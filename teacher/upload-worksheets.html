@@ -158,12 +158,14 @@
       const hasOrderWord = /رتّ?ب/.test(blockText);
       const hasMarkWord = /علامة/.test(blockText);
       const hasBlankWord = /الفراغ/.test(blockText);
+      const hasTableWord = /أكمل الجدول|امل[أإ] الجدول|اكمل الجدول/.test(blockText);
       const hasListWord = /اذكر|عدّ?د/.test(blockText);
 
       if (hasOptionLetters && hasCorrectWord) return "mcq";
       if (hasMarkWord) return "true-false";
       if (hasMatchWord) return "matching";
       if (hasOrderWord) return "ordering";
+      if (hasTableWord) return "fill-table";
       if (hasBlankWord || hasBlanks) return "fill-blank";
       if (hasListWord) return "open-text";
       return "open-text";
@@ -193,10 +195,23 @@
         base.pairs = [{ left: "", right: "" }];
       } else if (type === "ordering") {
         base.items = [""];
+      } else if (type === "fill-table") {
+        base.table = makeEmptyTable(3, 4);
       } else {
         base.prompt = "";
       }
       return base;
+    }
+
+    // ---------- بناء جدول فاضي بعدد أعمدة وصفوف معيّن (يشمل عمود/صف العناوين) ----------
+    function makeEmptyTable(cols, rows) {
+      return {
+        cols, rows,
+        corner: "",
+        colHeaders: Array(Math.max(cols - 1, 0)).fill(""),
+        rowHeaders: Array(Math.max(rows - 1, 0)).fill(""),
+        answers: Array(Math.max(rows - 1, 0)).fill(null).map(() => Array(Math.max(cols - 1, 0)).fill(""))
+      };
     }
 
     // ---------- محاولة استخراج أسئلة الاختيار من متعدد وخياراتها ----------
@@ -411,6 +426,7 @@
 
     const typeLabels = {
       "fill-blank": "أكمل الفراغات",
+      "fill-table": "أكمل الجدول",
       "mcq": "اختيار من متعدد",
       "true-false": "صح / خطأ",
       "matching": "مزاوجة",
@@ -518,11 +534,92 @@
             <input type="text" placeholder="العنصر بترتيبه الصحيح" value="${escapeHtml(it)}" data-order="${i}">
             <button class="remove-btn" data-remove="${i}">حذف</button>
           </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة عنصر</button>`;
+      } else if (ex.type === "fill-table") {
+        renderTableEditor(el, ex);
+        return;
       } else {
         el.innerHTML = `<textarea data-prompt rows="3" placeholder="نص السؤال المفتوح">${escapeHtml(ex.prompt)}</textarea>`;
       }
 
       bindEditorEvents(el, ex);
+    }
+
+    // ---------- محرر تمرين أكمل الجدول (عدد الأعمدة/الصفوف يشمل رأس الجدول) ----------
+    function renderTableEditor(el, ex) {
+      const t = ex.table;
+      el.innerHTML = `
+        <div style="display:flex;gap:10px;margin-bottom:10px;">
+          <div style="flex:1;">
+            <label style="font-size:12px;">عدد الأعمدة (شامل عمود العناوين)</label>
+            <input type="number" id="colsInput-${ex.id}" value="${t.cols}" min="2" max="6">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:12px;">عدد الصفوف (شامل صف العناوين)</label>
+            <input type="number" id="rowsInput-${ex.id}" value="${t.rows}" min="2" max="8">
+          </div>
+        </div>
+        <button class="btn btn-secondary small-btn" id="genTableBtn-${ex.id}" style="margin-bottom:12px;">توليد الجدول</button>
+        <div id="tableGrid-${ex.id}"></div>
+        <p style="font-size:11px;color:var(--ink-soft);margin-top:8px;">الخلايا الزرقاء = العناوين، الخلايا الوردية = الإجابة الصحيحة (تظهر فاضية للطالب).</p>
+      `;
+
+      document.getElementById(`genTableBtn-${ex.id}`).addEventListener("click", () => {
+        const newCols = Math.max(2, parseInt(document.getElementById(`colsInput-${ex.id}`).value, 10) || 2);
+        const newRows = Math.max(2, parseInt(document.getElementById(`rowsInput-${ex.id}`).value, 10) || 2);
+        const resized = makeEmptyTable(newCols, newRows);
+        // نحافظ على القيم القديمة قد الإمكان بدل ما نمسحها كلها
+        resized.corner = t.corner;
+        for (let i = 0; i < Math.min(resized.colHeaders.length, t.colHeaders.length); i++) resized.colHeaders[i] = t.colHeaders[i];
+        for (let i = 0; i < Math.min(resized.rowHeaders.length, t.rowHeaders.length); i++) resized.rowHeaders[i] = t.rowHeaders[i];
+        for (let r = 0; r < Math.min(resized.answers.length, t.answers.length); r++) {
+          for (let c = 0; c < Math.min(resized.answers[r].length, t.answers[r].length); c++) {
+            resized.answers[r][c] = t.answers[r][c];
+          }
+        }
+        ex.table = resized;
+        renderTableEditor(el, ex);
+      });
+
+      drawTableGrid(document.getElementById(`tableGrid-${ex.id}`), ex.table);
+    }
+
+    function drawTableGrid(container, t) {
+      container.innerHTML = "";
+      const grid = document.createElement("div");
+      grid.style.cssText = `display:grid;grid-template-columns:repeat(${t.cols},minmax(80px,1fr));gap:6px;`;
+      container.appendChild(grid);
+
+      for (let r = 0; r < t.rows; r++) {
+        for (let c = 0; c < t.cols; c++) {
+          const isHeaderRow = r === 0;
+          const isHeaderCol = c === t.cols - 1;
+          const cell = document.createElement("input");
+          cell.type = "text";
+
+          if (isHeaderRow && isHeaderCol) {
+            cell.value = t.corner;
+            cell.placeholder = "عنوان الجدول";
+            cell.style.cssText = "background:#2f5aa8;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
+            cell.addEventListener("input", (e) => { t.corner = e.target.value; });
+          } else if (isHeaderRow) {
+            cell.value = t.colHeaders[c] || "";
+            cell.placeholder = "عنوان عمود";
+            cell.style.cssText = "background:#2f5aa8;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
+            cell.addEventListener("input", (e) => { t.colHeaders[c] = e.target.value; });
+          } else if (isHeaderCol) {
+            cell.value = t.rowHeaders[r - 1] || "";
+            cell.placeholder = "عنوان صف";
+            cell.style.cssText = "background:#2f5aa8;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
+            cell.addEventListener("input", (e) => { t.rowHeaders[r - 1] = e.target.value; });
+          } else {
+            cell.value = t.answers[r - 1][c] || "";
+            cell.placeholder = "الإجابة الصحيحة";
+            cell.style.cssText = "background:#fff;border:2px solid #d43d8f;border-radius:6px;padding:8px;font-size:12px;text-align:center;";
+            cell.addEventListener("input", (e) => { t.answers[r - 1][c] = e.target.value; });
+          }
+          grid.appendChild(cell);
+        }
+      }
     }
 
     function bindEditorEvents(el, ex) {
@@ -614,6 +711,7 @@
             type: ex.type,
             data: ex.type === "open-text" ? { prompt: ex.prompt }
                 : ex.type === "matching" ? { pairs: ex.pairs }
+                : ex.type === "fill-table" ? ex.table
                 : { items: ex.items },
             autoGraded: ex.type !== "open-text"
           }))
@@ -761,6 +859,36 @@
     }
 
     // ---------- عرض معاينة شبيهة بشاشة الطالب ----------
+    function renderTablePreview(container, t) {
+      if (!container || !t) return;
+      const grid = document.createElement("div");
+      grid.style.cssText = `display:grid;grid-template-columns:repeat(${t.cols},minmax(80px,1fr));gap:6px;`;
+      container.appendChild(grid);
+
+      for (let r = 0; r < t.rows; r++) {
+        for (let c = 0; c < t.cols; c++) {
+          const isHeaderRow = r === 0;
+          const isHeaderCol = c === t.cols - 1;
+          const cell = document.createElement("div");
+          cell.style.cssText = "border-radius:6px;padding:8px;font-size:12px;text-align:center;min-height:16px;";
+
+          if (isHeaderRow && isHeaderCol) {
+            cell.textContent = t.corner || "";
+            cell.style.background = "#2f5aa8"; cell.style.color = "#fff"; cell.style.fontWeight = "700";
+          } else if (isHeaderRow) {
+            cell.textContent = t.colHeaders[c] || "";
+            cell.style.background = "#2f5aa8"; cell.style.color = "#fff"; cell.style.fontWeight = "700";
+          } else if (isHeaderCol) {
+            cell.textContent = t.rowHeaders[r - 1] || "";
+            cell.style.background = "#2f5aa8"; cell.style.color = "#fff"; cell.style.fontWeight = "700";
+          } else {
+            cell.style.background = "#fff"; cell.style.border = "2px solid #d43d8f";
+          }
+          grid.appendChild(cell);
+        }
+      }
+    }
+
     function renderWorksheetPreview(title, worksheetData) {
       document.getElementById("previewWorksheetTitle").textContent = title;
       const body = document.getElementById("previewWorksheetBody");
@@ -785,6 +913,11 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
               ${it.options.map((opt) => `<span class="type-badge" style="background:var(--paper);color:var(--ink-soft);">${escapeHtml(opt) || "—"}</span>`).join("")}
             </div>`).join("");
+        }
+        if (ex.type === "fill-table") {
+          const containerId = `tblprev-${i}`;
+          setTimeout(() => renderTablePreview(document.getElementById(containerId), ex.data), 0);
+          return header + `<div id="${containerId}"></div>`;
         }
         if (ex.type === "matching") {
           return header + (ex.data.pairs || []).map((p) => `

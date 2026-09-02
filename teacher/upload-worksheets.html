@@ -7,9 +7,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/styles.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   .ex-block { border:1.5px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; background:#fff; }
-  .ex-block-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .ex-block-header { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   .type-badge { background:var(--teal-light); color:var(--teal); font-size:12px; padding:3px 10px; border-radius:20px; font-weight:700; }
   .raw-ref { background:var(--paper); border-radius:8px; padding:8px 10px; font-size:12px; color:var(--ink-soft); max-height:110px; overflow-y:auto; margin-bottom:10px; white-space:pre-wrap; }
   .item-row { display:flex; gap:6px; margin-bottom:8px; align-items:center; }
@@ -27,25 +29,30 @@
 
     <!-- 1) رفع الملف -->
     <div class="card">
-      <h3 style="margin-top:0">١) رفع ملف PDF</h3>
-      <input type="file" id="pdfInput" accept="application/pdf">
+      <h3 style="margin-top:0">١) رفع الملف</h3>
+      <p style="font-size:12px;color:var(--ink-soft);">يقبل: PDF، Word (docx)، أو صورة ممسوحة ضوئيًا (jpg/png)</p>
+      <input type="file" id="pdfInput" accept="application/pdf,.docx,image/*">
       <p id="pageCountInfo" style="font-size:12px;color:var(--ink-soft);margin-top:6px;"></p>
       <br>
-      <div style="display:flex; gap:10px;">
-        <div style="flex:1;">
-          <label>من صفحة (اختياري)</label>
-          <input type="text" id="pageFrom" inputmode="numeric" placeholder="مثال: 2">
+
+      <div id="pdfOnlyControls">
+        <div style="display:flex; gap:10px;">
+          <div style="flex:1;">
+            <label>من صفحة (اختياري)</label>
+            <input type="text" id="pageFrom" inputmode="numeric" placeholder="مثال: 2">
+          </div>
+          <div style="flex:1;">
+            <label>إلى صفحة (اختياري)</label>
+            <input type="text" id="pageTo" inputmode="numeric" placeholder="مثال: 3">
+          </div>
         </div>
-        <div style="flex:1;">
-          <label>إلى صفحة (اختياري)</label>
-          <input type="text" id="pageTo" inputmode="numeric" placeholder="مثال: 3">
-        </div>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">سيبهم فاضيين لاستخراج الملف كامل.</p>
+        <br>
+        <button class="btn btn-secondary" id="previewPagesBtn">معاينة الصفحات المحددة</button>
+        <div id="pagePreviewWrap" style="margin-top:14px;display:flex;flex-direction:column;gap:10px;"></div>
+        <br>
       </div>
-      <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">سيبهم فاضيين لاستخراج الملف كامل.</p>
-      <br>
-      <button class="btn btn-secondary" id="previewPagesBtn">معاينة الصفحات المحددة</button>
-      <div id="pagePreviewWrap" style="margin-top:14px;display:flex;flex-direction:column;gap:10px;"></div>
-      <br>
+
       <button class="btn btn-primary" id="extractBtn">استخراج التمارين</button>
       <p id="extractStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
     </div>
@@ -130,7 +137,13 @@
       exCounter++;
       const base = { id: "ex" + exCounter, type, rawText };
       if (type === "fill-blank") {
-        const lines = rawText.split("\n").filter((l) => /\.{3,}|_{3,}/.test(l));
+        let lines = rawText.split("\n").filter((l) => /\.{3,}|_{3,}/.test(l));
+        if (lines.length === 0) {
+          // مفيش نقط فراغ ظاهرة (جدول بخلايا فاضية مثلًا) — نستخدم كل سطر محتوى كنقطة بداية بدل خانة فاضية
+          lines = rawText.split("\n")
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0 && !/^تدريب|^أكمل الفراغ|^امأل الفراغ/.test(l));
+        }
         base.items = lines.map((l) => ({ prompt: l.trim(), answer: "" }));
         if (base.items.length === 0) base.items = [{ prompt: "", answer: "" }];
       } else if (type === "true-false") {
@@ -139,7 +152,7 @@
         base.items = lines.map((l) => ({ statement: l.trim(), answer: null }));
         if (base.items.length === 0) base.items = [{ statement: "", answer: null }];
       } else if (type === "mcq") {
-        base.items = [{ prompt: "", options: ["", "", ""], correctIndex: 0 }];
+        base.items = extractMcqQuestions(rawText);
       } else if (type === "matching") {
         base.pairs = [{ left: "", right: "" }];
       } else if (type === "ordering") {
@@ -148,6 +161,34 @@
         base.prompt = "";
       }
       return base;
+    }
+
+    // ---------- محاولة استخراج أسئلة الاختيار من متعدد وخياراتها ----------
+    function extractMcqQuestions(rawText) {
+      const lines = rawText.split("\n").map((l) => l.trim()).filter(Boolean);
+      const questions = [];
+      let current = null;
+
+      lines.forEach((line) => {
+        // سطر يبدأ برقم = بداية سؤال جديد (مثال: "1 النظام العشري ...")
+        if (/^[0-9\u0660-\u0669]+[\s.\-)]/.test(line)) {
+          if (current) questions.push(current);
+          current = { promptLine: line.replace(/^[0-9\u0660-\u0669]+[\s.\-)]*/, ""), optionParts: [] };
+        } else if (current) {
+          current.optionParts.push(line);
+        }
+      });
+      if (current) questions.push(current);
+
+      const result = questions.map((q) => {
+        // نحاول نلاقي حروف الاختيار أ/ب/ج منفصلة في الأسطر التالية ونقسم عليها
+        const joined = q.optionParts.join(" ");
+        const parts = joined.split(/(?:^|\s)[أإا](?=\s)|(?:^|\s)ب(?=\s)|(?:^|\s)ج(?=\s)/).map((p) => p.trim()).filter(Boolean);
+        const options = parts.length >= 3 ? parts.slice(0, 3) : ["", "", ""];
+        return { prompt: q.promptLine.trim(), options, correctIndex: 0 };
+      }).filter((q) => q.prompt.length > 0);
+
+      return result.length > 0 ? result : [{ prompt: "", options: ["", "", ""], correctIndex: 0 }];
     }
 
     // ---------- معاينة الصفحات المحددة كصور ----------
@@ -212,55 +253,98 @@
       }
     });
 
-    // ---------- عرض عدد صفحات الملف فور اختياره ----------
+    // ---------- تحديد نوع الملف ----------
+    function getFileKind(file) {
+      const name = file.name.toLowerCase();
+      if (name.endsWith(".pdf") || file.type === "application/pdf") return "pdf";
+      if (name.endsWith(".docx")) return "docx";
+      if (file.type.startsWith("image/")) return "image";
+      return "unknown";
+    }
+
+    // ---------- إظهار/إخفاء أدوات الصفحات حسب نوع الملف + عرض معلومات الملف ----------
     document.getElementById("pdfInput").addEventListener("change", async (e) => {
       const infoEl = document.getElementById("pageCountInfo");
+      const pdfControls = document.getElementById("pdfOnlyControls");
       if (!e.target.files[0]) { infoEl.textContent = ""; return; }
-      infoEl.textContent = "جاري قراءة عدد الصفحات...";
-      try {
-        const arrayBuffer = await e.target.files[0].arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        infoEl.textContent = `عدد صفحات الملف: ${pdf.numPages}`;
-      } catch (err) {
-        infoEl.textContent = "";
+
+      const kind = getFileKind(e.target.files[0]);
+      if (kind === "pdf") {
+        pdfControls.style.display = "block";
+        infoEl.textContent = "جاري قراءة عدد الصفحات...";
+        try {
+          const arrayBuffer = await e.target.files[0].arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          infoEl.textContent = `عدد صفحات الملف: ${pdf.numPages}`;
+        } catch (err) {
+          infoEl.textContent = "";
+        }
+      } else if (kind === "docx") {
+        pdfControls.style.display = "none";
+        infoEl.textContent = "ملف Word — سيُستخرج المستند كامل (تحديد نطاق الصفحات غير متاح لهذا النوع).";
+      } else if (kind === "image") {
+        pdfControls.style.display = "none";
+        infoEl.textContent = "صورة — سيتم التعرف الضوئي على النص (OCR)، قد يستغرق دقيقة أو أكثر.";
+      } else {
+        pdfControls.style.display = "none";
+        infoEl.textContent = "نوع ملف غير مدعوم.";
       }
     });
 
-    // ---------- زر الاستخراج ----------
+    // ---------- زر الاستخراج (يتفرّع حسب نوع الملف) ----------
     document.getElementById("extractBtn").addEventListener("click", async () => {
       const fileInput = document.getElementById("pdfInput");
       const statusEl = document.getElementById("extractStatus");
       if (!fileInput.files[0]) {
-        statusEl.textContent = "اختر ملف PDF أولًا.";
+        statusEl.textContent = "اختر ملف أولًا.";
         statusEl.style.color = "var(--bad)";
         return;
       }
 
+      const file = fileInput.files[0];
+      const kind = getFileKind(file);
       statusEl.textContent = "جاري القراءة والاستخراج...";
       statusEl.style.color = "var(--ink-soft)";
 
       try {
-        const arrayBuffer = await fileInput.files[0].arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = "";
 
-        const fromRaw = document.getElementById("pageFrom").value.trim();
-        const toRaw = document.getElementById("pageTo").value.trim();
-        let startPage = fromRaw ? parseInt(fromRaw, 10) : 1;
-        let endPage = toRaw ? parseInt(toRaw, 10) : pdf.numPages;
+        if (kind === "pdf") {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-        if (isNaN(startPage) || startPage < 1) startPage = 1;
-        if (isNaN(endPage) || endPage > pdf.numPages) endPage = pdf.numPages;
-        if (startPage > endPage) {
-          statusEl.textContent = "رقم صفحة البداية أكبر من النهاية — راجع الأرقام.";
+          const fromRaw = document.getElementById("pageFrom").value.trim();
+          const toRaw = document.getElementById("pageTo").value.trim();
+          let startPage = fromRaw ? parseInt(fromRaw, 10) : 1;
+          let endPage = toRaw ? parseInt(toRaw, 10) : pdf.numPages;
+          if (isNaN(startPage) || startPage < 1) startPage = 1;
+          if (isNaN(endPage) || endPage > pdf.numPages) endPage = pdf.numPages;
+          if (startPage > endPage) {
+            statusEl.textContent = "رقم صفحة البداية أكبر من النهاية — راجع الأرقام.";
+            statusEl.style.color = "var(--bad)";
+            return;
+          }
+
+          for (let i = startPage; i <= endPage; i++) {
+            const page = await pdf.getPage(i);
+            const lines = await extractLinesFromPage(page);
+            fullText += lines.join("\n") + "\n";
+          }
+
+        } else if (kind === "docx") {
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          fullText = result.value;
+
+        } else if (kind === "image") {
+          statusEl.textContent = "جاري التعرف الضوئي على النص (OCR) — ممكن ياخد دقيقة أو أكتر...";
+          const ocrResult = await Tesseract.recognize(file, "ara");
+          fullText = ocrResult.data.text;
+
+        } else {
+          statusEl.textContent = "نوع الملف مش مدعوم. الأنواع المتاحة: PDF، Word (docx)، صورة.";
           statusEl.style.color = "var(--bad)";
           return;
-        }
-
-        let fullText = "";
-        for (let i = startPage; i <= endPage; i++) {
-          const page = await pdf.getPage(i);
-          const lines = await extractLinesFromPage(page);
-          fullText += lines.join("\n") + "\n";
         }
 
         // تقسيم النص لكتل حسب كلمة "تدريب" متبوعة برقم
@@ -315,6 +399,7 @@
           <div class="ex-block-header">
             <span class="type-badge">تمرين ${idx + 1}</span>
             ${typeSelect}
+            <button class="remove-btn" data-delete="${ex.id}">حذف البطاقة</button>
           </div>
           <label style="font-size:12px;color:var(--ink-soft);">النص الخام (عدّله لو فيه خطأ قراءة، ثم اضغط إعادة معالجة)</label>
           <textarea class="raw-edit" data-raw="${ex.id}" rows="5" style="font-size:12px;">${escapeHtml(ex.rawText)}</textarea>
@@ -331,6 +416,13 @@
           exercises[idx] = makeExercise(newType === ex.type ? detectedType : newType, newRaw);
           exercises[idx].id = ex.id;
           renderExercises();
+        });
+
+        div.querySelector(`[data-delete="${ex.id}"]`).addEventListener("click", () => {
+          if (confirm("متأكد إنك عايز تحذف التمرين ده؟")) {
+            exercises.splice(idx, 1);
+            renderExercises();
+          }
         });
 
         div.querySelector(`[data-retype="${ex.id}"]`).addEventListener("change", (e) => {

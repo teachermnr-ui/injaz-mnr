@@ -80,6 +80,13 @@
       <p id="saveStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
     </div>
 
+    <!-- معاينة الورقة قبل النشر -->
+    <div class="card" id="previewWorksheetCard" style="display:none;">
+      <h3 style="margin-top:0">معاينة: <span id="previewWorksheetTitle"></span></h3>
+      <p style="font-size:12px;color:var(--ink-soft);">هذا شكل تقريبي لما سيظهر للطالب (بدون حفظ إجابات).</p>
+      <div id="previewWorksheetBody"></div>
+    </div>
+
     <!-- 4) نشر الورقة (يظهر فور الحفظ) -->
     <div class="card" id="publishCard" style="display:none;">
       <h3 style="margin-top:0">٤) نشر الورقة: <span id="publishTitle"></span></h3>
@@ -694,9 +701,19 @@
             <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
             <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""} (${(w.exercises || []).length} تمرين)</p>
           </div>
-          <button class="btn btn-primary small-btn" data-publish-existing="${d.id}" data-title="${escapeHtml(w.title)}">نشر</button>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-secondary small-btn" data-preview-existing="${d.id}" data-title="${escapeHtml(w.title)}">معاينة</button>
+            <button class="btn btn-primary small-btn" data-publish-existing="${d.id}" data-title="${escapeHtml(w.title)}">نشر</button>
+          </div>
         `;
         listEl.appendChild(row);
+      });
+
+      listEl.querySelectorAll("[data-preview-existing]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.previewExisting);
+          renderWorksheetPreview(btn.dataset.title, wDoc.data());
+        });
       });
 
       listEl.querySelectorAll("[data-publish-existing]").forEach((btn) => {
@@ -704,6 +721,46 @@
           openPublishPanel(btn.dataset.publishExisting, btn.dataset.title);
         });
       });
+    }
+
+    // ---------- عرض معاينة شبيهة بشاشة الطالب ----------
+    function renderWorksheetPreview(title, worksheetData) {
+      document.getElementById("previewWorksheetTitle").textContent = title;
+      const body = document.getElementById("previewWorksheetBody");
+      const exList = worksheetData.exercises || [];
+
+      body.innerHTML = exList.map((ex, i) => {
+        const header = `<p style="font-weight:700;font-size:13px;color:var(--teal);margin:16px 0 8px;">تمرين ${i + 1} — ${typeLabels[ex.type] || ex.type}</p>`;
+
+        if (ex.type === "fill-blank") {
+          return header + (ex.data.items || []).map((it) => `
+            <div class="item-row"><input type="text" placeholder="${escapeHtml(it.prompt)}" disabled></div>`).join("");
+        }
+        if (ex.type === "true-false") {
+          return header + (ex.data.items || []).map((it) => `
+            <div class="tf-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;">
+              <span>${escapeHtml(it.statement)}</span><span>✓ / ✗</span>
+            </div>`).join("");
+        }
+        if (ex.type === "mcq") {
+          return header + (ex.data.items || []).map((it) => `
+            <p style="font-size:13px;margin:6px 0 4px;font-weight:500;">${escapeHtml(it.prompt)}</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+              ${it.options.map((opt) => `<span class="type-badge" style="background:var(--paper);color:var(--ink-soft);">${escapeHtml(opt) || "—"}</span>`).join("")}
+            </div>`).join("");
+        }
+        if (ex.type === "matching") {
+          return header + (ex.data.pairs || []).map((p) => `
+            <div class="item-row" style="font-size:13px;"><span>${escapeHtml(p.left)}</span><span>↔</span><span>${escapeHtml(p.right)}</span></div>`).join("");
+        }
+        if (ex.type === "ordering") {
+          return header + `<ol style="font-size:13px;padding-inline-start:20px;">${(ex.data.items || []).map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ol>`;
+        }
+        return header + `<textarea rows="3" placeholder="${escapeHtml(ex.data.prompt || "")}" disabled></textarea>`;
+      }).join("");
+
+      document.getElementById("previewWorksheetCard").style.display = "block";
+      document.getElementById("previewWorksheetCard").scrollIntoView({ behavior: "smooth" });
     }
 
     document.getElementById("refreshDraftsBtn").addEventListener("click", loadDrafts);

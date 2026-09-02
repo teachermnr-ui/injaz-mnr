@@ -6,16 +6,86 @@
 <title>تسجيل الدخول</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/styles.css">
-<script type="module" src="../shared/firebase-config.js"></script>
 </head>
 <body>
   <header class="app-header">
-    <h1>تسجيل الدخول</h1>
+    <h1>ملف الإنجاز</h1>
   </header>
+
   <main class="container">
     <div class="card">
-      <p>هذه الصفحة قيد الإنشاء — دخول الطالب بالاسم/الفصل + PIN سيُبنى هنا في مرحلة لاحقة.</p>
+      <h3 style="margin-top:0">تسجيل الدخول</h3>
+      <label>أدخل رمز PIN الخاص بك</label>
+      <input type="text" id="pinInput" inputmode="numeric" placeholder="مثال: 1050132" style="font-size:20px;text-align:center;letter-spacing:2px;">
+      <br><br>
+      <button class="btn btn-primary" id="loginBtn" style="width:100%;">دخول</button>
+      <p id="loginStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+      <div id="disambigList" style="margin-top:14px;"></div>
     </div>
   </main>
+
+  <script type="module">
+    import { db } from "../shared/firebase-config.js";
+    import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    document.getElementById("loginBtn").addEventListener("click", doLogin);
+    document.getElementById("pinInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doLogin();
+    });
+
+    async function doLogin() {
+      const pin = document.getElementById("pinInput").value.trim();
+      const statusEl = document.getElementById("loginStatus");
+      const listEl = document.getElementById("disambigList");
+      listEl.innerHTML = "";
+
+      if (!pin) {
+        statusEl.textContent = "اكتب رقم الـ PIN.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+
+      statusEl.textContent = "جاري التحقق...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        const q = query(collection(db, "students"), where("pin", "==", pin));
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          statusEl.textContent = "رقم الـ PIN غير صحيح — تأكد من الرقم مع معلمك.";
+          statusEl.style.color = "var(--bad)";
+          return;
+        }
+
+        if (snap.docs.length === 1) {
+          signIn(snap.docs[0]);
+          return;
+        }
+
+        // حالة نادرة: نفس الـ PIN لأكتر من طالب (فصول مختلفة بنفس الرمز) — نخلي الطالب يختار
+        statusEl.textContent = "لقينا أكتر من طالب بنفس الرقم — اختر اسمك:";
+        statusEl.style.color = "var(--ink-soft)";
+        listEl.innerHTML = snap.docs.map((d, i) => {
+          const s = d.data();
+          return `<button class="btn btn-secondary" data-pick="${i}" style="width:100%;margin-bottom:8px;">${s.name}</button>`;
+        }).join("");
+        listEl.querySelectorAll("[data-pick]").forEach((btn) => {
+          btn.addEventListener("click", () => signIn(snap.docs[+btn.dataset.pick]));
+        });
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    }
+
+    function signIn(studentDoc) {
+      const s = studentDoc.data();
+      sessionStorage.setItem("studentId", studentDoc.id);
+      sessionStorage.setItem("studentName", s.name);
+      sessionStorage.setItem("studentClassId", s.currentClassId);
+      window.location.href = "worksheets.html";
+    }
+  </script>
 </body>
 </html>

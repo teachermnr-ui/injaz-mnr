@@ -6,16 +6,366 @@
 <title>رفع ملفات الأسئلة وتحويلها</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/styles.css">
-<script type="module" src="../shared/firebase-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  .ex-block { border:1.5px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; background:#fff; }
+  .ex-block-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .type-badge { background:var(--teal-light); color:var(--teal); font-size:12px; padding:3px 10px; border-radius:20px; font-weight:700; }
+  .raw-ref { background:var(--paper); border-radius:8px; padding:8px 10px; font-size:12px; color:var(--ink-soft); max-height:110px; overflow-y:auto; margin-bottom:10px; white-space:pre-wrap; }
+  .item-row { display:flex; gap:6px; margin-bottom:8px; align-items:center; }
+  .item-row input[type=text] { flex:1; }
+  .small-btn { padding:5px 10px; font-size:12px; }
+  .remove-btn { background:var(--coral-light); color:var(--coral); border:none; border-radius:6px; padding:5px 9px; cursor:pointer; font-size:12px; }
+</style>
 </head>
 <body>
   <header class="app-header">
     <h1>رفع ملفات الأسئلة وتحويلها</h1>
   </header>
+
   <main class="container">
+
+    <!-- 1) رفع الملف -->
     <div class="card">
-      <p>هذه الصفحة قيد الإنشاء — رفع PDF، الاستخراج التلقائي، ومراجعة المعلم قبل النشر سيُبنى هنا في مرحلة لاحقة.</p>
+      <h3 style="margin-top:0">١) رفع ملف PDF</h3>
+      <input type="file" id="pdfInput" accept="application/pdf">
+      <br><br>
+      <button class="btn btn-primary" id="extractBtn">استخراج التمارين</button>
+      <p id="extractStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
     </div>
+
+    <!-- 2) مراجعة التمارين المستخرجة -->
+    <div class="card" id="reviewCard" style="display:none;">
+      <h3 style="margin-top:0">٢) مراجعة التمارين قبل النشر</h3>
+      <p style="font-size:13px;color:var(--ink-soft);">راجع كل تمرين، عدّل النوع لو محتاج، واملأ العناصر الناقصة.</p>
+      <div id="exercisesWrap"></div>
+    </div>
+
+    <!-- 3) بيانات الورقة والحفظ -->
+    <div class="card" id="saveCard" style="display:none;">
+      <h3 style="margin-top:0">٣) بيانات الورقة</h3>
+      <label>عنوان الورقة</label>
+      <input type="text" id="worksheetTitle" placeholder="مثال: تمثيل البيانات">
+      <br><br>
+      <label>الوحدة</label>
+      <input type="text" id="worksheetUnit">
+      <br><br>
+      <label>الدرس</label>
+      <input type="text" id="worksheetLesson">
+      <br><br>
+      <button class="btn btn-primary" id="saveWorksheetBtn">حفظ الورقة (مسودة)</button>
+      <p id="saveStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+    </div>
+
   </main>
+
+  <script type="module">
+    import { db } from "../shared/firebase-config.js";
+    import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    let exercises = []; // { id, type, rawText, ...structuredData }
+    let exCounter = 0;
+
+    // ---------- استخراج النص من كل صفحة مع محاولة ترتيب صحيح للعربي RTL ----------
+    async function extractLinesFromPage(page) {
+      const textContent = await page.getTextContent();
+      const groups = {};
+      textContent.items.forEach((it) => {
+        const y = Math.round(it.transform[5]);
+        if (!groups[y]) groups[y] = [];
+        groups[y].push(it);
+      });
+      const ys = Object.keys(groups).map(Number).sort((a, b) => b - a);
+      return ys.map((y) => {
+        const lineItems = groups[y].sort((a, b) => b.transform[4] - a.transform[4]);
+        return lineItems.map((it) => it.str).join(" ").replace(/\s+/g, " ").trim();
+      }).filter((l) => l.length > 0);
+    }
+
+    // ---------- تصنيف نوع التمرين حسب كلمات مفتاحية ثابتة ----------
+    function detectType(blockText) {
+      if (/اختر الإجابة الصحيحة|اختر الاجابة الصحيحة/.test(blockText)) return "mcq";
+      if (/ضع علامة|صح.*خطأ|صح.*خطا/.test(blockText)) return "true-false";
+      if (/صل بين/.test(blockText)) return "matching";
+      if (/رتّب|رتب /.test(blockText)) return "ordering";
+      if (/أكمل الفراغ|املأ الفراغ|أكمل الجدول/.test(blockText)) return "fill-blank";
+      if (/اذكر|عدّد|عدد /.test(blockText)) return "open-text";
+      return "open-text";
+    }
+
+    function makeExercise(type, rawText) {
+      exCounter++;
+      const base = { id: "ex" + exCounter, type, rawText };
+      if (type === "fill-blank") {
+        const lines = rawText.split("\n").filter((l) => /\.{3,}|_{3,}/.test(l));
+        base.items = lines.map((l) => ({ prompt: l.trim(), answer: "" }));
+        if (base.items.length === 0) base.items = [{ prompt: "", answer: "" }];
+      } else if (type === "true-false") {
+        const lines = rawText.split("\n")
+          .filter((l) => l.trim().length > 15 && !/ضع علامة|تدريب/.test(l));
+        base.items = lines.map((l) => ({ statement: l.trim(), answer: null }));
+        if (base.items.length === 0) base.items = [{ statement: "", answer: null }];
+      } else if (type === "mcq") {
+        base.items = [{ prompt: "", options: ["", "", ""], correctIndex: 0 }];
+      } else if (type === "matching") {
+        base.pairs = [{ left: "", right: "" }];
+      } else if (type === "ordering") {
+        base.items = [""];
+      } else {
+        base.prompt = "";
+      }
+      return base;
+    }
+
+    // ---------- زر الاستخراج ----------
+    document.getElementById("extractBtn").addEventListener("click", async () => {
+      const fileInput = document.getElementById("pdfInput");
+      const statusEl = document.getElementById("extractStatus");
+      if (!fileInput.files[0]) {
+        statusEl.textContent = "اختر ملف PDF أولًا.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+
+      statusEl.textContent = "جاري القراءة والاستخراج...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        const arrayBuffer = await fileInput.files[0].arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const lines = await extractLinesFromPage(page);
+          fullText += lines.join("\n") + "\n";
+        }
+
+        // تقسيم النص لكتل حسب كلمة "تدريب" متبوعة برقم
+        const splitRegex = /(?=تدريب\s*\(?\s*[0-9\u0660-\u0669]+\s*\)?\s*:?)/;
+        const rawBlocks = fullText.split(splitRegex).map((b) => b.trim()).filter((b) => b.length > 20);
+
+        exercises = rawBlocks.map((block) => {
+          const type = detectType(block);
+          return makeExercise(type, block);
+        });
+
+        if (exercises.length === 0) {
+          statusEl.textContent = "ما قدرناش نلاقي تمارين بصيغة \"تدريب\" في الملف — جرّب ملف آخر أو راجع الصيغة.";
+          statusEl.style.color = "var(--bad)";
+          return;
+        }
+
+        statusEl.textContent = `تم استخراج ${exercises.length} تمرين. راجعهم تحت.`;
+        statusEl.style.color = "var(--ok)";
+        renderExercises();
+        document.getElementById("reviewCard").style.display = "block";
+        document.getElementById("saveCard").style.display = "block";
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ أثناء القراءة: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    });
+
+    const typeLabels = {
+      "fill-blank": "أكمل الفراغات",
+      "mcq": "اختيار من متعدد",
+      "true-false": "صح / خطأ",
+      "matching": "مزاوجة",
+      "ordering": "ترتيب",
+      "open-text": "سؤال مفتوح"
+    };
+
+    function renderExercises() {
+      const wrap = document.getElementById("exercisesWrap");
+      wrap.innerHTML = "";
+      exercises.forEach((ex, idx) => {
+        const div = document.createElement("div");
+        div.className = "ex-block";
+
+        const typeSelect = `
+          <select data-retype="${ex.id}" style="width:auto;">
+            ${Object.entries(typeLabels).map(([val, label]) =>
+              `<option value="${val}" ${val === ex.type ? "selected" : ""}>${label}</option>`).join("")}
+          </select>`;
+
+        div.innerHTML = `
+          <div class="ex-block-header">
+            <span class="type-badge">تمرين ${idx + 1}</span>
+            ${typeSelect}
+          </div>
+          <div class="raw-ref">${ex.rawText.slice(0, 400)}${ex.rawText.length > 400 ? "..." : ""}</div>
+          <div class="ex-editor" id="editor-${ex.id}"></div>
+        `;
+        wrap.appendChild(div);
+        renderEditor(ex);
+
+        div.querySelector(`[data-retype="${ex.id}"]`).addEventListener("change", (e) => {
+          const newType = e.target.value;
+          exercises[idx] = makeExercise(newType, ex.rawText);
+          exercises[idx].id = ex.id;
+          renderExercises();
+        });
+      });
+    }
+
+    function renderEditor(ex) {
+      const el = document.getElementById(`editor-${ex.id}`);
+      if (!el) return;
+
+      if (ex.type === "fill-blank") {
+        el.innerHTML = ex.items.map((it, i) => `
+          <div class="item-row">
+            <input type="text" placeholder="نص الفراغ" value="${escapeHtml(it.prompt)}" data-field="prompt" data-i="${i}">
+            <input type="text" placeholder="الإجابة الصحيحة" value="${escapeHtml(it.answer)}" data-field="answer" data-i="${i}" style="max-width:120px;">
+            <button class="remove-btn" data-remove="${i}">حذف</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة فراغ</button>`;
+      } else if (ex.type === "true-false") {
+        el.innerHTML = ex.items.map((it, i) => `
+          <div class="item-row">
+            <input type="text" placeholder="نص العبارة" value="${escapeHtml(it.statement)}" data-field="statement" data-i="${i}">
+            <select data-field="answer" data-i="${i}" style="width:auto;">
+              <option value="" ${it.answer === null ? "selected" : ""}>—</option>
+              <option value="true" ${it.answer === true ? "selected" : ""}>صح</option>
+              <option value="false" ${it.answer === false ? "selected" : ""}>خطأ</option>
+            </select>
+            <button class="remove-btn" data-remove="${i}">حذف</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة عبارة</button>`;
+      } else if (ex.type === "mcq") {
+        el.innerHTML = ex.items.map((it, i) => `
+          <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;">
+            <input type="text" placeholder="نص السؤال" value="${escapeHtml(it.prompt)}" data-field="prompt" data-i="${i}" style="margin-bottom:6px;">
+            ${it.options.map((opt, oi) => `
+              <div class="item-row">
+                <input type="radio" name="correct-${ex.id}-${i}" ${it.correctIndex === oi ? "checked" : ""} data-correct="${i}" data-oi="${oi}">
+                <input type="text" placeholder="خيار ${oi + 1}" value="${escapeHtml(opt)}" data-option="${i}" data-oi="${oi}">
+              </div>`).join("")}
+            <button class="remove-btn" data-remove="${i}">حذف السؤال</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة سؤال</button>`;
+      } else if (ex.type === "matching") {
+        el.innerHTML = ex.pairs.map((p, i) => `
+          <div class="item-row">
+            <input type="text" placeholder="العنصر" value="${escapeHtml(p.left)}" data-left="${i}">
+            <span>↔</span>
+            <input type="text" placeholder="المقابل الصحيح" value="${escapeHtml(p.right)}" data-right="${i}">
+            <button class="remove-btn" data-remove="${i}">حذف</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة زوج</button>`;
+      } else if (ex.type === "ordering") {
+        el.innerHTML = ex.items.map((it, i) => `
+          <div class="item-row">
+            <span style="font-weight:700;">${i + 1}.</span>
+            <input type="text" placeholder="العنصر بترتيبه الصحيح" value="${escapeHtml(it)}" data-order="${i}">
+            <button class="remove-btn" data-remove="${i}">حذف</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة عنصر</button>`;
+      } else {
+        el.innerHTML = `<textarea data-prompt rows="3" placeholder="نص السؤال المفتوح">${escapeHtml(ex.prompt)}</textarea>`;
+      }
+
+      bindEditorEvents(el, ex);
+    }
+
+    function bindEditorEvents(el, ex) {
+      el.querySelectorAll("[data-field]").forEach((input) => {
+        input.addEventListener("input", (e) => {
+          const i = +e.target.dataset.i;
+          const field = e.target.dataset.field;
+          let val = e.target.value;
+          if (field === "answer" && ex.type === "true-false") {
+            val = val === "true" ? true : val === "false" ? false : null;
+          }
+          ex.items[i][field] = val;
+        });
+      });
+      el.querySelectorAll("[data-option]").forEach((input) => {
+        input.addEventListener("input", (e) => {
+          ex.items[+e.target.dataset.option].options[+e.target.dataset.oi] = e.target.value;
+        });
+      });
+      el.querySelectorAll("[data-correct]").forEach((input) => {
+        input.addEventListener("change", (e) => {
+          ex.items[+e.target.dataset.correct].correctIndex = +e.target.dataset.oi;
+        });
+      });
+      el.querySelectorAll("[data-left]").forEach((input) => {
+        input.addEventListener("input", (e) => { ex.pairs[+e.target.dataset.left].left = e.target.value; });
+      });
+      el.querySelectorAll("[data-right]").forEach((input) => {
+        input.addEventListener("input", (e) => { ex.pairs[+e.target.dataset.right].right = e.target.value; });
+      });
+      el.querySelectorAll("[data-order]").forEach((input) => {
+        input.addEventListener("input", (e) => { ex.items[+e.target.dataset.order] = e.target.value; });
+      });
+      const promptEl = el.querySelector("[data-prompt]");
+      if (promptEl) promptEl.addEventListener("input", (e) => { ex.prompt = e.target.value; });
+
+      el.querySelectorAll("[data-remove]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const i = +e.target.dataset.remove;
+          if (ex.type === "matching") ex.pairs.splice(i, 1);
+          else if (ex.type === "ordering") ex.items.splice(i, 1);
+          else ex.items.splice(i, 1);
+          renderEditor(ex);
+        });
+      });
+      const addBtn = el.querySelector("[data-add]");
+      if (addBtn) addBtn.addEventListener("click", () => {
+        if (ex.type === "fill-blank") ex.items.push({ prompt: "", answer: "" });
+        else if (ex.type === "true-false") ex.items.push({ statement: "", answer: null });
+        else if (ex.type === "mcq") ex.items.push({ prompt: "", options: ["", "", ""], correctIndex: 0 });
+        else if (ex.type === "matching") ex.pairs.push({ left: "", right: "" });
+        else if (ex.type === "ordering") ex.items.push("");
+        renderEditor(ex);
+      });
+    }
+
+    function escapeHtml(str) {
+      return (str || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // ---------- حفظ الورقة كمسودة في Firestore ----------
+    document.getElementById("saveWorksheetBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("saveStatus");
+      const title = document.getElementById("worksheetTitle").value.trim();
+      if (!title) {
+        statusEl.textContent = "اكتب عنوان الورقة أولًا.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+
+      statusEl.textContent = "جاري الحفظ...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        const worksheetsRef = collection(db, "worksheets");
+        await addDoc(worksheetsRef, {
+          title,
+          unit: document.getElementById("worksheetUnit").value.trim(),
+          lesson: document.getElementById("worksheetLesson").value.trim(),
+          sourceFileName: document.getElementById("pdfInput").files[0]?.name || "",
+          status: "draft",
+          assignedClassIds: [],
+          assignedStudentIds: [],
+          dueDate: null,
+          createdAt: serverTimestamp(),
+          publishedAt: null,
+          exercises: exercises.map((ex) => ({
+            exerciseId: ex.id,
+            type: ex.type,
+            data: ex.type === "open-text" ? { prompt: ex.prompt }
+                : ex.type === "matching" ? { pairs: ex.pairs }
+                : { items: ex.items },
+            autoGraded: ex.type !== "open-text"
+          }))
+        });
+        statusEl.textContent = "تم حفظ الورقة كمسودة بنجاح. تقدر تراجعها وتنشرها لاحقًا.";
+        statusEl.style.color = "var(--ok)";
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ أثناء الحفظ: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    });
+  </script>
 </body>
 </html>

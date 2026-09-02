@@ -80,11 +80,32 @@
       <p id="saveStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
     </div>
 
+    <!-- 4) نشر الورقة (يظهر فور الحفظ) -->
+    <div class="card" id="publishCard" style="display:none;">
+      <h3 style="margin-top:0">٤) نشر الورقة: <span id="publishTitle"></span></h3>
+      <p style="font-size:13px;color:var(--ink-soft);">اختر الفصل/الفصول اللي هتوصلهم الورقة.</p>
+      <div id="classCheckboxes" style="margin-bottom:12px;"></div>
+      <label>تاريخ الاستحقاق (اختياري)</label>
+      <input type="date" id="dueDateInput">
+      <br><br>
+      <button class="btn btn-primary" id="confirmPublishBtn">تأكيد النشر</button>
+      <p id="publishStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+    </div>
+
+    <!-- 5) المسودات الحالية غير المنشورة -->
+    <div class="card">
+      <h3 style="margin-top:0">٥) المسودات الحالية</h3>
+      <button class="btn btn-secondary" id="refreshDraftsBtn">تحديث القائمة</button>
+      <div id="draftsList" style="margin-top:14px;"></div>
+    </div>
+
   </main>
 
   <script type="module">
     import { db } from "../shared/firebase-config.js";
-    import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import {
+      collection, addDoc, getDocs, query, where, doc, updateDoc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
@@ -562,7 +583,7 @@
 
       try {
         const worksheetsRef = collection(db, "worksheets");
-        await addDoc(worksheetsRef, {
+        const newDoc = await addDoc(worksheetsRef, {
           title,
           unit: document.getElementById("worksheetUnit").value.trim(),
           lesson: document.getElementById("worksheetLesson").value.trim(),
@@ -582,13 +603,112 @@
             autoGraded: ex.type !== "open-text"
           }))
         });
-        statusEl.textContent = "تم حفظ الورقة كمسودة بنجاح. تقدر تراجعها وتنشرها لاحقًا.";
+        statusEl.textContent = "تم حفظ الورقة كمسودة بنجاح.";
         statusEl.style.color = "var(--ok)";
+        await openPublishPanel(newDoc.id, title);
+        await loadDrafts();
       } catch (err) {
         statusEl.textContent = "حصل خطأ أثناء الحفظ: " + err.message;
         statusEl.style.color = "var(--bad)";
       }
     });
+
+    // ---------- فتح لوحة النشر لورقة معيّنة ----------
+    let currentPublishId = null;
+
+    async function openPublishPanel(worksheetId, title) {
+      currentPublishId = worksheetId;
+      document.getElementById("publishTitle").textContent = title;
+      const box = document.getElementById("classCheckboxes");
+      box.innerHTML = "جاري تحميل الفصول...";
+
+      const classesSnap = await getDocs(collection(db, "classes"));
+      if (classesSnap.empty) {
+        box.innerHTML = `<p style="font-size:13px;color:var(--bad);">مفيش فصول متاحة — أنشئ فصل من صفحة إدارة الطلاب الأول.</p>`;
+      } else {
+        box.innerHTML = classesSnap.docs.map((d) => {
+          const c = d.data();
+          const periodLabel = c.period === "first" ? "الفترة الأولى" : "الفترة الثانية";
+          const label = c.name ? `${c.code} - ${c.name} (${periodLabel})` : `${c.code} (${periodLabel})`;
+          return `
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:14px;">
+              <input type="checkbox" value="${d.id}" data-class-check>
+              ${label}
+            </label>`;
+        }).join("");
+      }
+
+      document.getElementById("publishCard").style.display = "block";
+      document.getElementById("publishCard").scrollIntoView({ behavior: "smooth" });
+    }
+
+    document.getElementById("confirmPublishBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("publishStatus");
+      const selected = Array.from(document.querySelectorAll("[data-class-check]:checked")).map((cb) => cb.value);
+
+      if (selected.length === 0) {
+        statusEl.textContent = "اختر فصل واحد على الأقل.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+
+      statusEl.textContent = "جاري النشر...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        const dueDateVal = document.getElementById("dueDateInput").value;
+        await updateDoc(doc(db, "worksheets", currentPublishId), {
+          status: "published",
+          assignedClassIds: selected,
+          dueDate: dueDateVal || null,
+          publishedAt: serverTimestamp()
+        });
+        statusEl.textContent = "تم نشر الورقة بنجاح — هتظهر للطلاب في الفصول المحددة.";
+        statusEl.style.color = "var(--ok)";
+        await loadDrafts();
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ أثناء النشر: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    });
+
+    // ---------- عرض المسودات الحالية ----------
+    async function loadDrafts() {
+      const listEl = document.getElementById("draftsList");
+      listEl.innerHTML = "جاري التحميل...";
+      const q = query(collection(db, "worksheets"), where("status", "==", "draft"));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">مفيش مسودات حاليًا.</p>`;
+        return;
+      }
+
+      listEl.innerHTML = "";
+      snap.docs.forEach((d) => {
+        const w = d.data();
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);";
+        row.innerHTML = `
+          <div>
+            <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""} (${(w.exercises || []).length} تمرين)</p>
+          </div>
+          <button class="btn btn-primary small-btn" data-publish-existing="${d.id}" data-title="${escapeHtml(w.title)}">نشر</button>
+        `;
+        listEl.appendChild(row);
+      });
+
+      listEl.querySelectorAll("[data-publish-existing]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          openPublishPanel(btn.dataset.publishExisting, btn.dataset.title);
+        });
+      });
+    }
+
+    document.getElementById("refreshDraftsBtn").addEventListener("click", loadDrafts);
+    loadDrafts();
   </script>
+
 </body>
 </html>

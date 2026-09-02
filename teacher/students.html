@@ -6,16 +6,354 @@
 <title>إدارة الطلاب</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/styles.css">
-<script type="module" src="../shared/firebase-config.js"></script>
 </head>
 <body>
   <header class="app-header">
     <h1>إدارة الطلاب</h1>
   </header>
+
   <main class="container">
+
+    <!-- 1) تحديد / إنشاء الفصل -->
     <div class="card">
-      <p>هذه الصفحة قيد الإنشاء — رفع بيانات الطلاب، توليد الـ PIN، ونقل الطلاب بين الفصول سيُبنى هنا في المرحلة التالية.</p>
+      <h3 style="margin-top:0">١) تحديد الفصل</h3>
+      <label>رمز الصف (٣ أرقام)</label>
+      <input type="text" id="classCode" maxlength="3" placeholder="مثال: 105" inputmode="numeric">
+      <br><br>
+      <label>الفترة</label>
+      <select id="period">
+        <option value="first">الفترة الأولى</option>
+        <option value="second">الفترة الثانية</option>
+      </select>
+      <br><br>
+      <label>اسم الفصل (اختياري)</label>
+      <input type="text" id="className" placeholder="مثال: أول ثانوي - 3">
+      <br><br>
+      <button class="btn btn-primary" id="selectClassBtn">تحديد / إنشاء الفصل</button>
+      <p id="classStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
     </div>
+
+    <!-- 2) إضافة الطلاب -->
+    <div class="card" id="addStudentsCard" style="display:none;">
+      <h3 style="margin-top:0">٢) إضافة الطلاب</h3>
+      <p style="font-size:13px;color:var(--ink-soft);">
+        الصق البيانات — كل سطر: رقم الهوية، الاسم (مفصولين بفاصلة أو مسافة تاب)
+      </p>
+      <textarea id="pasteArea" rows="6" placeholder="1061532832, محمد أحمد الزهراني&#10;1055512345, عبدالله سعيد القحطاني"></textarea>
+      <br><br>
+      <button class="btn btn-secondary" id="previewBtn">معاينة القائمة</button>
+
+      <div id="previewWrap" style="display:none;margin-top:16px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:var(--teal-light);">
+              <th style="padding:6px;border:1px solid var(--line);">التسلسل</th>
+              <th style="padding:6px;border:1px solid var(--line);">الاسم</th>
+              <th style="padding:6px;border:1px solid var(--line);">رقم الهوية</th>
+              <th style="padding:6px;border:1px solid var(--line);">PIN</th>
+            </tr>
+          </thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+        <br>
+        <button class="btn btn-primary" id="saveStudentsBtn">حفظ الطلاب</button>
+      </div>
+      <p id="addStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+    </div>
+
+    <!-- 3) قائمة طلاب الفصل الحالي -->
+    <div class="card" id="listCard" style="display:none;">
+      <h3 style="margin-top:0">٣) طلاب الفصل الحالي</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:var(--teal-light);">
+            <th style="padding:6px;border:1px solid var(--line);">التسلسل</th>
+            <th style="padding:6px;border:1px solid var(--line);">الاسم</th>
+            <th style="padding:6px;border:1px solid var(--line);">PIN</th>
+            <th style="padding:6px;border:1px solid var(--line);">تعديل</th>
+          </tr>
+        </thead>
+        <tbody id="listBody"></tbody>
+      </table>
+    </div>
+
+    <!-- 4) نقل طالب بين الفصول -->
+    <div class="card" id="transferCard" style="display:none;">
+      <h3 style="margin-top:0">٤) نقل طالب إلى فصل آخر</h3>
+      <label>اختر الطالب</label>
+      <select id="transferStudentSelect"></select>
+      <br><br>
+      <label>رمز الصف الجديد (٣ أرقام)</label>
+      <input type="text" id="targetClassCode" maxlength="3" inputmode="numeric">
+      <br><br>
+      <label>الفترة</label>
+      <select id="targetPeriod">
+        <option value="first">الفترة الأولى</option>
+        <option value="second">الفترة الثانية</option>
+      </select>
+      <br><br>
+      <button class="btn btn-primary" id="transferBtn">نقل الطالب (مع بقاء الـ PIN كما هو)</button>
+      <p id="transferStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+    </div>
+
   </main>
+
+  <script type="module">
+    import { db } from "../shared/firebase-config.js";
+    import { assignAlphabeticalSequence, nextSequenceNumber, generatePin, isPinAvailable } from "../shared/utils.js";
+    import {
+      collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, getDoc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    let currentClassId = null;
+    let currentClassCode = null;
+    let currentPeriod = null;
+    let previewList = [];
+
+    // ---------- 1) تحديد / إنشاء الفصل ----------
+    document.getElementById("selectClassBtn").addEventListener("click", async () => {
+      const code = document.getElementById("classCode").value.trim();
+      const period = document.getElementById("period").value;
+      const name = document.getElementById("className").value.trim();
+      const statusEl = document.getElementById("classStatus");
+
+      if (!/^\d{3}$/.test(code)) {
+        statusEl.textContent = "رمز الصف لازم يكون 3 أرقام بالظبط.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+
+      statusEl.textContent = "جاري البحث عن الفصل...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        const classesRef = collection(db, "classes");
+        const q = query(classesRef, where("code", "==", code), where("period", "==", period));
+        const snap = await getDocs(q);
+
+        if (!snap.empty) {
+          currentClassId = snap.docs[0].id;
+          statusEl.textContent = `تم تحديد الفصل الموجود (${code} - ${period === "first" ? "الفترة الأولى" : "الفترة الثانية"}).`;
+        } else {
+          const newClassRef = await addDoc(classesRef, {
+            code, period, name: name || "", createdAt: serverTimestamp()
+          });
+          currentClassId = newClassRef.id;
+          statusEl.textContent = `تم إنشاء فصل جديد (${code} - ${period === "first" ? "الفترة الأولى" : "الفترة الثانية"}).`;
+        }
+        statusEl.style.color = "var(--ok)";
+        currentClassCode = code;
+        currentPeriod = period;
+
+        document.getElementById("addStudentsCard").style.display = "block";
+        document.getElementById("listCard").style.display = "block";
+        document.getElementById("transferCard").style.display = "block";
+        await loadStudentsList();
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    });
+
+    // ---------- 2) معاينة قائمة الطلاب المُلصقة ----------
+    document.getElementById("previewBtn").addEventListener("click", async () => {
+      const raw = document.getElementById("pasteArea").value.trim();
+      const addStatus = document.getElementById("addStatus");
+      if (!raw) {
+        addStatus.textContent = "الصق بيانات الطلاب الأول.";
+        addStatus.style.color = "var(--bad)";
+        return;
+      }
+
+      const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+      const parsed = lines.map((line) => {
+        const parts = line.split(/[,\t]/).map((p) => p.trim());
+        return { nationalId: parts[0] || "", name: parts[1] || "" };
+      }).filter((s) => s.nationalId && s.name);
+
+      if (parsed.length === 0) {
+        addStatus.textContent = "ما قدرناش نقرأ أي طالب — تأكد من الصيغة (رقم الهوية، الاسم).";
+        addStatus.style.color = "var(--bad)";
+        return;
+      }
+
+      // نجيب الطلاب الموجودين فعليًا في الفصل عشان نعرف أول تسلسل فاضي
+      const studentsRef = collection(db, "students");
+      const q = query(studentsRef, where("currentClassId", "==", currentClassId));
+      const existingSnap = await getDocs(q);
+      const existingStudents = existingSnap.docs.map((d) => d.data());
+
+      let sequenced;
+      if (existingStudents.length === 0) {
+        // أول رفع للفصل: ترتيب أبجدي كامل من رقم 1
+        sequenced = assignAlphabeticalSequence(parsed);
+      } else {
+        // فصل عنده طلاب بالفعل: الجدد يضافوا في الآخر بدون إعادة ترتيب القدامى
+        let nextSeq = nextSequenceNumber(existingStudents);
+        sequenced = parsed.map((s) => ({ ...s, sequenceNumber: nextSeq++ }));
+      }
+
+      previewList = sequenced.map((s) => ({
+        ...s,
+        pin: generatePin(currentClassCode, s.sequenceNumber, s.nationalId)
+      }));
+
+      const tbody = document.getElementById("previewBody");
+      tbody.innerHTML = "";
+      previewList.forEach((s) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="padding:6px;border:1px solid var(--line);text-align:center;">${s.sequenceNumber}</td>
+          <td style="padding:6px;border:1px solid var(--line);">${s.name}</td>
+          <td style="padding:6px;border:1px solid var(--line);text-align:center;">${s.nationalId}</td>
+          <td style="padding:6px;border:1px solid var(--line);text-align:center;font-weight:700;">${s.pin}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById("previewWrap").style.display = "block";
+      addStatus.textContent = `تمت معاينة ${previewList.length} طالب. راجع القائمة ثم اضغط حفظ.`;
+      addStatus.style.color = "var(--ink-soft)";
+    });
+
+    // ---------- حفظ الطلاب في Firestore ----------
+    document.getElementById("saveStudentsBtn").addEventListener("click", async () => {
+      const addStatus = document.getElementById("addStatus");
+      addStatus.textContent = "جاري الحفظ...";
+      addStatus.style.color = "var(--ink-soft)";
+      try {
+        const studentsRef = collection(db, "students");
+        for (const s of previewList) {
+          await addDoc(studentsRef, {
+            nationalId: s.nationalId,
+            name: s.name,
+            pin: s.pin,
+            originClassCode: currentClassCode,
+            sequenceNumber: s.sequenceNumber,
+            currentClassId: currentClassId,
+            currentPeriod: currentPeriod,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+        addStatus.textContent = `تم حفظ ${previewList.length} طالب بنجاح.`;
+        addStatus.style.color = "var(--ok)";
+        document.getElementById("pasteArea").value = "";
+        document.getElementById("previewWrap").style.display = "none";
+        previewList = [];
+        await loadStudentsList();
+      } catch (err) {
+        addStatus.textContent = "حصل خطأ أثناء الحفظ: " + err.message;
+        addStatus.style.color = "var(--bad)";
+      }
+    });
+
+    // ---------- 3) عرض قائمة طلاب الفصل الحالي ----------
+    async function loadStudentsList() {
+      const studentsRef = collection(db, "students");
+      const q = query(studentsRef, where("currentClassId", "==", currentClassId));
+      const snap = await getDocs(q);
+      const students = snap.docs.map((d) => ({ studentId: d.id, ...d.data() }))
+        .sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+
+      const tbody = document.getElementById("listBody");
+      tbody.innerHTML = "";
+      const transferSelect = document.getElementById("transferStudentSelect");
+      transferSelect.innerHTML = "";
+
+      students.forEach((s) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="padding:6px;border:1px solid var(--line);text-align:center;">${s.sequenceNumber}</td>
+          <td style="padding:6px;border:1px solid var(--line);">${s.name}</td>
+          <td style="padding:6px;border:1px solid var(--line);text-align:center;font-weight:700;" id="pin-${s.studentId}">${s.pin}</td>
+          <td style="padding:6px;border:1px solid var(--line);text-align:center;">
+            <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;" data-edit="${s.studentId}">تعديل PIN</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+
+        const opt = document.createElement("option");
+        opt.value = s.studentId;
+        opt.textContent = `${s.name} (${s.pin})`;
+        transferSelect.appendChild(opt);
+      });
+
+      tbody.querySelectorAll("[data-edit]").forEach((btn) => {
+        btn.addEventListener("click", () => editPin(btn.dataset.edit, students));
+      });
+    }
+
+    async function editPin(studentId, allStudentsInClass) {
+      const newPin = prompt("أدخل رقم PIN الجديد:");
+      if (!newPin) return;
+
+      if (isPinAvailable(newPin, currentClassId, studentId, allStudentsInClass)) {
+        try {
+          await updateDoc(doc(db, "students", studentId), {
+            pin: newPin,
+            updatedAt: serverTimestamp()
+          });
+          document.getElementById(`pin-${studentId}`).textContent = newPin;
+          await loadStudentsList();
+        } catch (err) {
+          alert("حصل خطأ: " + err.message);
+        }
+      } else {
+        alert("هذا الرقم مستخدم بالفعل لطالب آخر في نفس الفصل. اختر رقمًا مختلفًا.");
+      }
+    }
+
+    // ---------- 4) نقل طالب بين الفصول (بدون تغيير PIN) ----------
+    document.getElementById("transferBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("transferStatus");
+      const studentId = document.getElementById("transferStudentSelect").value;
+      const targetCode = document.getElementById("targetClassCode").value.trim();
+      const targetPeriod = document.getElementById("targetPeriod").value;
+
+      if (!studentId) {
+        statusEl.textContent = "اختر طالب أولًا.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+      if (!/^\d{3}$/.test(targetCode)) {
+        statusEl.textContent = "رمز الصف الجديد لازم يكون 3 أرقام.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+
+      statusEl.textContent = "جاري النقل...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        const classesRef = collection(db, "classes");
+        const q = query(classesRef, where("code", "==", targetCode), where("period", "==", targetPeriod));
+        const snap = await getDocs(q);
+
+        let targetClassId;
+        if (!snap.empty) {
+          targetClassId = snap.docs[0].id;
+        } else {
+          const newClassRef = await addDoc(classesRef, {
+            code: targetCode, period: targetPeriod, name: "", createdAt: serverTimestamp()
+          });
+          targetClassId = newClassRef.id;
+        }
+
+        // النقل: نغيّر currentClassId و currentPeriod فقط — الـ PIN وoriginClassCode وsequenceNumber يفضلوا كما هم
+        await updateDoc(doc(db, "students", studentId), {
+          currentClassId: targetClassId,
+          currentPeriod: targetPeriod,
+          updatedAt: serverTimestamp()
+        });
+
+        statusEl.textContent = "تم نقل الطالب بنجاح — الـ PIN وسجله بقوا كما هما.";
+        statusEl.style.color = "var(--ok)";
+        await loadStudentsList();
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    });
+  </script>
 </body>
 </html>

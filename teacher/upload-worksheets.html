@@ -106,12 +106,20 @@
       <div id="draftsList" style="margin-top:14px;"></div>
     </div>
 
+    <!-- 6) بنك الأسئلة -->
+    <div class="card">
+      <h3 style="margin-top:0">٦) بنك الأسئلة</h3>
+      <p style="font-size:12px;color:var(--ink-soft);">أوراق محفوظة لإعادة استخدامها في سنوات قادمة — تُنسخ كمسودة جديدة كل مرة تحتاجها.</p>
+      <button class="btn btn-secondary" id="refreshBankBtn">تحديث القائمة</button>
+      <div id="bankList" style="margin-top:14px;"></div>
+    </div>
+
   </main>
 
   <script type="module">
     import { db } from "../shared/firebase-config.js";
     import {
-      collection, addDoc, getDocs, query, where, doc, updateDoc, serverTimestamp
+      collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -701,9 +709,11 @@
             <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
             <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""} (${(w.exercises || []).length} تمرين)</p>
           </div>
-          <div style="display:flex;gap:6px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-secondary small-btn" data-preview-existing="${d.id}" data-title="${escapeHtml(w.title)}">معاينة</button>
             <button class="btn btn-primary small-btn" data-publish-existing="${d.id}" data-title="${escapeHtml(w.title)}">نشر</button>
+            <button class="btn btn-secondary small-btn" data-tobank="${d.id}">نقل لبنك الأسئلة</button>
+            <button class="remove-btn" data-delete-draft="${d.id}">حذف</button>
           </div>
         `;
         listEl.appendChild(row);
@@ -719,6 +729,33 @@
       listEl.querySelectorAll("[data-publish-existing]").forEach((btn) => {
         btn.addEventListener("click", () => {
           openPublishPanel(btn.dataset.publishExisting, btn.dataset.title);
+        });
+      });
+
+      listEl.querySelectorAll("[data-delete-draft]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("متأكد إنك عايز تحذف المسودة دي نهائيًا؟")) return;
+          await deleteDoc(doc(db, "worksheets", btn.dataset.deleteDraft));
+          await loadDrafts();
+        });
+      });
+
+      listEl.querySelectorAll("[data-tobank]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("هتُنقل الورقة دي لبنك الأسئلة وتختفي من المسودات. متابعة؟")) return;
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.tobank);
+          const w = wDoc.data();
+          await addDoc(collection(db, "questionBank"), {
+            title: w.title,
+            unit: w.unit,
+            lesson: w.lesson,
+            sourceFileName: w.sourceFileName || "",
+            exercises: w.exercises,
+            savedAt: serverTimestamp()
+          });
+          await deleteDoc(doc(db, "worksheets", btn.dataset.tobank));
+          await loadDrafts();
+          await loadBank();
         });
       });
     }
@@ -764,7 +801,78 @@
     }
 
     document.getElementById("refreshDraftsBtn").addEventListener("click", loadDrafts);
+
+    // ---------- بنك الأسئلة ----------
+    async function loadBank() {
+      const listEl = document.getElementById("bankList");
+      listEl.innerHTML = "جاري التحميل...";
+      const snap = await getDocs(collection(db, "questionBank"));
+
+      if (snap.empty) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">بنك الأسئلة فاضي حاليًا.</p>`;
+        return;
+      }
+
+      listEl.innerHTML = "";
+      snap.docs.forEach((d) => {
+        const w = d.data();
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px;";
+        row.innerHTML = `
+          <div>
+            <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""} (${(w.exercises || []).length} تمرين)</p>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-secondary small-btn" data-preview-bank="${d.id}" data-title="${escapeHtml(w.title)}">معاينة</button>
+            <button class="btn btn-primary small-btn" data-use-bank="${d.id}">استخدام (نسخ كمسودة جديدة)</button>
+            <button class="remove-btn" data-delete-bank="${d.id}">حذف نهائي</button>
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+
+      listEl.querySelectorAll("[data-preview-bank]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.previewBank);
+          renderWorksheetPreview(btn.dataset.title, wDoc.data());
+        });
+      });
+
+      listEl.querySelectorAll("[data-use-bank]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.useBank);
+          const w = wDoc.data();
+          await addDoc(collection(db, "worksheets"), {
+            title: w.title,
+            unit: w.unit,
+            lesson: w.lesson,
+            sourceFileName: w.sourceFileName || "",
+            status: "draft",
+            assignedClassIds: [],
+            assignedStudentIds: [],
+            dueDate: null,
+            createdAt: serverTimestamp(),
+            publishedAt: null,
+            exercises: w.exercises
+          });
+          alert("تم نسخ الورقة كمسودة جديدة. تقدر تلاقيها في قائمة المسودات وتنشرها.");
+          await loadDrafts();
+        });
+      });
+
+      listEl.querySelectorAll("[data-delete-bank]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("متأكد إنك عايز تحذف الورقة نهائيًا من بنك الأسئلة؟ ده مش هينفع يترجع.")) return;
+          await deleteDoc(doc(db, "questionBank", btn.dataset.deleteBank));
+          await loadBank();
+        });
+      });
+    }
+
+    document.getElementById("refreshBankBtn").addEventListener("click", loadBank);
     loadDrafts();
+    loadBank();
   </script>
 
 </body>

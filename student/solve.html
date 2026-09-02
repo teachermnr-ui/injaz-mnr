@@ -147,29 +147,39 @@
 
         } else if (ex.type === "matching") {
           const pairs = ex.data.pairs || [];
-          const shuffledRights = shuffle(pairs.map((p) => p.right));
-          block.innerHTML = `<p style="margin-top:0;">${num}صل بين العمودين</p>` +
-            pairs.map((p, i) => `
-              <div class="item-line">
-                <label style="font-size:13px;">${escapeHtml(p.left)}</label>
-                <select class="answer-select" data-match="${ex.exerciseId}:${i}">
-                  <option value="">اختر...</option>
-                  ${shuffledRights.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("")}
-                </select>
-              </div>`).join("");
+          block.innerHTML = `<p style="margin-top:0;">${num}صل بين العمودين</p>
+            <p style="font-size:11px;color:var(--ink-soft);">اضغط عنصر من (أ) ثم عنصر من (ب) لربطهما. اضغط عنصر مربوط لتغيير اختياره.</p>
+            <div id="pairwrap-${ex.exerciseId}"></div>`;
+          wrap.appendChild(block);
+          setupPairColumns(
+            document.getElementById(`pairwrap-${ex.exerciseId}`),
+            ex.exerciseId,
+            pairs.map((p) => p.left),
+            pairs.map((p) => p.right)
+          );
+          return;
 
         } else if (ex.type === "ordering") {
           const items = ex.data.items || [];
-          const shuffledItems = shuffle(items);
-          block.innerHTML = `<p style="margin-top:0;">${num}رتّب العناصر بالترتيب الصحيح</p>` +
-            items.map((_, i) => `
-              <div class="item-line">
-                <label style="font-size:13px;">الترتيب ${i + 1}</label>
-                <select class="answer-select" data-order="${ex.exerciseId}:${i}">
-                  <option value="">اختر...</option>
-                  ${shuffledItems.map((it) => `<option value="${escapeHtml(it)}">${escapeHtml(it)}</option>`).join("")}
-                </select>
-              </div>`).join("");
+          block.innerHTML = `<p style="margin-top:0;">${num}رتّب العناصر بالترتيب الصحيح</p>
+            <p style="font-size:11px;color:var(--ink-soft);">اضغط رقم الترتيب ثم العنصر المناسب له.</p>
+            <div id="pairwrap-${ex.exerciseId}"></div>`;
+          wrap.appendChild(block);
+          setupPairColumns(
+            document.getElementById(`pairwrap-${ex.exerciseId}`),
+            ex.exerciseId,
+            items.map((_, i) => `الترتيب ${i + 1}`),
+            items
+          );
+          return;
+
+        } else if (ex.type === "fill-table") {
+          const t = ex.data;
+          block.innerHTML = `<p style="margin-top:0;">${num}أكمل الجدول</p>
+            <div id="tblsolve-${ex.exerciseId}"></div>`;
+          wrap.appendChild(block);
+          renderFillTable(document.getElementById(`tblsolve-${ex.exerciseId}`), ex.exerciseId, t);
+          return;
 
         } else {
           block.innerHTML = `<p style="margin-top:0;">${num}سؤال مفتوح</p>
@@ -181,6 +191,136 @@
       });
 
       bindAnswerEvents();
+    }
+
+    // ---------- أعمدة متقابلة قابلة للتعديل (تُستخدم في المزاوجة والترتيب) ----------
+    // rightItems: عمود (أ) الثابت باليمين — الترتيب فيه لا يتغيّر
+    // poolItems: عمود (ب) المخلوط بالشمال — نفس عدد rightItems
+    // بيحفظ في studentAnswers[`${exerciseId}:${i}`] = النص المرتبط من عمود (ب)
+    function setupPairColumns(container, exerciseId, rightItems, poolItems) {
+      const shuffledPool = shuffle(poolItems);
+      const colors = ["#E6F1FB", "#EAF3DE", "#FAEEDA", "#FBEAF0", "#EEEDFE"];
+      const colorText = ["#0C447C", "#27500A", "#633806", "#72243E", "#3C3489"];
+
+      const grid = document.createElement("div");
+      grid.style.cssText = "display:grid;grid-template-columns:1.6fr 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;";
+      container.appendChild(grid);
+
+      const rightPair = {}; // rightIndex -> poolIndex
+      const poolPair = {};  // poolIndex -> rightIndex
+      let pending = null;
+
+      const rightCells = [];
+      const poolCells = [];
+
+      rightItems.forEach((text, i) => {
+        const cell = document.createElement("div");
+        cell.textContent = text;
+        cell.style.cssText = "padding:10px;font-size:13px;border-top:1px solid var(--line);cursor:pointer;";
+        cell.addEventListener("click", () => handleTap("right", i));
+        grid.appendChild(cell);
+        rightCells.push(cell);
+
+        const poolCell = document.createElement("div");
+        poolCell.textContent = shuffledPool[i];
+        poolCell.style.cssText = "padding:10px;font-size:13px;border-top:1px solid var(--line);border-right:1px solid var(--line);cursor:pointer;text-align:center;";
+        poolCell.addEventListener("click", () => handleTap("pool", i));
+        grid.appendChild(poolCell);
+        poolCells.push(poolCell);
+      });
+
+      function handleTap(side, idx) {
+        if (pending && pending.side === side && pending.idx === idx) {
+          pending = null;
+          render();
+          return;
+        }
+        if (pending && pending.side !== side) {
+          const rIdx = side === "right" ? idx : pending.idx;
+          const pIdx = side === "pool" ? idx : pending.idx;
+          if (rightPair[rIdx] !== undefined) delete poolPair[rightPair[rIdx]];
+          if (poolPair[pIdx] !== undefined) delete rightPair[poolPair[pIdx]];
+          rightPair[rIdx] = pIdx;
+          poolPair[pIdx] = rIdx;
+          pending = null;
+          studentAnswers[`${exerciseId}:${rIdx}`] = shuffledPool[pIdx];
+          render();
+          return;
+        }
+        pending = { side, idx };
+        render();
+      }
+
+      function render() {
+        rightCells.forEach((cell, i) => {
+          cell.style.outline = "none";
+          cell.style.background = "transparent";
+          cell.style.color = "var(--ink)";
+          cell.style.fontWeight = "400";
+          if (pending && pending.side === "right" && pending.idx === i) {
+            cell.style.outline = "2px solid var(--ink-soft)";
+          } else if (rightPair[i] !== undefined) {
+            cell.style.background = colors[i % colors.length];
+            cell.style.color = colorText[i % colors.length];
+            cell.style.fontWeight = "700";
+          }
+        });
+        poolCells.forEach((cell, i) => {
+          cell.style.outline = "none";
+          cell.style.background = "transparent";
+          cell.style.color = "var(--ink)";
+          cell.style.fontWeight = "400";
+          if (pending && pending.side === "pool" && pending.idx === i) {
+            cell.style.outline = "2px solid var(--ink-soft)";
+          } else if (poolPair[i] !== undefined) {
+            const rIdx = poolPair[i];
+            cell.style.background = colors[rIdx % colors.length];
+            cell.style.color = colorText[rIdx % colors.length];
+            cell.style.fontWeight = "700";
+          }
+        });
+      }
+
+      render();
+    }
+
+    // ---------- عرض تمرين أكمل الجدول للطالب (خلايا الإجابة فاضية قابلة للتعبئة) ----------
+    function renderFillTable(container, exerciseId, t) {
+      const grid = document.createElement("div");
+      grid.style.cssText = `display:grid;grid-template-columns:repeat(${t.cols},minmax(80px,1fr));gap:6px;`;
+      container.appendChild(grid);
+
+      for (let r = 0; r < t.rows; r++) {
+        for (let c = 0; c < t.cols; c++) {
+          const isHeaderRow = r === 0;
+          const isHeaderCol = c === t.cols - 1;
+
+          if (isHeaderRow && isHeaderCol) {
+            const cell = document.createElement("div");
+            cell.textContent = t.corner || "";
+            cell.style.cssText = "background:#2f5aa8;color:#fff;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
+            grid.appendChild(cell);
+          } else if (isHeaderRow) {
+            const cell = document.createElement("div");
+            cell.textContent = t.colHeaders[c] || "";
+            cell.style.cssText = "background:#2f5aa8;color:#fff;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
+            grid.appendChild(cell);
+          } else if (isHeaderCol) {
+            const cell = document.createElement("div");
+            cell.textContent = t.rowHeaders[r - 1] || "";
+            cell.style.cssText = "background:#2f5aa8;color:#fff;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
+            grid.appendChild(cell);
+          } else {
+            const input = document.createElement("input");
+            input.type = "text";
+            input.style.cssText = "width:100%;box-sizing:border-box;border:2px solid #d43d8f;border-radius:6px;padding:8px;font-size:12px;text-align:center;";
+            input.addEventListener("input", (e) => {
+              studentAnswers[`${exerciseId}:${r - 1}:${c}`] = e.target.value;
+            });
+            grid.appendChild(input);
+          }
+        }
+      }
     }
 
     function bindAnswerEvents() {
@@ -203,12 +343,6 @@
           e.target.classList.add("selected");
           studentAnswers[key] = +e.target.dataset.oi;
         });
-      });
-      document.querySelectorAll("[data-match]").forEach((sel) => {
-        sel.addEventListener("change", (e) => { studentAnswers[e.target.dataset.match] = e.target.value; });
-      });
-      document.querySelectorAll("[data-order]").forEach((sel) => {
-        sel.addEventListener("change", (e) => { studentAnswers[e.target.dataset.order] = e.target.value; });
       });
       document.querySelectorAll("[data-open]").forEach((ta) => {
         ta.addEventListener("input", (e) => { studentAnswers[e.target.dataset.open] = e.target.value; });
@@ -279,6 +413,23 @@
             return correct;
           });
           answersArray.push({ exerciseId: ex.exerciseId, answer: vals, isCorrect: results.every(Boolean) });
+
+        } else if (ex.type === "fill-table") {
+          const t = ex.data;
+          const grid = [];
+          let allCorrect = true;
+          for (let r = 0; r < t.answers.length; r++) {
+            const rowVals = [];
+            for (let c = 0; c < t.answers[r].length; c++) {
+              const val = studentAnswers[`${ex.exerciseId}:${r}:${c}`] || "";
+              rowVals.push(val);
+              autoTotal++;
+              const correct = normalize(val) === normalize(t.answers[r][c]) && t.answers[r][c];
+              if (correct) autoCorrect++; else allCorrect = false;
+            }
+            grid.push(rowVals);
+          }
+          answersArray.push({ exerciseId: ex.exerciseId, answer: grid, isCorrect: allCorrect });
 
         } else {
           answersArray.push({ exerciseId: ex.exerciseId, answer: studentAnswers[ex.exerciseId] || "", isCorrect: null });

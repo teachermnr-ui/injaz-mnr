@@ -171,6 +171,40 @@
       return "open-text";
     }
 
+    // ---------- تحويل تمرين محفوظ (صيغة Firestore) لصيغة قابلة للتعديل في المحرر ----------
+    function hydrateExercise(savedEx) {
+      exCounter++;
+      const base = { id: "ex" + exCounter, type: savedEx.type, rawText: "" };
+      if (savedEx.type === "matching") {
+        base.pairs = JSON.parse(JSON.stringify(savedEx.data.pairs || [{ left: "", right: "" }]));
+      } else if (savedEx.type === "fill-table") {
+        const d = savedEx.data;
+        base.table = {
+          cols: d.cols,
+          rows: d.rows,
+          cells: (d.cells || []).map((r) => (r.row || []).map((cell) => ({ ...cell })))
+        };
+      } else if (savedEx.type === "open-text") {
+        base.prompt = savedEx.data.prompt || "";
+      } else {
+        base.items = JSON.parse(JSON.stringify(savedEx.data.items || []));
+      }
+      return base;
+    }
+
+    // ---------- تحميل ورقة محفوظة (مسودة أو من بنك الأسئلة) داخل المحرر للتعديل ----------
+    // الحفظ بعد كده بينشئ مستند جديد دايمًا، فالأصل بيفضل زي ما هو
+    function loadWorksheetIntoEditor(w) {
+      exercises = (w.exercises || []).map(hydrateExercise);
+      document.getElementById("worksheetTitle").value = (w.title || "") + " (نسخة)";
+      document.getElementById("worksheetUnit").value = w.unit || "";
+      document.getElementById("worksheetLesson").value = w.lesson || "";
+      renderExercises();
+      document.getElementById("reviewCard").style.display = "block";
+      document.getElementById("saveCard").style.display = "block";
+      document.getElementById("reviewCard").scrollIntoView({ behavior: "smooth" });
+    }
+
     function makeExercise(type, rawText) {
       exCounter++;
       const base = { id: "ex" + exCounter, type, rawText };
@@ -204,14 +238,19 @@
     }
 
     // ---------- بناء جدول فاضي بعدد أعمدة وصفوف معيّن (يشمل عمود/صف العناوين) ----------
+    // كل خلية عندها نوع مستقل (header/answer) قابل للتبديل لاحقًا بالضغط المطول
+    // افتراضيًا: الصف الأول والعمود الأول (اليمين في RTL) = عناوين
     function makeEmptyTable(cols, rows) {
-      return {
-        cols, rows,
-        corner: "",
-        colHeaders: Array(Math.max(cols - 1, 0)).fill(""),
-        rowHeaders: Array(Math.max(rows - 1, 0)).fill(""),
-        answers: Array(Math.max(rows - 1, 0)).fill(null).map(() => Array(Math.max(cols - 1, 0)).fill(""))
-      };
+      const cells = [];
+      for (let r = 0; r < rows; r++) {
+        const row = [];
+        for (let c = 0; c < cols; c++) {
+          const isHeader = r === 0 || c === 0;
+          row.push({ type: isHeader ? "header" : "answer", value: "" });
+        }
+        cells.push(row);
+      }
+      return { cols, rows, cells };
     }
 
     // ---------- محاولة استخراج أسئلة الاختيار من متعدد وخياراتها ----------
@@ -560,20 +599,16 @@
         </div>
         <button class="btn btn-secondary small-btn" id="genTableBtn-${ex.id}" style="margin-bottom:12px;">توليد الجدول</button>
         <div id="tableGrid-${ex.id}"></div>
-        <p style="font-size:11px;color:var(--ink-soft);margin-top:8px;">الخلايا الزرقاء = العناوين، الخلايا الوردية = الإجابة الصحيحة (تظهر فاضية للطالب).</p>
+        <p style="font-size:11px;color:var(--ink-soft);margin-top:8px;">الخلايا الزرقاء = عناوين، الخلايا الوردية = إجابة يملأها الطالب. اضغط مطولًا على أي خلية لتبديل نوعها.</p>
       `;
 
       document.getElementById(`genTableBtn-${ex.id}`).addEventListener("click", () => {
         const newCols = Math.max(2, parseInt(document.getElementById(`colsInput-${ex.id}`).value, 10) || 2);
         const newRows = Math.max(2, parseInt(document.getElementById(`rowsInput-${ex.id}`).value, 10) || 2);
         const resized = makeEmptyTable(newCols, newRows);
-        // نحافظ على القيم القديمة قد الإمكان بدل ما نمسحها كلها
-        resized.corner = t.corner;
-        for (let i = 0; i < Math.min(resized.colHeaders.length, t.colHeaders.length); i++) resized.colHeaders[i] = t.colHeaders[i];
-        for (let i = 0; i < Math.min(resized.rowHeaders.length, t.rowHeaders.length); i++) resized.rowHeaders[i] = t.rowHeaders[i];
-        for (let r = 0; r < Math.min(resized.answers.length, t.answers.length); r++) {
-          for (let c = 0; c < Math.min(resized.answers[r].length, t.answers[r].length); c++) {
-            resized.answers[r][c] = t.answers[r][c];
+        for (let r = 0; r < Math.min(newRows, t.rows); r++) {
+          for (let c = 0; c < Math.min(newCols, t.cols); c++) {
+            resized.cells[r][c] = { ...t.cells[r][c] };
           }
         }
         ex.table = resized;
@@ -591,35 +626,39 @@
 
       for (let r = 0; r < t.rows; r++) {
         for (let c = 0; c < t.cols; c++) {
-          const isHeaderRow = r === 0;
-          const isHeaderCol = c === t.cols - 1;
+          const cellData = t.cells[r][c];
           const cell = document.createElement("input");
           cell.type = "text";
-
-          if (isHeaderRow && isHeaderCol) {
-            cell.value = t.corner;
-            cell.placeholder = "عنوان الجدول";
-            cell.style.cssText = "background:#2f5aa8;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
-            cell.addEventListener("input", (e) => { t.corner = e.target.value; });
-          } else if (isHeaderRow) {
-            cell.value = t.colHeaders[c] || "";
-            cell.placeholder = "عنوان عمود";
-            cell.style.cssText = "background:#2f5aa8;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
-            cell.addEventListener("input", (e) => { t.colHeaders[c] = e.target.value; });
-          } else if (isHeaderCol) {
-            cell.value = t.rowHeaders[r - 1] || "";
-            cell.placeholder = "عنوان صف";
-            cell.style.cssText = "background:#2f5aa8;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
-            cell.addEventListener("input", (e) => { t.rowHeaders[r - 1] = e.target.value; });
-          } else {
-            cell.value = t.answers[r - 1][c] || "";
-            cell.placeholder = "الإجابة الصحيحة";
-            cell.style.cssText = "background:#fff;border:2px solid #d43d8f;border-radius:6px;padding:8px;font-size:12px;text-align:center;";
-            cell.addEventListener("input", (e) => { t.answers[r - 1][c] = e.target.value; });
-          }
+          cell.value = cellData.value || "";
+          cell.placeholder = cellData.type === "header" ? "عنوان" : "الإجابة الصحيحة";
+          applyTableCellStyle(cell, cellData.type);
+          cell.addEventListener("input", (e) => { cellData.value = e.target.value; });
+          attachLongPress(cell, () => {
+            cellData.type = cellData.type === "header" ? "answer" : "header";
+            drawTableGrid(container, t);
+          });
           grid.appendChild(cell);
         }
       }
+    }
+
+    function applyTableCellStyle(el, type) {
+      if (type === "header") {
+        el.style.cssText = "background:#2f5aa8;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
+      } else {
+        el.style.cssText = "background:#fff;border:2px solid #d43d8f;border-radius:6px;padding:8px;font-size:12px;text-align:center;";
+      }
+    }
+
+    // ---------- ضغط مطوّل (تعمل على اللمس والفأرة) ----------
+    function attachLongPress(el, callback) {
+      let timer = null;
+      const start = () => { timer = setTimeout(callback, 550); };
+      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      el.addEventListener("pointerdown", start);
+      el.addEventListener("pointerup", cancel);
+      el.addEventListener("pointerleave", cancel);
+      el.addEventListener("pointercancel", cancel);
     }
 
     function bindEditorEvents(el, ex) {
@@ -711,7 +750,7 @@
             type: ex.type,
             data: ex.type === "open-text" ? { prompt: ex.prompt }
                 : ex.type === "matching" ? { pairs: ex.pairs }
-                : ex.type === "fill-table" ? ex.table
+                : ex.type === "fill-table" ? { cols: ex.table.cols, rows: ex.table.rows, cells: ex.table.cells.map((row) => ({ row })) }
                 : { items: ex.items },
             autoGraded: ex.type !== "open-text"
           }))
@@ -809,6 +848,7 @@
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-secondary small-btn" data-preview-existing="${d.id}" data-title="${escapeHtml(w.title)}">معاينة</button>
+            <button class="btn btn-secondary small-btn" data-edit-existing="${d.id}">تعديل</button>
             <button class="btn btn-primary small-btn" data-publish-existing="${d.id}" data-title="${escapeHtml(w.title)}">نشر</button>
             <button class="btn btn-secondary small-btn" data-tobank="${d.id}">نقل لبنك الأسئلة</button>
             <button class="remove-btn" data-delete-draft="${d.id}">حذف</button>
@@ -821,6 +861,13 @@
         btn.addEventListener("click", async () => {
           const wDoc = snap.docs.find((d) => d.id === btn.dataset.previewExisting);
           renderWorksheetPreview(btn.dataset.title, wDoc.data());
+        });
+      });
+
+      listEl.querySelectorAll("[data-edit-existing]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.editExisting);
+          loadWorksheetIntoEditor(wDoc.data());
         });
       });
 
@@ -858,35 +905,27 @@
       });
     }
 
-    // ---------- عرض معاينة شبيهة بشاشة الطالب ----------
+    // ---------- عرض معاينة شبيهة بشاشة الطالب (t هنا بصيغة Firestore المغلّفة) ----------
     function renderTablePreview(container, t) {
       if (!container || !t) return;
+      const cellsMatrix = (t.cells || []).map((r) => r.row || []);
       const grid = document.createElement("div");
       grid.style.cssText = `display:grid;grid-template-columns:repeat(${t.cols},minmax(80px,1fr));gap:6px;`;
       container.appendChild(grid);
 
-      for (let r = 0; r < t.rows; r++) {
-        for (let c = 0; c < t.cols; c++) {
-          const isHeaderRow = r === 0;
-          const isHeaderCol = c === t.cols - 1;
+      cellsMatrix.forEach((row) => {
+        row.forEach((cellData) => {
           const cell = document.createElement("div");
           cell.style.cssText = "border-radius:6px;padding:8px;font-size:12px;text-align:center;min-height:16px;";
-
-          if (isHeaderRow && isHeaderCol) {
-            cell.textContent = t.corner || "";
-            cell.style.background = "#2f5aa8"; cell.style.color = "#fff"; cell.style.fontWeight = "700";
-          } else if (isHeaderRow) {
-            cell.textContent = t.colHeaders[c] || "";
-            cell.style.background = "#2f5aa8"; cell.style.color = "#fff"; cell.style.fontWeight = "700";
-          } else if (isHeaderCol) {
-            cell.textContent = t.rowHeaders[r - 1] || "";
+          if (cellData.type === "header") {
+            cell.textContent = cellData.value || "";
             cell.style.background = "#2f5aa8"; cell.style.color = "#fff"; cell.style.fontWeight = "700";
           } else {
             cell.style.background = "#fff"; cell.style.border = "2px solid #d43d8f";
           }
           grid.appendChild(cell);
-        }
-      }
+        });
+      });
     }
 
     function renderWorksheetPreview(title, worksheetData) {
@@ -956,8 +995,9 @@
             <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
             <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""} (${(w.exercises || []).length} تمرين)</p>
           </div>
-          <div style="display:flex;gap:6px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-secondary small-btn" data-preview-bank="${d.id}" data-title="${escapeHtml(w.title)}">معاينة</button>
+            <button class="btn btn-secondary small-btn" data-edit-bank="${d.id}">تعديل</button>
             <button class="btn btn-primary small-btn" data-use-bank="${d.id}">استخدام (نسخ كمسودة جديدة)</button>
             <button class="remove-btn" data-delete-bank="${d.id}">حذف نهائي</button>
           </div>
@@ -969,6 +1009,13 @@
         btn.addEventListener("click", () => {
           const wDoc = snap.docs.find((d) => d.id === btn.dataset.previewBank);
           renderWorksheetPreview(btn.dataset.title, wDoc.data());
+        });
+      });
+
+      listEl.querySelectorAll("[data-edit-bank]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.editBank);
+          loadWorksheetIntoEditor(wDoc.data());
         });
       });
 

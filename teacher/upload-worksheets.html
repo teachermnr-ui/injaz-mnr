@@ -29,7 +29,23 @@
     <div class="card">
       <h3 style="margin-top:0">١) رفع ملف PDF</h3>
       <input type="file" id="pdfInput" accept="application/pdf">
-      <br><br>
+      <p id="pageCountInfo" style="font-size:12px;color:var(--ink-soft);margin-top:6px;"></p>
+      <br>
+      <div style="display:flex; gap:10px;">
+        <div style="flex:1;">
+          <label>من صفحة (اختياري)</label>
+          <input type="text" id="pageFrom" inputmode="numeric" placeholder="مثال: 2">
+        </div>
+        <div style="flex:1;">
+          <label>إلى صفحة (اختياري)</label>
+          <input type="text" id="pageTo" inputmode="numeric" placeholder="مثال: 3">
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">سيبهم فاضيين لاستخراج الملف كامل.</p>
+      <br>
+      <button class="btn btn-secondary" id="previewPagesBtn">معاينة الصفحات المحددة</button>
+      <div id="pagePreviewWrap" style="margin-top:14px;display:flex;flex-direction:column;gap:10px;"></div>
+      <br>
       <button class="btn btn-primary" id="extractBtn">استخراج التمارين</button>
       <p id="extractStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
     </div>
@@ -84,14 +100,29 @@
       }).filter((l) => l.length > 0);
     }
 
-    // ---------- تصنيف نوع التمرين حسب كلمات مفتاحية ثابتة ----------
+    // ---------- تصنيف نوع التمرين ----------
+    // ملاحظة: استخراج نص PDF العربي غالبًا بيبدّل حروف متجاورة (مثال: "اختر" ← "اخرت").
+    // فبدل الاعتماد على جمل كاملة، بندوّر على كلمات قصيرة أقل عرضة للتشويش + علامات هيكلية
+    // (حروف الاختيار أ/ب/ج منفصلة، نقط متتالية للفراغات) وهي أوثق من الجملة الكاملة.
     function detectType(blockText) {
-      if (/اختر الإجابة الصحيحة|اختر الاجابة الصحيحة/.test(blockText)) return "mcq";
-      if (/ضع علامة|صح.*خطأ|صح.*خطا/.test(blockText)) return "true-false";
-      if (/صل بين/.test(blockText)) return "matching";
-      if (/رتّب|رتب /.test(blockText)) return "ordering";
-      if (/أكمل الفراغ|املأ الفراغ|أكمل الجدول/.test(blockText)) return "fill-blank";
-      if (/اذكر|عدّد|عدد /.test(blockText)) return "open-text";
+      const hasOptionLetters =
+        /(^|\s)[أإا](\s|$)/.test(blockText) &&
+        /(^|\s)ب(\s|$)/.test(blockText) &&
+        /(^|\s)ج(\s|$)/.test(blockText);
+      const hasBlanks = /\.{3,}|_{3,}/.test(blockText);
+      const hasCorrectWord = /الصحيح/.test(blockText);
+      const hasMatchWord = /\bصل\b/.test(blockText);
+      const hasOrderWord = /رتّ?ب/.test(blockText);
+      const hasMarkWord = /علامة/.test(blockText);
+      const hasBlankWord = /الفراغ/.test(blockText);
+      const hasListWord = /اذكر|عدّ?د/.test(blockText);
+
+      if (hasOptionLetters && hasCorrectWord) return "mcq";
+      if (hasMarkWord) return "true-false";
+      if (hasMatchWord) return "matching";
+      if (hasOrderWord) return "ordering";
+      if (hasBlankWord || hasBlanks) return "fill-blank";
+      if (hasListWord) return "open-text";
       return "open-text";
     }
 
@@ -119,6 +150,82 @@
       return base;
     }
 
+    // ---------- معاينة الصفحات المحددة كصور ----------
+    document.getElementById("previewPagesBtn").addEventListener("click", async () => {
+      const fileInput = document.getElementById("pdfInput");
+      const previewWrap = document.getElementById("pagePreviewWrap");
+      if (!fileInput.files[0]) {
+        alert("اختر ملف PDF أولًا.");
+        return;
+      }
+
+      previewWrap.innerHTML = `<p style="font-size:12px;color:var(--ink-soft);">جاري تجهيز المعاينة...</p>`;
+
+      try {
+        const arrayBuffer = await fileInput.files[0].arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+        const fromRaw = document.getElementById("pageFrom").value.trim();
+        const toRaw = document.getElementById("pageTo").value.trim();
+        let startPage = fromRaw ? parseInt(fromRaw, 10) : 1;
+        let endPage = toRaw ? parseInt(toRaw, 10) : pdf.numPages;
+        if (isNaN(startPage) || startPage < 1) startPage = 1;
+        if (isNaN(endPage) || endPage > pdf.numPages) endPage = pdf.numPages;
+        if (startPage > endPage) {
+          previewWrap.innerHTML = `<p style="font-size:12px;color:var(--bad);">رقم صفحة البداية أكبر من النهاية.</p>`;
+          return;
+        }
+        // حماية بسيطة: متعرضش أكتر من 15 صفحة دفعة واحدة (أداء الجهاز)
+        if (endPage - startPage + 1 > 15) {
+          previewWrap.innerHTML = `<p style="font-size:12px;color:var(--bad);">النطاق كبير جدًا للمعاينة (أكتر من 15 صفحة) — ضيّق النطاق أو استخرج مباشرة بدون معاينة.</p>`;
+          return;
+        }
+
+        previewWrap.innerHTML = "";
+        for (let i = startPage; i <= endPage; i++) {
+          const page = await pdf.getPage(i);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const scale = 320 / baseViewport.width;
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          canvas.style.border = "1px solid var(--line)";
+          canvas.style.borderRadius = "8px";
+          canvas.style.maxWidth = "100%";
+
+          const ctx = canvas.getContext("2d");
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          const label = document.createElement("p");
+          label.textContent = `صفحة ${i}`;
+          label.style.cssText = "font-size:12px;font-weight:700;color:var(--teal);margin:0;";
+
+          const box = document.createElement("div");
+          box.appendChild(label);
+          box.appendChild(canvas);
+          previewWrap.appendChild(box);
+        }
+      } catch (err) {
+        previewWrap.innerHTML = `<p style="font-size:12px;color:var(--bad);">حصل خطأ في المعاينة: ${err.message}</p>`;
+      }
+    });
+
+    // ---------- عرض عدد صفحات الملف فور اختياره ----------
+    document.getElementById("pdfInput").addEventListener("change", async (e) => {
+      const infoEl = document.getElementById("pageCountInfo");
+      if (!e.target.files[0]) { infoEl.textContent = ""; return; }
+      infoEl.textContent = "جاري قراءة عدد الصفحات...";
+      try {
+        const arrayBuffer = await e.target.files[0].arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        infoEl.textContent = `عدد صفحات الملف: ${pdf.numPages}`;
+      } catch (err) {
+        infoEl.textContent = "";
+      }
+    });
+
     // ---------- زر الاستخراج ----------
     document.getElementById("extractBtn").addEventListener("click", async () => {
       const fileInput = document.getElementById("pdfInput");
@@ -136,8 +243,21 @@
         const arrayBuffer = await fileInput.files[0].arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
+        const fromRaw = document.getElementById("pageFrom").value.trim();
+        const toRaw = document.getElementById("pageTo").value.trim();
+        let startPage = fromRaw ? parseInt(fromRaw, 10) : 1;
+        let endPage = toRaw ? parseInt(toRaw, 10) : pdf.numPages;
+
+        if (isNaN(startPage) || startPage < 1) startPage = 1;
+        if (isNaN(endPage) || endPage > pdf.numPages) endPage = pdf.numPages;
+        if (startPage > endPage) {
+          statusEl.textContent = "رقم صفحة البداية أكبر من النهاية — راجع الأرقام.";
+          statusEl.style.color = "var(--bad)";
+          return;
+        }
+
         let fullText = "";
-        for (let i = 1; i <= pdf.numPages; i++) {
+        for (let i = startPage; i <= endPage; i++) {
           const page = await pdf.getPage(i);
           const lines = await extractLinesFromPage(page);
           fullText += lines.join("\n") + "\n";
@@ -196,11 +316,22 @@
             <span class="type-badge">تمرين ${idx + 1}</span>
             ${typeSelect}
           </div>
-          <div class="raw-ref">${ex.rawText.slice(0, 400)}${ex.rawText.length > 400 ? "..." : ""}</div>
+          <label style="font-size:12px;color:var(--ink-soft);">النص الخام (عدّله لو فيه خطأ قراءة، ثم اضغط إعادة معالجة)</label>
+          <textarea class="raw-edit" data-raw="${ex.id}" rows="5" style="font-size:12px;">${escapeHtml(ex.rawText)}</textarea>
+          <button class="btn btn-secondary small-btn" data-reprocess="${ex.id}" style="margin:6px 0 10px;">إعادة معالجة هذا التمرين</button>
           <div class="ex-editor" id="editor-${ex.id}"></div>
         `;
         wrap.appendChild(div);
         renderEditor(ex);
+
+        div.querySelector(`[data-reprocess="${ex.id}"]`).addEventListener("click", () => {
+          const newRaw = div.querySelector(`[data-raw="${ex.id}"]`).value;
+          const newType = div.querySelector(`[data-retype="${ex.id}"]`).value;
+          const detectedType = detectType(newRaw);
+          exercises[idx] = makeExercise(newType === ex.type ? detectedType : newType, newRaw);
+          exercises[idx].id = ex.id;
+          renderExercises();
+        });
 
         div.querySelector(`[data-retype="${ex.id}"]`).addEventListener("change", (e) => {
           const newType = e.target.value;

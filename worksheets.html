@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>أوراق العمل الإلكترونية</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    /* نفس ألوان omr.html الأساسية */
+    --teal:#0f766e; --teal-d:#0b5a54; --teal-l:#e6f2f0;
+    --ink:#15242b; --muted:#5b6f76; --line:#d8e2e0;
+    --paper:#f6f8f7; --white:#ffffff;
+    --ok:#1f9d55; --bad:#d64545; --warn:#c9870a;
+    --shadow:0 1px 2px rgba(16,40,40,.06),0 8px 24px rgba(16,40,40,.06);
+    /* أسماء متغيرات كانت مستخدمة في كود أوراق العمل — مرادفات لنفس لوحة الألوان فوق */
+    --teal-light: var(--teal-l);
+    --coral: var(--bad);
+    --coral-light: #fbe3e3;
+    --navy: var(--teal-d);
+    --card: var(--white);
+    --ink-soft: var(--muted);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Tajawal',"Segoe UI",Tahoma,system-ui,sans-serif;
+    background:var(--paper); color:var(--ink); line-height:1.5;
+    direction:rtl;
+  }
+  header.app{
+    background:linear-gradient(180deg,var(--teal),var(--teal-d));
+    color:#fff; padding:8px 12px; position:sticky; top:0; z-index:30;
+    box-shadow:var(--shadow);
+  }
+  nav.tabs{display:flex;gap:6px;margin-top:0}
+  nav.tabs button{
+    flex:1;min-width:0;border:0;border-radius:9px;padding:7px 5px;font-size:12px;font-weight:600;line-height:1.25;
+    background:rgba(255,255,255,.14);color:#fff;cursor:pointer;transition:.15s;
+    white-space:normal;word-break:break-word;font-family:'Tajawal',sans-serif;
+  }
+  nav.tabs button.active{background:#fff;color:var(--teal-d)}
+  main{padding:16px;max-width:860px;margin:0 auto}
+  .panel{display:none}
+  .panel.active{display:block;animation:fade .2s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
+  .btn { border: none; border-radius: 10px; padding: 12px 20px; font-family: 'Tajawal', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .btn-primary { background: var(--coral); color: #fff; }
+  .btn-secondary { background: var(--teal-light); color: var(--teal); }
+  input[type=text], input[type=email], input[type=number], input[type=date], input[type=file], select, textarea {
+    width: 100%; border: 1.5px solid var(--line); border-radius: 8px; padding: 8px 10px;
+    font-family: 'Tajawal', sans-serif; font-size: 14px; background: #fff; color: var(--ink);
+  }
+  label { font-size: 13px; color: var(--ink-soft); }
+  .status-pill { display: inline-block; border-radius: 20px; padding: 3px 12px; font-size: 12px; font-weight: 700; }
+  .status-not-started { background: var(--line); color: var(--ink-soft); }
+  .status-in-progress { background: #fdf1d8; color: #97650b; }
+  .status-submitted { background: var(--teal-light); color: var(--teal); }
+  .status-corrected { background: #e1f5ee; color: var(--ok); }
+
+  .ex-block { border:1.5px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; background:#fff; }
+  .ex-block-header { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .type-badge { background:var(--teal-light); color:var(--teal); font-size:12px; padding:3px 10px; border-radius:20px; font-weight:700; }
+  .raw-ref { background:var(--paper); border-radius:8px; padding:8px 10px; font-size:12px; color:var(--ink-soft); max-height:110px; overflow-y:auto; margin-bottom:10px; white-space:pre-wrap; }
+  .item-row { display:flex; gap:6px; margin-bottom:8px; align-items:center; }
+  .item-row input[type=text] { flex:1; }
+  .small-btn { padding:5px 10px; font-size:12px; }
+  .remove-btn { background:var(--coral-light); color:var(--coral); border:none; border-radius:6px; padding:5px 9px; cursor:pointer; font-size:12px; }
+</style>
+</head>
+<body>
+<header class="app">
+  <nav class="tabs">
+    <button id="tab-upload" class="active" onclick="showWsTab('upload')">📤 رفع وتحويل</button>
+    <button id="tab-bank" onclick="showWsTab('bank')">🗂️ بنك الأسئلة</button>
+    <button id="tab-publish" onclick="showWsTab('publish')">📢 نشر</button>
+    <button id="tab-submissions" onclick="showWsTab('submissions')">📋 متابعة التسليمات</button>
+    <button id="tab-pins" onclick="showWsTab('pins')">🔑 أكواد الدخول</button>
+  </nav>
+</header>
+
+  <main>
+
+  <!-- ================= رفع وتحويل ================= -->
+  <section id="panel-upload" class="panel active">
+
+    <!-- إعداد شكل عرض الأوراق للطالب -->
+    <div class="card">
+      <h3 style="margin-top:0">شكل عرض الأوراق للطالب</h3>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-secondary" id="viewCardsBtn" style="flex:1;">بطاقات</button>
+        <button class="btn btn-secondary" id="viewListBtn" style="flex:1;">قائمة</button>
+      </div>
+      <p id="viewSettingStatus" style="font-size:12px;color:var(--ink-soft);margin-top:8px;"></p>
+    </div>
+
+    <!-- 1) رفع الملف -->
+    <div class="card">
+      <h3 style="margin-top:0">١) رفع الملف</h3>
+      <p style="font-size:12px;color:var(--ink-soft);">يقبل: PDF، Word (docx)، أو صورة ممسوحة ضوئيًا (jpg/png)</p>
+      <input type="file" id="pdfInput" accept="application/pdf,.docx,image/*">
+      <p id="pageCountInfo" style="font-size:12px;color:var(--ink-soft);margin-top:6px;"></p>
+      <br>
+
+      <div id="pdfOnlyControls">
+        <div style="display:flex; gap:10px;">
+          <div style="flex:1;">
+            <label>من صفحة (اختياري)</label>
+            <input type="text" id="pageFrom" inputmode="numeric" placeholder="مثال: 2">
+          </div>
+          <div style="flex:1;">
+            <label>إلى صفحة (اختياري)</label>
+            <input type="text" id="pageTo" inputmode="numeric" placeholder="مثال: 3">
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">سيبهم فاضيين لاستخراج الملف كامل.</p>
+        <br>
+        <button class="btn btn-secondary" id="previewPagesBtn">معاينة الصفحات المحددة</button>
+        <div id="pagePreviewWrap" style="margin-top:14px;display:flex;flex-direction:column;gap:10px;"></div>
+        <br>
+      </div>
+
+      <button class="btn btn-primary" id="extractBtn">استخراج التمارين</button>
+      <p id="extractStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+    </div>
+
+    <!-- 2) مراجعة التمارين المستخرجة -->
+    <div class="card" id="reviewCard" style="display:none;">
+      <h3 style="margin-top:0">٢) مراجعة التمارين قبل النشر</h3>
+      <p style="font-size:13px;color:var(--ink-soft);">راجع كل تمرين، عدّل النوع لو محتاج، واملأ العناصر الناقصة.</p>
+      <div id="exercisesWrap"></div>
+    </div>
+
+    <!-- 3) بيانات الورقة والحفظ -->
+    <div class="card" id="saveCard" style="display:none;">
+      <h3 style="margin-top:0">٣) بيانات الورقة</h3>
+      <label>عنوان الورقة</label>
+      <input type="text" id="worksheetTitle" placeholder="مثال: تمثيل البيانات">
+      <br><br>
+      <label>الوحدة</label>
+      <input type="text" id="worksheetUnit">
+      <br><br>
+      <label>الدرس</label>
+      <input type="text" id="worksheetLesson">
+      <br><br>
+      <button class="btn btn-primary" id="saveWorksheetBtn">حفظ الورقة (مسودة)</button>
+      <p id="saveStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+    </div>
+
+  </section>
+
+  <!-- معاينة الورقة (مشتركة بين التبويبات) -->
+  <div class="card" id="previewWorksheetCard" style="display:none;max-width:860px;margin:0 auto 16px;">
+    <h3 style="margin-top:0">معاينة: <span id="previewWorksheetTitle"></span></h3>
+    <p style="font-size:12px;color:var(--ink-soft);">هذا شكل تقريبي لما سيظهر للطالب (بدون حفظ إجابات).</p>
+    <div id="previewWorksheetBody"></div>
+  </div>
+
+  <!-- ================= نشر ================= -->
+  <section id="panel-publish" class="panel">
+    <!-- 4) نشر الورقة (يظهر فور الحفظ) -->
+    <div class="card" id="publishCard" style="display:none;">
+      <h3 style="margin-top:0">٤) نشر الورقة: <span id="publishTitle"></span></h3>
+      <p style="font-size:13px;color:var(--ink-soft);">اختر الفصل/الفصول اللي هتوصلهم الورقة.</p>
+      <div id="classCheckboxes" style="margin-bottom:12px;"></div>
+      <label>تاريخ الاستحقاق (اختياري)</label>
+      <input type="date" id="dueDateInput">
+      <br><br>
+      <button class="btn btn-primary" id="confirmPublishBtn">تأكيد النشر</button>
+      <p id="publishStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+    </div>
+
+    <!-- 5) المسودات الحالية غير المنشورة -->
+    <div class="card">
+      <h3 style="margin-top:0">٥) المسودات الحالية</h3>
+      <button class="btn btn-secondary" id="refreshDraftsBtn">تحديث القائمة</button>
+      <div id="draftsList" style="margin-top:14px;"></div>
+    </div>
+  </section>
+
+  <!-- ================= بنك الأسئلة ================= -->
+  <section id="panel-bank" class="panel">
+    <div class="card">
+      <h3 style="margin-top:0">٦) بنك الأسئلة</h3>
+      <p style="font-size:12px;color:var(--ink-soft);">أوراق محفوظة لإعادة استخدامها في سنوات قادمة — تُنسخ كمسودة جديدة كل مرة تحتاجها.</p>
+      <button class="btn btn-secondary" id="refreshBankBtn">تحديث القائمة</button>
+      <div id="bankList" style="margin-top:14px;"></div>
+    </div>
+  </section>
+
+  <!-- ================= متابعة التسليمات ================= -->
+  <section id="panel-submissions" class="panel">
+    <div class="card">
+      <h3 style="margin-top:0">١) اختر ورقة منشورة</h3>
+      <button class="btn btn-secondary" id="refreshWsBtn">تحديث القائمة</button>
+      <div id="worksheetsList" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card" id="studentsCard" style="display:none;">
+      <h3 style="margin-top:0">٢) الطلاب — <span id="selectedWsTitle"></span></h3>
+      <div id="studentsList"></div>
+    </div>
+
+    <div class="card" id="detailCard" style="display:none;">
+      <h3 style="margin-top:0">تسليم: <span id="detailStudentName"></span></h3>
+      <div id="answersWrap"></div>
+      <button class="btn btn-primary" id="saveGradingBtn" style="width:100%;margin-top:10px;">حفظ التصحيح</button>
+      <p id="gradingStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+    </div>
+  </section>
+
+  <!-- ================= أكواد الدخول ================= -->
+  <section id="panel-pins" class="panel">
+    <div class="card">
+      <h3 style="margin-top:0">اختر فصل</h3>
+      <select id="pinsClassSelect"><option value="">جاري تحميل الفصول...</option></select>
+    </div>
+    <div class="card" id="pinsListCard" style="display:none;">
+      <h3 style="margin-top:0">أكواد طلاب الفصل</h3>
+      <p style="font-size:12px;color:var(--ink-soft);">لو الطالب مالوش كود لسه، بيتولّد له تلقائيًا أول ما تفتح الفصل ده.</p>
+      <div id="pinsList" style="margin-top:14px;"></div>
+    </div>
+  </section>
+
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, setDoc, getDoc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    /* إعدادات مشروع Firebase الموحّد — عدّلها بمفاتيح المشروع الجديد فور توفرها */
+    const firebaseConfig = {
+      apiKey: "AIzaSyCEW-BTrfkqLUFXj7drtts7GkN6PXpbV4A",
+      authDomain: "injaz-classroom.firebaseapp.com",
+      projectId: "injaz-classroom",
+      storageBucket: "injaz-classroom.firebasestorage.app",
+      messagingSenderId: "640060389242",
+      appId: "1:640060389242:web:37e42c456d7b4e015e88c3"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    /* ===== حارس الدخول: نفس جلسة omr — لا يوجد نظام دخول منفصل لأوراق العمل ===== */
+    let CLS_SESSION = null;
+    try { CLS_SESSION = JSON.parse(localStorage.getItem('cls_session') || 'null'); } catch (e) { CLS_SESSION = null; }
+    if (!CLS_SESSION || !CLS_SESSION.userId) {
+      location.replace('index.html');
+    }
+    const currentTeacher = { uid: CLS_SESSION.userId, name: CLS_SESSION.username, schoolId: CLS_SESSION.schoolId };
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const bar = document.createElement('div');
+      bar.style.cssText = 'display:flex;align-items:center;gap:8px;justify-content:flex-end;background:var(--teal-d);color:#fff;padding:6px 14px;font-size:12.5px';
+      bar.innerHTML = '<span style="opacity:.9">' + (CLS_SESSION.username || '') + '</span>' +
+        '<a href="index.html" style="background:rgba(255,255,255,.16);color:#fff;text-decoration:none;padding:4px 12px;border-radius:8px;font-weight:600">← الرئيسية</a>';
+      document.body.insertBefore(bar, document.body.firstChild);
+    });
+
+    /* ===== تبديل التبويبات ===== */
+    function showWsTab(t) {
+      ['upload', 'publish', 'bank', 'submissions', 'pins'].forEach((x) => {
+        document.getElementById('panel-' + x).classList.toggle('active', x === t);
+        document.getElementById('tab-' + x).classList.toggle('active', x === t);
+      });
+      if (t === 'publish') loadDrafts();
+      if (t === 'bank') loadBank();
+      if (t === 'submissions') loadWorksheetsForSubmissions();
+      if (t === 'pins') loadPinsClasses();
+    }
+    window.showWsTab = showWsTab;
+
+    loadViewSetting();
+    loadDrafts();
+    loadBank();
+
+    // ---------- إعداد شكل عرض الأوراق للطالب ----------
+    async function loadViewSetting() {
+      const snap = await getDoc(doc(db, "settings", "display"));
+      const current = snap.exists() ? snap.data().worksheetView : "cards";
+      highlightViewBtn(current);
+    }
+    function highlightViewBtn(current) {
+      document.getElementById("viewCardsBtn").classList.toggle("btn-primary", current === "cards");
+      document.getElementById("viewCardsBtn").classList.toggle("btn-secondary", current !== "cards");
+      document.getElementById("viewListBtn").classList.toggle("btn-primary", current === "list");
+      document.getElementById("viewListBtn").classList.toggle("btn-secondary", current !== "list");
+    }
+    async function setViewSetting(val) {
+      await setDoc(doc(db, "settings", "display"), { worksheetView: val }, { merge: true });
+      highlightViewBtn(val);
+      document.getElementById("viewSettingStatus").textContent = "تم الحفظ.";
+      document.getElementById("viewSettingStatus").style.color = "var(--ok)";
+    }
+    document.getElementById("viewCardsBtn").addEventListener("click", () => setViewSetting("cards"));
+    document.getElementById("viewListBtn").addEventListener("click", () => setViewSetting("list"));
+    loadViewSetting();
+
+    let exercises = []; // { id, type, rawText, ...structuredData }
+    let exCounter = 0;
+
+    // ---------- استخراج النص من كل صفحة مع محاولة ترتيب صحيح للعربي RTL ----------
+    async function extractLinesFromPage(page) {
+      const textContent = await page.getTextContent();
+      const groups = {};
+      textContent.items.forEach((it) => {
+        const y = Math.round(it.transform[5]);
+        if (!groups[y]) groups[y] = [];
+        groups[y].push(it);
+      });
+      const ys = Object.keys(groups).map(Number).sort((a, b) => b - a);
+      return ys.map((y) => {
+        const lineItems = groups[y].sort((a, b) => b.transform[4] - a.transform[4]);
+        return lineItems.map((it) => it.str).join(" ").replace(/\s+/g, " ").trim();
+      }).filter((l) => l.length > 0);
+    }
+
+    // ---------- تصنيف نوع التمرين ----------
+    // ملاحظة: استخراج نص PDF العربي غالبًا بيبدّل حروف متجاورة (مثال: "اختر" ← "اخرت").
+    // فبدل الاعتماد على جمل كاملة، بندوّر على كلمات قصيرة أقل عرضة للتشويش + علامات هيكلية
+    // (حروف الاختيار أ/ب/ج منفصلة، نقط متتالية للفراغات) وهي أوثق من الجملة الكاملة.
+    function detectType(blockText) {
+      const hasOptionLetters =
+        /(^|\s)[أإا](\s|$)/.test(blockText) &&
+        /(^|\s)ب(\s|$)/.test(blockText) &&
+        /(^|\s)ج(\s|$)/.test(blockText);
+      const hasBlanks = /\.{3,}|_{3,}/.test(blockText);
+      const hasCorrectWord = /الصحيح/.test(blockText);
+      const hasMatchWord = /\bصل\b/.test(blockText);
+      const hasOrderWord = /رتّ?ب/.test(blockText);
+      const hasMarkWord = /علامة/.test(blockText);
+      const hasBlankWord = /الفراغ/.test(blockText);
+      const hasTableWord = /أكمل الجدول|امل[أإ] الجدول|اكمل الجدول/.test(blockText);
+      const hasListWord = /اذكر|عدّ?د/.test(blockText);
+
+      if (hasOptionLetters && hasCorrectWord) return "mcq";
+      if (hasMarkWord) return "true-false";
+      if (hasMatchWord) return "matching";
+      if (hasOrderWord) return "ordering";
+      if (hasTableWord) return "fill-table";
+      if (hasBlankWord || hasBlanks) return "fill-blank";
+      if (hasListWord) return "open-text";
+      return "open-text";
+    }
+
+    // ---------- تحويل تمرين محفوظ (صيغة Firestore) لصيغة قابلة للتعديل في المحرر ----------
+    function hydrateExercise(savedEx) {
+      exCounter++;
+      const base = { id: "ex" + exCounter, type: savedEx.type, rawText: "" };
+      if (savedEx.type === "matching") {
+        base.pairs = JSON.parse(JSON.stringify(savedEx.data.pairs || [{ left: "", right: "" }]));
+      } else if (savedEx.type === "fill-table") {
+        const d = savedEx.data;
+        base.table = {
+          cols: d.cols,
+          rows: d.rows,
+          cells: (d.cells || []).map((r) => (r.row || []).map((cell) => ({ ...cell })))
+        };
+      } else if (savedEx.type === "open-text") {
+        base.prompt = savedEx.data.prompt || "";
+      } else {
+        base.items = JSON.parse(JSON.stringify(savedEx.data.items || []));
+      }
+      return base;
+    }
+
+    // ---------- تحميل ورقة محفوظة (مسودة أو من بنك الأسئلة) داخل المحرر للتعديل ----------
+    // الحفظ بعد كده بينشئ مستند جديد دايمًا، فالأصل بيفضل زي ما هو
+    function loadWorksheetIntoEditor(w) {
+      exercises = (w.exercises || []).map(hydrateExercise);
+      document.getElementById("worksheetTitle").value = (w.title || "") + " (نسخة)";
+      document.getElementById("worksheetUnit").value = w.unit || "";
+      document.getElementById("worksheetLesson").value = w.lesson || "";
+      renderExercises();
+      document.getElementById("reviewCard").style.display = "block";
+      document.getElementById("saveCard").style.display = "block";
+      document.getElementById("reviewCard").scrollIntoView({ behavior: "smooth" });
+    }
+
+    function makeExercise(type, rawText) {
+      exCounter++;
+      const base = { id: "ex" + exCounter, type, rawText };
+      if (type === "fill-blank") {
+        let lines = rawText.split("\n").filter((l) => /\.{3,}|_{3,}/.test(l));
+        if (lines.length === 0) {
+          // مفيش نقط فراغ ظاهرة (جدول بخلايا فاضية مثلًا) — نستخدم كل سطر محتوى كنقطة بداية بدل خانة فاضية
+          lines = rawText.split("\n")
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0 && !/^تدريب|^أكمل الفراغ|^امأل الفراغ/.test(l));
+        }
+        base.items = lines.map((l) => ({ prompt: l.trim(), answer: "" }));
+        if (base.items.length === 0) base.items = [{ prompt: "", answer: "" }];
+      } else if (type === "true-false") {
+        const lines = rawText.split("\n")
+          .filter((l) => l.trim().length > 15 && !/ضع علامة|تدريب/.test(l));
+        base.items = lines.map((l) => ({ statement: l.trim(), answer: null }));
+        if (base.items.length === 0) base.items = [{ statement: "", answer: null }];
+      } else if (type === "mcq") {
+        base.items = extractMcqQuestions(rawText);
+      } else if (type === "matching") {
+        base.pairs = [{ left: "", right: "" }];
+      } else if (type === "ordering") {
+        base.items = [""];
+      } else if (type === "fill-table") {
+        base.table = makeEmptyTable(3, 4);
+      } else {
+        base.prompt = "";
+      }
+      return base;
+    }
+
+    // ---------- بناء جدول فاضي بعدد أعمدة وصفوف معيّن (يشمل عمود/صف العناوين) ----------
+    // كل خلية عندها نوع مستقل (header/answer) قابل للتبديل لاحقًا بالضغط المطول
+    // افتراضيًا: الصف الأول والعمود الأول (اليمين في RTL) = عناوين
+    function makeEmptyTable(cols, rows) {
+      const cells = [];
+      for (let r = 0; r < rows; r++) {
+        const row = [];
+        for (let c = 0; c < cols; c++) {
+          const isHeader = r === 0 || c === 0;
+          row.push({ type: isHeader ? "header" : "answer", value: "" });
+        }
+        cells.push(row);
+      }
+      return { cols, rows, cells };
+    }
+
+    // ---------- محاولة استخراج أسئلة الاختيار من متعدد وخياراتها ----------
+    function extractMcqQuestions(rawText) {
+      const lines = rawText.split("\n").map((l) => l.trim()).filter(Boolean);
+      const questions = [];
+      let current = null;
+
+      lines.forEach((line) => {
+        // سطر يبدأ برقم = بداية سؤال جديد (مثال: "1 النظام العشري ...")
+        if (/^[0-9\u0660-\u0669]+[\s.\-)]/.test(line)) {
+          if (current) questions.push(current);
+          current = { promptLine: line.replace(/^[0-9\u0660-\u0669]+[\s.\-)]*/, ""), optionParts: [] };
+        } else if (current) {
+          current.optionParts.push(line);
+        }
+      });
+      if (current) questions.push(current);
+
+      const result = questions.map((q) => {
+        // نحاول نلاقي حروف الاختيار أ/ب/ج منفصلة في الأسطر التالية ونقسم عليها
+        const joined = q.optionParts.join(" ");
+        const parts = joined.split(/(?:^|\s)[أإا](?=\s)|(?:^|\s)ب(?=\s)|(?:^|\s)ج(?=\s)/).map((p) => p.trim()).filter(Boolean);
+        const options = parts.length >= 3 ? parts.slice(0, 3) : ["", "", ""];
+        return { prompt: q.promptLine.trim(), options, correctIndex: 0 };
+      }).filter((q) => q.prompt.length > 0);
+
+      return result.length > 0 ? result : [{ prompt: "", options: ["", "", ""], correctIndex: 0 }];
+    }
+
+    // ---------- معاينة الصفحات المحددة كصور ----------
+    document.getElementById("previewPagesBtn").addEventListener("click", async () => {
+      const fileInput = document.getElementById("pdfInput");
+      const previewWrap = document.getElementById("pagePreviewWrap");
+      if (!fileInput.files[0]) {
+        alert("اختر ملف PDF أولًا.");
+        return;
+      }
+
+      previewWrap.innerHTML = `<p style="font-size:12px;color:var(--ink-soft);">جاري تجهيز المعاينة...</p>`;
+
+      try {
+        const arrayBuffer = await fileInput.files[0].arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+        const fromRaw = document.getElementById("pageFrom").value.trim();
+        const toRaw = document.getElementById("pageTo").value.trim();
+        let startPage = fromRaw ? parseInt(fromRaw, 10) : 1;
+        let endPage = toRaw ? parseInt(toRaw, 10) : pdf.numPages;
+        if (isNaN(startPage) || startPage < 1) startPage = 1;
+        if (isNaN(endPage) || endPage > pdf.numPages) endPage = pdf.numPages;
+        if (startPage > endPage) {
+          previewWrap.innerHTML = `<p style="font-size:12px;color:var(--bad);">رقم صفحة البداية أكبر من النهاية.</p>`;
+          return;
+        }
+        // حماية بسيطة: متعرضش أكتر من 15 صفحة دفعة واحدة (أداء الجهاز)
+        if (endPage - startPage + 1 > 15) {
+          previewWrap.innerHTML = `<p style="font-size:12px;color:var(--bad);">النطاق كبير جدًا للمعاينة (أكتر من 15 صفحة) — ضيّق النطاق أو استخرج مباشرة بدون معاينة.</p>`;
+          return;
+        }
+
+        previewWrap.innerHTML = "";
+        for (let i = startPage; i <= endPage; i++) {
+          const page = await pdf.getPage(i);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const scale = 320 / baseViewport.width;
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          canvas.style.border = "1px solid var(--line)";
+          canvas.style.borderRadius = "8px";
+          canvas.style.maxWidth = "100%";
+
+          const ctx = canvas.getContext("2d");
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          const label = document.createElement("p");
+          label.textContent = `صفحة ${i}`;
+          label.style.cssText = "font-size:12px;font-weight:700;color:var(--teal);margin:0;";
+
+          const box = document.createElement("div");
+          box.appendChild(label);
+          box.appendChild(canvas);
+          previewWrap.appendChild(box);
+        }
+      } catch (err) {
+        previewWrap.innerHTML = `<p style="font-size:12px;color:var(--bad);">حصل خطأ في المعاينة: ${err.message}</p>`;
+      }
+    });
+
+    // ---------- تحديد نوع الملف ----------
+    function getFileKind(file) {
+      const name = file.name.toLowerCase();
+      if (name.endsWith(".pdf") || file.type === "application/pdf") return "pdf";
+      if (name.endsWith(".docx")) return "docx";
+      if (file.type.startsWith("image/")) return "image";
+      return "unknown";
+    }
+
+    // ---------- إظهار/إخفاء أدوات الصفحات حسب نوع الملف + عرض معلومات الملف ----------
+    document.getElementById("pdfInput").addEventListener("change", async (e) => {
+      const infoEl = document.getElementById("pageCountInfo");
+      const pdfControls = document.getElementById("pdfOnlyControls");
+      if (!e.target.files[0]) { infoEl.textContent = ""; return; }
+
+      const kind = getFileKind(e.target.files[0]);
+      if (kind === "pdf") {
+        pdfControls.style.display = "block";
+        infoEl.textContent = "جاري قراءة عدد الصفحات...";
+        try {
+          const arrayBuffer = await e.target.files[0].arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          infoEl.textContent = `عدد صفحات الملف: ${pdf.numPages}`;
+        } catch (err) {
+          infoEl.textContent = "";
+        }
+      } else if (kind === "docx") {
+        pdfControls.style.display = "none";
+        infoEl.textContent = "ملف Word — سيُستخرج المستند كامل (تحديد نطاق الصفحات غير متاح لهذا النوع).";
+      } else if (kind === "image") {
+        pdfControls.style.display = "none";
+        infoEl.textContent = "صورة — سيتم التعرف الضوئي على النص (OCR)، قد يستغرق دقيقة أو أكثر.";
+      } else {
+        pdfControls.style.display = "none";
+        infoEl.textContent = "نوع ملف غير مدعوم.";
+      }
+    });
+
+    // ---------- زر الاستخراج (يتفرّع حسب نوع الملف) ----------
+    document.getElementById("extractBtn").addEventListener("click", async () => {
+      const fileInput = document.getElementById("pdfInput");
+      const statusEl = document.getElementById("extractStatus");
+      if (!fileInput.files[0]) {
+        statusEl.textContent = "اختر ملف أولًا.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const kind = getFileKind(file);
+      statusEl.textContent = "جاري القراءة والاستخراج...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        let fullText = "";
+
+        if (kind === "pdf") {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+          const fromRaw = document.getElementById("pageFrom").value.trim();
+          const toRaw = document.getElementById("pageTo").value.trim();
+          let startPage = fromRaw ? parseInt(fromRaw, 10) : 1;
+          let endPage = toRaw ? parseInt(toRaw, 10) : pdf.numPages;
+          if (isNaN(startPage) || startPage < 1) startPage = 1;
+          if (isNaN(endPage) || endPage > pdf.numPages) endPage = pdf.numPages;
+          if (startPage > endPage) {
+            statusEl.textContent = "رقم صفحة البداية أكبر من النهاية — راجع الأرقام.";
+            statusEl.style.color = "var(--bad)";
+            return;
+          }
+
+          for (let i = startPage; i <= endPage; i++) {
+            const page = await pdf.getPage(i);
+            const lines = await extractLinesFromPage(page);
+            fullText += lines.join("\n") + "\n";
+          }
+
+        } else if (kind === "docx") {
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          fullText = result.value;
+
+        } else if (kind === "image") {
+          statusEl.textContent = "جاري التعرف الضوئي على النص (OCR) — ممكن ياخد دقيقة أو أكتر...";
+          const ocrResult = await Tesseract.recognize(file, "ara");
+          fullText = ocrResult.data.text;
+
+        } else {
+          statusEl.textContent = "نوع الملف مش مدعوم. الأنواع المتاحة: PDF، Word (docx)، صورة.";
+          statusEl.style.color = "var(--bad)";
+          return;
+        }
+
+        // تقسيم النص لكتل حسب كلمة "تدريب" متبوعة برقم
+        const splitRegex = /(?=تدريب\s*\(?\s*[0-9\u0660-\u0669]+\s*\)?\s*:?)/;
+        const rawBlocks = fullText.split(splitRegex).map((b) => b.trim()).filter((b) => b.length > 20);
+
+        exercises = rawBlocks.map((block) => {
+          const type = detectType(block);
+          return makeExercise(type, block);
+        });
+
+        if (exercises.length === 0) {
+          statusEl.textContent = "ما قدرناش نلاقي تمارين بصيغة \"تدريب\" في الملف — جرّب ملف آخر أو راجع الصيغة.";
+          statusEl.style.color = "var(--bad)";
+          return;
+        }
+
+        statusEl.textContent = `تم استخراج ${exercises.length} تمرين. راجعهم تحت.`;
+        statusEl.style.color = "var(--ok)";
+        renderExercises();
+        document.getElementById("reviewCard").style.display = "block";
+        document.getElementById("saveCard").style.display = "block";
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ أثناء القراءة: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    });
+
+    const typeLabels = {
+      "fill-blank": "أكمل الفراغات",
+      "fill-table": "أكمل الجدول",
+      "mcq": "اختيار من متعدد",
+      "true-false": "صح / خطأ",
+      "matching": "مزاوجة",
+      "ordering": "ترتيب",
+      "open-text": "سؤال مفتوح"
+    };
+
+    function renderExercises() {
+      const wrap = document.getElementById("exercisesWrap");
+      wrap.innerHTML = "";
+      exercises.forEach((ex, idx) => {
+        const div = document.createElement("div");
+        div.className = "ex-block";
+
+        const typeSelect = `
+          <select data-retype="${ex.id}" style="width:auto;">
+            ${Object.entries(typeLabels).map(([val, label]) =>
+              `<option value="${val}" ${val === ex.type ? "selected" : ""}>${label}</option>`).join("")}
+          </select>`;
+
+        div.innerHTML = `
+          <div class="ex-block-header">
+            <span class="type-badge">تمرين ${idx + 1}</span>
+            ${typeSelect}
+            <button class="remove-btn" data-delete="${ex.id}">حذف البطاقة</button>
+          </div>
+          <label style="font-size:12px;color:var(--ink-soft);">النص الخام (عدّله لو فيه خطأ قراءة، ثم اضغط إعادة معالجة)</label>
+          <textarea class="raw-edit" data-raw="${ex.id}" rows="5" style="font-size:12px;">${escapeHtml(ex.rawText)}</textarea>
+          <button class="btn btn-secondary small-btn" data-reprocess="${ex.id}" style="margin:6px 0 10px;">إعادة معالجة هذا التمرين</button>
+          <div class="ex-editor" id="editor-${ex.id}"></div>
+        `;
+        wrap.appendChild(div);
+        renderEditor(ex);
+
+        div.querySelector(`[data-reprocess="${ex.id}"]`).addEventListener("click", () => {
+          const newRaw = div.querySelector(`[data-raw="${ex.id}"]`).value;
+          const newType = div.querySelector(`[data-retype="${ex.id}"]`).value;
+          const detectedType = detectType(newRaw);
+          exercises[idx] = makeExercise(newType === ex.type ? detectedType : newType, newRaw);
+          exercises[idx].id = ex.id;
+          renderExercises();
+        });
+
+        div.querySelector(`[data-delete="${ex.id}"]`).addEventListener("click", () => {
+          if (confirm("متأكد إنك عايز تحذف التمرين ده؟")) {
+            exercises.splice(idx, 1);
+            renderExercises();
+          }
+        });
+
+        div.querySelector(`[data-retype="${ex.id}"]`).addEventListener("change", (e) => {
+          const newType = e.target.value;
+          exercises[idx] = makeExercise(newType, ex.rawText);
+          exercises[idx].id = ex.id;
+          renderExercises();
+        });
+      });
+    }
+
+    function renderEditor(ex) {
+      const el = document.getElementById(`editor-${ex.id}`);
+      if (!el) return;
+
+      if (ex.type === "fill-blank") {
+        el.innerHTML = ex.items.map((it, i) => `
+          <div class="item-row">
+            <input type="text" placeholder="نص الفراغ" value="${escapeHtml(it.prompt)}" data-field="prompt" data-i="${i}">
+            <input type="text" placeholder="الإجابة الصحيحة" value="${escapeHtml(it.answer)}" data-field="answer" data-i="${i}" style="max-width:120px;">
+            <button class="remove-btn" data-remove="${i}">حذف</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة فراغ</button>`;
+      } else if (ex.type === "true-false") {
+        el.innerHTML = ex.items.map((it, i) => `
+          <div class="item-row">
+            <input type="text" placeholder="نص العبارة" value="${escapeHtml(it.statement)}" data-field="statement" data-i="${i}">
+            <select data-field="answer" data-i="${i}" style="width:auto;">
+              <option value="" ${it.answer === null ? "selected" : ""}>—</option>
+              <option value="true" ${it.answer === true ? "selected" : ""}>صح</option>
+              <option value="false" ${it.answer === false ? "selected" : ""}>خطأ</option>
+            </select>
+            <button class="remove-btn" data-remove="${i}">حذف</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة عبارة</button>`;
+      } else if (ex.type === "mcq") {
+        el.innerHTML = ex.items.map((it, i) => `
+          <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;">
+            <input type="text" placeholder="نص السؤال" value="${escapeHtml(it.prompt)}" data-field="prompt" data-i="${i}" style="margin-bottom:6px;">
+            ${it.options.map((opt, oi) => `
+              <div class="item-row">
+                <input type="radio" name="correct-${ex.id}-${i}" ${it.correctIndex === oi ? "checked" : ""} data-correct="${i}" data-oi="${oi}">
+                <input type="text" placeholder="خيار ${oi + 1}" value="${escapeHtml(opt)}" data-option="${i}" data-oi="${oi}">
+              </div>`).join("")}
+            <button class="remove-btn" data-remove="${i}">حذف السؤال</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة سؤال</button>`;
+      } else if (ex.type === "matching") {
+        el.innerHTML = ex.pairs.map((p, i) => `
+          <div class="item-row">
+            <input type="text" placeholder="العنصر" value="${escapeHtml(p.left)}" data-left="${i}">
+            <span>↔</span>
+            <input type="text" placeholder="المقابل الصحيح" value="${escapeHtml(p.right)}" data-right="${i}">
+            <button class="remove-btn" data-remove="${i}">حذف</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة زوج</button>`;
+      } else if (ex.type === "ordering") {
+        el.innerHTML = ex.items.map((it, i) => `
+          <div class="item-row">
+            <span style="font-weight:700;">${i + 1}.</span>
+            <input type="text" placeholder="العنصر بترتيبه الصحيح" value="${escapeHtml(it)}" data-order="${i}">
+            <button class="remove-btn" data-remove="${i}">حذف</button>
+          </div>`).join("") + `<button class="btn btn-secondary small-btn" data-add>+ إضافة عنصر</button>`;
+      } else if (ex.type === "fill-table") {
+        renderTableEditor(el, ex);
+        return;
+      } else {
+        el.innerHTML = `<textarea data-prompt rows="3" placeholder="نص السؤال المفتوح">${escapeHtml(ex.prompt)}</textarea>`;
+      }
+
+      bindEditorEvents(el, ex);
+    }
+
+    // ---------- محرر تمرين أكمل الجدول (عدد الأعمدة/الصفوف يشمل رأس الجدول) ----------
+    function renderTableEditor(el, ex) {
+      const t = ex.table;
+      el.innerHTML = `
+        <div style="display:flex;gap:10px;margin-bottom:10px;">
+          <div style="flex:1;">
+            <label style="font-size:12px;">عدد الأعمدة (شامل عمود العناوين)</label>
+            <input type="number" id="colsInput-${ex.id}" value="${t.cols}" min="2" max="6">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:12px;">عدد الصفوف (شامل صف العناوين)</label>
+            <input type="number" id="rowsInput-${ex.id}" value="${t.rows}" min="2" max="8">
+          </div>
+        </div>
+        <button class="btn btn-secondary small-btn" id="genTableBtn-${ex.id}" style="margin-bottom:12px;">توليد الجدول</button>
+        <div id="tableGrid-${ex.id}"></div>
+        <p style="font-size:11px;color:var(--ink-soft);margin-top:8px;">الخلايا الزرقاء = عناوين، الخلايا الوردية = إجابة يملأها الطالب. اضغط مطولًا على أي خلية لتبديل نوعها.</p>
+      `;
+
+      document.getElementById(`genTableBtn-${ex.id}`).addEventListener("click", () => {
+        const newCols = Math.max(2, parseInt(document.getElementById(`colsInput-${ex.id}`).value, 10) || 2);
+        const newRows = Math.max(2, parseInt(document.getElementById(`rowsInput-${ex.id}`).value, 10) || 2);
+        const resized = makeEmptyTable(newCols, newRows);
+        for (let r = 0; r < Math.min(newRows, t.rows); r++) {
+          for (let c = 0; c < Math.min(newCols, t.cols); c++) {
+            resized.cells[r][c] = { ...t.cells[r][c] };
+          }
+        }
+        ex.table = resized;
+        renderTableEditor(el, ex);
+      });
+
+      drawTableGrid(document.getElementById(`tableGrid-${ex.id}`), ex.table);
+    }
+
+    function drawTableGrid(container, t) {
+      container.innerHTML = "";
+      const grid = document.createElement("div");
+      grid.style.cssText = `display:grid;grid-template-columns:repeat(${t.cols},minmax(80px,1fr));gap:6px;`;
+      container.appendChild(grid);
+
+      for (let r = 0; r < t.rows; r++) {
+        for (let c = 0; c < t.cols; c++) {
+          const cellData = t.cells[r][c];
+          const cell = document.createElement("input");
+          cell.type = "text";
+          cell.value = cellData.value || "";
+          cell.placeholder = cellData.type === "header" ? "عنوان" : "الإجابة الصحيحة";
+          applyTableCellStyle(cell, cellData.type);
+          cell.addEventListener("input", (e) => { cellData.value = e.target.value; });
+          attachLongPress(cell, () => {
+            cellData.type = cellData.type === "header" ? "answer" : "header";
+            drawTableGrid(container, t);
+          });
+          grid.appendChild(cell);
+        }
+      }
+    }
+
+    function applyTableCellStyle(el, type) {
+      if (type === "header") {
+        el.style.cssText = "background:#2f5aa8;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
+      } else {
+        el.style.cssText = "background:#fff;border:2px solid #d43d8f;border-radius:6px;padding:8px;font-size:12px;text-align:center;";
+      }
+    }
+
+    // ---------- ضغط مطوّل (تعمل على اللمس والفأرة) ----------
+    function attachLongPress(el, callback) {
+      let timer = null;
+      const start = () => { timer = setTimeout(callback, 550); };
+      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      el.addEventListener("pointerdown", start);
+      el.addEventListener("pointerup", cancel);
+      el.addEventListener("pointerleave", cancel);
+      el.addEventListener("pointercancel", cancel);
+    }
+
+    function bindEditorEvents(el, ex) {
+      el.querySelectorAll("[data-field]").forEach((input) => {
+        input.addEventListener("input", (e) => {
+          const i = +e.target.dataset.i;
+          const field = e.target.dataset.field;
+          let val = e.target.value;
+          if (field === "answer" && ex.type === "true-false") {
+            val = val === "true" ? true : val === "false" ? false : null;
+          }
+          ex.items[i][field] = val;
+        });
+      });
+      el.querySelectorAll("[data-option]").forEach((input) => {
+        input.addEventListener("input", (e) => {
+          ex.items[+e.target.dataset.option].options[+e.target.dataset.oi] = e.target.value;
+        });
+      });
+      el.querySelectorAll("[data-correct]").forEach((input) => {
+        input.addEventListener("change", (e) => {
+          ex.items[+e.target.dataset.correct].correctIndex = +e.target.dataset.oi;
+        });
+      });
+      el.querySelectorAll("[data-left]").forEach((input) => {
+        input.addEventListener("input", (e) => { ex.pairs[+e.target.dataset.left].left = e.target.value; });
+      });
+      el.querySelectorAll("[data-right]").forEach((input) => {
+        input.addEventListener("input", (e) => { ex.pairs[+e.target.dataset.right].right = e.target.value; });
+      });
+      el.querySelectorAll("[data-order]").forEach((input) => {
+        input.addEventListener("input", (e) => { ex.items[+e.target.dataset.order] = e.target.value; });
+      });
+      const promptEl = el.querySelector("[data-prompt]");
+      if (promptEl) promptEl.addEventListener("input", (e) => { ex.prompt = e.target.value; });
+
+      el.querySelectorAll("[data-remove]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const i = +e.target.dataset.remove;
+          if (ex.type === "matching") ex.pairs.splice(i, 1);
+          else if (ex.type === "ordering") ex.items.splice(i, 1);
+          else ex.items.splice(i, 1);
+          renderEditor(ex);
+        });
+      });
+      const addBtn = el.querySelector("[data-add]");
+      if (addBtn) addBtn.addEventListener("click", () => {
+        if (ex.type === "fill-blank") ex.items.push({ prompt: "", answer: "" });
+        else if (ex.type === "true-false") ex.items.push({ statement: "", answer: null });
+        else if (ex.type === "mcq") ex.items.push({ prompt: "", options: ["", "", ""], correctIndex: 0 });
+        else if (ex.type === "matching") ex.pairs.push({ left: "", right: "" });
+        else if (ex.type === "ordering") ex.items.push("");
+        renderEditor(ex);
+      });
+    }
+
+    function escapeHtml(str) {
+      return (str || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // ---------- حفظ الورقة كمسودة في Firestore ----------
+    document.getElementById("saveWorksheetBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("saveStatus");
+      const title = document.getElementById("worksheetTitle").value.trim();
+      if (!title) {
+        statusEl.textContent = "اكتب عنوان الورقة أولًا.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+
+      statusEl.textContent = "جاري الحفظ...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        const worksheetsRef = collection(db, "worksheets");
+        const newDoc = await addDoc(worksheetsRef, {
+          schoolId: currentTeacher.schoolId,
+          createdBy: currentTeacher.uid,
+          title,
+          unit: document.getElementById("worksheetUnit").value.trim(),
+          lesson: document.getElementById("worksheetLesson").value.trim(),
+          sourceFileName: document.getElementById("pdfInput").files[0]?.name || "",
+          status: "draft",
+          assignedClassIds: [],
+          assignedStudentIds: [],
+          dueDate: null,
+          createdAt: serverTimestamp(),
+          publishedAt: null,
+          exercises: exercises.map((ex) => ({
+            exerciseId: ex.id,
+            type: ex.type,
+            data: ex.type === "open-text" ? { prompt: ex.prompt }
+                : ex.type === "matching" ? { pairs: ex.pairs }
+                : ex.type === "fill-table" ? { cols: ex.table.cols, rows: ex.table.rows, cells: ex.table.cells.map((row) => ({ row })) }
+                : { items: ex.items },
+            autoGraded: ex.type !== "open-text"
+          }))
+        });
+        statusEl.textContent = "تم حفظ الورقة كمسودة بنجاح.";
+        statusEl.style.color = "var(--ok)";
+        await openPublishPanel(newDoc.id, title);
+        await loadDrafts();
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ أثناء الحفظ: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    });
+
+    // ---------- فتح لوحة النشر لورقة معيّنة ----------
+    let currentPublishId = null;
+
+    async function openPublishPanel(worksheetId, title) {
+      currentPublishId = worksheetId;
+      document.getElementById("publishTitle").textContent = title;
+      const box = document.getElementById("classCheckboxes");
+      box.innerHTML = "جاري تحميل الفصول...";
+
+      try {
+        const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+        const rosterData = rosterSnap.exists() ? rosterSnap.data() : {};
+        let classes = [];
+        try { classes = JSON.parse(rosterData.value || "{}").classes || []; } catch (e) { classes = []; }
+
+        // لو المستخدم دور معلم (مش أدمن)، نقصر القائمة على الفصول المُسندة له فقط
+        const userSnap = await getDoc(doc(db, "users", currentTeacher.uid));
+        const userData = userSnap.exists() ? userSnap.data() : {};
+        if (userData.role !== "admin" && Array.isArray(userData.assignedClasses) && userData.assignedClasses.length) {
+          classes = classes.filter((c) => userData.assignedClasses.includes(String(c.code)));
+        }
+
+        if (classes.length === 0) {
+          box.innerHTML = `<p style="font-size:13px;color:var(--bad);">مفيش فصول متاحة لك — راجع الفصول المُسندة إليك من إدارة المستخدمين.</p>`;
+        } else {
+          box.innerHTML = classes.map((c) => `
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:14px;">
+              <input type="checkbox" value="${c.code}" data-class-check>
+              ${c.code}${c.name ? " - " + c.name : ""}
+            </label>`).join("");
+        }
+      } catch (err) {
+        box.innerHTML = `<p style="font-size:13px;color:var(--bad);">حصل خطأ: ${err.message}</p>`;
+      }
+
+      document.getElementById("publishCard").style.display = "block";
+      document.getElementById("publishCard").scrollIntoView({ behavior: "smooth" });
+    }
+
+    document.getElementById("confirmPublishBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("publishStatus");
+      const selected = Array.from(document.querySelectorAll("[data-class-check]:checked")).map((cb) => cb.value);
+
+      if (selected.length === 0) {
+        statusEl.textContent = "اختر فصل واحد على الأقل.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+
+      statusEl.textContent = "جاري النشر...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        const dueDateVal = document.getElementById("dueDateInput").value;
+        await updateDoc(doc(db, "worksheets", currentPublishId), {
+          status: "published",
+          assignedClassIds: selected,
+          dueDate: dueDateVal || null,
+          publishedAt: serverTimestamp()
+        });
+        statusEl.textContent = "تم نشر الورقة بنجاح — هتظهر للطلاب في الفصول المحددة.";
+        statusEl.style.color = "var(--ok)";
+        await loadDrafts();
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ أثناء النشر: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    });
+
+    // ---------- عرض المسودات الحالية ----------
+    async function loadDrafts() {
+      const listEl = document.getElementById("draftsList");
+      listEl.innerHTML = "جاري التحميل...";
+      const q = query(collection(db, "worksheets"),
+        where("createdBy", "==", currentTeacher.uid), where("status", "==", "draft"));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">مفيش مسودات حاليًا.</p>`;
+        return;
+      }
+
+      listEl.innerHTML = "";
+      snap.docs.forEach((d) => {
+        const w = d.data();
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);";
+        row.innerHTML = `
+          <div>
+            <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""} (${(w.exercises || []).length} تمرين)</p>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-secondary small-btn" data-preview-existing="${d.id}" data-title="${escapeHtml(w.title)}">معاينة</button>
+            <button class="btn btn-secondary small-btn" data-edit-existing="${d.id}">تعديل</button>
+            <button class="btn btn-primary small-btn" data-publish-existing="${d.id}" data-title="${escapeHtml(w.title)}">نشر</button>
+            <button class="btn btn-secondary small-btn" data-tobank="${d.id}">نقل لبنك الأسئلة</button>
+            <button class="remove-btn" data-delete-draft="${d.id}">حذف</button>
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+
+      listEl.querySelectorAll("[data-preview-existing]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.previewExisting);
+          renderWorksheetPreview(btn.dataset.title, wDoc.data());
+        });
+      });
+
+      listEl.querySelectorAll("[data-edit-existing]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.editExisting);
+          loadWorksheetIntoEditor(wDoc.data());
+        });
+      });
+
+      listEl.querySelectorAll("[data-publish-existing]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          openPublishPanel(btn.dataset.publishExisting, btn.dataset.title);
+        });
+      });
+
+      listEl.querySelectorAll("[data-delete-draft]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("متأكد إنك عايز تحذف المسودة دي نهائيًا؟")) return;
+          await deleteDoc(doc(db, "worksheets", btn.dataset.deleteDraft));
+          await loadDrafts();
+        });
+      });
+
+      listEl.querySelectorAll("[data-tobank]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("هتُنقل الورقة دي لبنك الأسئلة وتختفي من المسودات. متابعة؟")) return;
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.tobank);
+          const w = wDoc.data();
+          await addDoc(collection(db, "questionBank"), {
+            schoolId: currentTeacher.schoolId,
+            createdBy: currentTeacher.uid,
+            title: w.title,
+            unit: w.unit,
+            lesson: w.lesson,
+            sourceFileName: w.sourceFileName || "",
+            exercises: w.exercises,
+            savedAt: serverTimestamp()
+          });
+          await deleteDoc(doc(db, "worksheets", btn.dataset.tobank));
+          await loadDrafts();
+          await loadBank();
+        });
+      });
+    }
+
+    // ---------- عرض معاينة شبيهة بشاشة الطالب (t هنا بصيغة Firestore المغلّفة) ----------
+    function renderTablePreview(container, t) {
+      if (!container || !t) return;
+      const cellsMatrix = (t.cells || []).map((r) => r.row || []);
+      const grid = document.createElement("div");
+      grid.style.cssText = `display:grid;grid-template-columns:repeat(${t.cols},minmax(80px,1fr));gap:6px;`;
+      container.appendChild(grid);
+
+      cellsMatrix.forEach((row) => {
+        row.forEach((cellData) => {
+          const cell = document.createElement("div");
+          cell.style.cssText = "border-radius:6px;padding:8px;font-size:12px;text-align:center;min-height:16px;";
+          if (cellData.type === "header") {
+            cell.textContent = cellData.value || "";
+            cell.style.background = "#2f5aa8"; cell.style.color = "#fff"; cell.style.fontWeight = "700";
+          } else {
+            cell.style.background = "#fff"; cell.style.border = "2px solid #d43d8f";
+          }
+          grid.appendChild(cell);
+        });
+      });
+    }
+
+    function renderWorksheetPreview(title, worksheetData) {
+      document.getElementById("previewWorksheetTitle").textContent = title;
+      const body = document.getElementById("previewWorksheetBody");
+      const exList = worksheetData.exercises || [];
+
+      body.innerHTML = exList.map((ex, i) => {
+        const header = `<p style="font-weight:700;font-size:13px;color:var(--teal);margin:16px 0 8px;">تمرين ${i + 1} — ${typeLabels[ex.type] || ex.type}</p>`;
+
+        if (ex.type === "fill-blank") {
+          return header + (ex.data.items || []).map((it) => `
+            <div class="item-row"><input type="text" placeholder="${escapeHtml(it.prompt)}" disabled></div>`).join("");
+        }
+        if (ex.type === "true-false") {
+          return header + (ex.data.items || []).map((it) => `
+            <div class="tf-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;">
+              <span>${escapeHtml(it.statement)}</span><span>✓ / ✗</span>
+            </div>`).join("");
+        }
+        if (ex.type === "mcq") {
+          return header + (ex.data.items || []).map((it) => `
+            <p style="font-size:13px;margin:6px 0 4px;font-weight:500;">${escapeHtml(it.prompt)}</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+              ${it.options.map((opt) => `<span class="type-badge" style="background:var(--paper);color:var(--ink-soft);">${escapeHtml(opt) || "—"}</span>`).join("")}
+            </div>`).join("");
+        }
+        if (ex.type === "fill-table") {
+          const containerId = `tblprev-${i}`;
+          setTimeout(() => renderTablePreview(document.getElementById(containerId), ex.data), 0);
+          return header + `<div id="${containerId}"></div>`;
+        }
+        if (ex.type === "matching") {
+          return header + (ex.data.pairs || []).map((p) => `
+            <div class="item-row" style="font-size:13px;"><span>${escapeHtml(p.left)}</span><span>↔</span><span>${escapeHtml(p.right)}</span></div>`).join("");
+        }
+        if (ex.type === "ordering") {
+          return header + `<ol style="font-size:13px;padding-inline-start:20px;">${(ex.data.items || []).map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ol>`;
+        }
+        return header + `<textarea rows="3" placeholder="${escapeHtml(ex.data.prompt || "")}" disabled></textarea>`;
+      }).join("");
+
+      document.getElementById("previewWorksheetCard").style.display = "block";
+      document.getElementById("previewWorksheetCard").scrollIntoView({ behavior: "smooth" });
+    }
+
+    document.getElementById("refreshDraftsBtn").addEventListener("click", loadDrafts);
+
+    // ---------- بنك الأسئلة ----------
+    async function loadBank() {
+      const listEl = document.getElementById("bankList");
+      listEl.innerHTML = "جاري التحميل...";
+      const snap = await getDocs(query(collection(db, "questionBank"), where("createdBy", "==", currentTeacher.uid)));
+
+      if (snap.empty) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">بنك الأسئلة فاضي حاليًا.</p>`;
+        return;
+      }
+
+      listEl.innerHTML = "";
+      snap.docs.forEach((d) => {
+        const w = d.data();
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px;";
+        row.innerHTML = `
+          <div>
+            <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""} (${(w.exercises || []).length} تمرين)</p>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-secondary small-btn" data-preview-bank="${d.id}" data-title="${escapeHtml(w.title)}">معاينة</button>
+            <button class="btn btn-secondary small-btn" data-edit-bank="${d.id}">تعديل</button>
+            <button class="btn btn-primary small-btn" data-use-bank="${d.id}">استخدام (نسخ كمسودة جديدة)</button>
+            <button class="remove-btn" data-delete-bank="${d.id}">حذف نهائي</button>
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+
+      listEl.querySelectorAll("[data-preview-bank]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.previewBank);
+          renderWorksheetPreview(btn.dataset.title, wDoc.data());
+        });
+      });
+
+      listEl.querySelectorAll("[data-edit-bank]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.editBank);
+          loadWorksheetIntoEditor(wDoc.data());
+        });
+      });
+
+      listEl.querySelectorAll("[data-use-bank]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const wDoc = snap.docs.find((d) => d.id === btn.dataset.useBank);
+          const w = wDoc.data();
+          await addDoc(collection(db, "worksheets"), {
+            schoolId: currentTeacher.schoolId,
+            createdBy: currentTeacher.uid,
+            title: w.title,
+            unit: w.unit,
+            lesson: w.lesson,
+            sourceFileName: w.sourceFileName || "",
+            status: "draft",
+            assignedClassIds: [],
+            assignedStudentIds: [],
+            dueDate: null,
+            createdAt: serverTimestamp(),
+            publishedAt: null,
+            exercises: w.exercises
+          });
+          alert("تم نسخ الورقة كمسودة جديدة. تقدر تلاقيها في قائمة المسودات وتنشرها.");
+          await loadDrafts();
+        });
+      });
+
+      listEl.querySelectorAll("[data-delete-bank]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("متأكد إنك عايز تحذف الورقة نهائيًا من بنك الأسئلة؟ ده مش هينفع يترجع.")) return;
+          await deleteDoc(doc(db, "questionBank", btn.dataset.deleteBank));
+          await loadBank();
+        });
+      });
+    }
+
+    document.getElementById("refreshBankBtn").addEventListener("click", loadBank);
+
+    /* ================= متابعة التسليمات ================= */
+    const submissionStatusLabels = {
+      "not-started": "لم يبدأ",
+      "in-progress": "جاري",
+      "submitted": "مُسلّم",
+      "corrected": "مُصحح"
+    };
+
+    let currentWorksheet = null;
+    let currentWorksheetId = null;
+    let currentSubmission = null;
+    let manualGrades = {}; // exerciseId -> true/false
+
+    async function loadWorksheetsForSubmissions() {
+      const listEl = document.getElementById("worksheetsList");
+      listEl.innerHTML = "جاري التحميل...";
+      const q = query(collection(db, "worksheets"),
+        where("createdBy", "==", currentTeacher.uid), where("status", "==", "published"));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">مفيش أوراق منشورة حاليًا.</p>`;
+        return;
+      }
+
+      listEl.innerHTML = "";
+      snap.docs.forEach((d) => {
+        const w = d.data();
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;";
+        row.innerHTML = `
+          <div>
+            <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""}</p>
+          </div>
+          <span style="font-size:12px;color:var(--teal);">عرض ←</span>
+        `;
+        row.addEventListener("click", () => selectWorksheetForSubmissions(d.id, w));
+        listEl.appendChild(row);
+      });
+    }
+    document.getElementById("refreshWsBtn").addEventListener("click", loadWorksheetsForSubmissions);
+
+    // ---------- عرض طلاب الفصول المعيّنة للورقة (من روستر omr) وحالتهم ----------
+    async function selectWorksheetForSubmissions(worksheetId, w) {
+      currentWorksheet = w;
+      currentWorksheetId = worksheetId;
+      document.getElementById("selectedWsTitle").textContent = w.title;
+      document.getElementById("studentsCard").style.display = "block";
+      document.getElementById("detailCard").style.display = "none";
+      document.getElementById("studentsCard").scrollIntoView({ behavior: "smooth" });
+
+      const listEl = document.getElementById("studentsList");
+      listEl.innerHTML = "جاري التحميل...";
+
+      const classCodes = w.assignedClassIds || [];
+      if (classCodes.length === 0) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">الورقة دي مش معيّنة لأي فصل.</p>`;
+        return;
+      }
+
+      const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+      let rosterStudents = [];
+      try { rosterStudents = JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").students || []; } catch (e) { rosterStudents = []; }
+      const students = rosterStudents.filter((s) => classCodes.includes(String(s.classCode)));
+
+      const subsQ = query(collection(db, "submissions"), where("worksheetId", "==", worksheetId));
+      const subsSnap = await getDocs(subsQ);
+      const subByStudent = {};
+      subsSnap.docs.forEach((d) => { subByStudent[d.data().studentId] = { id: d.id, ...d.data() }; });
+
+      if (students.length === 0) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">مفيش طلاب في الفصول المعيّنة.</p>`;
+        return;
+      }
+
+      listEl.innerHTML = "";
+      students.forEach((s) => {
+        const sub = subByStudent[s.seat];
+        const status = sub ? sub.status : "not-started";
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;";
+        row.innerHTML = `
+          <div>
+            <p style="margin:0;font-weight:500;font-size:14px;">${s.name}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${sub && sub.totalScore ? sub.totalScore : ""}</p>
+          </div>
+          <span class="status-pill status-${status}">${submissionStatusLabels[status]}</span>
+        `;
+        if (sub) {
+          row.addEventListener("click", () => openSubmissionDetail(s.name, sub));
+        } else {
+          row.style.cursor = "default";
+          row.style.opacity = "0.6";
+        }
+        listEl.appendChild(row);
+      });
+    }
+
+    // ---------- تفاصيل تسليم طالب ----------
+    function openSubmissionDetail(studentName, sub) {
+      currentSubmission = sub;
+      manualGrades = {};
+      document.getElementById("detailStudentName").textContent = studentName;
+      document.getElementById("detailCard").style.display = "block";
+      document.getElementById("detailCard").scrollIntoView({ behavior: "smooth" });
+
+      const wrap = document.getElementById("answersWrap");
+      wrap.innerHTML = "";
+
+      (currentWorksheet.exercises || []).forEach((ex, idx) => {
+        const ans = (sub.answers || []).find((a) => a.exerciseId === ex.exerciseId);
+        const block = document.createElement("div");
+        block.style.cssText = "border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px;";
+
+        let bodyHtml = "";
+        if (ex.type === "open-text") {
+          bodyHtml = `
+            <p style="font-size:13px;background:var(--paper);border-radius:8px;padding:8px;">${escapeHtml((ans && ans.answer) || "(بدون إجابة)")}</p>
+            <div style="margin-top:8px;">
+              <button class="btn btn-secondary small-btn" data-grade="${ex.exerciseId}" data-val="true">صحيح</button>
+              <button class="btn btn-secondary small-btn" data-grade="${ex.exerciseId}" data-val="false">خاطئ</button>
+            </div>`;
+        } else {
+          const correctness = ans ? ans.isCorrect : null;
+          const badge = correctness === true ? "✓ صحيح" : correctness === false ? "✗ خاطئ" : "— جزئي/غير محدد";
+          const badgeColor = correctness === true ? "var(--ok)" : correctness === false ? "var(--bad)" : "var(--ink-soft)";
+          bodyHtml = `
+            <p style="font-size:13px;background:var(--paper);border-radius:8px;padding:8px;white-space:pre-wrap;">${escapeHtml(JSON.stringify((ans && ans.answer) || "", null, 0))}</p>
+            <p style="font-size:12px;color:${badgeColor};font-weight:700;margin-top:6px;">${badge}</p>`;
+        }
+
+        block.innerHTML = `
+          <p style="margin:0 0 8px;font-weight:700;font-size:13px;color:var(--teal);">تمرين ${idx + 1} — ${typeLabels[ex.type] || ex.type}</p>
+          ${bodyHtml}
+        `;
+        wrap.appendChild(block);
+      });
+
+      wrap.querySelectorAll("[data-grade]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const exId = e.target.dataset.grade;
+          const val = e.target.dataset.val === "true";
+          manualGrades[exId] = val;
+          wrap.querySelectorAll(`[data-grade="${exId}"]`).forEach((b) => {
+            b.classList.remove("btn-primary");
+            b.classList.add("btn-secondary");
+          });
+          e.target.classList.remove("btn-secondary");
+          e.target.classList.add("btn-primary");
+        });
+      });
+    }
+
+    document.getElementById("saveGradingBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("gradingStatus");
+      statusEl.textContent = "جاري الحفظ...";
+      statusEl.style.color = "var(--ink-soft)";
+
+      try {
+        const updatedAnswers = (currentSubmission.answers || []).map((a) => {
+          if (manualGrades[a.exerciseId] !== undefined) {
+            return { ...a, isCorrect: manualGrades[a.exerciseId] };
+          }
+          return a;
+        });
+
+        const correctCount = updatedAnswers.filter((a) => a.isCorrect === true).length;
+        const totalCount = updatedAnswers.length;
+
+        await updateDoc(doc(db, "submissions", currentSubmission.id), {
+          answers: updatedAnswers,
+          status: "corrected",
+          totalScore: `${correctCount} من ${totalCount} تمرين`,
+          correctedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+
+        statusEl.textContent = "تم حفظ التصحيح بنجاح.";
+        statusEl.style.color = "var(--ok)";
+        await selectWorksheetForSubmissions(currentWorksheetId, currentWorksheet);
+      } catch (err) {
+        statusEl.textContent = "حصل خطأ أثناء الحفظ: " + err.message;
+        statusEl.style.color = "var(--bad)";
+      }
+    });
+
+    /* ================= أكواد الدخول ================= */
+    async function loadPinsClasses() {
+      const sel = document.getElementById("pinsClassSelect");
+      sel.innerHTML = `<option value="">جاري التحميل...</option>`;
+
+      try {
+        const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+        let classes = [];
+        try { classes = JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").classes || []; } catch (e) { classes = []; }
+
+        const userSnap = await getDoc(doc(db, "users", currentTeacher.uid));
+        const userData = userSnap.exists() ? userSnap.data() : {};
+        if (userData.role !== "admin" && Array.isArray(userData.assignedClasses) && userData.assignedClasses.length) {
+          classes = classes.filter((c) => userData.assignedClasses.includes(String(c.code)));
+        }
+
+        if (classes.length === 0) {
+          sel.innerHTML = `<option value="">مفيش فصول متاحة لك</option>`;
+          return;
+        }
+        sel.innerHTML = `<option value="">اختر فصل...</option>` +
+          classes.map((c) => `<option value="${c.code}">${c.code}${c.name ? " - " + c.name : ""}</option>`).join("");
+      } catch (err) {
+        sel.innerHTML = `<option value="">حصل خطأ</option>`;
+      }
+    }
+
+    document.getElementById("pinsClassSelect").addEventListener("change", async (e) => {
+      const classCode = e.target.value;
+      const card = document.getElementById("pinsListCard");
+      const listEl = document.getElementById("pinsList");
+      if (!classCode) { card.style.display = "none"; return; }
+
+      card.style.display = "block";
+      listEl.innerHTML = "جاري التحميل...";
+
+      const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+      let rosterStudents = [];
+      try { rosterStudents = JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").students || []; } catch (e2) { rosterStudents = []; }
+      const students = rosterStudents.filter((s) => String(s.classCode) === classCode);
+
+      if (students.length === 0) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">مفيش طلاب في الفصل ده.</p>`;
+        return;
+      }
+
+      // نجيب الأكواد الموجودة بالفعل لطلاب المدرسة دي
+      const pinsSnap = await getDocs(query(collection(db, "studentPins"), where("schoolId", "==", currentTeacher.schoolId)));
+      const pinsBySeat = {};
+      pinsSnap.docs.forEach((d) => { pinsBySeat[d.data().seat] = d.data().pin; });
+
+      listEl.innerHTML = "";
+      for (const s of students) {
+        let pin = pinsBySeat[s.seat];
+        if (!pin) {
+          pin = String(Math.floor(100000 + Math.random() * 900000));
+          await addDoc(collection(db, "studentPins"), {
+            pin, schoolId: currentTeacher.schoolId, seat: s.seat, name: s.name, classCode, createdAt: serverTimestamp()
+          });
+        }
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);";
+        row.innerHTML = `
+          <span style="font-size:14px;">${s.name}</span>
+          <strong style="font-size:16px;letter-spacing:1px;color:var(--teal);">${pin}</strong>
+        `;
+        listEl.appendChild(row);
+      }
+    });
+  </script>
+
+</body>
+</html>

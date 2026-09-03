@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>أوراقي</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#0f766e; --teal-d:#0b5a54; --teal-l:#e6f2f0;
+    --ink:#15242b; --muted:#5b6f76; --line:#d8e2e0; --paper:#f6f8f7; --white:#fff;
+    --ok:#1f9d55; --bad:#d64545;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Tajawal',sans-serif;background:var(--paper);color:var(--ink);direction:rtl;}
+  header{background:linear-gradient(180deg,var(--teal),var(--teal-d));color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;}
+  header h1{font-size:17px;margin:0;}
+  main{max-width:640px;margin:0 auto;padding:16px;}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px;}
+  .btn{border:none;border-radius:10px;padding:12px 20px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;background:var(--teal);color:#fff;}
+  .ws-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+  .ws-card:active{background:var(--paper);}
+  .ws-list-row{background:#fff;border-bottom:1px solid var(--line);padding:10px 4px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+  .status-pill{display:inline-block;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;}
+  .status-not-started{background:var(--line);color:var(--muted);}
+  .status-in-progress{background:#fdf1d8;color:#97650b;}
+  .status-submitted{background:var(--teal-l);color:var(--teal);}
+  .status-corrected{background:#e1f5ee;color:var(--ok);}
+</style>
+</head>
+<body>
+  <header>
+    <h1>أوراقي</h1>
+    <span id="studentNameLabel" style="font-size:13px;"></span>
+  </header>
+
+  <main>
+    <div id="notLoggedIn" class="card" style="display:none;">
+      <p>لازم تسجّل دخولك الأول.</p>
+      <a href="index.html" class="btn" style="display:inline-block;text-decoration:none;">تسجيل الدخول</a>
+    </div>
+
+    <div id="worksheetsWrap"></div>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getFirestore, collection, query, where, getDocs, doc, getDoc
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    /* إعدادات مشروع Firebase الموحّد — نفس مفاتيح worksheets.html/index.html */
+    const firebaseConfig = {
+      apiKey: "AIzaSyCEW-BTrfkqLUFXj7drtts7GkN6PXpbV4A",
+      authDomain: "injaz-classroom.firebaseapp.com",
+      projectId: "injaz-classroom",
+      storageBucket: "injaz-classroom.firebasestorage.app",
+      messagingSenderId: "640060389242",
+      appId: "1:640060389242:web:37e42c456d7b4e015e88c3"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    /* جلسة الطالب (PIN) */
+    let STU = null;
+    try { STU = JSON.parse(localStorage.getItem('stu_session') || 'null'); } catch (e) { STU = null; }
+
+    if (!STU || !STU.pin) {
+      document.getElementById("notLoggedIn").style.display = "block";
+    } else {
+      document.getElementById("studentNameLabel").textContent = STU.name;
+      loadWorksheets();
+    }
+
+    const statusLabels = {
+      "not-started": "لم يبدأ",
+      "in-progress": "جاري",
+      "submitted": "مُسلّم",
+      "corrected": "مُصحح"
+    };
+
+    async function loadWorksheets() {
+      const wrap = document.getElementById("worksheetsWrap");
+      wrap.innerHTML = `<p style="font-size:13px;color:var(--muted);">جاري التحميل...</p>`;
+
+      const settingSnap = await getDoc(doc(db, "settings", "display"));
+      const viewMode = settingSnap.exists() ? settingSnap.data().worksheetView : "cards";
+
+      const wq = query(
+        collection(db, "worksheets"),
+        where("schoolId", "==", STU.schoolId),
+        where("status", "==", "published"),
+        where("assignedClassIds", "array-contains", STU.classCode)
+      );
+      const wSnap = await getDocs(wq);
+
+      const sq = query(collection(db, "submissions"), where("studentId", "==", STU.seat));
+      const sSnap = await getDocs(sq);
+      const submissionByWorksheet = {};
+      sSnap.docs.forEach((d) => { submissionByWorksheet[d.data().worksheetId] = { id: d.id, ...d.data() }; });
+
+      if (wSnap.empty) {
+        wrap.innerHTML = `<div class="card"><p style="font-size:13px;color:var(--muted);">مفيش أوراق متاحة لك حاليًا.</p></div>`;
+        return;
+      }
+
+      wrap.innerHTML = "";
+      const listContainer = viewMode === "list" ? document.createElement("div") : null;
+      if (listContainer) {
+        listContainer.style.cssText = "background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 12px;";
+        wrap.appendChild(listContainer);
+      }
+
+      wSnap.docs.forEach((d) => {
+        const w = d.data();
+        const sub = submissionByWorksheet[d.id];
+        const status = sub ? sub.status : "not-started";
+        const card = document.createElement("div");
+
+        if (viewMode === "list") {
+          card.className = "ws-list-row";
+          card.innerHTML = `
+            <span style="font-size:14px;font-weight:500;">${w.title}</span>
+            <span class="status-pill status-${status}">${statusLabels[status]}</span>
+          `;
+          card.addEventListener("click", () => { window.location.href = `student-solve.html?worksheetId=${d.id}`; });
+          listContainer.appendChild(card);
+        } else {
+          card.className = "ws-card";
+          card.innerHTML = `
+            <div>
+              <p style="margin:0;font-weight:700;font-size:15px;">${w.title}</p>
+              <p style="margin:4px 0 0;font-size:12px;color:var(--muted);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""}</p>
+            </div>
+            <span class="status-pill status-${status}">${statusLabels[status]}</span>
+          `;
+          card.addEventListener("click", () => { window.location.href = `student-solve.html?worksheetId=${d.id}`; });
+          wrap.appendChild(card);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

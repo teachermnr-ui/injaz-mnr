@@ -67,15 +67,6 @@ submissionId (auto)
   updatedAt       : timestamp
 ```
 
-### `references` — مراجع الطالب (ملفات PDF للتصفح)
-```
-referenceId (auto)
-  title           : string
-  fileUrl         : string   // مسار الملف في Firebase Storage
-  assignedClassIds: array<string>
-  uploadedAt      : timestamp
-```
-
 ## توليد الـ PIN
 ```
 PIN = رمز الصف (3 أرقام) + الترتيب الأبجدي (رقمين، padded) + آخر رقمين من رقم الهوية

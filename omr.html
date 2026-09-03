@@ -573,8 +573,10 @@ const state = {
   meta:[],           // مصفوفة مشتقّة: نوع وخيارات كل سؤال
   key:[],            // مفتاح الإجابة: قيمة كل سؤال = رقم الخيار أو null
   results:[],
-  students:[],       // قائمة الطلاب: {seat, name, classCode}
-  classes:[],        // الفصول: {name, code}
+  students:[],       // قائمة الطلاب المرئية للمستخدم الحالي فقط: {seat, name, classCode}
+  classes:[],        // الفصول المرئية للمستخدم الحالي فقط: {name, code, createdBy}
+  fullStudents:[],   // كل طلاب المدرسة (بدون فلترة) — تُستخدم فقط لفحص التكرار والحفظ الآمن
+  fullClasses:[],    // كل فصول المدرسة (بدون فلترة) — تُستخدم فقط لفحص التكرار والحفظ الآمن
   selectedStudents:{}, // خانات الاختيار المؤقتة
   attendance:{},       // حالة الحضور لكل طالب: present|late|absent
   attMenuSeat:null,    // الطالب الذي تُعرض قائمة حضوره
@@ -1437,19 +1439,21 @@ function clearKey(){ state.key = new Array(state.cfg.numQ).fill(null); buildKeyG
 function normalizeSeat(s){ return String(s||'').replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]).replace(/\D/g,''); }
 
 /* ---- الفصول ---- */
-function addClass(){
+async function addClass(){
   if(!clsGuardAdd()) return;
   const name=(document.getElementById('clName').value||'').trim();
   const code=(document.getElementById('clCode').value||'').trim();
   if(!name){ alert('أدخل اسم الصف.'); return; }
   if(!code){ alert('أدخل رمز الصف.'); return; }
-  if(state.classes.some(c=>c.code===code)){ alert('رمز الصف مستخدم من قبل. اختر رمزاً غير متكرر.'); return; }
-  if(state.classes.some(c=>c.name===name)){ alert('اسم الصف مستخدم من قبل. اختر اسماً غير متكرر.'); return; }
-  state.classes.push({ name, code });
+  if(state.fullClasses.some(c=>c.code===code)){ alert('رمز الصف مستخدم من قبل. اختر رمزاً غير متكرر.'); return; }
+  if(state.fullClasses.some(c=>c.name===name)){ alert('اسم الصف مستخدم من قبل. اختر اسماً غير متكرر.'); return; }
+  try{
+    await mutateSharedRoster((classes)=>{ classes.push({ name, code, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null }); });
+  }catch(e){ alert('فشل حفظ الصف: '+e.message); return; }
   document.getElementById('clName').value=''; document.getElementById('clCode').value='';
-  refreshClassDropdowns(); renderClasses(); renderStudents(); saveStudentsToCloud();
+  refreshClassDropdowns(); renderClasses(); renderStudents();
 }
-function delClass(code){
+async function delClass(code){
   if(!clsGuardDel()) return;
   const studs = state.students.filter(s=>s.classCode===code);
   const cl = state.classes.find(c=>c.code===code);
@@ -1457,15 +1461,20 @@ function delClass(code){
     ? `حذف الصف «${cl?cl.name:code}» سيحذف أيضاً ${toArabic(studs.length)} طالباً مرتبطين به نهائياً. متابعة؟`
     : `حذف الصف «${cl?cl.name:code}»؟`;
   if(!confirm(msg)) return;
-  // حذف طلاب الصف وكل بياناتهم المرتبطة (حضور + سجل أعمال)
+  // حذف طلاب الصف وكل بياناتهم المرتبطة (حضور + سجل أعمال) — محلي (خاص بالمعلم)
   studs.forEach(s=>{ delete state.attendance[s.seat]; delete state.selectedStudents[s.seat]; });
   delete state.workLog[code];
-  state.students = state.students.filter(s=>s.classCode!==code);
-  state.classes = state.classes.filter(c=>c.code!==code);
+  try{
+    await mutateSharedRoster((classes, students)=>{
+      const idx = classes.findIndex(c=>c.code===code);
+      if(idx>=0) classes.splice(idx,1);
+      for(let i=students.length-1;i>=0;i--){ if(students[i].classCode===code) students.splice(i,1); }
+    });
+  }catch(e){ alert('فشل حذف الصف: '+e.message); return; }
   refreshClassDropdowns(); renderClasses(); renderStudents(); renderWorkLog();
-  saveStudentsToCloud(); saveWorkLogToCloud();
+  saveWorkLogToCloud();
 }
-function classNameByCode(code){ const c=state.classes.find(x=>x.code===code); return c? c.name : ''; }
+function classNameByCode(code){ const c=(state.fullClasses.length?state.fullClasses:state.classes).find(x=>x.code===code); return c? c.name : ''; }
 function renderClasses(){
   const host=document.getElementById('classesHost'); if(!host) return;
   if(!state.classes.length){ host.innerHTML='<div class="empty">لا توجد فصول بعد. أضف فصلاً للبدء.</div>'; return; }
@@ -1489,11 +1498,20 @@ function refreshClassDropdowns(){
 }
 
 /* ---- الطلاب ---- */
-// التسلسل التلقائي لرقم الهوية عند غيابه: Class-<رمز الصف>-<رقم>
+// دالة نقية: تضيف/تحدّث طالب داخل مصفوفة معيّنة (تُستخدم جوه معاملة على البيانات الكاملة)
+function upsertStudentIn(students, st){
+  const ex = students.find(s=>s.seat===st.seat);
+  if(ex){
+    if(String(ex.classCode)===String(st.classCode)){ Object.assign(ex, st); return {status:'updated'}; }
+    return {status:'dup', dupClass:ex.classCode};   // موجود في صف آخر — لا يُنقل تلقائياً
+  }
+  students.push(st); return {status:'added'};
+}
+// التسلسل التلقائي لرقم الهوية عند غيابه: Class-<رمز الصف>-<رقم> — يفحص كل طلاب المدرسة تفاديًا للتعارض
 function nextAutoSeat(classCode){
   const prefix = `Class-${classCode}-`;
   let max = 0;
-  state.students.forEach(s=>{
+  (state.fullStudents.length?state.fullStudents:state.students).forEach(s=>{
     if(s.seat && s.seat.indexOf(prefix)===0){
       const n = parseInt(s.seat.slice(prefix.length),10);
       if(!isNaN(n) && n>max) max=n;
@@ -1501,7 +1519,7 @@ function nextAutoSeat(classCode){
   });
   return prefix + (max+1);
 }
-function addStudentManual(){
+async function addStudentManual(){
   if(!clsGuardAdd()) return;
   if(!state.classes.length){ alert('أضف فصلاً واحداً على الأقل قبل تسجيل الطلاب.'); return; }
   const name = (document.getElementById('stName').value||'').trim();
@@ -1515,34 +1533,45 @@ function addStudentManual(){
   if(!seat || normalizeSeat(rawId)!==rawId.replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)])){
     alert('رقم الهوية يجب أن يكون أرقاماً فقط بلا حروف أو رموز.'); return;
   }
-  const r = upsertStudent({ seat, name, classCode });
-  if(r.status==='dup'){ alert('هذا الطالب (رقم الهوية '+seat+') مسجّل مسبقاً في صف: '+clsNameOmr(r.dupClass)+'.\nلا يمكن وجود الطالب في أكثر من صف.'); return; }
+  let result;
+  try{
+    await mutateSharedRoster((classes, students)=>{ result = upsertStudentIn(students, { seat, name, classCode }); });
+  }catch(e){ alert('فشل الحفظ: '+e.message); return; }
+  if(result.status==='dup'){ alert('هذا الطالب (رقم الهوية '+seat+') مسجّل مسبقاً في صف: '+clsNameOmr(result.dupClass)+'.\nلا يمكن وجود الطالب في أكثر من صف.'); return; }
   document.getElementById('stName').value=''; document.getElementById('stSeat').value='';
-  renderStudents(); saveStudentsToCloud();
+  renderStudents();
 }
 // استيراد يدوي (لصق): رقم الهوية ثم الاسم، لصفٍّ محدّد (رقم تلقائي عند غيابه)
-function importStudents(){
+async function importStudents(){
   if(!clsGuardAdd()) return;
   const classCode = document.getElementById('stImportClass').value;
   if(!classCode){ alert('اختر الصف أولاً قبل الاستيراد.'); return; }
   const txt = document.getElementById('stBulk').value||'';
   const lines = txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  let added=0; const dups=[];
-  for(const line of lines){
-    const parts = line.split(/[,،\t]/).map(p=>p.trim());
-    if(!parts.length) continue;
-    // الصيغة: رقم الهوية ثم الاسم — وإن كان أول حقل اسماً (سطر بحقل واحد) يُعدّ اسماً بلا هوية
-    let seat='', name='';
-    if(parts.length>=2){ seat = normalizeSeat(parts[0]); name = parts[1]; }
-    else { name = parts[0]; }
-    if(!name) continue;
-    if(!seat) seat = nextAutoSeat(classCode);   // توليد تلقائي عند غياب الهوية
-    const r = upsertStudent({ seat, name, classCode });
-    if(r.status==='dup') dups.push({name, cls:clsNameOmr(r.dupClass)}); else added++;
-  }
+  let added=0, updated=0; const dups=[];
+  try{
+    await mutateSharedRoster((classes, students)=>{
+      for(const line of lines){
+        const parts = line.split(/[,،\t]/).map(p=>p.trim());
+        if(!parts.length) continue;
+        let seat='', name='';
+        if(parts.length>=2){ seat = normalizeSeat(parts[0]); name = parts[1]; }
+        else { name = parts[0]; }
+        if(!name) continue;
+        if(!seat){
+          const prefix = `Class-${classCode}-`;
+          let max=0; students.forEach(s=>{ if(s.seat && s.seat.indexOf(prefix)===0){ const n=parseInt(s.seat.slice(prefix.length),10); if(!isNaN(n)&&n>max)max=n; } });
+          seat = prefix + (max+1);
+        }
+        const r = upsertStudentIn(students, { seat, name, classCode });
+        if(r.status==='dup') dups.push({name, cls:classNameByCode(r.dupClass)||r.dupClass});
+        else if(r.status==='updated') updated++; else added++;
+      }
+    });
+  }catch(e){ alert('فشل الاستيراد: '+e.message); return; }
   document.getElementById('stBulk').value='';
-  renderStudents(); saveStudentsToCloud();
-  let msg = `تم استيراد/تحديث ${toArabic(added)} طالب في الصف.`;
+  renderStudents();
+  let msg = `تم استيراد/تحديث ${toArabic(added+updated)} طالب في الصف.`;
   if(dups.length){ msg += `\n\nتم تجاهل ${toArabic(dups.length)} طالباً موجوداً مسبقاً في صف آخر:\n`+dups.slice(0,30).map(d=>'• '+d.name+' → '+d.cls).join('\n'); }
   alert(msg);
 }
@@ -1684,15 +1713,7 @@ function parseExcelRoster(rows){
   }
   return { students, byClass, grade, section };
 }
-function upsertStudent(st){
-  const ex = state.students.find(s=>s.seat===st.seat);
-  if(ex){
-    if(String(ex.classCode)===String(st.classCode)){ Object.assign(ex, st); return {status:'updated'}; }
-    return {status:'dup', dupClass:ex.classCode};   // موجود في صف آخر — لا يُنقل تلقائياً
-  }
-  state.students.push(st); return {status:'added'};
-}
-function clsNameOmr(code){ return (state.classes.find(c=>String(c.code)===String(code))||{}).name||code; }
+function clsNameOmr(code){ const src=(state.fullClasses.length?state.fullClasses:state.classes); return (src.find(c=>String(c.code)===String(code))||{}).name||code; }
 
 /* ============================================================
    استيراد من نور (PDF) — استخراج الهوية/الاسم/الصف ثم طلب رمز الصف
@@ -1752,7 +1773,7 @@ function showOcrDiag(){
 function closeImportReview(){ document.getElementById('importReviewOverlay').style.display='none'; pendingImport=null; }
 
 // تأكيد الاستيراد: إنشاء الفصول وإضافة الطلاب
-function confirmImport(){
+async function confirmImport(){
   if(!clsGuardAdd()) return;
   if(!pendingImport) return;
   // تحقّق: كل صف يحتاج رمزاً
@@ -1763,36 +1784,48 @@ function confirmImport(){
   const codes = pendingImport.groups.map(g=>g.code);
   if(new Set(codes).size !== codes.length){ alert('هناك رمز صف مكرّر بين الصفوف. اجعل كل رمز فريداً.'); return; }
   let addedClasses=0, addedStudents=0, updated=0; const dups=[];
-  pendingImport.groups.forEach(g=>{
-    let cls = state.classes.find(c=>c.code===g.code);
-    if(!cls){
-      // امنع تكرار الاسم
-      let nm = g.className; let n=2;
-      while(state.classes.some(c=>c.name===nm)) nm = g.className+' ('+(n++)+')';
-      cls = { name: nm, code: g.code };
-      state.classes.push(cls); addedClasses++;
-    }
-    g.students.forEach(s=>{
-      let seat = s.seat;
-      if(!seat){ seat = nextAutoSeat(g.code); }   // لا هوية (استيراد بالأسماء) → ترقيم تلقائي
-      const r = upsertStudent({ seat, name:s.name, classCode:g.code });
-      if(r.status==='dup') dups.push({name:s.name, cls:clsNameOmr(r.dupClass)});
-      else if(r.status==='updated') updated++; else addedStudents++;
+  try{
+    await mutateSharedRoster((classes, students)=>{
+      pendingImport.groups.forEach(g=>{
+        let cls = classes.find(c=>c.code===g.code);
+        if(!cls){
+          let nm = g.className; let n=2;
+          while(classes.some(c=>c.name===nm)) nm = g.className+' ('+(n++)+')';
+          cls = { name: nm, code: g.code, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null };
+          classes.push(cls); addedClasses++;
+        }
+        g.students.forEach(s=>{
+          let seat = s.seat;
+          if(!seat){
+            const prefix = `Class-${g.code}-`;
+            let max=0; students.forEach(x=>{ if(x.seat && x.seat.indexOf(prefix)===0){ const n=parseInt(x.seat.slice(prefix.length),10); if(!isNaN(n)&&n>max)max=n; } });
+            seat = prefix + (max+1);
+          }
+          const r = upsertStudentIn(students, { seat, name:s.name, classCode:g.code });
+          if(r.status==='dup') dups.push({name:s.name, cls:(classes.find(c=>String(c.code)===String(r.dupClass))||{}).name||r.dupClass});
+          else if(r.status==='updated') updated++; else addedStudents++;
+        });
+      });
     });
-  });
-  refreshClassDropdowns(); renderClasses(); renderStudents(); saveStudentsToCloud();
+  }catch(e){ alert('فشل الاستيراد: '+e.message); return; }
+  refreshClassDropdowns(); renderClasses(); renderStudents();
   closeImportReview();
   let msg = `تم الاستيراد بنجاح ✅\nفصول جديدة: ${toArabic(addedClasses)}\nطلاب جُدد: ${toArabic(addedStudents)}`;
   if(updated) msg += `\nطلاب محدّثون: ${toArabic(updated)}`;
   if(dups.length){ msg += `\n\nطلاب موجودون مسبقاً في صف آخر (تم تجاهلهم): ${toArabic(dups.length)}\n`+dups.slice(0,30).map(d=>'• '+d.name+' → '+d.cls).join('\n'); }
   alert(msg);
 }
-function delStudent(seat){
+async function delStudent(seat){
   if(!clsGuardDel()) return;
   if(!confirm('حذف هذا الطالب؟')) return;
-  state.students = state.students.filter(s=>s.seat!==seat);
+  try{
+    await mutateSharedRoster((classes, students)=>{
+      const idx = students.findIndex(s=>s.seat===seat);
+      if(idx>=0) students.splice(idx,1);
+    });
+  }catch(e){ alert('فشل الحذف: '+e.message); return; }
   delete state.selectedStudents[seat];
-  renderStudents(); saveStudentsToCloud();
+  renderStudents();
 }
 function findStudent(seat){
   const raw = String(seat==null?'':seat).trim();
@@ -4541,36 +4574,109 @@ async function loadResultsFromCloud(manual){
   }catch(e){ if(manual) alert('فشل تحميل النتائج: '+e.message); }
 }
 
-/* ---- الطلاب ---- (تُحفظ ضمن مجموعة exams بمعرّف مستقل students، تفادياً لمجموعات جديدة) */
+/* ---- الروستر المشترك (فصول + طلاب) — مستند واحد لكل مدرسة، يشترك فيه كل المعلمين ---- */
+let CLS_USER_ROLE = '';
+let CLS_USER_ASSIGNED = [];
+
+function rosterDocRef(){
+  const sid = (CLS_SESSION && CLS_SESSION.schoolId) || 'admin';
+  return db.collection('schoolData').doc('roster_' + sid);
+}
+
+// يحدد هل الفصل مرئي للمستخدم الحالي: الأدمن يشوف كل حاجة،
+// وغيره يشوف بس الفصول المُسندة له من الأدمن أو اللي هو نفسه أنشأها
+function isClassVisible(cls){
+  if(CLS_USER_ROLE==='admin') return true;
+  const code = normalizeDigits(String(cls.code||'')).trim();
+  if(CLS_USER_ASSIGNED.map(x=>normalizeDigits(String(x)).trim()).includes(code)) return true;
+  if(cls.createdBy && CLS_SESSION && cls.createdBy===CLS_SESSION.userId) return true;
+  return false;
+}
+
+// يعيد حساب state.classes/state.students (المرئي) من state.fullClasses/state.fullStudents (الكامل)
+function recomputeVisibleRoster(){
+  state.classes = state.fullClasses.filter(isClassVisible);
+  const visCodes = new Set(state.classes.map(c=>String(c.code)));
+  state.students = state.fullStudents.filter(s=>visCodes.has(String(s.classCode)));
+}
+
+/* حفظ آمن بمعاملة Firestore: يقرأ أحدث نسخة من روستر المدرسة وقت الحفظ فعليًا،
+   يطبّق التعديل المطلوب بس، ويحفظ — عشان لو معلمين عدّلوا في نفس اللحظة محدش يمسح تعديل التاني */
+async function mutateSharedRoster(mutatorFn){
+  if(!cloudReady) throw new Error('قاعدة البيانات غير مهيّأة');
+  const ref = rosterDocRef();
+  await db.runTransaction(async (tx)=>{
+    const snap = await tx.get(ref);
+    let data = {};
+    try{ data = snap.exists ? JSON.parse(snap.data().value||'{}') : {}; }catch(e){ data = {}; }
+    const classes = Array.isArray(data.classes) ? data.classes : [];
+    const students = Array.isArray(data.students) ? data.students : [];
+    const result = mutatorFn(classes, students); // المُعدِّل يُعدّل المصفوفتين في مكانهما مباشرة
+    tx.set(ref, {
+      value: JSON.stringify({ classes, students, teacherAdd: data.teacherAdd!==false }),
+      updatedAt: Date.now(), schoolId: (CLS_SESSION&&CLS_SESSION.schoolId)||null, base:'roster'
+    });
+    state.fullClasses = classes; state.fullStudents = students;
+    return result;
+  });
+  recomputeVisibleRoster();
+}
+
+/* إعداد المعلم الخاص (سجل الأعمال + الملصقات) — يفضل معزولاً لكل معلم لوحده */
+async function saveTeacherConfigToCloud(){
+  if(!cloudReady) return;
+  try{ await cloudSet('exams', 'teacherCfg', { workCfg: state.workCfg, stickers: state.stickers }); }catch(e){}
+}
+
 async function saveStudentsToCloud(manual){
+  // احتفظ بالاسم القديم توافقًا مع بقية الكود — بيحفظ إعداد المعلم بس،
+  // لأن تعديلات الفصول/الطلاب بقت بتتم عبر mutateSharedRoster مباشرة
   if(!cloudReady){ if(manual) alert('قاعدة البيانات غير مهيّأة.'); return; }
-  if(!rosterLoaded && !manual) return;   // لا تحفظ قبل اكتمال التحميل الأول (حتى لا تُمسح الترويسة)
   try{
-    await cloudSet('exams', 'roster', { students: state.students, classes: state.classes, workCfg: state.workCfg, stickers: state.stickers });
+    await saveTeacherConfigToCloud();
     if(manual) setCloudStatus('ok', `✅ حُفظ ${toArabic(state.students.length)} طالب و${toArabic(state.classes.length)} صفّاً سحابياً.`);
   }catch(e){ if(manual) alert('فشل الحفظ: '+e.message); }
 }
+
 async function loadStudentsFromCloud(manual){
   if(!cloudReady){ if(manual) alert('قاعدة البيانات غير مهيّأة.'); return; }
   try{
-    let data = await cloudGet('exams', 'roster');
-    if(data && (data.students||data.classes)){
-      state.students = data.students||[]; state.classes = data.classes||[];
-      state.stickers = Array.isArray(data.stickers)?data.stickers:[];
-      ensureStickers();
-      if(data.workCfg && data.workCfg.periods){
-        // ادمج الترويسة المحفوظة فوق الافتراضية (فلا يُفقد أي حقل)
-        const defH = defaultWorkCfg().header;
-        data.workCfg.header = Object.assign({}, defH, data.workCfg.header||{});
-        state.workCfg = data.workCfg;
+    // هوية المستخدم ودوره وفصوله المُسندة — أساس الفلترة
+    CLS_USER_ROLE=''; CLS_USER_ASSIGNED=[];
+    if(CLS_SESSION && CLS_SESSION.userId){
+      const uSnap = await db.collection('users').doc(CLS_SESSION.userId).get();
+      if(uSnap.exists){
+        const u = uSnap.data();
+        CLS_USER_ROLE = u.role||'';
+        CLS_USER_ASSIGNED = Array.isArray(u.assignedClasses) ? u.assignedClasses : [];
       }
-    } else {
-      const old = await cloudGet('exams', 'students');
-      if(Array.isArray(old)) state.students = old;
     }
+
+    // الروستر المشترك الكامل
+    const rSnap = await rosterDocRef().get();
+    let rData = {};
+    try{ rData = rSnap.exists ? JSON.parse(rSnap.data().value||'{}') : {}; }catch(e){ rData = {}; }
+    state.fullClasses = Array.isArray(rData.classes) ? rData.classes : [];
+    state.fullStudents = Array.isArray(rData.students) ? rData.students : [];
+    CLS_TEACHER_ADD = (rData.teacherAdd!==false);
+    recomputeVisibleRoster();
+
+    // إعداد المعلم الخاص (سجل الأعمال + الملصقات) — معزول
+    let cfgData = await cloudGet('exams', 'teacherCfg');
+    if(!cfgData){ cfgData = await cloudGet('exams', 'roster'); } // توافق مع نسخة قديمة قبل الفصل
+    if(cfgData){
+      state.stickers = Array.isArray(cfgData.stickers) ? cfgData.stickers : [];
+      ensureStickers();
+      if(cfgData.workCfg && cfgData.workCfg.periods){
+        const defH = defaultWorkCfg().header;
+        cfgData.workCfg.header = Object.assign({}, defH, cfgData.workCfg.header||{});
+        state.workCfg = cfgData.workCfg;
+      }
+    } else { ensureStickers(); }
+
     rosterLoaded = true;
     try{ const _fu = await cloudGet('results','followup'); state.followup = (_fu && typeof _fu==='object' && !Array.isArray(_fu)) ? _fu : {}; }catch(e){ state.followup = {}; }
-    await clsProvisionFromSchool();
+    clsApplyTeacherAdd();
     refreshClassDropdowns(); renderClasses(); renderStudents();
     if(typeof renderWlHeader==='function') renderWlHeader();
     if(typeof renderWlSetup==='function') renderWlSetup();

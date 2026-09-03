@@ -6,37 +6,71 @@
 <title>تسجيل دخول المعلم</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/styles.css">
+<style>
+  body { display:flex; align-items:center; min-height:100vh; }
+  .welcome-wrap { max-width:420px; margin:0 auto; padding:40px 24px; width:100%; }
+  .welcome-title { font-size:28px; font-weight:900; text-align:center; margin:0 0 6px; }
+  .welcome-subtitle { font-size:14px; color:var(--ink-soft); text-align:center; margin:0 0 32px; }
+
+  .pill-btn {
+    width:100%; display:flex; align-items:center; justify-content:space-between;
+    background:#fff; border:1.5px solid var(--line); border-radius:999px;
+    padding:14px 10px 14px 22px; margin-bottom:14px;
+    font-family:'Tajawal',sans-serif; font-size:15px; font-weight:500; color:var(--ink);
+    cursor:pointer; transition:.15s;
+  }
+  .pill-btn:active { background:var(--paper); }
+  .pill-icon {
+    width:34px; height:34px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .email-form { background:#fff; border:1.5px solid var(--line); border-radius:20px; padding:20px; margin-top:4px; }
+  .back-link { display:block; text-align:center; font-size:13px; color:var(--ink-soft); margin-top:14px; cursor:pointer; text-decoration:underline; }
+</style>
 </head>
 <body>
-  <header class="app-header">
-    <h1>تسجيل دخول المعلم</h1>
-  </header>
 
-  <main class="container">
+  <div class="welcome-wrap">
 
     <!-- 1) اختيار طريقة الدخول -->
-    <div class="card" id="signinCard">
-      <h3 style="margin-top:0">سجّل دخولك</h3>
-      <button class="btn btn-primary" id="googleBtn" style="width:100%;margin-bottom:14px;">الدخول بجوجل</button>
+    <div id="signinCard">
+      <h1 class="welcome-title">مرحباً بك</h1>
+      <p class="welcome-subtitle">سجّل دخولك للمتابعة</p>
 
-      <hr style="border:none;border-top:1px solid var(--line);margin:14px 0;">
+      <button class="pill-btn" id="googleBtn">
+        <span>المتابعة بحساب Google</span>
+        <span class="pill-icon" style="background:#fff;border:1px solid var(--line);">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l6-6C34.5 5.5 29.6 3.5 24 3.5 12.7 3.5 3.5 12.7 3.5 24S12.7 44.5 24 44.5 44.5 35.3 44.5 24c0-1.2-.1-2.4-.3-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l6-6C34.5 6.5 29.6 4.5 24 4.5c-7.4 0-13.8 4.2-17 10.2z"/><path fill="#4CAF50" d="M24 44.5c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.4c-2 1.5-4.6 2.4-7.6 2.4-5.2 0-9.6-3.3-11.3-7.9l-6.6 5.1C9.9 40.1 16.4 44.5 24 44.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.7l6.6 5.4c-.5.5 7-5.1 7-15.1 0-1.2-.1-2.4-.3-3.5z"/></svg>
+        </span>
+      </button>
 
-      <label>البريد الإلكتروني</label>
-      <input type="email" id="emailInput" placeholder="example@email.com">
-      <br><br>
-      <label>كلمة المرور</label>
-      <input type="password" id="passwordInput" placeholder="••••••••">
-      <br><br>
-      <div style="display:flex;gap:10px;">
-        <button class="btn btn-primary" id="emailSigninBtn" style="flex:1;">دخول</button>
-        <button class="btn btn-secondary" id="emailSignupBtn" style="flex:1;">إنشاء حساب جديد</button>
+      <button class="pill-btn" id="emailToggleBtn">
+        <span>المتابعة بالبريد الإلكتروني</span>
+        <span class="pill-icon" style="background:#E8F0FE;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 6h18v12H3z" stroke="#1A73E8" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 6l9 7 9-7" stroke="#1A73E8" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        </span>
+      </button>
+
+      <div class="email-form" id="emailFormWrap" style="display:none;">
+        <label>البريد الإلكتروني</label>
+        <input type="email" id="emailInput" placeholder="example@email.com">
+        <br><br>
+        <label>كلمة المرور</label>
+        <input type="password" id="passwordInput" placeholder="••••••••">
+        <br><br>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-primary" id="emailSigninBtn" style="flex:1;">دخول</button>
+          <button class="btn btn-secondary" id="emailSignupBtn" style="flex:1;">إنشاء حساب جديد</button>
+        </div>
       </div>
-      <p id="signinStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+
+      <p id="signinStatus" style="font-size:13px;color:var(--ink-soft);margin-top:14px;text-align:center;"></p>
     </div>
 
     <!-- 2) إكمال البروفايل أول مرة -->
-    <div class="card" id="profileCard" style="display:none;">
-      <h3 style="margin-top:0">أكمل بياناتك (أول مرة فقط)</h3>
+    <div class="email-form" id="profileCard" style="display:none;">
+      <h3 style="margin-top:0;text-align:center;">أكمل بياناتك (أول مرة فقط)</h3>
       <label>اسم المعلم</label>
       <input type="text" id="teacherNameInput" placeholder="مثال: محمد رشاد">
       <br><br>
@@ -47,7 +81,7 @@
       <p id="profileStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
     </div>
 
-  </main>
+  </div>
 
   <script type="module">
     import { auth, db } from "../shared/firebase-config.js";
@@ -70,6 +104,11 @@
         document.getElementById("signinCard").style.display = "none";
         document.getElementById("profileCard").style.display = "block";
       }
+    });
+
+    document.getElementById("emailToggleBtn").addEventListener("click", () => {
+      const wrap = document.getElementById("emailFormWrap");
+      wrap.style.display = wrap.style.display === "none" ? "block" : "none";
     });
 
     document.getElementById("googleBtn").addEventListener("click", async () => {

@@ -83,6 +83,7 @@
           <tr style="background:var(--teal-light);">
             <th style="padding:6px;border:1px solid var(--line);">التسلسل</th>
             <th style="padding:6px;border:1px solid var(--line);">الاسم</th>
+            <th style="padding:6px;border:1px solid var(--line);">الهوية</th>
             <th style="padding:6px;border:1px solid var(--line);">PIN</th>
             <th style="padding:6px;border:1px solid var(--line);">تعديل</th>
           </tr>
@@ -116,7 +117,7 @@
     import { db } from "../shared/firebase-config.js";
     import { requireTeacherAuth, signOutTeacher } from "../shared/auth.js";
     import { assignAlphabeticalSequence, nextSequenceNumber, generatePin, isPinAvailable } from "../shared/utils.js";
-    import { findExistingRelationship, findAccountByNationalId } from "../shared/studentLink.js";
+    import { findExistingRelationship, findAccountByNationalId, createIdChangeRequest } from "../shared/studentLink.js";
     import {
       collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, getDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -387,9 +388,11 @@
         tr.innerHTML = `
           <td style="padding:6px;border:1px solid var(--line);text-align:center;">${s.sequenceNumber}</td>
           <td style="padding:6px;border:1px solid var(--line);">${s.name}</td>
+          <td style="padding:6px;border:1px solid var(--line);text-align:center;font-size:11px;" id="nid-${s.studentId}">${s.nationalId}${s.activated ? ' <span style="color:var(--teal);">✓مفعّل</span>' : ""}</td>
           <td style="padding:6px;border:1px solid var(--line);text-align:center;font-weight:700;" id="pin-${s.studentId}">${s.pin}</td>
-          <td style="padding:6px;border:1px solid var(--line);text-align:center;">
-            <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;" data-edit="${s.studentId}">تعديل PIN</button>
+          <td style="padding:6px;border:1px solid var(--line);text-align:center;white-space:nowrap;">
+            <button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" data-edit="${s.studentId}">PIN</button>
+            <button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" data-editid="${s.studentId}">الهوية</button>
           </td>
         `;
         tbody.appendChild(tr);
@@ -403,6 +406,30 @@
       tbody.querySelectorAll("[data-edit]").forEach((btn) => {
         btn.addEventListener("click", () => editPin(btn.dataset.edit, students));
       });
+      tbody.querySelectorAll("[data-editid]").forEach((btn) => {
+        btn.addEventListener("click", () => editNationalId(btn.dataset.editid, students));
+      });
+    }
+
+    async function editNationalId(studentId, allStudentsInClass) {
+      const target = allStudentsInClass.find((s) => s.studentId === studentId);
+      const newId = prompt("أدخل رقم الهوية الصحيح:", target.nationalId);
+      if (!newId || newId === target.nationalId) return;
+
+      try {
+        if (target.activated && target.studentAccountId) {
+          // الطالب مفعّل — محتاج موافقته الأول
+          await createIdChangeRequest(target.studentAccountId, target.nationalId, newId, currentTeacher.code);
+          alert("تم إرسال طلب التعديل — هيتفعّل بعد موافقة الطالب. رقمه القديم يفضل شغال لحد الموافقة.");
+        } else {
+          // مش مفعّل لسه — تعديل مباشر
+          await updateDoc(doc(db, "students", studentId), { nationalId: newId, updatedAt: serverTimestamp() });
+          alert("تم تعديل رقم الهوية.");
+        }
+        await loadStudentsList();
+      } catch (err) {
+        alert("حصل خطأ: " + err.message);
+      }
     }
 
     async function editPin(studentId, allStudentsInClass) {

@@ -6,6 +6,7 @@
 <title>إدارة الطلاب</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -46,6 +47,15 @@
       <textarea id="pasteArea" rows="6" placeholder="1061532832, محمد أحمد الزهراني&#10;1055512345, عبدالله سعيد القحطاني"></textarea>
       <br><br>
       <button class="btn btn-secondary" id="previewBtn">معاينة القائمة</button>
+
+      <hr style="border:none;border-top:1px solid var(--line);margin:20px 0;">
+
+      <p style="font-size:13px;color:var(--ink-soft);">
+        أو ارفع ملف Excel مُصدَّر من منصة مدرستي مباشرة (يتعرف تلقائيًا على عمودي الهوية والاسم)
+      </p>
+      <input type="file" id="excelInput" accept=".xlsx,.xls">
+      <br><br>
+      <button class="btn btn-secondary" id="excelPreviewBtn">معاينة من ملف Excel</button>
 
       <div id="previewWrap" style="display:none;margin-top:16px;">
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -106,6 +116,7 @@
     import { db } from "../shared/firebase-config.js";
     import { requireTeacherAuth, signOutTeacher } from "../shared/auth.js";
     import { assignAlphabeticalSequence, nextSequenceNumber, generatePin, isPinAvailable } from "../shared/utils.js";
+    import { findExistingRelationship, findAccountByNationalId } from "../shared/studentLink.js";
     import {
       collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, getDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -173,24 +184,12 @@
       }
     });
 
-    // ---------- 2) معاينة قائمة الطلاب المُلصقة ----------
-    document.getElementById("previewBtn").addEventListener("click", async () => {
-      const raw = document.getElementById("pasteArea").value.trim();
+    // ---------- منطق مشترك للمعاينة (يُستخدم من اللصق ومن ملف Excel) ----------
+    async function buildPreview(parsed) {
       const addStatus = document.getElementById("addStatus");
-      if (!raw) {
-        addStatus.textContent = "الصق بيانات الطلاب الأول.";
-        addStatus.style.color = "var(--bad)";
-        return;
-      }
-
-      const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
-      const parsed = lines.map((line) => {
-        const parts = line.split(/[,\t]/).map((p) => p.trim());
-        return { nationalId: parts[0] || "", name: parts[1] || "" };
-      }).filter((s) => s.nationalId && s.name);
 
       if (parsed.length === 0) {
-        addStatus.textContent = "ما قدرناش نقرأ أي طالب — تأكد من الصيغة (رقم الهوية، الاسم).";
+        addStatus.textContent = "ما قدرناش نلاقي أي طالب صالح (لازم هوية واسم مع بعض).";
         addStatus.style.color = "var(--bad)";
         return;
       }
@@ -211,9 +210,31 @@
         sequenced = parsed.map((s) => ({ ...s, sequenceNumber: nextSeq++ }));
       }
 
-      previewList = sequenced.map((s) => ({
-        ...s,
-        pin: generatePin(currentTeacher.code, currentClassCode, s.sequenceNumber, s.nationalId)
+      addStatus.textContent = "جاري التحقق من تكرار الطلاب...";
+      addStatus.style.color = "var(--ink-soft)";
+
+      // لكل طالب: نتحقق هل عنده علاقة سابقة عند نفس المعلم (نعيد استخدام PIN)
+      // أو حساب موجود عند معلم تاني (نربطه تلقائيًا وصامتًا)
+      previewList = await Promise.all(sequenced.map(async (s) => {
+        const existingRel = await findExistingRelationship(currentTeacher.code, s.nationalId);
+        if (existingRel) {
+          return {
+            ...s,
+            existingId: existingRel.id,
+            pin: existingRel.pin,
+            sequenceNumber: existingRel.sequenceNumber,
+            studentAccountId: existingRel.studentAccountId || null,
+            reused: true
+          };
+        }
+
+        const matchedAccount = await findAccountByNationalId(s.nationalId);
+        return {
+          ...s,
+          pin: generatePin(currentTeacher.code, currentClassCode, s.sequenceNumber, s.nationalId),
+          studentAccountId: matchedAccount ? matchedAccount.uid : null,
+          reused: false
+        };
       }));
 
       const tbody = document.getElementById("previewBody");
@@ -222,7 +243,7 @@
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td style="padding:6px;border:1px solid var(--line);text-align:center;">${s.sequenceNumber}</td>
-          <td style="padding:6px;border:1px solid var(--line);">${s.name}</td>
+          <td style="padding:6px;border:1px solid var(--line);">${s.name}${s.reused ? ' <span style="font-size:11px;color:var(--teal);">(رمز سابق)</span>' : ""}</td>
           <td style="padding:6px;border:1px solid var(--line);text-align:center;">${s.nationalId}</td>
           <td style="padding:6px;border:1px solid var(--line);text-align:center;font-weight:700;">${s.pin}</td>
         `;
@@ -231,6 +252,76 @@
       document.getElementById("previewWrap").style.display = "block";
       addStatus.textContent = `تمت معاينة ${previewList.length} طالب. راجع القائمة ثم اضغط حفظ.`;
       addStatus.style.color = "var(--ink-soft)";
+    }
+
+    // ---------- 2أ) معاينة من اللصق ----------
+    document.getElementById("previewBtn").addEventListener("click", async () => {
+      const raw = document.getElementById("pasteArea").value.trim();
+      const addStatus = document.getElementById("addStatus");
+      if (!raw) {
+        addStatus.textContent = "الصق بيانات الطلاب الأول.";
+        addStatus.style.color = "var(--bad)";
+        return;
+      }
+
+      const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+      const parsed = lines.map((line) => {
+        const parts = line.split(/[,\t]/).map((p) => p.trim());
+        return { nationalId: parts[0] || "", name: parts[1] || "" };
+      }).filter((s) => s.nationalId && s.name);
+
+      await buildPreview(parsed);
+    });
+
+    // ---------- 2ب) معاينة من ملف Excel (مُصدَّر من منصة مدرستي) ----------
+    // يتعرف على عمود الهوية وعمود الاسم من عنوان كل عمود (بحث عن كلمة "هوية" أو "اسم")
+    // بدل الاعتماد على ترتيب أعمدة ثابت، عشان يشتغل حتى لو الملف فيه أعمدة إضافية (صف، فصل، جوال...)
+    document.getElementById("excelPreviewBtn").addEventListener("click", async () => {
+      const fileInput = document.getElementById("excelInput");
+      const addStatus = document.getElementById("addStatus");
+      if (!fileInput.files[0]) {
+        addStatus.textContent = "اختر ملف Excel أولًا.";
+        addStatus.style.color = "var(--bad)";
+        return;
+      }
+
+      addStatus.textContent = "جاري قراءة الملف...";
+      addStatus.style.color = "var(--ink-soft)";
+
+      try {
+        const arrayBuffer = await fileInput.files[0].arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: "array" });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+        if (rows.length < 2) {
+          addStatus.textContent = "الملف فاضي أو مالوش صفوف بيانات.";
+          addStatus.style.color = "var(--bad)";
+          return;
+        }
+
+        const headerRow = rows[0].map((h) => (h || "").toString().trim());
+        const idColIndex = headerRow.findIndex((h) => /هوي/.test(h));
+        const nameColIndex = headerRow.findIndex((h) => /اسم/.test(h));
+
+        if (idColIndex === -1 || nameColIndex === -1) {
+          addStatus.textContent = "ما قدرناش نتعرف على عمود الهوية أو الاسم في الملف — تأكد إن العناوين موجودة في السطر الأول.";
+          addStatus.style.color = "var(--bad)";
+          return;
+        }
+
+        const parsed = rows.slice(1)
+          .map((row) => ({
+            nationalId: (row[idColIndex] || "").toString().trim(),
+            name: (row[nameColIndex] || "").toString().trim()
+          }))
+          .filter((s) => s.nationalId && s.name);
+
+        await buildPreview(parsed);
+      } catch (err) {
+        addStatus.textContent = "حصل خطأ أثناء قراءة الملف: " + err.message;
+        addStatus.style.color = "var(--bad)";
+      }
     });
 
     // ---------- حفظ الطلاب في Firestore ----------
@@ -241,17 +332,30 @@
       try {
         const studentsRef = collection(db, "students");
         for (const s of previewList) {
-          await addDoc(studentsRef, {
-            nationalId: s.nationalId,
-            name: s.name,
-            pin: s.pin,
-            originClassCode: currentClassCode,
-            sequenceNumber: s.sequenceNumber,
-            currentClassId: currentClassId,
-            currentPeriod: currentPeriod,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
+          if (s.reused && s.existingId) {
+            // طالب له علاقة سابقة عند نفس المعلم — نحدّث فصله الحالي بدل ما ننشئ نسخة جديدة (نفس منطق نقل الطالب)
+            await updateDoc(doc(db, "students", s.existingId), {
+              name: s.name,
+              currentClassId: currentClassId,
+              currentPeriod: currentPeriod,
+              updatedAt: serverTimestamp()
+            });
+          } else {
+            await addDoc(studentsRef, {
+              nationalId: s.nationalId,
+              name: s.name,
+              pin: s.pin,
+              teacherCode: currentTeacher.code,
+              originClassCode: currentClassCode,
+              sequenceNumber: s.sequenceNumber,
+              currentClassId: currentClassId,
+              currentPeriod: currentPeriod,
+              studentAccountId: s.studentAccountId || null,
+              activated: !!s.studentAccountId,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+          }
         }
         addStatus.textContent = `تم حفظ ${previewList.length} طالب بنجاح.`;
         addStatus.style.color = "var(--ok)";

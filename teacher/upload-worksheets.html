@@ -27,6 +27,16 @@
 
   <main class="container">
 
+    <!-- إعداد شكل عرض الأوراق للطالب -->
+    <div class="card">
+      <h3 style="margin-top:0">شكل عرض الأوراق للطالب</h3>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-secondary" id="viewCardsBtn" style="flex:1;">بطاقات</button>
+        <button class="btn btn-secondary" id="viewListBtn" style="flex:1;">قائمة</button>
+      </div>
+      <p id="viewSettingStatus" style="font-size:12px;color:var(--ink-soft);margin-top:8px;"></p>
+    </div>
+
     <!-- 1) رفع الملف -->
     <div class="card">
       <h3 style="margin-top:0">١) رفع الملف</h3>
@@ -119,10 +129,32 @@
   <script type="module">
     import { db } from "../shared/firebase-config.js";
     import {
-      collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, serverTimestamp
+      collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, setDoc, getDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    // ---------- إعداد شكل عرض الأوراق للطالب ----------
+    async function loadViewSetting() {
+      const snap = await getDoc(doc(db, "settings", "display"));
+      const current = snap.exists() ? snap.data().worksheetView : "cards";
+      highlightViewBtn(current);
+    }
+    function highlightViewBtn(current) {
+      document.getElementById("viewCardsBtn").classList.toggle("btn-primary", current === "cards");
+      document.getElementById("viewCardsBtn").classList.toggle("btn-secondary", current !== "cards");
+      document.getElementById("viewListBtn").classList.toggle("btn-primary", current === "list");
+      document.getElementById("viewListBtn").classList.toggle("btn-secondary", current !== "list");
+    }
+    async function setViewSetting(val) {
+      await setDoc(doc(db, "settings", "display"), { worksheetView: val }, { merge: true });
+      highlightViewBtn(val);
+      document.getElementById("viewSettingStatus").textContent = "تم الحفظ.";
+      document.getElementById("viewSettingStatus").style.color = "var(--ok)";
+    }
+    document.getElementById("viewCardsBtn").addEventListener("click", () => setViewSetting("cards"));
+    document.getElementById("viewListBtn").addEventListener("click", () => setViewSetting("list"));
+    loadViewSetting();
 
     let exercises = []; // { id, type, rawText, ...structuredData }
     let exCounter = 0;

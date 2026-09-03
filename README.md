@@ -23,14 +23,12 @@
 ├── teacher/
 │   ├── students.html           ← إدارة الطلاب (رفع، PIN، نقل بين الفصول)
 │   ├── upload-worksheets.html  ← رفع PDF وتحويله
-│   ├── references.html         ← رفع مراجع الطالب
 │   ├── submissions.html        ← متابعة التسليمات
 │   └── portfolio.html          ← ملف الإنجاز (عرض المعلم)
 └── student/
     ├── login.html               ← دخول بالـ PIN
     ├── worksheets.html          ← قائمة الأوراق
     ├── solve.html               ← حل الورقة
-    ├── references.html         ← تصفح المراجع
     └── portfolio.html          ← ملف الإنجاز (عرض الطالب)
 ```
 

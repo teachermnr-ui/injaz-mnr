@@ -6,16 +6,83 @@
 <title>ملف إنجازي</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/styles.css">
-<script type="module" src="../shared/firebase-config.js"></script>
+<style>
+  .record-row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); }
+  .record-row:last-child { border-bottom:none; }
+</style>
 </head>
 <body>
   <header class="app-header">
     <h1>ملف إنجازي</h1>
   </header>
+
   <main class="container">
-    <div class="card">
-      <p>هذه الصفحة قيد الإنشاء — سجل الطالب التراكمي (أوراقه، درجاته، تطوره) سيُبنى هنا في مرحلة لاحقة.</p>
+    <div id="notLoggedIn" class="card" style="display:none;">
+      <p>لازم تسجّل دخولك الأول.</p>
+      <a href="login.html" class="btn btn-primary" style="display:inline-block;text-decoration:none;">تسجيل الدخول</a>
+    </div>
+
+    <div class="card" id="recordCard" style="display:none;">
+      <div id="recordList"></div>
     </div>
   </main>
+
+  <script type="module">
+    import { db } from "../shared/firebase-config.js";
+    import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const studentId = sessionStorage.getItem("studentId");
+
+    const statusLabels = {
+      "not-started": "لم يبدأ",
+      "in-progress": "جاري",
+      "submitted": "مُسلّم",
+      "corrected": "مُصحح"
+    };
+
+    if (!studentId) {
+      document.getElementById("notLoggedIn").style.display = "block";
+    } else {
+      loadRecord();
+    }
+
+    async function loadRecord() {
+      document.getElementById("recordCard").style.display = "block";
+      const listEl = document.getElementById("recordList");
+      listEl.innerHTML = "جاري التحميل...";
+
+      const wSnap = await getDocs(collection(db, "worksheets"));
+      const worksheetTitleMap = {};
+      wSnap.docs.forEach((d) => { worksheetTitleMap[d.id] = d.data().title; });
+
+      const q = query(collection(db, "submissions"), where("studentId", "==", studentId));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">لسه ما سلّمت أي ورقة.</p>`;
+        return;
+      }
+
+      const records = snap.docs.map((d) => d.data()).sort((a, b) => {
+        const ta = a.submittedAt ? a.submittedAt.seconds : 0;
+        const tb = b.submittedAt ? b.submittedAt.seconds : 0;
+        return tb - ta;
+      });
+
+      listEl.innerHTML = "";
+      records.forEach((r) => {
+        const row = document.createElement("div");
+        row.className = "record-row";
+        row.innerHTML = `
+          <div>
+            <p style="margin:0;font-weight:500;font-size:14px;">${worksheetTitleMap[r.worksheetId] || "ورقة محذوفة"}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${r.totalScore || ""}</p>
+          </div>
+          <span class="status-pill status-${r.status}">${statusLabels[r.status] || r.status}</span>
+        `;
+        listEl.appendChild(row);
+      });
+    }
+  </script>
 </body>
 </html>

@@ -219,8 +219,7 @@ input,select{font-family:inherit;font-size:15px}
   <div class="topbar">
     <div class="tb-title" id="tbTitle">نظام الفصول</div>
     <span class="tb-badge" id="tbPeriod"></span>
-    <button class="tb-icon" id="tbOmr" title="صفحة التصحيح">📝</button>
-    <button class="tb-icon" id="tbWorksheets" title="أوراق العمل الإلكترونية">📄</button>
+    <button class="tb-icon" id="tbOmr" title="إدارة الصف">📝</button>
     <button class="tb-icon" id="tbPw" title="تغيير كلمة المرور">🔑</button>
     <button class="tb-icon" id="tbOut" title="تسجيل الخروج"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.6 6.8a8 8 0 1 0 10.8 0"/></svg></button>
   </div>
@@ -496,8 +495,6 @@ function enterApp(){
   $('#tbPeriod').textContent = periodLabel(SESSION.period);
   const _omrKeys=['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'];
   const _ob=$('#tbOmr'); if(_ob) _ob.style.display=(CURRENT.role==='admin'||_omrKeys.some(k=>can(k,'access')))?'flex':'none';
-  const _wsKeys=['worksheets.upload','worksheets.bank','worksheets.publish','worksheets.submissions'];
-  const _wb=$('#tbWorksheets'); if(_wb) _wb.style.display=(CURRENT.role==='admin'||_wsKeys.some(k=>can(k,'access')))?'flex':'none';
   const tabs=visibleTabs();
   const bar=$('#tabbar'); bar.innerHTML='';
   tabs.forEach(t=>{
@@ -526,28 +523,23 @@ function renderTabs(){
   [...$('#tabbar').children].forEach((b,i)=> b.classList.toggle('active', visibleTabs()[i] && visibleTabs()[i].key===activeTab));
 }
 $('#tbOmr').onclick = ()=>{ window.location.href='omr.html'; };
-$('#tbWorksheets').onclick = ()=>{ window.location.href='worksheets/upload.html'; };
 $('#tbPw').onclick  = ()=>{ openChangePw(false); };
 $('#tbOut').onclick = ()=>{ logout(); };
 function openMenu(){
   const school = CURRENT.schoolId && SCHOOLS[CURRENT.schoolId] ? SCHOOLS[CURRENT.schoolId].name : 'كل المدارس';
   const omrKeys=['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'];
   const showOmr = CURRENT.role==='admin' || omrKeys.some(k=>can(k,'access'));
-  const wsKeys=['worksheets.upload','worksheets.bank','worksheets.publish','worksheets.submissions'];
-  const showWorksheets = CURRENT.role==='admin' || wsKeys.some(k=>can(k,'access'));
   modal('<div class="m-grab"></div>'+
     '<div class="m-head"><div class="m-av">'+esc((CURRENT.username||'?')[0])+'</div>'+
       '<div class="m-id"><div class="nm">'+esc(CURRENT.username)+'</div>'+
       '<div class="sb">'+esc(ROLES[CURRENT.role]||CURRENT.role)+' · '+esc(school)+'</div>'+
       '<span class="m-chip">'+esc(periodLabel(SESSION.period))+'</span></div></div>'+
     '<button class="m-row" id="mPw"><span class="mi">🔑</span><span class="ml">تغيير كلمة المرور</span><span class="mc">‹</span></button>'+
-    (showOmr?'<button class="m-row primary" id="mOmr"><span class="mi">📝</span><span class="ml">صفحة التصحيح الآلي</span><span class="mc">‹</span></button>':'')+
-    (showWorksheets?'<button class="m-row primary" id="mWorksheets"><span class="mi">📄</span><span class="ml">أوراق العمل الإلكترونية</span><span class="mc">‹</span></button>':'')+
+    (showOmr?'<button class="m-row primary" id="mOmr"><span class="mi">📝</span><span class="ml">إدارة الصف</span><span class="mc">‹</span></button>':'')+
     '<button class="m-row danger" id="mOut"><span class="mi">⏻</span><span class="ml">تسجيل الخروج</span><span class="mc">‹</span></button>'+
     '<button class="m-close" onclick="closeModal()">إغلاق</button>');
   $('#mPw').onclick=()=>{ closeModal(); openChangePw(false); };
   if($('#mOmr')) $('#mOmr').onclick=()=>{ window.location.href='omr.html'; };
-  if($('#mWorksheets')) $('#mWorksheets').onclick=()=>{ window.location.href='worksheets/upload.html'; };
   $('#mOut').onclick=()=>{ closeModal(); logout(); };
 }
 

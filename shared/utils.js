@@ -22,16 +22,17 @@ export function nextSequenceNumber(existingStudents) {
 }
 
 /**
- * توليد PIN الطالب: رمز الصف (3 أرقام) + التسلسل الأبجدي (رقمين) + آخر رقمين من رقم الهوية
+ * توليد PIN الطالب: رمز المعلم + رمز الصف (3 أرقام) + التسلسل الأبجدي (رقمين) + آخر رقمين من رقم الهوية
+ * @param {string} teacherCode - مثال: "T1"
  * @param {string} classCode - مثال: "105"
  * @param {number} sequenceNumber - مثال: 13
  * @param {string} nationalId - مثال: "1061532832"
- * @returns {string} مثال: "1051332"
+ * @returns {string} مثال: "T11051332"
  */
-export function generatePin(classCode, sequenceNumber, nationalId) {
+export function generatePin(teacherCode, classCode, sequenceNumber, nationalId) {
   const seqPadded = String(sequenceNumber).padStart(2, "0");
   const lastTwoOfId = nationalId.slice(-2);
-  return `${classCode}${seqPadded}${lastTwoOfId}`;
+  return `${teacherCode}${classCode}${seqPadded}${lastTwoOfId}`;
 }
 
 /**

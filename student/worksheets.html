@@ -25,12 +25,16 @@
       <a href="login.html" class="btn btn-primary" style="display:inline-block;text-decoration:none;">تسجيل الدخول</a>
     </div>
 
+    <div id="idChangeCard" class="card" style="display:none;border:2px solid var(--coral);"></div>
+
     <div id="worksheetsWrap"></div>
   </main>
 
   <script type="module">
-    import { db } from "../shared/firebase-config.js";
+    import { auth, db } from "../shared/firebase-config.js";
     import { collection, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getPendingIdChangeRequests, approveIdChangeRequest, rejectIdChangeRequest } from "../shared/studentLink.js";
 
     const studentId = sessionStorage.getItem("studentId");
     const studentName = sessionStorage.getItem("studentName");
@@ -41,6 +45,51 @@
     } else {
       document.getElementById("studentNameLabel").textContent = studentName;
       loadWorksheets();
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+      const pending = await getPendingIdChangeRequests(user.uid);
+      if (pending.length > 0) showIdChangeCard(pending[0]);
+    });
+
+    function showIdChangeCard(request) {
+      const card = document.getElementById("idChangeCard");
+      card.style.display = "block";
+      card.innerHTML = `
+        <h3 style="margin-top:0;">طلب تعديل رقم الهوية</h3>
+        <p style="font-size:14px;">معلمك عدّل رقم هويتك من <strong>${request.oldNationalId}</strong> إلى <strong>${request.newNationalId}</strong>. هل الرقم الجديد صحيح؟</p>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-primary" id="approveIdBtn" style="flex:1;">صحيح، موافق</button>
+          <button class="btn btn-secondary" id="rejectIdBtn" style="flex:1;">مش صحيح</button>
+        </div>
+        <p id="idChangeStatus" style="font-size:13px;color:var(--ink-soft);margin-top:10px;"></p>
+      `;
+      document.getElementById("approveIdBtn").addEventListener("click", async () => {
+        const statusEl = document.getElementById("idChangeStatus");
+        statusEl.textContent = "جاري التحديث...";
+        try {
+          await approveIdChangeRequest(request);
+          statusEl.textContent = "تم تحديث رقم هويتك بنجاح.";
+          statusEl.style.color = "var(--ok)";
+          setTimeout(() => { card.style.display = "none"; }, 1500);
+        } catch (err) {
+          statusEl.textContent = "حصل خطأ: " + err.message;
+          statusEl.style.color = "var(--bad)";
+        }
+      });
+      document.getElementById("rejectIdBtn").addEventListener("click", async () => {
+        const statusEl = document.getElementById("idChangeStatus");
+        try {
+          await rejectIdChangeRequest(request.id);
+          statusEl.textContent = "تم رفض الطلب. كلّم معلمك يصحح الرقم.";
+          statusEl.style.color = "var(--ink-soft)";
+          setTimeout(() => { card.style.display = "none"; }, 1500);
+        } catch (err) {
+          statusEl.textContent = "حصل خطأ: " + err.message;
+          statusEl.style.color = "var(--bad)";
+        }
+      });
     }
 
     const statusLabels = {

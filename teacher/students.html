@@ -10,6 +10,10 @@
 <body>
   <header class="app-header">
     <h1>إدارة الطلاب</h1>
+    <span style="font-size:12px;">
+      <span id="teacherLabel"></span>
+      <a href="#" id="logoutLink" style="color:#fff;text-decoration:underline;margin-right:10px;">خروج</a>
+    </span>
   </header>
 
   <main class="container">
@@ -100,15 +104,26 @@
 
   <script type="module">
     import { db } from "../shared/firebase-config.js";
+    import { requireTeacherAuth, signOutTeacher } from "../shared/auth.js";
     import { assignAlphabeticalSequence, nextSequenceNumber, generatePin, isPinAvailable } from "../shared/utils.js";
     import {
       collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, getDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
+    let currentTeacher = null;
     let currentClassId = null;
     let currentClassCode = null;
     let currentPeriod = null;
     let previewList = [];
+
+    requireTeacherAuth().then((teacher) => {
+      currentTeacher = teacher;
+      document.getElementById("teacherLabel").textContent = `${teacher.name} (${teacher.code})`;
+    });
+    document.getElementById("logoutLink").addEventListener("click", (e) => {
+      e.preventDefault();
+      signOutTeacher();
+    });
 
     // ---------- 1) تحديد / إنشاء الفصل ----------
     document.getElementById("selectClassBtn").addEventListener("click", async () => {
@@ -128,7 +143,9 @@
 
       try {
         const classesRef = collection(db, "classes");
-        const q = query(classesRef, where("code", "==", code), where("period", "==", period));
+        const q = query(classesRef,
+          where("teacherCode", "==", currentTeacher.code),
+          where("code", "==", code), where("period", "==", period));
         const snap = await getDocs(q);
 
         if (!snap.empty) {
@@ -136,6 +153,7 @@
           statusEl.textContent = `تم تحديد الفصل الموجود (${code} - ${period === "first" ? "الفترة الأولى" : "الفترة الثانية"}).`;
         } else {
           const newClassRef = await addDoc(classesRef, {
+            teacherCode: currentTeacher.code,
             code, period, name: name || "", createdAt: serverTimestamp()
           });
           currentClassId = newClassRef.id;
@@ -195,7 +213,7 @@
 
       previewList = sequenced.map((s) => ({
         ...s,
-        pin: generatePin(currentClassCode, s.sequenceNumber, s.nationalId)
+        pin: generatePin(currentTeacher.code, currentClassCode, s.sequenceNumber, s.nationalId)
       }));
 
       const tbody = document.getElementById("previewBody");
@@ -326,7 +344,9 @@
 
       try {
         const classesRef = collection(db, "classes");
-        const q = query(classesRef, where("code", "==", targetCode), where("period", "==", targetPeriod));
+        const q = query(classesRef,
+          where("teacherCode", "==", currentTeacher.code),
+          where("code", "==", targetCode), where("period", "==", targetPeriod));
         const snap = await getDocs(q);
 
         let targetClassId;
@@ -334,6 +354,7 @@
           targetClassId = snap.docs[0].id;
         } else {
           const newClassRef = await addDoc(classesRef, {
+            teacherCode: currentTeacher.code,
             code: targetCode, period: targetPeriod, name: "", createdAt: serverTimestamp()
           });
           targetClassId = newClassRef.id;

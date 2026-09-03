@@ -23,6 +23,10 @@
 <body>
   <header class="app-header">
     <h1>رفع ملفات الأسئلة وتحويلها</h1>
+    <span style="font-size:12px;">
+      <span id="teacherLabel"></span>
+      <a href="#" id="logoutLink" style="color:#fff;text-decoration:underline;margin-right:10px;">خروج</a>
+    </span>
   </header>
 
   <main class="container">
@@ -128,11 +132,25 @@
 
   <script type="module">
     import { db } from "../shared/firebase-config.js";
+    import { requireTeacherAuth, signOutTeacher } from "../shared/auth.js";
     import {
       collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, setDoc, getDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    let currentTeacher = null;
+    requireTeacherAuth().then((teacher) => {
+      currentTeacher = teacher;
+      document.getElementById("teacherLabel").textContent = `${teacher.name} (${teacher.code})`;
+      loadViewSetting();
+      loadDrafts();
+      loadBank();
+    });
+    document.getElementById("logoutLink").addEventListener("click", (e) => {
+      e.preventDefault();
+      signOutTeacher();
+    });
 
     // ---------- إعداد شكل عرض الأوراق للطالب ----------
     async function loadViewSetting() {
@@ -767,6 +785,7 @@
       try {
         const worksheetsRef = collection(db, "worksheets");
         const newDoc = await addDoc(worksheetsRef, {
+          teacherCode: currentTeacher.code,
           title,
           unit: document.getElementById("worksheetUnit").value.trim(),
           lesson: document.getElementById("worksheetLesson").value.trim(),
@@ -806,7 +825,7 @@
       const box = document.getElementById("classCheckboxes");
       box.innerHTML = "جاري تحميل الفصول...";
 
-      const classesSnap = await getDocs(collection(db, "classes"));
+      const classesSnap = await getDocs(query(collection(db, "classes"), where("teacherCode", "==", currentTeacher.code)));
       if (classesSnap.empty) {
         box.innerHTML = `<p style="font-size:13px;color:var(--bad);">مفيش فصول متاحة — أنشئ فصل من صفحة إدارة الطلاب الأول.</p>`;
       } else {
@@ -860,7 +879,8 @@
     async function loadDrafts() {
       const listEl = document.getElementById("draftsList");
       listEl.innerHTML = "جاري التحميل...";
-      const q = query(collection(db, "worksheets"), where("status", "==", "draft"));
+      const q = query(collection(db, "worksheets"),
+        where("teacherCode", "==", currentTeacher.code), where("status", "==", "draft"));
       const snap = await getDocs(q);
 
       if (snap.empty) {
@@ -923,6 +943,7 @@
           const wDoc = snap.docs.find((d) => d.id === btn.dataset.tobank);
           const w = wDoc.data();
           await addDoc(collection(db, "questionBank"), {
+            teacherCode: currentTeacher.code,
             title: w.title,
             unit: w.unit,
             lesson: w.lesson,
@@ -1010,7 +1031,7 @@
     async function loadBank() {
       const listEl = document.getElementById("bankList");
       listEl.innerHTML = "جاري التحميل...";
-      const snap = await getDocs(collection(db, "questionBank"));
+      const snap = await getDocs(query(collection(db, "questionBank"), where("teacherCode", "==", currentTeacher.code)));
 
       if (snap.empty) {
         listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">بنك الأسئلة فاضي حاليًا.</p>`;
@@ -1056,6 +1077,7 @@
           const wDoc = snap.docs.find((d) => d.id === btn.dataset.useBank);
           const w = wDoc.data();
           await addDoc(collection(db, "worksheets"), {
+            teacherCode: currentTeacher.code,
             title: w.title,
             unit: w.unit,
             lesson: w.lesson,
@@ -1083,8 +1105,6 @@
     }
 
     document.getElementById("refreshBankBtn").addEventListener("click", loadBank);
-    loadDrafts();
-    loadBank();
   </script>
 
 </body>

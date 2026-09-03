@@ -421,7 +421,7 @@
             }
             grid.push(rowVals);
           }
-          answersArray.push({ exerciseId: ex.exerciseId, answer: grid, isCorrect: allCorrect });
+          answersArray.push({ exerciseId: ex.exerciseId, answer: grid.map((row) => ({ row })), isCorrect: allCorrect });
 
         } else {
           answersArray.push({ exerciseId: ex.exerciseId, answer: studentAnswers[ex.exerciseId] || "", isCorrect: null });

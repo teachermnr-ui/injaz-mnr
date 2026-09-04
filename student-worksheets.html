@@ -31,7 +31,10 @@
 <body>
   <header>
     <h1>أوراقي</h1>
-    <span id="studentNameLabel" style="font-size:13px;"></span>
+    <span style="display:flex;align-items:center;gap:10px;">
+      <span id="studentNameLabel" style="font-size:13px;"></span>
+      <button id="stuLogoutBtn" style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">خروج</button>
+    </span>
   </header>
 
   <main>
@@ -69,8 +72,14 @@
       document.getElementById("notLoggedIn").style.display = "block";
     } else {
       document.getElementById("studentNameLabel").textContent = STU.name;
+      document.getElementById("stuLogoutBtn").style.display = "inline-block";
       loadWorksheets();
     }
+
+    document.getElementById("stuLogoutBtn").addEventListener("click", () => {
+      localStorage.removeItem("stu_session");
+      window.location.href = "index.html";
+    });
 
     const statusLabels = {
       "not-started": "لم يبدأ",

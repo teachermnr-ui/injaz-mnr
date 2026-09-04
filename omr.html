@@ -195,7 +195,7 @@
           <input id="cfgSubject" value="تقنية رقمية">
         </label>
         <label class="field">الصف
-          <select id="cfgClassSel" onchange="renderSheet()"><option value="">— اختر الصف —</option></select>
+          <select id="cfgClassSel" onchange="onVClassChange(this);renderSheet()"><option value="">— اختر الصف —</option></select>
         </label>
         <label class="field">الفترة
           <input id="cfgPeriod" value="الثانية">
@@ -278,7 +278,15 @@
         <div class="subcard">
           <div class="subtitle">الفصول <span class="sub">أضف الفصول أولاً قبل تسجيل الطلاب</span></div>
           <div class="row" style="margin-bottom:10px">
-            <label class="field" style="flex:2">اسم الصف<input id="clName" placeholder="مثال: أول ثانوي / 1"></label>
+            <label class="field" style="flex:1">المرحلة<select id="clStage" onchange="onClStageChange()">
+              <option value="">— اختر —</option>
+              <option value="ابتدائية">الابتدائية</option>
+              <option value="متوسطة">المتوسطة</option>
+              <option value="ثانوية">الثانوية</option>
+            </select></label>
+          </div>
+          <div class="row" style="margin-bottom:10px">
+            <label class="field" style="flex:2">اسم الصف<select id="clName"><option value="">— اختر المرحلة أولاً —</option></select></label>
             <label class="field" style="flex:1.2">رمز الصف<input id="clCode" placeholder="مثال: 101"></label>
           </div>
           <button class="primary" onclick="addClass()">➕ إضافة الصف</button>
@@ -326,6 +334,30 @@
       </div>
     </div>
 
+    <!-- ===== ٢ب. إسناد المواد ===== -->
+    <div class="card seccard">
+      <div class="secheader" onclick="toggleSec('secSubjects',this)">
+        <div class="secicon" style="background:#fdf3e2">📚</div>
+        <div class="sectext"><div class="sectitle">إسناد المواد</div><div class="secdesc">حدّد أي مادة تُدرّسها في أي فصل من فصولك</div></div>
+        <div class="secarrow">‹</div>
+      </div>
+      <div id="secSubjects" class="seccontent" style="display:none">
+        <div class="subcard">
+          <label class="field">المادة
+            <select id="subjSelect" onchange="onSubjectSelectChange()"><option value="">— اختر مادة —</option></select>
+          </label>
+          <button class="ghost" style="margin-top:8px" onclick="addCustomSubject()">➕ إضافة مادة غير موجودة</button>
+          <div id="subjClassesHost" style="margin-top:14px"></div>
+          <button class="primary" style="margin-top:10px;display:none" id="subjSaveBtn" onclick="saveSubjectAssignment()">💾 حفظ إسناد المادة</button>
+          <div id="subjSaveStatus" style="margin-top:8px;font-size:13px"></div>
+        </div>
+        <div class="subcard">
+          <div class="subtitle">المواد المُسندة حالياً</div>
+          <div id="subjAssignedList"><div class="empty">لا توجد مواد مُسندة بعد.</div></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== ٣. طلاب الصف ===== -->
     <div class="card seccard">
       <div class="secheader" onclick="toggleSec('secStudents',this)">
@@ -335,7 +367,7 @@
       </div>
       <div id="secStudents" class="seccontent" style="display:none">
         <label class="field">اعرض طلاب الصف
-          <select id="stViewClass" onchange="renderStudents()"><option value="">— كل الفصول —</option></select>
+          <select id="stViewClass" onchange="onVClassChange(this);renderStudents()"><option value="">— كل الفصول —</option></select>
         </label>
         <div id="studentsHost"><div class="empty">لا يوجد طلاب بعد.</div></div>
         <p class="hint" style="margin:10px 0 0;line-height:1.9">📌 <b>عرض سجل الطالب:</b> اضغط رقم الهوية.<br>📌 <b>تسجيل الحضور والغياب والتأخّر:</b> اضغط اسم الطالب.<br>📌 <b>نقل الطالب أو حذفه:</b> من الزرّين بجانب بطاقته. <b>إرسال ملاحظة عن طالب:</b> من تبويب «الملاحظات».</p>
@@ -347,7 +379,7 @@
     <div class="card">
       <h2>١) مفتاح الإجابة <span class="sub">اختر الإجابة الصحيحة لكل سؤال</span></h2>
       <label class="field">الصف المراد تصحيحه <span style="font-weight:400;color:var(--muted)">(اختياري)</span>
-        <select id="gradeClassSel" onchange="onGradeClassChange()"><option value="">— كل الطلاب —</option></select>
+        <select id="gradeClassSel" onchange="onVClassChange(this);onGradeClassChange()"><option value="">— كل الطلاب —</option></select>
       </label>
       <div class="row" style="margin-bottom:10px">
         <button class="ghost" onclick="clearKey()">مسح المفتاح</button>
@@ -476,7 +508,7 @@
       <h2>سجل الأعمال</h2>
       <div id="cloudStatus" class="status info" style="margin-bottom:10px">جارٍ التهيئة…</div>
       <label class="field">عرض سجل الصف
-        <select id="wlViewClass" onchange="renderWorkLog()"><option value="">— اختر الصف —</option></select>
+        <select id="wlViewClass" onchange="onVClassChange(this);renderWorkLog()"><option value="">— اختر الصف —</option></select>
       </label>
       <div id="workLogHost"><div class="empty">اختر صفاً لعرض سجل أعماله.</div></div>
       <div class="row no-print" style="margin-top:10px">
@@ -577,6 +609,8 @@ const state = {
   classes:[],        // الفصول المرئية للمستخدم الحالي فقط: {name, code, createdBy}
   fullStudents:[],   // كل طلاب المدرسة (بدون فلترة) — تُستخدم فقط لفحص التكرار والحفظ الآمن
   fullClasses:[],    // كل فصول المدرسة (بدون فلترة) — تُستخدم فقط لفحص التكرار والحفظ الآمن
+  customSubjects:[], // مواد أضافها المعلمون يدويًا (غير القائمة الثابتة)، مشتركة على مستوى المدرسة
+  mySubjectAssignments:[], // {classCode, subject} — المواد اللي أسندها المعلم الحالي لنفسه
   selectedStudents:{}, // خانات الاختيار المؤقتة
   attendance:{},       // حالة الحضور لكل طالب: present|late|absent
   attMenuSeat:null,    // الطالب الذي تُعرض قائمة حضوره
@@ -809,9 +843,11 @@ function readCfg(){
   state.cfg.title  = g('cfgTitle').value;
   state.cfg.sub    = g('cfgSub').value;
   state.cfg.school = g('cfgSchool') ? g('cfgSchool').value : '';
-  state.cfg.subject = g('cfgSubject') ? g('cfgSubject').value : '';
   const clSel = g('cfgClassSel');
-  if(clSel){ state.cfg.classCode = clSel.value; state.cfg.className = classNameByCode(clSel.value) || clSel.value; }
+  const v = clSel ? parseVKey(clSel.value) : {classCode:'', subject:null};
+  const typedSubject = g('cfgSubject') ? g('cfgSubject').value.trim() : '';
+  state.cfg.subject = typedSubject || v.subject || '';
+  if(clSel){ state.cfg.classCode = v.classCode; state.cfg.className = classNameByCode(v.classCode) || v.classCode; }
   else state.cfg.className = g('cfgClassName') ? g('cfgClassName').value : '';
   state.cfg.period = g('cfgPeriod') ? g('cfgPeriod').value : '';
   state.cfg.perCol = Math.max(5, Math.min(40, +g('cfgPerCol').value||20));
@@ -1409,7 +1445,7 @@ function onLiveClick(){
 // اختيار الصف المراد تصحيحه (اختياري)
 function onGradeClassChange(){
   const sel = document.getElementById('gradeClassSel');
-  state.gradeClassCode = sel ? sel.value : '';
+  state.gradeClassCode = sel ? parseVKey(sel.value).classCode : '';
   populateResultStudentSelect();
 }
 // تعبئة قائمة الطلاب في النتيجة بطلاب الصف المحدّد (أو الكل)
@@ -1439,6 +1475,91 @@ function clearKey(){ state.key = new Array(state.cfg.numQ).fill(null); buildKeyG
 function normalizeSeat(s){ return String(s||'').replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]).replace(/\D/g,''); }
 
 /* ---- الفصول ---- */
+const CLS_GRADE_OPTIONS = {
+  'ابتدائية': ['أول ابتدائي','ثاني ابتدائي','ثالث ابتدائي','رابع ابتدائي','خامس ابتدائي','سادس ابتدائي'],
+  'متوسطة': ['أول متوسط','ثاني متوسط','ثالث متوسط'],
+  'ثانوية': ['أول ثانوي','ثاني ثانوي','ثالث ثانوي']
+};
+function onClStageChange(){
+  const stage = document.getElementById('clStage').value;
+  const sel = document.getElementById('clName');
+  const opts = CLS_GRADE_OPTIONS[stage] || [];
+  sel.innerHTML = '<option value="">'+(opts.length?'— اختر —':'— اختر المرحلة أولاً —')+'</option>' +
+    opts.map(o=>'<option value="'+o+'">'+o+'</option>').join('');
+}
+
+/* ---- إسناد المواد ---- */
+const CLS_FIXED_SUBJECTS = [
+  'القرآن الكريم والتفسير','الكفايات اللغوية','الرياضيات','اللغة الإنجليزية','الأحياء','الكيمياء',
+  'التفكير الناقد','التقنية الرقمية','التربية الصحية والبدنية','الفيزياء','التاريخ','التوحيد والفقه',
+  'الفنون','علوم الأرض والفضاء','البحث ومصادر المعلومات','المهارات الإدارية','التنمية المستدامة','التصميم الرقمي'
+];
+function allSubjectsList(){
+  const custom = Array.isArray(state.customSubjects) ? state.customSubjects : [];
+  return [...CLS_FIXED_SUBJECTS, ...custom.filter(s=>!CLS_FIXED_SUBJECTS.includes(s))];
+}
+function renderSubjectSelect(){
+  const sel = document.getElementById('subjSelect'); if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— اختر مادة —</option>' + allSubjectsList().map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  sel.value = cur;
+}
+async function addCustomSubject(){
+  const name = prompt('اسم المادة الجديدة:');
+  if(!name || !name.trim()) return;
+  const trimmed = name.trim();
+  if(allSubjectsList().includes(trimmed)){ alert('المادة موجودة بالفعل.'); return; }
+  try{
+    await mutateSharedRoster((classes, students, customSubjects)=>{ customSubjects.push(trimmed); });
+  }catch(e){ alert('فشل الحفظ: '+e.message); return; }
+  renderSubjectSelect();
+  document.getElementById('subjSelect').value = trimmed;
+  onSubjectSelectChange();
+}
+function onSubjectSelectChange(){
+  const subject = document.getElementById('subjSelect').value;
+  const host = document.getElementById('subjClassesHost');
+  const btn = document.getElementById('subjSaveBtn');
+  if(!subject){ host.innerHTML=''; btn.style.display='none'; return; }
+  if(!state.classes.length){ host.innerHTML='<div class="empty">لا توجد فصول مُسندة لك بعد.</div>'; btn.style.display='none'; return; }
+  const myAssignments = (state.mySubjectAssignments||[]).filter(a=>a.subject===subject).map(a=>a.classCode);
+  host.innerHTML = '<div class="sub" style="margin-bottom:8px">اختر الفصول التي تُدرّس فيها «'+escapeHtml(subject)+'»:</div>' +
+    state.classes.map(c=>`
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:14px">
+        <input type="checkbox" class="subjClsChk" value="${escapeHtml(c.code)}" ${myAssignments.includes(c.code)?'checked':''}>
+        ${escapeHtml(c.name)} ${escapeHtml(c.code)}
+      </label>`).join('');
+  btn.style.display='block';
+}
+async function saveSubjectAssignment(){
+  const subject = document.getElementById('subjSelect').value;
+  if(!subject) return;
+  const checked = [...document.querySelectorAll('.subjClsChk:checked')].map(x=>x.value);
+  const statusEl = document.getElementById('subjSaveStatus');
+  statusEl.textContent = 'جاري الحفظ...'; statusEl.style.color='var(--muted)';
+  try{
+    // نستبدل إسنادات المادة دي بالكامل بآخر اختيار (تسمح للمعلم يكرر الحفظ لمواد مختلفة)
+    const others = (state.mySubjectAssignments||[]).filter(a=>a.subject!==subject);
+    const fresh = checked.map(code=>({classCode:code, subject}));
+    const newAssignments = [...others, ...fresh];
+    await db.collection('users').doc(CLS_SESSION.userId).update({ subjectAssignments: newAssignments });
+    state.mySubjectAssignments = newAssignments;
+    statusEl.textContent = '✅ تم الحفظ.'; statusEl.style.color='var(--ok)';
+    renderAssignedSubjectsList();
+  }catch(e){ statusEl.textContent = 'فشل الحفظ: '+e.message; statusEl.style.color='var(--bad)'; }
+}
+function renderAssignedSubjectsList(){
+  const host = document.getElementById('subjAssignedList'); if(!host) return;
+  const list = state.mySubjectAssignments||[];
+  if(!list.length){ host.innerHTML = '<div class="empty">لا توجد مواد مُسندة بعد.</div>'; return; }
+  const bySubject = {};
+  list.forEach(a=>{ (bySubject[a.subject]=bySubject[a.subject]||[]).push(a.classCode); });
+  host.innerHTML = Object.entries(bySubject).map(([subj,codes])=>`
+    <div style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <div style="font-weight:700;font-size:14px">${escapeHtml(subj)}</div>
+      <div style="font-size:12px;color:var(--muted)">${codes.map(c=>{ const cl=state.classes.find(x=>x.code===c); return cl?escapeHtml(cl.name)+' '+escapeHtml(c):escapeHtml(c); }).join('، ')}</div>
+    </div>`).join('');
+}
 async function addClass(){
   if(!clsGuardAdd()) return;
   const name=(document.getElementById('clName').value||'').trim();
@@ -1450,7 +1571,8 @@ async function addClass(){
   try{
     await mutateSharedRoster((classes)=>{ classes.push({ name, code, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null }); });
   }catch(e){ alert('فشل حفظ الصف: '+e.message); return; }
-  document.getElementById('clName').value=''; document.getElementById('clCode').value='';
+  document.getElementById('clStage').value=''; onClStageChange();
+  document.getElementById('clCode').value='';
   refreshClassDropdowns(); renderClasses(); renderStudents();
 }
 async function delClass(code){
@@ -1463,7 +1585,7 @@ async function delClass(code){
   if(!confirm(msg)) return;
   // حذف طلاب الصف وكل بياناتهم المرتبطة (حضور + سجل أعمال) — محلي (خاص بالمعلم)
   studs.forEach(s=>{ delete state.attendance[s.seat]; delete state.selectedStudents[s.seat]; });
-  delete state.workLog[code];
+  Object.keys(state.workLog).forEach(k=>{ if(k===code || k.indexOf(code+'::')===0) delete state.workLog[k]; });
   try{
     await mutateSharedRoster((classes, students)=>{
       const idx = classes.findIndex(c=>c.code===code);
@@ -1486,14 +1608,15 @@ function renderClasses(){
   host.innerHTML=html+'</tbody></table></div>';}
 // تحديث كل القوائم المنسدلة التي تعرض الفصول (الطلاب + التصميم)
 function refreshClassDropdowns(){
-  const opts = state.classes.map(c=>`<option value="${escapeHtml(c.code)}">${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`).join('');
-  const set=(id,first)=>{ const el=document.getElementById(id); if(!el) return; const cur=el.value; el.innerHTML=first+opts; el.value=cur; };
+  const opts = state.classes.map(c=>`<option value="${escapeHtml(c.code)}">${escapeHtml(c.name)} ${escapeHtml(c.code)}</option>`).join('');
+  const vopts = getVirtualClasses().map(v=>`<option value="${escapeHtml(v.key)}">${escapeHtml(v.label)}</option>`).join('');
+  const set=(id,first,useV)=>{ const el=document.getElementById(id); if(!el) return; const cur=el.value; el.innerHTML=first+(useV?vopts:opts); el.value=cur; };
   set('stClassSel','<option value="">— اختر الصف —</option>');
   set('stImportClass','<option value="">— اختر الصف أولاً —</option>');
-  set('stViewClass','<option value="">— كل الفصول —</option>');
-  set('cfgClassSel','<option value="">— اختر الصف —</option>');
-  set('wlViewClass','<option value="">— اختر الصف —</option>');
-  set('gradeClassSel','<option value="">— كل الطلاب —</option>');
+  set('stViewClass','<option value="">— كل الفصول —</option>',true);
+  set('cfgClassSel','<option value="">— اختر الصف —</option>',true);
+  set('wlViewClass','<option value="">— اختر الصف —</option>',true);
+  set('gradeClassSel','<option value="">— كل الطلاب —</option>',true);
   if(typeof populateResultStudentSelect==='function') populateResultStudentSelect();
 }
 
@@ -1962,7 +2085,8 @@ const ATT_LBL = { present:'حاضر', excused:'مستأذن', late:'متأخر',
 function renderStudents(){
   const host = document.getElementById('studentsHost'); if(!host) return;
   const filter = document.getElementById('stViewClass') ? document.getElementById('stViewClass').value : '';
-  const list = filter ? state.students.filter(s=>s.classCode===filter) : state.students.slice();
+  const filterCode = parseVKey(filter).classCode;
+  const list = filterCode ? state.students.filter(s=>s.classCode===filterCode) : state.students.slice();
   const cnt = document.getElementById('stCount'); if(cnt) cnt.textContent = `${toArabic(list.length)} طالب`;
   if(!state.classes.length){ host.innerHTML='<div class="empty">أضف فصلاً أولاً، ثم سجّل الطلاب.</div>'; updateBulkBar(); return; }
   if(!list.length){ host.innerHTML='<div class="empty">لا يوجد طلاب في هذا العرض.</div>'; updateBulkBar(); return; }
@@ -2011,7 +2135,8 @@ function renderStudents(){
 function effectiveAtt(s){
   const live = state.attendance[s.seat];
   if(live) return live;
-  const wl = state.workLog[s.classCode] && state.workLog[s.classCode][s.seat];
+  const vkey = makeVKey(s.classCode, CLS_ACTIVE_SUBJECT);
+  const wl = state.workLog[vkey] && state.workLog[vkey][s.seat];
   if(wl && wl.events){
     const ev = wl.events.find(e=>e.date===todayStr());
     if(ev) return { status:ev.status, note:ev.note||'', ts:ev.ts, saved:true };
@@ -2052,7 +2177,7 @@ function setAttendance(seat,status){
     // إزالة الحالة المحفوظة لليوم (رجوع إلى الافتراضي حاضر)
     delete state.attendance[seat];
     const s = findStudent(seat);
-    if(s){ const wl = state.workLog[s.classCode] && state.workLog[s.classCode][seat];
+    if(s){ const vkey = makeVKey(s.classCode, CLS_ACTIVE_SUBJECT); const wl = state.workLog[vkey] && state.workLog[vkey][seat];
       if(wl && wl.events){ const i=wl.events.findIndex(e=>e.date===todayStr()); if(i>=0){ wl.events.splice(i,1); saveWorkLogToCloud(); } }
     }
   } else {
@@ -2070,10 +2195,11 @@ function setAttendance(seat,status){
    سجل الأعمال — الحضور التراكمي ودرجات الفترات
    ============================================================ */
 function workEntry(classCode, seat){
-  if(!state.workLog[classCode]) state.workLog[classCode] = {};
-  if(!state.workLog[classCode][seat]) state.workLog[classCode][seat] = { events:[], exams:{}, bands:{}, attempts:{} };
-  if(!state.workLog[classCode][seat].attempts) state.workLog[classCode][seat].attempts = {};
-  return state.workLog[classCode][seat];
+  const vkey = makeVKey(classCode, CLS_ACTIVE_SUBJECT);
+  if(!state.workLog[vkey]) state.workLog[vkey] = {};
+  if(!state.workLog[vkey][seat]) state.workLog[vkey][seat] = { events:[], exams:{}, bands:{}, attempts:{} };
+  if(!state.workLog[vkey][seat].attempts) state.workLog[vkey][seat].attempts = {};
+  return state.workLog[vkey][seat];
 }
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; }
 function countStatus(entry, status){ return (entry.events||[]).filter(e=>e.status===status).length; }
@@ -2081,7 +2207,8 @@ function countStatus(entry, status){ return (entry.events||[]).filter(e=>e.statu
 // الحفظ في سجل الأعمال: يسجّل حالة كل طلاب العرض الحالي بتاريخ اليوم (غير المحدَّد = حاضر)
 function commitAttendance(){
   const filter = document.getElementById('stViewClass') ? document.getElementById('stViewClass').value : '';
-  const list = filter ? state.students.filter(s=>s.classCode===filter) : state.students.slice();
+  const filterCode = parseVKey(filter).classCode;
+  const list = filterCode ? state.students.filter(s=>s.classCode===filterCode) : state.students.slice();
   if(!list.length){ alert('لا يوجد طلاب لتسجيل حضورهم.'); return; }
   const date = todayStr(), ts = Date.now();
   let nAbs=0, nLate=0, nPres=0;
@@ -2145,9 +2272,10 @@ async function loadWorkLog(manual){
 function renderWorkLog(){
   const host = document.getElementById('workLogHost'); if(!host) return;
   const sel = document.getElementById('wlViewClass');
-  const code = sel ? sel.value : '';
+  const code = sel ? sel.value : '';   // مفتاح فصل افتراضي (فصل أو فصل::مادة)
   if(!code){ host.innerHTML='<div class="empty">اختر صفاً لعرض سجل أعماله.</div>'; return; }
-  const studs = state.students.filter(s=>s.classCode===code);
+  const realCode = parseVKey(code).classCode;
+  const studs = state.students.filter(s=>s.classCode===realCode);
   if(!studs.length){ host.innerHTML='<div class="empty">لا يوجد طلاب في هذا الصف.</div>'; return; }
   const log = state.workLog[code]||{};
   const cfg = state.workCfg;
@@ -2433,7 +2561,8 @@ function flToggle(){ const c=document.getElementById('flCard'); if(!c) return; c
 function flFillClasses(selId){
   const sel=document.getElementById(selId); if(!sel) return;
   const cur=sel.value;
-  sel.innerHTML='<option value="">— كل الفصول —</option>'+(state.classes||[]).map(c=>'<option value="'+escapeHtml(c.code)+'">'+escapeHtml(c.name)+'</option>').join('');
+  const vopts = getVirtualClasses().map(v=>'<option value="'+escapeHtml(v.key)+'">'+escapeHtml(v.label)+'</option>').join('');
+  sel.innerHTML='<option value="">— كل الفصول —</option>'+vopts;
   if(cur) sel.value=cur;
 }
 function flStudents(code){
@@ -2446,14 +2575,17 @@ function flStuLine(s,i){
   return '<div class="nm">'+num+escapeHtml(s.name||'')+'</div>'+
          '<div class="mt">الهوية: '+toArabic(s.seat)+' · الصف: '+escapeHtml(clsNameOmr(s.classCode)||'—')+'</div>';
 }
-function fuList(seat){ return (state.followup && state.followup[seat]) || []; }
+// مفتاح سجل المتابعة (ملصقات الطالب) — يفصل حسب المادة النشطة لو موجودة
+function fuKey(seat){ return CLS_ACTIVE_SUBJECT ? (seat+'::'+CLS_ACTIVE_SUBJECT) : String(seat); }
+function fuList(seat){ return (state.followup && state.followup[fuKey(seat)]) || []; }
 function fmtScore(n){ n=+n||0; return (n>0?'+':'')+toArabic(n); }
 function flStuName(seat){ const s=(state.students||[]).find(x=>String(x.seat)===String(seat)); return s?s.name:''; }
 async function saveFollowup(){ try{ await cloudSet('results','followup', state.followup||{}); }catch(e){} }
 function renderFollowView(){
   flFillClasses('followClass');
-  const sel=document.getElementById('followClass'); const code=sel?sel.value:'';
-  const studs=flStudents(code);
+  const sel=document.getElementById('followClass'); const vkey=sel?sel.value:'';
+  const vp=parseVKey(vkey); CLS_ACTIVE_SUBJECT=vp.subject;
+  const studs=flStudents(vp.classCode);
   const body=document.getElementById('followBody'); if(!body) return;
   if(!studs.length){ body.innerHTML='<p class="hint">لا يوجد طلاب لعرضهم.</p>'; return; }
   body.innerHTML=studs.map((s,i)=>{
@@ -2527,7 +2659,8 @@ function boostRefCat(){ return 'part'; }
 function commitSticker(seat, sid, earned){
   const st=(state.stickers||[]).find(x=>x.id===sid); if(!st) return;
   state.followup=state.followup||{};
-  (state.followup[seat]=state.followup[seat]||[]).push({
+  const fk = fuKey(seat);
+  (state.followup[fk]=state.followup[fk]||[]).push({
     id:'fu_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),
     sid:st.id, icon:st.icon, name:st.name, cat:st.cat,
     boost: st.cat==='boost', discount: !!st.discount,
@@ -2539,9 +2672,10 @@ function commitSticker(seat, sid, earned){
 function removeFu(seat,fid){
   if(!clsGuardDel()) return;
   if(!confirm('إزالة هذا الملصق من الطالب؟')) return;
-  const arr=state.followup&&state.followup[seat]; if(!arr) return;
+  const fk = fuKey(seat);
+  const arr=state.followup&&state.followup[fk]; if(!arr) return;
   const i=arr.findIndex(x=>x.id===fid); if(i>=0) arr.splice(i,1);
-  if(!arr.length) delete state.followup[seat];
+  if(!arr.length) delete state.followup[fk];
   saveFollowup(); renderFollowView();
 }
 function fuCatSum(seat){
@@ -2551,8 +2685,9 @@ function fuCatSum(seat){
 }
 function renderRecordView(){
   flFillClasses('recordClass');
-  const sel=document.getElementById('recordClass'); const code=sel?sel.value:'';
-  const studs=flStudents(code);
+  const sel=document.getElementById('recordClass'); const vkey=sel?sel.value:'';
+  const vp=parseVKey(vkey); CLS_ACTIVE_SUBJECT=vp.subject;
+  const studs=flStudents(vp.classCode);
   const cats=stickerCats();
   const body=document.getElementById('recordBody'); if(!body) return;
   if(!studs.length){ body.innerHTML='<p class="hint">لا يوجد طلاب لعرضهم.</p>'; return; }
@@ -2573,12 +2708,29 @@ function renderRecordView(){
 }
 
 // ---- ترويسة السجل الثابتة (محفوظة) ----
+async function autofillWlHeader(){
+  const h = state.workCfg.header;
+  let changed = false;
+  if(!h.teacher && CLS_SESSION && CLS_SESSION.username){ h.teacher = CLS_SESSION.username; changed = true; }
+  if((!h.school || !h.edu) && CLS_SESSION && CLS_SESSION.schoolId){
+    try{
+      const snap = await db.collection('schoolData').doc('schools').get();
+      const list = snap.exists ? (snap.data().list||{}) : {};
+      const sc = list[CLS_SESSION.schoolId];
+      if(sc){
+        if(!h.school && sc.name){ h.school = sc.name; changed = true; }
+        if(!h.edu && sc.eduDept){ h.edu = sc.eduDept; changed = true; }
+      }
+    }catch(e){}
+  }
+  if(changed) saveStudentsToCloud();
+}
 function renderWlHeader(){
   const host = document.getElementById('wlHeaderHost'); if(!host) return;
   const h = state.workCfg.header;
   const fld = (label,key)=>`<label class="field" style="margin-bottom:8px">${label}
     <input id="wlh_${key}" value="${escapeHtml(h[key]||'')}" onchange="setWlHeader('${key}',this.value)"></label>`;
-  host.innerHTML = `<p class="hint" style="margin-top:0">تُحفظ هذه البيانات وتظهر ثابتة في رأس تقرير السجل، وتبقى محفوظة دائماً حتى تغيّرها. (المملكة العربية السعودية ووزارة التعليم ثابتتان دائماً.)</p>
+  host.innerHTML = `<p class="hint" style="margin-top:0">تُعبّأ إدارة التعليم واسم المدرسة واسم المعلم تلقائياً من بياناتك، وتقدر تعدّلها يدوياً. المادة تُضاف تلقائياً حسب الفصل المختار عند التصدير (فصل قد يرتبط بأكثر من مادة). تبقى محفوظة حتى تغيّرها.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       ${fld('إدارة التعليم','edu')}
       ${fld('اسم المدرسة','school')}
@@ -2656,10 +2808,11 @@ function moeLogoInline(w){
 function openWorkLogExport(code, pal, scope){
   pal = pal || PALETTES.red;
   const cfg = state.workCfg, h = cfg.header;
-  const studs = state.students.filter(s=>s.classCode===code);
+  const v = parseVKey(code);
+  const studs = state.students.filter(s=>s.classCode===v.classCode);
   if(!studs.length){ alert('لا يوجد طلاب في هذا الصف.'); return; }
   const log = state.workLog[code]||{};
-  const className = classNameByCode(code)||'';
+  const className = (classNameByCode(v.classCode)||'') + (v.subject?(' - '+v.subject):'');
   // نطاق الفترات: كامل أو فترة واحدة
   let periods = cfg.periods, single=false;
   if(scope!=null && scope!=='all'){ const i=+scope; if(cfg.periods[i]){ periods=[cfg.periods[i]]; single=true; } }
@@ -2690,7 +2843,7 @@ function openWorkLogExport(code, pal, scope){
   const logo = moeLogoInline(150);
   const title = single ? `سجل أعمال السنة (${periods[0].name}) — ${className}` : `سجل أعمال السنة — ${className}`;
   // فترة واحدة (أضيق) → عمودي؛ كامل (أعرض) → أفقي
-  win.document.write(buildExportHTML({ title, pal, logo, h, className, head1, head2, rows, landscape:!single, subtitle: single?periods[0].name:'' }));
+  win.document.write(buildExportHTML({ title, pal, logo, h, className, subject: v.subject||'', head1, head2, rows, landscape:!single, subtitle: single?periods[0].name:'' }));
   win.document.close();
 }
 
@@ -2698,10 +2851,11 @@ function openWorkLogExport(code, pal, scope){
 function openDetailedExport(code, periodIdx, pal){
   pal = pal || PALETTES.red;
   const cfg = state.workCfg, h = cfg.header, p = cfg.periods[periodIdx];
-  const studs = state.students.filter(s=>s.classCode===code);
+  const v = parseVKey(code);
+  const studs = state.students.filter(s=>s.classCode===v.classCode);
   if(!studs.length){ alert('لا يوجد طلاب في هذا الصف.'); return; }
   const log = state.workLog[code]||{};
-  const className = classNameByCode(code)||'';
+  const className = (classNameByCode(v.classCode)||'') + (v.subject?(' - '+v.subject):'');
   const win = window.open('', '_blank');
   if(!win){ alert('فضلاً اسمح بالنوافذ المنبثقة للتصدير.'); return; }
   const vis = p.items.filter(it=>!it.hidden);
@@ -2726,7 +2880,7 @@ function openDetailedExport(code, periodIdx, pal){
     rows += `<tr>${tds}</tr>`;
   });
   const logo = moeLogoInline(150);
-  win.document.write(buildExportHTML({ title:`تفصيل ${p.name} — ${className}`, pal, logo, h, className, head1, head2, rows, landscape:true, subtitle:`تفصيل المحاولات — ${p.name}` }));
+  win.document.write(buildExportHTML({ title:`تفصيل ${p.name} — ${className}`, pal, logo, h, className, subject: v.subject||'', head1, head2, rows, landscape:true, subtitle:`تفصيل المحاولات — ${p.name}` }));
   win.document.close();
 }
 
@@ -2778,7 +2932,7 @@ function buildExportHTML(o){
     <div class="right">المملكة العربية السعودية<br>وزارة التعليم<br>${escapeHtml(o.h.edu||'')}<br>${escapeHtml(o.h.school||'')}</div>
     <div class="center">${o.logo}<h1>سجل أعمال السنة</h1>${o.subtitle?`<div class="sub">${escapeHtml(o.subtitle)}</div>`:''}</div>
     <div class="left">
-      <div class="row"><span class="lbl">المادة</span><span class="val">${escapeHtml(state.cfg.subject||'')}</span></div>
+      <div class="row"><span class="lbl">المادة</span><span class="val">${escapeHtml(o.subject||'')}</span></div>
       <div class="row"><span class="lbl">الصف</span><span class="val">${escapeHtml(o.className)}</span></div>
       <div class="row"><span class="lbl">معلم المادة</span><span class="val">${escapeHtml(o.h.teacher||'')}</span></div>
       <div class="row"><span class="lbl">العام الدراسي</span><span class="val">${escapeHtml(o.h.year||'')}</span></div>
@@ -2794,7 +2948,8 @@ function buildExportHTML(o){
 // نافذة سجل الطالب: تواريخ الغياب/التأخر/الحضور وملاحظاتها
 function openStudentRecord(seat){
   const s = findStudent(seat); if(!s) return;
-  const entry = (state.workLog[s.classCode] && state.workLog[s.classCode][seat]) || { events:[], exams:{} };
+  const vkey = makeVKey(s.classCode, CLS_ACTIVE_SUBJECT);
+  const entry = (state.workLog[vkey] && state.workLog[vkey][seat]) || { events:[], exams:{} };
   const cnt = (st)=> (entry.events||[]).filter(e=>e.status===st).length;
   const nExcused=cnt('excused'), nAbsent=cnt('absent'), nLate=cnt('late');
 
@@ -4061,7 +4216,7 @@ function showTab(t){
   const flc=document.getElementById('flCard');
   if(t==='students'){ collapseStudentCards(); if(flc) flc.classList.add('show'); }
   else { if(flc) flc.classList.remove('show'); closeStuOverlays(); }
-  if(t==='cloud'){ renderWlHeader(); renderWlSetup(); renderStickerSetup(); renderWorkLog(); }
+  if(t==='cloud'){ autofillWlHeader().then(renderWlHeader); renderWlSetup(); renderStickerSetup(); renderWorkLog(); }
   if(t==='notes') renderOmrNotes();
 }
 function collapseStudentCards(){
@@ -4099,9 +4254,12 @@ let CLS_SESSION = null, CLS_NS = '', CLS_TEACHER_ADD = true, CLS_OMR_PERM = {vie
   CLS_NS = '_' + (CLS_SESSION.schoolId||'admin') + '_' + (CLS_SESSION.period||'first') + '_' + CLS_SESSION.userId;
   document.addEventListener('DOMContentLoaded', function(){
     var bar = document.createElement('div');
-    bar.style.cssText = 'display:flex;align-items:center;gap:8px;justify-content:flex-end;background:#0b5a54;color:#fff;padding:6px 14px;font-size:12.5px';
-    bar.innerHTML = '<span style="opacity:.9">'+ (CLS_SESSION.username||'') +' · '+ (CLS_SESSION.period==='second'?'الفترة الثانية':'الفترة الأولى') +'</span>'+
-      '<a href="index.html" style="background:rgba(255,255,255,.16);color:#fff;text-decoration:none;padding:4px 12px;border-radius:8px;font-weight:600">← الرئيسية</a>';
+    bar.style.cssText = 'background:#0b5a54;color:#fff;padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px';
+    bar.innerHTML = '<div style="font-weight:800;font-size:14.5px;line-height:1.35;word-break:break-word">'+ escapeHtml(CLS_SESSION.username||'') +'</div>'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<a href="index.html" style="background:rgba(255,255,255,.18);color:#fff;text-decoration:none;padding:5px 13px;border-radius:9px;font-weight:700;font-size:12.5px;white-space:nowrap">🏠 الرئيسية</a>'+
+        '<span style="background:rgba(255,255,255,.14);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:500;white-space:nowrap">'+(CLS_SESSION.period==='second'?'الفترة الثانية':'الفترة الأولى')+'</span>'+
+      '</div>';
     document.body.insertBefore(bar, document.body.firstChild);
   });
 })();
@@ -4235,15 +4393,17 @@ async function clsLoadTeacherAdd(){
 /* عند الإيقاف: إخفاء بطاقتي «إضافة يدوية» و«استيراد من نور» كاملتين */
 function clsApplyTeacherAdd(){
   try{
+    const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
     ['secManual','secImport'].forEach(id=>{
       const el=document.getElementById(id); if(!el) return;
-      const card=el.closest('.seccard'); if(card) card.style.display = (CLS_TEACHER_ADD===false)?'none':'';
+      const card=el.closest('.seccard'); if(card) card.style.display = (!exempt && CLS_TEACHER_ADD===false)?'none':'';
     });
   }catch(e){}
 }
 function clsGuardAdd(){
   if(CLS_OMR_PERM.edit===false){ alert('ليس لديك صلاحية التعديل في صفحة التصحيح.'); return false; }
-  if(CLS_TEACHER_ADD===false){ alert('إضافة الطلاب موقوفة من إدارة المدرسة حالياً.'); return false; }
+  const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
+  if(!exempt && CLS_TEACHER_ADD===false){ alert('إضافة الطلاب موقوفة من إدارة المدرسة حالياً.'); return false; }
   return true;
 }
 function clsGuardEdit(){ if(CLS_OMR_PERM.edit===false){ alert('ليس لديك صلاحية التعديل في صفحة التصحيح (مشاهدة فقط).'); return false; } return true; }
@@ -4254,7 +4414,7 @@ async function clsLoadPerms(){
     const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
     if(!snap.exists) return;
     const u = snap.data();
-    if(u.role==='admin'){ CLS_OMR_PERM={view:true,edit:true,del:true}; return; }
+    if(u.role==='admin'||u.role==='schoolAdmin'){ CLS_OMR_PERM={view:true,edit:true,del:true}; return; }
     const perm=u.permissions||{};
     const keys=['omr.classes','omr.classes.manual','omr.classes.noor','omr.design','omr.grade','omr.results','omr.worklog'];
     const any=fl=>keys.some(k=>perm[k]&&perm[k][fl]);
@@ -4526,7 +4686,7 @@ function applyExam(id){
   document.getElementById('cfgSub').value = c.sub||'';
   if(document.getElementById('cfgSchool')) document.getElementById('cfgSchool').value = c.school||'';
   if(document.getElementById('cfgSubject')) document.getElementById('cfgSubject').value = c.subject||'';
-  if(document.getElementById('cfgClassSel')){ refreshClassDropdowns(); document.getElementById('cfgClassSel').value = c.classCode||''; }
+  if(document.getElementById('cfgClassSel')){ refreshClassDropdowns(); document.getElementById('cfgClassSel').value = makeVKey(c.classCode||'', c.subject||null); }
   if(document.getElementById('cfgPeriod')) document.getElementById('cfgPeriod').value = c.period||'';
   document.getElementById('cfgPerCol').value = c.perCol||20;
   document.getElementById('cfgSheetType').value = c.sheetType||'full';
@@ -4576,6 +4736,32 @@ async function loadResultsFromCloud(manual){
 
 /* ---- الروستر المشترك (فصول + طلاب) — مستند واحد لكل مدرسة، يشترك فيه كل المعلمين ---- */
 let CLS_USER_ROLE = '';
+let CLS_ACTIVE_SUBJECT = null; // المادة النشطة حاليًا حسب آخر قائمة فصل اختارها المعلم
+
+// يفكّك مفتاح الفصل الافتراضي (رمز_الفصل أو رمز_الفصل::المادة) لعنصريه
+function parseVKey(vkey){
+  if(!vkey) return {classCode:'', subject:null};
+  const i = String(vkey).indexOf('::');
+  return i===-1 ? {classCode:vkey, subject:null} : {classCode:vkey.slice(0,i), subject:vkey.slice(i+2)};
+}
+function makeVKey(classCode, subject){ return subject ? classCode+'::'+subject : classCode; }
+// يبني قائمة "الفصول الافتراضية": فصل عادي (لو معندوش مواد مُسندة)، أو فصل×مادة لكل مادة أسندها المعلم لنفسه
+function getVirtualClasses(){
+  const bySubjectClass = {};
+  (state.mySubjectAssignments||[]).forEach(a=>{ (bySubjectClass[a.classCode]=bySubjectClass[a.classCode]||[]).push(a.subject); });
+  const out = [];
+  state.classes.forEach(c=>{
+    const subs = bySubjectClass[c.code];
+    if(subs && subs.length){
+      subs.forEach(subject=> out.push({ key: makeVKey(c.code,subject), classCode:c.code, subject, label: c.name+' '+c.code+' - '+subject }));
+    } else {
+      out.push({ key: c.code, classCode:c.code, subject:null, label: c.name+' '+c.code });
+    }
+  });
+  return out;
+}
+// تُستدعى من onchange أي قائمة اختيار فصل افتراضي؛ تضبط المادة النشطة حسب الاختيار
+function onVClassChange(sel){ CLS_ACTIVE_SUBJECT = parseVKey(sel.value).subject; }
 let CLS_USER_ASSIGNED = [];
 
 function rosterDocRef(){
@@ -4586,7 +4772,7 @@ function rosterDocRef(){
 // يحدد هل الفصل مرئي للمستخدم الحالي: الأدمن يشوف كل حاجة،
 // وغيره يشوف بس الفصول المُسندة له من الأدمن أو اللي هو نفسه أنشأها
 function isClassVisible(cls){
-  if(CLS_USER_ROLE==='admin') return true;
+  if(CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin') return true;
   const code = normalizeDigits(String(cls.code||'')).trim();
   if(CLS_USER_ASSIGNED.map(x=>normalizeDigits(String(x)).trim()).includes(code)) return true;
   if(cls.createdBy && CLS_SESSION && cls.createdBy===CLS_SESSION.userId) return true;
@@ -4611,12 +4797,13 @@ async function mutateSharedRoster(mutatorFn){
     try{ data = snap.exists ? JSON.parse(snap.data().value||'{}') : {}; }catch(e){ data = {}; }
     const classes = Array.isArray(data.classes) ? data.classes : [];
     const students = Array.isArray(data.students) ? data.students : [];
-    const result = mutatorFn(classes, students); // المُعدِّل يُعدّل المصفوفتين في مكانهما مباشرة
+    const customSubjects = Array.isArray(data.customSubjects) ? data.customSubjects : [];
+    const result = mutatorFn(classes, students, customSubjects); // المُعدِّل يُعدّل المصفوفات في مكانها مباشرة
     tx.set(ref, {
-      value: JSON.stringify({ classes, students, teacherAdd: data.teacherAdd!==false }),
+      value: JSON.stringify({ classes, students, customSubjects, teacherAdd: data.teacherAdd!==false }),
       updatedAt: Date.now(), schoolId: (CLS_SESSION&&CLS_SESSION.schoolId)||null, base:'roster'
     });
-    state.fullClasses = classes; state.fullStudents = students;
+    state.fullClasses = classes; state.fullStudents = students; state.customSubjects = customSubjects;
     return result;
   });
   recomputeVisibleRoster();
@@ -4641,14 +4828,15 @@ async function saveStudentsToCloud(manual){
 async function loadStudentsFromCloud(manual){
   if(!cloudReady){ if(manual) alert('قاعدة البيانات غير مهيّأة.'); return; }
   try{
-    // هوية المستخدم ودوره وفصوله المُسندة — أساس الفلترة
-    CLS_USER_ROLE=''; CLS_USER_ASSIGNED=[];
+    // هوية المستخدم ودوره وفصوله المُسندة والمواد اللي سبق إسنادها له — أساس الفلترة
+    CLS_USER_ROLE=''; CLS_USER_ASSIGNED=[]; state.mySubjectAssignments=[];
     if(CLS_SESSION && CLS_SESSION.userId){
       const uSnap = await db.collection('users').doc(CLS_SESSION.userId).get();
       if(uSnap.exists){
         const u = uSnap.data();
         CLS_USER_ROLE = u.role||'';
         CLS_USER_ASSIGNED = Array.isArray(u.assignedClasses) ? u.assignedClasses : [];
+        state.mySubjectAssignments = Array.isArray(u.subjectAssignments) ? u.subjectAssignments : [];
       }
     }
 
@@ -4658,8 +4846,11 @@ async function loadStudentsFromCloud(manual){
     try{ rData = rSnap.exists ? JSON.parse(rSnap.data().value||'{}') : {}; }catch(e){ rData = {}; }
     state.fullClasses = Array.isArray(rData.classes) ? rData.classes : [];
     state.fullStudents = Array.isArray(rData.students) ? rData.students : [];
+    state.customSubjects = Array.isArray(rData.customSubjects) ? rData.customSubjects : [];
     CLS_TEACHER_ADD = (rData.teacherAdd!==false);
     recomputeVisibleRoster();
+    if(typeof renderSubjectSelect==='function') renderSubjectSelect();
+    if(typeof renderAssignedSubjectsList==='function') renderAssignedSubjectsList();
 
     // إعداد المعلم الخاص (سجل الأعمال + الملصقات) — معزول
     let cfgData = await cloudGet('exams', 'teacherCfg');
@@ -4678,7 +4869,7 @@ async function loadStudentsFromCloud(manual){
     try{ const _fu = await cloudGet('results','followup'); state.followup = (_fu && typeof _fu==='object' && !Array.isArray(_fu)) ? _fu : {}; }catch(e){ state.followup = {}; }
     clsApplyTeacherAdd();
     refreshClassDropdowns(); renderClasses(); renderStudents();
-    if(typeof renderWlHeader==='function') renderWlHeader();
+    if(typeof renderWlHeader==='function') autofillWlHeader().then(renderWlHeader);
     if(typeof renderWlSetup==='function') renderWlSetup();
     if(manual) setCloudStatus('ok', `✅ حُمّل ${toArabic(state.students.length)} طالب و${toArabic(state.classes.length)} صفّاً.`);
   }catch(e){ if(manual) alert('فشل التحميل: '+e.message); }
@@ -4714,14 +4905,14 @@ window.addEventListener('load', ()=>{
 <div id="followOv" class="flov">
   <div class="flov-head">
     <b style="font-size:15px;color:var(--teal-d);white-space:nowrap">📌 المتابعة</b>
-    <select id="followClass" onchange="renderFollowView()"></select>
+    <select id="followClass" onchange="onVClassChange(this);renderFollowView()"></select>
   </div>
   <div class="flov-body" id="followBody"></div>
 </div>
 <div id="recordOv" class="flov">
   <div class="flov-head">
     <b style="font-size:15px;color:var(--teal-d);white-space:nowrap">📋 سجل المتابعة</b>
-    <select id="recordClass" onchange="renderRecordView()"></select>
+    <select id="recordClass" onchange="onVClassChange(this);renderRecordView()"></select>
   </div>
   <div class="flov-body" id="recordBody"></div>
 </div>

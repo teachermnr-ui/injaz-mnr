@@ -64,12 +64,17 @@ input,select{font-family:inherit;font-size:15px}
 /* ===== App shell ===== */
 .topbar{
   position:sticky;top:0;z-index:30;background:var(--brand);color:#fff;
-  padding:12px 16px;display:flex;align-items:center;gap:12px;
+  padding:10px 16px 12px;display:flex;flex-direction:column;gap:8px;
 }
-.topbar .tb-title{font-weight:800;font-size:16px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-row1{display:flex}
+.tb-row1 .tb-title{font-weight:800;font-size:16px;line-height:1.35;white-space:normal;word-break:break-word}
+.tb-row2{display:flex;align-items:center;gap:8px}
+.tb-spacer{flex:1;min-width:8px}
 .tb-badge{background:rgba(255,255,255,.14);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;white-space:nowrap}
 .tb-menu-btn{background:rgba(255,255,255,.14);color:#fff;width:38px;height:38px;border-radius:11px;font-size:17px;display:flex;align-items:center;justify-content:center}
-.tb-icon{background:rgba(255,255,255,.14);color:#fff;width:36px;height:36px;border-radius:11px;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tb-icon{background:rgba(255,255,255,.14);color:#fff;width:36px;height:36px;border-radius:11px;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s}
+.tb-icon:active{background:rgba(255,255,255,.26)}
+.tb-wide{width:auto;padding:0 14px;font-size:13px;font-weight:700;white-space:nowrap}
 .tabbar{
   position:sticky;top:62px;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);
   display:flex;gap:4px;padding:8px 10px;overflow-x:auto;scrollbar-width:none;
@@ -177,7 +182,7 @@ input,select{font-family:inherit;font-size:15px}
     <h1>نظام الفصول الدراسية</h1>
     <p class="auth-sub">سجّل الدخول للمتابعة</p>
     <div id="loginAlert"></div>
-    <div class="field"><label>اسم المستخدم</label><input id="liUser" autocomplete="username" placeholder="اسم المستخدم"></div>
+    <div class="field"><label>رقم الهوية</label><input id="liUser" inputmode="numeric" autocomplete="username" placeholder="رقم الهوية"></div>
     <div class="field"><label>كلمة المرور</label><input id="liPass" type="password" autocomplete="current-password" placeholder="كلمة المرور"></div>
     <div class="field"><label>الفترة</label>
       <select id="liPeriod"><option value="first">الفترة الأولى</option><option value="second">الفترة الثانية</option></select>
@@ -217,11 +222,14 @@ input,select{font-family:inherit;font-size:15px}
 <!-- ===== App ===== -->
 <div id="appView" class="hidden">
   <div class="topbar">
-    <div class="tb-title" id="tbTitle">نظام الفصول</div>
-    <span class="tb-badge" id="tbPeriod"></span>
-    <button class="tb-icon" id="tbOmr" title="إدارة الصف" style="width:auto;padding:0 12px;font-size:13px;font-weight:700;white-space:nowrap;">إدارة الصف</button>
-    <button class="tb-icon" id="tbPw" title="تغيير كلمة المرور">🔑</button>
-    <button class="tb-icon" id="tbOut" title="تسجيل الخروج"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.6 6.8a8 8 0 1 0 10.8 0"/></svg></button>
+    <div class="tb-row1"><div class="tb-title" id="tbTitle">نظام الفصول</div></div>
+    <div class="tb-row2">
+      <span class="tb-badge" id="tbPeriod"></span>
+      <span class="tb-spacer"></span>
+      <button class="tb-icon tb-wide" id="tbOmr" title="إدارة الصف">إدارة الصف</button>
+      <button class="tb-icon" id="tbPw" title="تغيير كلمة المرور">🔑</button>
+      <button class="tb-icon" id="tbOut" title="تسجيل الخروج"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.6 6.8a8 8 0 1 0 10.8 0"/></svg></button>
+    </div>
   </div>
   <div class="tabbar" id="tabbar"></div>
   <div class="content" id="content"></div>
@@ -257,6 +265,7 @@ catch(e){ console.error('Firebase init', e); }
 /* ---------- الأدوار ---------- */
 const ROLES = {
   admin:    'أدمن',
+  schoolAdmin: 'أدمن المدرسة',
   manager:  'مدير',
   agent:    'وكيل',
   counselor:'موجه طلابي',
@@ -298,6 +307,7 @@ function defaultPerms(role){
   const p = {}; ALL_PERM_KEYS.forEach(k=>p[k]={access:false,edit:false,del:false});
   const set=(k,a,e,d)=>{ if(p[k]) p[k]={access:!!a,edit:!!e,del:!!d}; };
   if(role==='admin'){ ALL_PERM_KEYS.forEach(k=>p[k]={access:true,edit:true,del:true}); return p; }
+  if(role==='schoolAdmin'){ ALL_PERM_KEYS.forEach(k=>p[k]={access:true,edit:true,del:true}); return p; }
   if(role==='manager'){            // الرئيسية كاملة عدا المستخدمون/الإعدادات — مشاهدة فقط
     ['index.classes','index.sent','index.received','index.absence','index.studentStatus'].forEach(k=>set(k,true,false,false));
   } else if(role==='agent'){        // وكيل: وصول+تعديل (المرسلة، الواردة، الغياب)
@@ -382,7 +392,7 @@ async function ensureSeed(){
   const adminQ = await usersCol().where('role','==','admin').limit(1).get();
   if(adminQ.empty){
     await usersCol().add({
-      username:'admin', password:'admin123', role:'admin', schoolId:null,
+      loginId:'1000000000', username:'admin', password:'admin123', role:'admin', schoolId:null,
       assignedClasses:[], permissions:defaultPerms('admin'),
       mustChangePassword:true, active:true,
       createdAt:Date.now(), updatedAt:Date.now()
@@ -427,11 +437,15 @@ $('#liBtn').onclick = doLogin;
 $('#liPass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 async function doLogin(){
   const u=$('#liUser').value.trim(), p=$('#liPass').value, period=$('#liPeriod').value;
-  if(!u||!p){ alertBox('loginAlert','err','أدخل اسم المستخدم وكلمة المرور'); return; }
+  if(!u||!p){ alertBox('loginAlert','err','أدخل رقم الهوية وكلمة المرور'); return; }
   $('#liBtn').textContent='جارٍ الدخول…'; $('#liBtn').disabled=true;
   try{
-    const q = await usersCol().where('username','==',u).limit(1).get();
-    if(q.empty){ throw new Error('اسم المستخدم غير موجود'); }
+    let q = await usersCol().where('loginId','==',u).limit(1).get();
+    if(q.empty){
+      // توافق مع حسابات أُنشئت قبل هذا التحديث (مفيش رقم هوية مسجّل بعد)
+      q = await usersCol().where('username','==',u).limit(1).get();
+    }
+    if(q.empty){ throw new Error('رقم الهوية غير موجود'); }
     const doc=q.docs[0], data=doc.data();
     if(data.password!==p){ throw new Error('كلمة المرور غير صحيحة'); }
     if(data.active===false){ throw new Error('هذا الحساب معطّل. راجع المسؤول'); }
@@ -482,6 +496,7 @@ $('#pwBtn').onclick = async ()=>{
    ======================================================================== */
 function visibleTabs(){
   if(CURRENT.role==='admin') return INDEX_TABS.slice();
+  if(CURRENT.role==='schoolAdmin') return INDEX_TABS.filter(t=>t.key!=='settings');
   return INDEX_TABS.filter(t=>{
     const pm=CURRENT.permissions||{};
     if(t.key==='users'||t.key==='settings') return false; // للأدمن فقط
@@ -716,14 +731,15 @@ function renderPanel(){
 
 /* ---------------- تبويب المستخدمون (للأدمن) ---------------- */
 async function renderUsers(c){
+  const isSchoolScoped = CURRENT.role==='schoolAdmin';
   c.innerHTML=`<div class="panel-head"><h2>المستخدمون</h2>
     <button class="btn sm" id="addUserBtn">+ إضافة مستخدم</button></div>
-    <div class="sub-note">إدارة حسابات جميع المدارس وصلاحياتها.</div>
-    <div id="uFilter" class="card" style="padding:12px"></div>
+    <div class="sub-note">${isSchoolScoped?'إدارة حسابات مدرستك وصلاحياتها.':'إدارة حسابات جميع المدارس وصلاحياتها.'}</div>
+    <div id="uFilter" class="card" style="padding:12px${isSchoolScoped?';display:none':''}"></div>
     <div id="usersList"><div class="empty"><span class="spin"></span></div></div>`;
   $('#addUserBtn').onclick=()=>openUserModal(null);
 
-  // فلتر المدرسة
+  // فلتر المدرسة (يُخفى لأدمن المدرسة، فهو مقيّد على مدرسته أصلاً)
   const opts = ['<option value="">كل المدارس</option>']
     .concat(Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`)).join('');
   $('#uFilter').innerHTML=`<div class="field" style="margin:0"><label>عرض حسب المدرسة</label><select id="uSchoolFilter">${opts}</select></div>`;
@@ -731,12 +747,15 @@ async function renderUsers(c){
   loadUsersList();
 }
 async function loadUsersList(){
-  const wrap=$('#usersList'); const filter=$('#uSchoolFilter')?$('#uSchoolFilter').value:'';
+  const isSchoolScoped = CURRENT.role==='schoolAdmin';
+  const wrap=$('#usersList'); const filter = isSchoolScoped ? CURRENT.schoolId : ($('#uSchoolFilter')?$('#uSchoolFilter').value:'');
   try{
     const snap = await usersCol().get();
     let users = snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(filter) users = users.filter(u=>u.schoolId===filter);
-    users.sort((a,b)=>(a.role==='admin'?-1:0)-(b.role==='admin'?-1:0));
+    if(isSchoolScoped) users = users.filter(u=>u.schoolId===CURRENT.schoolId && u.role!=='admin');
+    else if(filter) users = users.filter(u=>u.schoolId===filter);
+    const rank=u=>u.role==='admin'?-2:u.role==='schoolAdmin'?-1:0;
+    users.sort((a,b)=>rank(a)-rank(b));
     if(!users.length){ wrap.innerHTML=`<div class="empty"><span class="e-emoji">👥</span>لا يوجد مستخدمون بعد.</div>`; return; }
     wrap.innerHTML = users.map(u=>{
       const sc = u.schoolId&&SCHOOLS[u.schoolId]?SCHOOLS[u.schoolId].name:(u.role==='admin'?'— كل المدارس —':'بلا مدرسة');
@@ -750,7 +769,7 @@ async function loadUsersList(){
         <span class="pill ${u.active===false?'off':'on'}">${u.active===false?'معطّل':'مُفعّل'}</span>
         <div class="row-actions">
           <button class="icon-btn" onclick="openUserModal('${u.id}')" title="تعديل">✏️</button>
-          ${u.role==='admin'?'':`<button class="icon-btn del" onclick="deleteUser('${u.id}','${esc(u.username)}')" title="حذف">🗑</button>`}
+          ${(u.role==='admin'||u.role==='schoolAdmin')?'':`<button class="icon-btn del" onclick="deleteUser('${u.id}','${esc(u.username)}')" title="حذف">🗑</button>`}
         </div></div></div>`;
     }).join('');
   }catch(e){ wrap.innerHTML=`<div class="alert err">${esc(e.message)}</div>`; }
@@ -764,7 +783,9 @@ async function openUserModal(id){
   editPerms = e ? JSON.parse(JSON.stringify(e.permissions||defaultPerms(e.role))) : defaultPerms('teacher');
   const schoolOpts = Object.entries(SCHOOLS).map(([sid,s])=>`<option value="${esc(sid)}" ${e&&e.schoolId===sid?'selected':''}>${esc(s.name)}</option>`).join('');
   const isAdminU = !!(e && e.role==='admin'); umReadonly=isAdminU; permReadonly=isAdminU;
-  const roleOpts = Object.entries(ROLES).filter(([k])=> k!=='admin' || isAdminU).map(([k,v])=>`<option value="${k}" ${e&&e.role===k?'selected':''}>${esc(v)}</option>`).join('');
+  const isSchoolAdminU = !!(e && e.role==='schoolAdmin');
+  const canGrantSchoolAdmin = CURRENT.role==='admin';
+  const roleOpts = Object.entries(ROLES).filter(([k])=> (k!=='admin' || isAdminU) && (k!=='schoolAdmin' || canGrantSchoolAdmin || isSchoolAdminU)).map(([k,v])=>`<option value="${k}" ${e&&e.role===k?'selected':''}>${esc(v)}</option>`).join('');
   modal(`<h2>${e?'تعديل مستخدم':'إضافة مستخدم'}</h2>
     <div id="umAlert"></div>
     <div class="field" style="margin-bottom:6px"><label>حالة الحساب</label>
@@ -772,7 +793,8 @@ async function openUserModal(id){
       <button type="button" class="chip ${e&&e.active===false?'active':''}" id="umInactive">معطّل</button></div></div>
     <div class="field"><label>المدرسة</label><select id="umSchool">
       <option value="">— اختر المدرسة —</option>${schoolOpts}</select></div>
-    <div class="field"><label>اسم المستخدم</label><input id="umUser" value="${e?esc(e.username):''}" placeholder="فريد لكل الموقع"></div>
+    <div class="field"><label>رقم الهوية</label><input id="umUser" inputmode="numeric" value="${e?esc(e.loginId||''):''}" placeholder="رقم الهوية — أرقام فقط (يُستخدم للدخول)"></div>
+    <div class="field"><label>اسم المستخدم</label><input id="umDisplayName" value="${e?esc(e.username):''}" placeholder="الاسم الظاهر في الموقع"></div>
     <div class="field"><label>كلمة المرور</label><input id="umPass" value="${e?esc(e.password):''}" placeholder="كلمة المرور"></div>
     <div class="field"><label>الدور</label><select id="umRole">${roleOpts}</select></div>
     <div class="field"><label>الفصول المسندة <span style="color:var(--muted);font-weight:400">(اختر فصلاً أو أكثر)</span></label>
@@ -794,9 +816,17 @@ async function openUserModal(id){
   renderPermTree();
   $('#umSave').onclick=()=>saveUser(activeState);
   if(isAdminU){
-    ['umSchool','umUser','umRole'].forEach(id=>{ const el=$('#'+id); if(el) el.disabled=true; });
+    ['umSchool','umUser','umRole','umDisplayName'].forEach(id=>{ const el=$('#'+id); if(el) el.disabled=true; });
     ['umActive','umInactive'].forEach(id=>{ const el=$('#'+id); if(el){ el.onclick=null; el.style.opacity='.55'; el.style.pointerEvents='none'; } });
     const al=$('#umAlert'); if(al) al.innerHTML='<div class="sub-note" style="margin:0 0 8px;color:var(--accent)">🔒 حساب الأدمن: كل الصلاحيات والفصول ممنوحة وبلا مدرسة محددة. لا يمكن تعديل سوى <b>كلمة المرور</b>.</div>';
+  } else if(isSchoolAdminU){
+    ['umSchool','umUser','umRole','umDisplayName'].forEach(id=>{ const el=$('#'+id); if(el) el.disabled=true; });
+    const al=$('#umAlert'); if(al) al.innerHTML='<div class="sub-note" style="margin:0 0 8px;color:var(--accent)">🔒 حساب أدمن المدرسة: كل الصلاحيات والفصول ممنوحة داخل مدرسته تلقائياً. لا يمكن تعديل سوى <b>كلمة المرور وحالة التفعيل</b>.</div>';
+  } else if(CURRENT.role==='schoolAdmin'){
+    // أدمن المدرسة يضيف/يعدّل مستخدمين داخل مدرسته فقط — المدرسة مقفولة على مدرسته
+    const schEl=$('#umSchool');
+    if(schEl){ schEl.value = CURRENT.schoolId; schEl.disabled = true; }
+    loadModalClasses(CURRENT.schoolId, e?e.assignedClasses:[]);
   }
 }
 async function loadModalClasses(schoolId, pre){
@@ -844,18 +874,29 @@ async function saveUser(active){
     }catch(e){ alertBox('umAlert','err',e.message); }
     return;
   }
-  const school=$('#umSchool').value, user=$('#umUser').value.trim(), pass=$('#umPass').value,
+  if(editUser && editUser.role==='schoolAdmin'){
+    const pass=$('#umPass').value;
+    if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور'); return; }
+    try{
+      await usersCol().doc(editUser.id).update({ password:pass, role:'schoolAdmin', schoolId:editUser.schoolId, assignedClasses:[], permissions:defaultPerms('schoolAdmin'), active, updatedAt:Date.now() });
+      toast('تم تحديث حساب أدمن المدرسة'); closeModal(); loadUsersList();
+    }catch(e){ alertBox('umAlert','err',e.message); }
+    return;
+  }
+  const school=$('#umSchool').value, loginId=$('#umUser').value.trim(), displayName=$('#umDisplayName').value.trim(), pass=$('#umPass').value,
         role=$('#umRole').value,
         classes=[...document.querySelectorAll('.umCls:checked')].map(x=>x.value);
   if(!school){ alertBox('umAlert','err','اختر المدرسة'); return; }
-  if(!user){ alertBox('umAlert','err','أدخل اسم المستخدم'); return; }
+  if(!loginId){ alertBox('umAlert','err','أدخل رقم الهوية'); return; }
+  if(!/^[0-9]+$/.test(loginId)){ alertBox('umAlert','err','رقم الهوية يجب أن يكون أرقاماً فقط'); return; }
+  if(!displayName){ alertBox('umAlert','err','أدخل اسم المستخدم'); return; }
   if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور'); return; }
   try{
-    // فحص تفرّد اسم المستخدم
-    const q=await usersCol().where('username','==',user).get();
+    // فحص تفرّد رقم الهوية (المُستخدم للدخول)
+    const q=await usersCol().where('loginId','==',loginId).get();
     const clash=q.docs.find(d=> d.id!==(editUser&&editUser.id));
-    if(clash){ alertBox('umAlert','err','اسم المستخدم مستخدم مسبقاً، اختر غيره'); return; }
-    const payload={ username:user, password:pass, role, schoolId:school, assignedClasses:classes,
+    if(clash){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
+    const payload={ loginId, username:displayName, password:pass, role, schoolId:school, assignedClasses:classes,
       permissions:editPerms, active, updatedAt:Date.now() };
     if(editUser){ await usersCol().doc(editUser.id).update(payload); toast('تم تحديث المستخدم'); }
     else { payload.mustChangePassword=true; payload.createdAt=Date.now(); await usersCol().add(payload); toast('تمت إضافة المستخدم'); }
@@ -900,18 +941,20 @@ function renderSchoolsList(){
   wrap.innerHTML=entries.map(([id,s])=>`<div class="card" style="box-shadow:none;margin-bottom:8px">
     <div class="urow">
       <div class="uavatar">🏫</div>
-      <div class="uinfo"><div class="uname">${esc(s.name)}</div>
-        <div class="umeta">${esc(s.year||'—')} · الفترة المُفعّلة: ${esc(periodLabel(s.activePeriod||'first'))} · فصول: ${esc(s.classCount||'—')}</div></div>
+      <div class="uinfo"><div class="uname">${esc(s.name)} ${s.code?'<span class="pill role">'+esc(s.code)+'</span>':''}</div>
+        <div class="umeta">${esc(s.eduDept||'—')} · ${esc(s.year||'—')} · الفترة المُفعّلة: ${esc(periodLabel(s.activePeriod||'first'))} · فصول: ${esc(s.classCount||'—')}</div></div>
       <div class="row-actions">
         <button class="icon-btn" onclick="openSchoolModal('${esc(id)}')" title="تعديل">✏️</button>
         <button class="icon-btn del" onclick="deleteSchool('${esc(id)}','${esc(s.name)}')" title="حذف">🗑</button>
       </div></div></div>`).join('');
 }
 function openSchoolModal(id){
-  const s = id?SCHOOLS[id]:{name:'',year:'',activePeriod:'first',classCount:''};
+  const s = id?SCHOOLS[id]:{name:'',eduDept:'',contactNumber:'',year:'',activePeriod:'first',classCount:''};
   modal(`<h2>${id?'تعديل مدرسة':'إضافة مدرسة'}</h2>
     <div id="smAlert"></div>
     <div class="field"><label>اسم المدرسة</label><input id="smName" value="${esc(s.name)}" placeholder="اسم المدرسة"></div>
+    <div class="field"><label>إدارة التعليم</label><input id="smEduDept" value="${esc(s.eduDept||'')}" placeholder="مثال: إدارة التعليم بمنطقة الرياض"></div>
+    <div class="field"><label>رقم التواصل</label><input id="smContact" value="${esc(s.contactNumber||'')}" inputmode="tel" placeholder="رقم جوال أو هاتف"></div>
     <div class="field"><label>العام الدراسي</label><input id="smYear" value="${esc(s.year||'')}" placeholder="مثال: ١٤٤٧/١٤٤٨ هـ"></div>
     <div class="field"><label>الفترة المُفعّلة</label>
       <select id="smPeriod">
@@ -928,7 +971,15 @@ function openSchoolModal(id){
     const name=$('#smName').value.trim();
     if(!name){ alertBox('smAlert','err','أدخل اسم المدرسة'); return; }
     const sid = id || ('s'+Date.now().toString(36));
-    SCHOOLS[sid]={ name, year:$('#smYear').value.trim(), activePeriod:$('#smPeriod').value, classCount:$('#smCount').value.trim() };
+    let code = s.code;
+    if(!code){
+      // توليد رمز تسلسلي S1, S2... — أعلى رقم موجود حاليًا + 1
+      let max=0;
+      Object.values(SCHOOLS).forEach(sc=>{ const m=/^S(\d+)$/.exec(sc.code||''); if(m){ const n=parseInt(m[1],10); if(n>max) max=n; } });
+      code = 'S'+(max+1);
+    }
+    SCHOOLS[sid]={ name, code, eduDept:$('#smEduDept').value.trim(), contactNumber:$('#smContact').value.trim(),
+      year:$('#smYear').value.trim(), activePeriod:$('#smPeriod').value, classCount:$('#smCount').value.trim() };
     try{ await schoolsDoc().set({list:SCHOOLS}); toast(id?'تم تحديث المدرسة':'تمت إضافة المدرسة'); closeModal(); renderSchoolsList(); }
     catch(e){ alertBox('smAlert','err',e.message); }
   };
@@ -973,7 +1024,7 @@ function confirmModal(title,msg,onYes,danger,withInput){
    تبويب الفصول والطلاب — روستر المدرسة العام
    ======================================================================== */
 let RClasses=[], RStudents=[], RSchoolId=null, pendingGroups=null, RTeacherAdd=true, RUI={ed:{},openStage:null,openClass:null};
-function can(k,f){ if(CURRENT.role==='admin') return true; const p=(CURRENT.permissions||{})[k]; return !!(p&&p[f]); }
+function can(k,f){ if(CURRENT.role==='admin'||CURRENT.role==='schoolAdmin') return true; const p=(CURRENT.permissions||{})[k]; return !!(p&&p[f]); }
 const rosterDoc = sid => db.collection('schoolData').doc('roster_'+sid);
 
 async function renderClasses(c){
@@ -999,19 +1050,16 @@ async function saveRoster(){
   await rosterDoc(RSchoolId).set({ value:JSON.stringify({classes:RClasses,students:RStudents,teacherAdd:RTeacherAdd}), updatedAt:Date.now(), schoolId:RSchoolId, base:'roster' });
 }
 function paintClasses(){
-  const canEdit=can('index.classes','edit'), canDel=can('index.classes','del');
   let html='';
   const sids=Object.entries(SCHOOLS);
   if(CURRENT.role==='admin' && sids.length){
     html += '<div class="card" style="padding:12px;margin-bottom:12px"><div class="field" style="margin:0"><label>المدرسة</label><select id="rSchool">'+
       sids.map(([id,s])=>'<option value="'+esc(id)+'"'+(id===RSchoolId?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select></div></div>';
   }
-  html += '<div class="sub-note">روستر المدرسة العام'+(canEdit?' — يمكنك الاستيراد والتعديل.':' — عرض فقط.')+'</div>';
-  if(canEdit) html += editorCardsHtml();
-  html += renderStagesHtml(canDel,canEdit);
+  html += '<div class="sub-note">روستر المدرسة العام — عرض فقط. لإضافة أو تعديل فصول وطلاب، افتح <b>«إدارة الصف»</b> من الشريط العلوي (تبويب «الطلاب والفصول»).</div>';
+  html += renderStagesHtml(false,false);
   $('#rRoot').innerHTML=html;
   const sel=$('#rSchool'); if(sel) sel.onchange=()=>{ RSchoolId=sel.value; loadRoster(); };
-  if(canEdit) wireImport();
 }
 function edCard(key,title,bodyHtml){
   const open=!!RUI.ed[key];

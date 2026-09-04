@@ -76,11 +76,11 @@
 <body>
 <header class="app">
   <nav class="tabs">
-    <button id="tab-upload" class="active" onclick="showWsTab('upload')">📤 رفع وتحويل</button>
-    <button id="tab-bank" onclick="showWsTab('bank')">🗂️ بنك الأسئلة</button>
+    <button id="tab-upload" class="active" onclick="showWsTab('upload')">🛠️ بناء نشاط</button>
     <button id="tab-publish" onclick="showWsTab('publish')">📢 نشر</button>
     <button id="tab-submissions" onclick="showWsTab('submissions')">📋 متابعة التسليمات</button>
-    <button id="tab-pins" onclick="showWsTab('pins')">🔑 أكواد الدخول</button>
+    <button id="tab-bank" onclick="showWsTab('bank')">🗂️ بنك الأسئلة</button>
+    <button id="tab-pins" onclick="showWsTab('pins')">🔑 أكواد الطلاب</button>
   </nav>
 </header>
 
@@ -259,9 +259,9 @@
 
     document.addEventListener('DOMContentLoaded', function () {
       const bar = document.createElement('div');
-      bar.style.cssText = 'display:flex;align-items:center;gap:8px;justify-content:flex-end;background:var(--teal-d);color:#fff;padding:6px 14px;font-size:12.5px';
-      bar.innerHTML = '<span style="opacity:.9">' + (CLS_SESSION.username || '') + '</span>' +
-        '<a href="index.html" style="background:rgba(255,255,255,.16);color:#fff;text-decoration:none;padding:4px 12px;border-radius:8px;font-weight:600">← الرئيسية</a>';
+      bar.style.cssText = 'background:var(--teal-d);color:#fff;padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px';
+      bar.innerHTML = '<div style="font-weight:800;font-size:14.5px;line-height:1.35;word-break:break-word">' + escapeHtml(CLS_SESSION.username || '') + '</div>' +
+        '<div><a href="index.html" style="background:rgba(255,255,255,.18);color:#fff;text-decoration:none;padding:5px 13px;border-radius:9px;font-weight:700;font-size:12.5px;white-space:nowrap">🏠 الرئيسية</a></div>';
       document.body.insertBefore(bar, document.body.firstChild);
     });
 
@@ -1009,6 +1009,26 @@
         });
         statusEl.textContent = "تم نشر الورقة بنجاح — هتظهر للطلاب في الفصول المحددة.";
         statusEl.style.color = "var(--ok)";
+
+        if (confirm("تحب تحفظ نسخة من النشاط ده في بنك الأسئلة الخاص بيك؟")) {
+          try {
+            const wSnap = await getDoc(doc(db, "worksheets", currentPublishId));
+            if (wSnap.exists()) {
+              const w = wSnap.data();
+              await addDoc(collection(db, "questionBank"), {
+                schoolId: currentTeacher.schoolId,
+                createdBy: currentTeacher.uid,
+                title: w.title,
+                unit: w.unit,
+                lesson: w.lesson,
+                sourceFileName: w.sourceFileName || "",
+                exercises: w.exercises,
+                savedAt: serverTimestamp()
+              });
+            }
+          } catch (e2) { /* تجاهل خطأ الحفظ الاختياري بدون مقاطعة تجربة النشر */ }
+        }
+
         await loadDrafts();
       } catch (err) {
         statusEl.textContent = "حصل خطأ أثناء النشر: " + err.message;
@@ -1487,11 +1507,21 @@
       const pinsBySeat = {};
       pinsSnap.docs.forEach((d) => { pinsBySeat[d.data().seat] = d.data().pin; });
 
+      // رمز المدرسة (S1, S2...) — يُلصق ببداية أي كود جديد يتولّد
+      let schoolCode = "";
+      try {
+        const schoolsSnap = await getDoc(doc(db, "schoolData", "schools"));
+        const list = schoolsSnap.exists() ? (schoolsSnap.data().list || {}) : {};
+        schoolCode = (list[currentTeacher.schoolId] && list[currentTeacher.schoolId].code) || "";
+      } catch (e3) { schoolCode = ""; }
+
+      const existingPins = new Set(Object.values(pinsBySeat));
       listEl.innerHTML = "";
       for (const s of students) {
         let pin = pinsBySeat[s.seat];
         if (!pin) {
-          pin = String(Math.floor(100000 + Math.random() * 900000));
+          do { pin = schoolCode + String(Math.floor(100000 + Math.random() * 900000)); } while (existingPins.has(pin));
+          existingPins.add(pin);
           await addDoc(collection(db, "studentPins"), {
             pin, schoolId: currentTeacher.schoolId, seat: s.seat, name: s.name, classCode, createdAt: serverTimestamp()
           });

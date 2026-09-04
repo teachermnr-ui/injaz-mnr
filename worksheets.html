@@ -43,6 +43,11 @@
     white-space:normal;word-break:break-word;font-family:'Tajawal',sans-serif;
   }
   nav.tabs button.active{background:#fff;color:var(--teal-d)}
+  @media (min-width:768px){
+    nav.tabs button{ padding:12px 18px; font-size:15px; border-radius:11px; }
+    header.app{ padding:12px 18px; }
+    main{ padding:24px; }
+  }
   main{padding:16px;max-width:860px;margin:0 auto}
   .panel{display:none}
   .panel.active{display:block;animation:fade .2s ease}
@@ -141,6 +146,32 @@
       <h3 style="margin-top:0">٣) بيانات الورقة</h3>
       <label>عنوان الورقة</label>
       <input type="text" id="worksheetTitle" placeholder="مثال: تمثيل البيانات">
+      <br><br>
+      <label>المادة</label>
+      <select id="worksheetSubject"><option value="">— اختر مادة —</option></select>
+      <br><br>
+      <label>الصف</label>
+      <select id="worksheetGrade">
+        <option value="">— اختر —</option>
+        <optgroup label="الابتدائية">
+          <option value="أول ابتدائي">أول ابتدائي</option>
+          <option value="ثاني ابتدائي">ثاني ابتدائي</option>
+          <option value="ثالث ابتدائي">ثالث ابتدائي</option>
+          <option value="رابع ابتدائي">رابع ابتدائي</option>
+          <option value="خامس ابتدائي">خامس ابتدائي</option>
+          <option value="سادس ابتدائي">سادس ابتدائي</option>
+        </optgroup>
+        <optgroup label="المتوسطة">
+          <option value="أول متوسط">أول متوسط</option>
+          <option value="ثاني متوسط">ثاني متوسط</option>
+          <option value="ثالث متوسط">ثالث متوسط</option>
+        </optgroup>
+        <optgroup label="الثانوية">
+          <option value="أول ثانوي">أول ثانوي</option>
+          <option value="ثاني ثانوي">ثاني ثانوي</option>
+          <option value="ثالث ثانوي">ثالث ثانوي</option>
+        </optgroup>
+      </select>
       <br><br>
       <label>الوحدة</label>
       <input type="text" id="worksheetUnit">
@@ -261,7 +292,10 @@
       const bar = document.createElement('div');
       bar.style.cssText = 'background:var(--teal-d);color:#fff;padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px';
       bar.innerHTML = '<div style="font-weight:800;font-size:14.5px;line-height:1.35;word-break:break-word">' + escapeHtml(CLS_SESSION.username || '') + '</div>' +
-        '<div><a href="index.html" style="background:rgba(255,255,255,.18);color:#fff;text-decoration:none;padding:5px 13px;border-radius:9px;font-weight:700;font-size:12.5px;white-space:nowrap">🏠 الرئيسية</a></div>';
+        '<div style="display:flex;gap:8px;">' +
+        '<a href="index.html" style="background:rgba(255,255,255,.18);color:#fff;text-decoration:none;padding:5px 13px;border-radius:9px;font-weight:700;font-size:12.5px;white-space:nowrap">🏠 الرئيسية</a>' +
+        '<a href="omr.html" style="background:rgba(255,255,255,.18);color:#fff;text-decoration:none;padding:5px 13px;border-radius:9px;font-weight:700;font-size:12.5px;white-space:nowrap">📝 إدارة الصف</a>' +
+        '</div>';
       document.body.insertBefore(bar, document.body.firstChild);
     });
 
@@ -278,9 +312,26 @@
     }
     window.showWsTab = showWsTab;
 
+    const WS_FIXED_SUBJECTS = [
+      "القرآن الكريم والتفسير", "الكفايات اللغوية", "الرياضيات", "اللغة الإنجليزية", "الأحياء", "الكيمياء",
+      "التفكير الناقد", "التقنية الرقمية", "التربية الصحية والبدنية", "الفيزياء", "التاريخ", "التوحيد والفقه",
+      "الفنون", "علوم الأرض والفضاء", "البحث ومصادر المعلومات", "المهارات الإدارية", "التنمية المستدامة", "التصميم الرقمي"
+    ];
+    async function loadSubjectOptions() {
+      let custom = [];
+      try {
+        const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+        custom = JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").customSubjects || [];
+      } catch (e) { custom = []; }
+      const all = [...WS_FIXED_SUBJECTS, ...custom.filter((s) => !WS_FIXED_SUBJECTS.includes(s))];
+      const sel = document.getElementById("worksheetSubject");
+      sel.innerHTML = `<option value="">— اختر مادة —</option>` + all.map((s) => `<option value="${s}">${s}</option>`).join("");
+    }
+
     loadViewSetting();
     loadDrafts();
     loadBank();
+    loadSubjectOptions();
 
     // ---------- إعداد شكل عرض الأوراق للطالب ----------
     async function loadViewSetting() {
@@ -903,8 +954,20 @@
     document.getElementById("saveWorksheetBtn").addEventListener("click", async () => {
       const statusEl = document.getElementById("saveStatus");
       const title = document.getElementById("worksheetTitle").value.trim();
+      const subject = document.getElementById("worksheetSubject").value;
+      const grade = document.getElementById("worksheetGrade").value;
       if (!title) {
         statusEl.textContent = "اكتب عنوان الورقة أولًا.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+      if (!subject) {
+        statusEl.textContent = "اختر المادة أولًا.";
+        statusEl.style.color = "var(--bad)";
+        return;
+      }
+      if (!grade) {
+        statusEl.textContent = "اختر الصف أولًا.";
         statusEl.style.color = "var(--bad)";
         return;
       }
@@ -917,6 +980,9 @@
         const newDoc = await addDoc(worksheetsRef, {
           schoolId: currentTeacher.schoolId,
           createdBy: currentTeacher.uid,
+          createdByName: currentTeacher.name,
+          subject,
+          grade,
           title,
           unit: document.getElementById("worksheetUnit").value.trim(),
           lesson: document.getElementById("worksheetLesson").value.trim(),
@@ -1018,6 +1084,8 @@
               await addDoc(collection(db, "questionBank"), {
                 schoolId: currentTeacher.schoolId,
                 createdBy: currentTeacher.uid,
+                subject: w.subject || "",
+                grade: w.grade || "",
                 title: w.title,
                 unit: w.unit,
                 lesson: w.lesson,
@@ -1106,6 +1174,8 @@
           await addDoc(collection(db, "questionBank"), {
             schoolId: currentTeacher.schoolId,
             createdBy: currentTeacher.uid,
+            subject: w.subject || "",
+            grade: w.grade || "",
             title: w.title,
             unit: w.unit,
             lesson: w.lesson,
@@ -1201,23 +1271,36 @@
       }
 
       listEl.innerHTML = "";
+      // تجميع حسب "المادة الصف" — مثال: تقنية رقمية أول ثانوي
+      const groups = {};
       snap.docs.forEach((d) => {
         const w = d.data();
-        const row = document.createElement("div");
-        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px;";
-        row.innerHTML = `
-          <div>
-            <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
-            <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""} (${(w.exercises || []).length} تمرين)</p>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn btn-secondary small-btn" data-preview-bank="${d.id}" data-title="${escapeHtml(w.title)}">معاينة</button>
-            <button class="btn btn-secondary small-btn" data-edit-bank="${d.id}">تعديل</button>
-            <button class="btn btn-primary small-btn" data-use-bank="${d.id}">استخدام (نسخ كمسودة جديدة)</button>
-            <button class="remove-btn" data-delete-bank="${d.id}">حذف نهائي</button>
-          </div>
-        `;
-        listEl.appendChild(row);
+        const key = (w.subject || "بدون مادة") + " " + (w.grade || "بدون صف");
+        (groups[key] = groups[key] || []).push({ id: d.id, ...w });
+      });
+      Object.keys(groups).sort().forEach((key) => {
+        const groupHeader = document.createElement("div");
+        groupHeader.style.cssText = "font-weight:800;font-size:14px;color:var(--teal);margin:14px 0 6px;padding-bottom:4px;border-bottom:2px solid var(--teal-light);";
+        groupHeader.textContent = key;
+        listEl.appendChild(groupHeader);
+
+        groups[key].forEach((w) => {
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px;";
+          row.innerHTML = `
+            <div>
+              <p style="margin:0;font-weight:700;font-size:14px;">${w.title}</p>
+              <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""} (${(w.exercises || []).length} تمرين)</p>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn btn-secondary small-btn" data-preview-bank="${w.id}" data-title="${escapeHtml(w.title)}">معاينة</button>
+              <button class="btn btn-secondary small-btn" data-edit-bank="${w.id}">تعديل</button>
+              <button class="btn btn-primary small-btn" data-use-bank="${w.id}">استخدام (نسخ كمسودة جديدة)</button>
+              <button class="remove-btn" data-delete-bank="${w.id}">حذف نهائي</button>
+            </div>
+          `;
+          listEl.appendChild(row);
+        });
       });
 
       listEl.querySelectorAll("[data-preview-bank]").forEach((btn) => {
@@ -1241,6 +1324,9 @@
           await addDoc(collection(db, "worksheets"), {
             schoolId: currentTeacher.schoolId,
             createdBy: currentTeacher.uid,
+            createdByName: currentTeacher.name,
+            subject: w.subject || "",
+            grade: w.grade || "",
             title: w.title,
             unit: w.unit,
             lesson: w.lesson,

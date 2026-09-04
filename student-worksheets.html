@@ -113,40 +113,82 @@
         return;
       }
 
-      wrap.innerHTML = "";
-      const listContainer = viewMode === "list" ? document.createElement("div") : null;
-      if (listContainer) {
-        listContainer.style.cssText = "background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 12px;";
-        wrap.appendChild(listContainer);
-      }
-
+      // تقسيم: أنشطة لسه ما اتسلمتش (تتجمّع حسب المادة والمعلم) + أنشطة مُسلّمة (قائمة واحدة أسفل الصفحة)
+      const pending = [];
+      const submitted = [];
       wSnap.docs.forEach((d) => {
         const w = d.data();
         const sub = submissionByWorksheet[d.id];
         const status = sub ? sub.status : "not-started";
-        const card = document.createElement("div");
+        const item = { id: d.id, w, sub, status };
+        if (status === "submitted" || status === "corrected") submitted.push(item);
+        else pending.push(item);
+      });
 
+      wrap.innerHTML = "";
+
+      function buildCard(item) {
+        const card = document.createElement("div");
+        card.className = viewMode === "list" ? "ws-list-row" : "ws-card";
         if (viewMode === "list") {
-          card.className = "ws-list-row";
           card.innerHTML = `
-            <span style="font-size:14px;font-weight:500;">${w.title}</span>
-            <span class="status-pill status-${status}">${statusLabels[status]}</span>
+            <span style="font-size:14px;font-weight:500;">${item.w.title}</span>
+            <span class="status-pill status-${item.status}">${statusLabels[item.status]}</span>
           `;
-          card.addEventListener("click", () => { window.location.href = `student-solve.html?worksheetId=${d.id}`; });
-          listContainer.appendChild(card);
         } else {
-          card.className = "ws-card";
           card.innerHTML = `
             <div>
-              <p style="margin:0;font-weight:700;font-size:15px;">${w.title}</p>
-              <p style="margin:4px 0 0;font-size:12px;color:var(--muted);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""}</p>
+              <p style="margin:0;font-weight:700;font-size:15px;">${item.w.title}</p>
+              <p style="margin:4px 0 0;font-size:12px;color:var(--muted);">${item.w.unit || ""} ${item.w.lesson ? "— " + item.w.lesson : ""}</p>
             </div>
-            <span class="status-pill status-${status}">${statusLabels[status]}</span>
+            <span class="status-pill status-${item.status}">${statusLabels[item.status]}</span>
           `;
-          card.addEventListener("click", () => { window.location.href = `student-solve.html?worksheetId=${d.id}`; });
-          wrap.appendChild(card);
         }
+        card.addEventListener("click", () => { window.location.href = `student-solve.html?worksheetId=${item.id}`; });
+        return card;
+      }
+
+      // تجميع الأنشطة الغير مسلّمة حسب "المادة .... اسم المعلم"
+      const groups = {};
+      pending.forEach((item) => {
+        const key = (item.w.subject || "بدون مادة") + " .... " + (item.w.createdByName || "المعلم");
+        (groups[key] = groups[key] || []).push(item);
       });
+
+      Object.keys(groups).sort().forEach((key) => {
+        const header = document.createElement("div");
+        header.style.cssText = "font-weight:800;font-size:15px;color:var(--teal-d);margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--teal-l);";
+        header.textContent = key;
+        wrap.appendChild(header);
+
+        const listContainer = viewMode === "list" ? document.createElement("div") : null;
+        if (listContainer) {
+          listContainer.style.cssText = "background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 12px;";
+          wrap.appendChild(listContainer);
+        }
+        groups[key].forEach((item) => {
+          const card = buildCard(item);
+          (listContainer || wrap).appendChild(card);
+        });
+      });
+
+      // الأنشطة المُسلّمة — قائمة واحدة مجمّعة أسفل الصفحة
+      if (submitted.length) {
+        const header = document.createElement("div");
+        header.style.cssText = "font-weight:800;font-size:15px;color:var(--muted);margin:22px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--line);";
+        header.textContent = "أنشطة تم تسليمها";
+        wrap.appendChild(header);
+
+        const listContainer = viewMode === "list" ? document.createElement("div") : null;
+        if (listContainer) {
+          listContainer.style.cssText = "background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 12px;";
+          wrap.appendChild(listContainer);
+        }
+        submitted.forEach((item) => {
+          const card = buildCard(item);
+          (listContainer || wrap).appendChild(card);
+        });
+      }
     }
   </script>
 </body>

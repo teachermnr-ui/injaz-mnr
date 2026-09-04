@@ -32,6 +32,11 @@
     white-space:normal;
   }
   nav.tabs button.active{background:#fff;color:var(--teal-d)}
+  @media (min-width:768px){
+    nav.tabs button{ padding:12px 18px; font-size:15px; border-radius:11px; }
+    header.app{ padding:12px 18px; }
+    main{ padding:24px; }
+  }
   main{padding:16px;max-width:860px;margin:0 auto}
   .panel{display:none}
   .panel.active{display:block;animation:fade .2s ease}
@@ -267,14 +272,16 @@
 
   <!-- ================= STUDENTS ================= -->
   <section id="panel-students" class="panel active">
-    <!-- ===== ١. إضافة يدوية ===== -->
+    <!-- ===== إضافة الفصول والمواد (موحّدة) ===== -->
     <div class="card seccard">
-      <div class="secheader" onclick="toggleSec('secManual',this)">
-        <div class="secicon" style="background:#eef0ff">✏️</div>
-        <div class="sectext"><div class="sectitle">إضافة يدوية</div><div class="secdesc">أضف الفصل والطلاب يدوياً</div></div>
+      <div class="secheader" onclick="toggleSec('secAddAll',this)">
+        <div class="secicon" style="background:#eef0ff">➕</div>
+        <div class="sectext"><div class="sectitle">إضافة الفصول والمواد</div><div class="secdesc">إضافة يدوية، استيراد من نور أو ملف جاهز، وإسناد المواد</div></div>
         <div class="secarrow">‹</div>
       </div>
-      <div id="secManual" class="seccontent" style="display:none">
+      <div id="secAddAll" class="seccontent" style="display:none">
+
+        <div id="secManual">
         <div class="subcard">
           <div class="subtitle">الفصول <span class="sub">أضف الفصول أولاً قبل تسجيل الطلاب</span></div>
           <div class="row" style="margin-bottom:10px">
@@ -301,17 +308,9 @@
           </div>
           <button class="primary" onclick="addStudentManual()">➕ إضافة الطالب</button>
         </div>
-      </div>
-    </div>
+        </div>
 
-    <!-- ===== ٢. استيراد من نور أو ملف جاهز ===== -->
-    <div class="card seccard">
-      <div class="secheader" onclick="toggleSec('secImport',this)">
-        <div class="secicon" style="background:#e7f7ee">📥</div>
-        <div class="sectext"><div class="sectitle">استيراد من نور أو ملف جاهز</div><div class="secdesc">استيراد بيانات الطلاب من ملف Excel</div></div>
-        <div class="secarrow">‹</div>
-      </div>
-      <div id="secImport" class="seccontent" style="display:none">
+        <div id="secImport">
         <div class="subcard">
           <div class="subtitle">📊 استيراد من ملف Excel (نور) <span class="sub">الأسماء ورقم الهوية بدقّة</span></div>
           <div class="hint" style="background:#eef6f4;border:1px solid var(--teal-l);border-radius:10px;padding:10px;margin-top:4px;line-height:1.9">
@@ -331,17 +330,9 @@
           </label>
           <button class="primary" style="margin-top:8px" onclick="importStudents()">⬆️ استيراد النص الملصق للصف المحدّد</button>
         </div>
-      </div>
-    </div>
+        </div>
 
-    <!-- ===== ٢ب. إسناد المواد ===== -->
-    <div class="card seccard">
-      <div class="secheader" onclick="toggleSec('secSubjects',this)">
-        <div class="secicon" style="background:#fdf3e2">📚</div>
-        <div class="sectext"><div class="sectitle">إسناد المواد</div><div class="secdesc">حدّد أي مادة تُدرّسها في أي فصل من فصولك</div></div>
-        <div class="secarrow">‹</div>
-      </div>
-      <div id="secSubjects" class="seccontent" style="display:none">
+        <div id="secSubjects">
         <div class="subcard">
           <label class="field">المادة
             <select id="subjSelect" onchange="onSubjectSelectChange()"><option value="">— اختر مادة —</option></select>
@@ -355,23 +346,25 @@
           <div class="subtitle">المواد المُسندة حالياً</div>
           <div id="subjAssignedList"><div class="empty">لا توجد مواد مُسندة بعد.</div></div>
         </div>
+        </div>
+
       </div>
     </div>
 
-    <!-- ===== ٣. طلاب الصف ===== -->
+    <!-- ===== طلاب الصف ===== -->
     <div class="card seccard">
       <div class="secheader" onclick="toggleSec('secStudents',this)">
         <div class="secicon" style="background:#e7eefb">👥</div>
-        <div class="sectext"><div class="sectitle">طلاب الصف <span class="sub" id="stCount">٠ طالب</span></div><div class="secdesc">بيانات الطلاب وتسجيل الانضباط والملاحظات</div></div>
+        <div class="sectext"><div class="sectitle">أسماء الطلاب <span class="sub" id="stCount">٠ طالب</span></div><div class="secdesc">بيانات الطلاب وتسجيل الانضباط والملاحظات</div></div>
         <div class="secarrow">‹</div>
       </div>
       <div id="secStudents" class="seccontent" style="display:none">
         <label class="field">اعرض طلاب الصف
-          <select id="stViewClass" onchange="onVClassChange(this);renderStudents()"><option value="">— كل الفصول —</option></select>
+          <select id="stViewClass" onchange="onVClassChange(this);renderStudents()"><option value="">— اختر الصف —</option></select>
         </label>
-        <div id="studentsHost"><div class="empty">لا يوجد طلاب بعد.</div></div>
-        <p class="hint" style="margin:10px 0 0;line-height:1.9">📌 <b>عرض سجل الطالب:</b> اضغط رقم الهوية.<br>📌 <b>تسجيل الحضور والغياب والتأخّر:</b> اضغط اسم الطالب.<br>📌 <b>نقل الطالب أو حذفه:</b> من الزرّين بجانب بطاقته. <b>إرسال ملاحظة عن طالب:</b> من تبويب «الملاحظات».</p>
-        <button class="primary" style="position:sticky;bottom:8px;margin-top:12px;width:100%;background:#0b7a63;box-shadow:0 4px 14px rgba(11,122,99,.35);z-index:20" onclick="commitAttendance()">💾 الحفظ في سجل الأعمال</button>
+        <div id="studentsHost"><div class="empty">اختر الصف لعرض طلابه.</div></div>
+        <p class="hint" style="margin:10px 0 0;line-height:1.9">📌 <b>عرض سجل الطالب:</b> اضغط رقم الهوية.<br>📌 <b>تسجيل الحضور والغياب والتأخّر:</b> استخدم الأزرار الظاهرة تحت اسم الطالب مباشرة.<br>📌 <b>نقل الطالب أو حذفه:</b> من الزرّين بجانب بطاقته. <b>إرسال ملاحظة عن طالب:</b> من تبويب «الملاحظات».</p>
+        <button class="primary" style="position:sticky;bottom:8px;margin-top:12px;width:100%;background:#0b7a63;box-shadow:0 4px 14px rgba(11,122,99,.35);z-index:20" onclick="commitAttendance()">💾 حفظ</button>
       </div>
     </div>
   </section>
@@ -2080,52 +2073,84 @@ async function sendOmrNotes(){
   }catch(e){ alert('تعذّر الإرسال: '+(e.message||e)); }
 }
 // خرائط حالات الحضور (عامة ليستخدمها العرض والنافذة معاً)
-const ATT_BG = { excused:'#e7f7ee', late:'#fff4e0', absent:'#fdecec' };   // مستأذن أخضر · متأخر أصفر · غائب أحمر (حاضر = أبيض)
-const ATT_LBL = { present:'حاضر', excused:'مستأذن', late:'متأخر', absent:'غائب' };
+const ATT_BG = { runaway:'#e9e9e9', excused:'#e7f7ee', late:'#fff4e0', absent:'#fdecec' };   // هارب رمادي غامق · مستأذن أخضر · متأخر أصفر · غائب أحمر (حاضر = أبيض)
+const ATT_LBL = { present:'حاضر', runaway:'هارب', excused:'مستأذن', late:'متأخر', absent:'غائب' };
+function attSummaryBar(list){
+  const counts = { runaway:0, late:0, excused:0, absent:0, present:0 };
+  list.forEach(s=>{ const att=effectiveAtt(s); const st=att?att.status:'present'; if(counts[st]!=null) counts[st]++; else counts.present++; });
+  const items = [
+    { key:'runaway', icon:'🏃', bg:'#2c2c2c' },
+    { key:'late',    icon:'⏰', bg:'#f5a623' },
+    { key:'excused', icon:'🙋', bg:'#2f8fe0' },
+    { key:'absent',  icon:'🚫', bg:'#e0356b' },
+    { key:'present', icon:'✅', bg:'#2fae63' }
+  ];
+  return '<div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:10px;padding:14px 4px;margin-bottom:10px;background:#fff;border-radius:14px;border:1px solid var(--line)">' +
+    items.map(it=>`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:5px;">
+        <div style="width:50px;height:50px;border-radius:50%;background:${it.bg};display:flex;align-items:center;justify-content:center;font-size:21px;">${it.icon}</div>
+        <div style="font-size:12px;font-weight:800;">${toArabic(counts[it.key])} ${ATT_LBL[it.key]}</div>
+      </div>`).join('') +
+    '</div>';
+}
 function renderStudents(){
   const host = document.getElementById('studentsHost'); if(!host) return;
   const filter = document.getElementById('stViewClass') ? document.getElementById('stViewClass').value : '';
   const filterCode = parseVKey(filter).classCode;
-  const list = filterCode ? state.students.filter(s=>s.classCode===filterCode) : state.students.slice();
-  const cnt = document.getElementById('stCount'); if(cnt) cnt.textContent = `${toArabic(list.length)} طالب`;
-  if(!state.classes.length){ host.innerHTML='<div class="empty">أضف فصلاً أولاً، ثم سجّل الطلاب.</div>'; updateBulkBar(); return; }
-  if(!list.length){ host.innerHTML='<div class="empty">لا يوجد طلاب في هذا العرض.</div>'; updateBulkBar(); return; }
+  const cnt = document.getElementById('stCount');
+  if(!state.classes.length){ host.innerHTML='<div class="empty">أضف فصلاً أولاً، ثم سجّل الطلاب.</div>'; if(cnt) cnt.textContent=''; updateBulkBar(); return; }
+  if(!filterCode){ host.innerHTML='<div class="empty">اختر الصف لعرض طلابه.</div>'; if(cnt) cnt.textContent=''; updateBulkBar(); return; }
+  const list = state.students.filter(s=>s.classCode===filterCode);
+  if(cnt) cnt.textContent = `${toArabic(list.length)} طالب`;
+  if(!list.length){ host.innerHTML='<div class="empty">لا يوجد طلاب في هذا الفصل.</div>'; updateBulkBar(); return; }
   const attBg = ATT_BG, attLbl = ATT_LBL;
-  const statCol = { excused:'#1a7a4f', late:'#b97400', absent:'#c0392b' };
-  let html = '';
+  const statCol = { runaway:'#2c2c2c', excused:'#1a7a4f', late:'#b97400', absent:'#c0392b' };
+  const attStatuses = [
+    { key:'runaway', label:'هارب',   color:'#2c2c2c' },
+    { key:'late',    label:'متأخر',  color:'#b97400' },
+    { key:'excused', label:'مستأذن', color:'#1a7a4f' },
+    { key:'absent',  label:'غائب',   color:'#c0392b' },
+    { key:'present', label:'حاضر',   color:'#1a9e5c' }
+  ];
+  let html = attSummaryBar(list);
   list.forEach((s,i)=>{
     const chk = state.selectedStudents[s.seat] ? 'checked':'';
     const att = effectiveAtt(s);
+    const curStatus = att ? att.status : 'present';
     const cardBg = (att && attBg[att.status]) ? `background:${attBg[att.status]}` : '';
-    const menuOpen = state.attMenuSeat===s.seat;
+    const noteOpen = state.attMenuSeat===s.seat;
     const statChip = att ? ` · <span class="stat" style="background:#fff;color:${statCol[att.status]||'#555'};border:1px solid ${statCol[att.status]||'#555'}">${attLbl[att.status]}</span>` : '';
     const noteLine = (att && att.note) ? `<div class="sub" style="color:#555">📝 ${escapeHtml(att.note)}</div>` : '';
-    let menu = '';
-    if(menuOpen){
-      menu = `<div class="attbtns">
-          <button style="background:#e7f7ee;color:#1a7a4f;border-color:#1a7a4f" onclick="setAttendance('${escapeHtml(s.seat)}','excused')">مستأذن</button>
-          <button style="background:#fff4e0;color:#b97400;border-color:#b97400" onclick="setAttendance('${escapeHtml(s.seat)}','late')">متأخر</button>
-          <button style="background:#fdecec;color:#c0392b;border-color:#c0392b" onclick="setAttendance('${escapeHtml(s.seat)}','absent')">غائب</button>
-        </div>
-        <input id="attNote" placeholder="ملاحظة (اختياري)" value="${escapeHtml(att&&att.note||'')}" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:9px;font:inherit;text-align:right;margin-top:8px">
+
+    const attRow = `<div class="attbtns" style="margin-top:8px;">` +
+      attStatuses.map(st=>{
+        const active = curStatus===st.key;
+        return `<button style="background:${active?st.color:'#fff'};color:${active?'#fff':st.color};border-color:${st.color}" onclick="setAttendance('${escapeHtml(s.seat)}','${st.key}')">${st.label}</button>`;
+      }).join('') + `</div>`;
+
+    let noteBlock = '';
+    if(noteOpen){
+      noteBlock = `<input id="attNote" placeholder="ملاحظة (اختياري)" value="${escapeHtml(att&&att.note||'')}" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:9px;font:inherit;text-align:right;margin-top:8px">
         <div style="display:flex;gap:6px;margin-top:8px">
-          <button class="ghost" style="flex:1;padding:8px;color:var(--ok);border-color:var(--ok)" onclick="setAttendance('${escapeHtml(s.seat)}','present')">↩️ حاضر (إزالة الحالة)</button>
-          <button class="ghost" style="flex:1;padding:8px" onclick="closeAttMenu()">إغلاق</button>
+          <button class="ghost" style="flex:1;padding:8px" onclick="closeAttMenu()">حفظ الملاحظة وإغلاق</button>
         </div>`;
     }
+
     html += `<div class="stcard" style="${cardBg}">
       <div class="top">
         <div style="flex:1;min-width:0;text-align:right">
-          <span class="nm" onclick="openAttMenu('${escapeHtml(s.seat)}')">${toArabic(i+1)}. ${escapeHtml(s.name)}</span>
+          <span class="nm" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${toArabic(i+1)}. ${escapeHtml(s.name)}</span>
           <div class="sub" style="overflow-wrap:anywhere;margin-top:3px"><span class="idlink" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${escapeHtml(s.seat)}</span> · ${escapeHtml(classNameByCode(s.classCode)||s.classCode||'—')}${statChip}</div>
           ${noteLine}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;flex:0 0 auto">
+          <button onclick="openAttMenu('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--line);background:#fff;color:#555;border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">📝 ملاحظة</button>
           <button onclick="moveStudentOmr('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--teal-d,#0b5a54);background:#fff;color:var(--teal-d,#0b5a54);border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">↔️ نقل</button>
           <button onclick="delStudent('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--bad);background:#fff;color:var(--bad);border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">🗑 حذف</button>
         </div>
       </div>
-      ${menu}
+      ${attRow}
+      ${noteBlock}
     </div>`;
   });
   host.innerHTML = html;
@@ -2143,7 +2168,7 @@ function effectiveAtt(s){
   }
   return null;
 }
-// فتح/إغلاق قائمة الحضور داخل بطاقة الطالب (دون فقد الموضع)
+// فتح/إغلاق حقل الملاحظة داخل بطاقة الطالب (دون فقد الموضع) — الحالات نفسها ظاهرة دائمًا خارج هذه القائمة
 function openAttMenu(seat){
   state.attMenuSeat = (state.attMenuSeat===seat ? null : seat);
   const y = window.scrollY;
@@ -2208,10 +2233,11 @@ function countStatus(entry, status){ return (entry.events||[]).filter(e=>e.statu
 function commitAttendance(){
   const filter = document.getElementById('stViewClass') ? document.getElementById('stViewClass').value : '';
   const filterCode = parseVKey(filter).classCode;
-  const list = filterCode ? state.students.filter(s=>s.classCode===filterCode) : state.students.slice();
+  if(!filterCode){ alert('اختر الصف أولاً.'); return; }
+  const list = state.students.filter(s=>s.classCode===filterCode);
   if(!list.length){ alert('لا يوجد طلاب لتسجيل حضورهم.'); return; }
   const date = todayStr(), ts = Date.now();
-  let nAbs=0, nLate=0, nPres=0;
+  let nAbs=0, nLate=0, nPres=0, nRun=0, nExc=0;
   list.forEach(s=>{
     const att = state.attendance[s.seat];
     const entry = workEntry(s.classCode, s.seat);
@@ -2223,14 +2249,14 @@ function commitAttendance(){
     else { status = 'present'; note = ''; }
     if(existing){ existing.status=status; existing.note=note; existing.ts=ts; }
     else entry.events.push({ date, ts, status, note });
-    if(status==='absent') nAbs++; else if(status==='late') nLate++; else nPres++;
+    if(status==='absent') nAbs++; else if(status==='late') nLate++; else if(status==='runaway') nRun++; else if(status==='excused') nExc++; else nPres++;
   });
   // تصفير الاختيارات اللحظية فقط (الحالة المحفوظة تبقى ملوّنة من سجل اليوم)
   list.forEach(s=>{ delete state.attendance[s.seat]; });
   renderStudents();
   renderWorkLog();
   saveWorkLogToCloud();
-  alert(`تم التسجيل في سجل الأعمال بتاريخ ${date}:\nحاضر ${toArabic(nPres)} · متأخر ${toArabic(nLate)} · غائب ${toArabic(nAbs)}`);
+  alert(`تم التسجيل في سجل الأعمال بتاريخ ${date}:\nحاضر ${toArabic(nPres)} · متأخر ${toArabic(nLate)} · مستأذن ${toArabic(nExc)} · غائب ${toArabic(nAbs)} · هارب ${toArabic(nRun)}`);
 }
 
 // تصفير الاختيار اللحظي غير المحفوظ بعد ١٥ ساعة (المحفوظ يبقى ملوّناً من سجل اليوم)
@@ -2951,7 +2977,7 @@ function openStudentRecord(seat){
   const vkey = makeVKey(s.classCode, CLS_ACTIVE_SUBJECT);
   const entry = (state.workLog[vkey] && state.workLog[vkey][seat]) || { events:[], exams:{} };
   const cnt = (st)=> (entry.events||[]).filter(e=>e.status===st).length;
-  const nExcused=cnt('excused'), nAbsent=cnt('absent'), nLate=cnt('late');
+  const nExcused=cnt('excused'), nAbsent=cnt('absent'), nLate=cnt('late'), nRunaway=cnt('runaway');
 
   // بطاقة تعريف
   const idCard = '<div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
@@ -2972,10 +2998,11 @@ function openStudentRecord(seat){
     '<div style="font-size:11px;color:var(--muted);margin-top:2px">'+lbl+'</div></div>';
   const behCard = '<div style="background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
     '<div style="text-align:right;font-weight:800;color:var(--ink);margin-bottom:10px">👤 التواجد والسلوك</div>'+
-    '<div style="display:flex;gap:8px">'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
       behBox('🙋',nExcused,'عدد الاستئذانات','#eaf1fb','#2e73cc')+
       behBox('❌',nAbsent,'عدد أيام الغياب','#fbecec','#c0392b')+
       behBox('🕐',nLate,'عدد التأخّرات','#fff5e6','#c9870a')+
+      behBox('🏃',nRunaway,'عدد مرات الهروب','#eeeeee','#2c2c2c')+
     '</div></div>';
 
   // أعمال السنة (٤ صناديق)
@@ -4396,7 +4423,7 @@ function clsApplyTeacherAdd(){
     const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
     ['secManual','secImport'].forEach(id=>{
       const el=document.getElementById(id); if(!el) return;
-      const card=el.closest('.seccard'); if(card) card.style.display = (!exempt && CLS_TEACHER_ADD===false)?'none':'';
+      el.style.display = (!exempt && CLS_TEACHER_ADD===false)?'none':'';
     });
   }catch(e){}
 }

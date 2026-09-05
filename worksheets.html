@@ -108,6 +108,7 @@
     <div class="card">
       <h3 style="margin-top:0">١) رفع الملف</h3>
       <p style="font-size:12px;color:var(--ink-soft);">يقبل: PDF، Word (docx)، أو صورة ممسوحة ضوئيًا (jpg/png)</p>
+      <p style="font-size:12px;color:var(--ink-soft);">ملفات PDF تُحلَّل الآن بالذكاء الاصطناعي (أدق في قراءة النص العربي).</p>
       <input type="file" id="pdfInput" accept="application/pdf,.docx,image/*">
       <p id="pageCountInfo" style="font-size:12px;color:var(--ink-soft);margin-top:6px;"></p>
       <br>
@@ -377,6 +378,9 @@
 
     let exercises = []; // { id, type, rawText, ...structuredData }
     let exCounter = 0;
+
+    // رابط سيرفر التحليل بالذكاء الاصطناعي (Cloudflare Worker) — يُستخدم فقط مع ملفات PDF
+    const AI_WORKER_URL = "https://injaz-worksheets-analyzer.teachermnr.workers.dev";
 
     // ---------- استخراج النص من كل صفحة مع محاولة ترتيب صحيح للعربي RTL ----------
     async function extractLinesFromPage(page) {
@@ -654,8 +658,7 @@
       statusEl.style.color = "var(--ink-soft)";
 
       try {
-        let fullText = "";
-
+        // ---------- مسار PDF: تحليل بالذكاء الاصطناعي (صورة كل صفحة) بدل استخراج النص القديم ----------
         if (kind === "pdf") {
           const arrayBuffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -672,13 +675,60 @@
             return;
           }
 
+          const aiExercises = [];
           for (let i = startPage; i <= endPage; i++) {
+            statusEl.textContent = `جاري تحليل الصفحة ${i} من ${endPage} بالذكاء الاصطناعي...`;
+
             const page = await pdf.getPage(i);
-            const lines = await extractLinesFromPage(page);
-            fullText += lines.join("\n") + "\n";
+            const baseViewport = page.getViewport({ scale: 1 });
+            const scale = 1400 / baseViewport.width; // دقة جيدة لقراءة النص بوضوح
+            const viewport = page.getViewport({ scale });
+
+            const canvas = document.createElement("canvas");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext("2d");
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+            let resp, result;
+            try {
+              resp = await fetch(AI_WORKER_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ image: dataUrl }),
+              });
+              result = await resp.json();
+            } catch (netErr) {
+              throw new Error(`تعذّر الاتصال بسيرفر التحليل عند الصفحة ${i}: ${netErr.message}`);
+            }
+            if (!resp.ok || result.error) {
+              throw new Error(`تعذّر تحليل الصفحة ${i}: ${result.error || resp.statusText}`);
+            }
+
+            (result.exercises || []).forEach((ex) => aiExercises.push(hydrateExercise(ex)));
           }
 
-        } else if (kind === "docx") {
+          exercises = aiExercises;
+
+          if (exercises.length === 0) {
+            statusEl.textContent = "ما قدر الذكاء الاصطناعي يلاقي أي تمارين في الصفحات المحددة.";
+            statusEl.style.color = "var(--bad)";
+            return;
+          }
+
+          statusEl.textContent = `تم استخراج ${exercises.length} تمرين بواسطة الذكاء الاصطناعي من ${endPage - startPage + 1} صفحة. راجعهم تحت.`;
+          statusEl.style.color = "var(--ok)";
+          renderExercises();
+          document.getElementById("reviewCard").style.display = "block";
+          document.getElementById("saveCard").style.display = "block";
+          return; // مسار PDF منفصل تمامًا، لا نكمل لمسار النص القديم تحت
+        }
+
+        // ---------- مسار docx / صورة (OCR): يبقى كما هو، يعتمد على استخراج نص ثم تقسيمه ----------
+        let fullText = "";
+
+        if (kind === "docx") {
           const arrayBuffer = await file.arrayBuffer();
           const result = await mammoth.extractRawText({ arrayBuffer });
           fullText = result.value;

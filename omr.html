@@ -1487,6 +1487,33 @@ function onClStageChange(){
     opts.map(o=>'<option value="'+o+'">'+o+'</option>').join('');
 }
 
+/* ---- رمز دخول الطلاب: حرف المرحلة + رقم تسلسلي يُحرق ولا يُعاد استخدامه بعد الحذف ---- */
+const CLS_STAGE_LETTER = { 'ابتدائية':'P', 'متوسطة':'M', 'ثانوية':'H' };
+let SCHOOL_CODE_CACHE = null;
+async function getSchoolCode(){
+  if(SCHOOL_CODE_CACHE) return SCHOOL_CODE_CACHE;
+  if(!CLS_SESSION || !CLS_SESSION.schoolId) return '';
+  try{
+    const snap = await db.collection('schoolData').doc('schools').get();
+    const list = snap.exists ? (snap.data().list||{}) : {};
+    const sc = list[CLS_SESSION.schoolId];
+    SCHOOL_CODE_CACHE = (sc && sc.code) || '';
+  }catch(e){ SCHOOL_CODE_CACHE = ''; }
+  return SCHOOL_CODE_CACHE;
+}
+// يولّد رمز فصل جديد لمرحلة معيّنة داخل العدّاد المشترك (loginCodeCounters) — لا يُستدعى إلا جوّه mutateSharedRoster
+function nextClassLoginCode(stage, loginCodeCounters){
+  const letter = CLS_STAGE_LETTER[stage] || 'C';
+  loginCodeCounters[letter] = (loginCodeCounters[letter]||0) + 1;
+  return letter + loginCodeCounters[letter];
+}
+// كود الدخول الكامل المعروض للمعلم = رمز المدرسة + رمز الفصل (مثال: S1H1)
+async function fullStudentLoginCode(cl){
+  if(!cl || !cl.loginCode) return '';
+  const schoolCode = await getSchoolCode();
+  return (schoolCode||'') + cl.loginCode;
+}
+
 /* ---- إسناد المواد ---- */
 const CLS_FIXED_SUBJECTS = [
   'القرآن الكريم والتفسير','الكفايات اللغوية','الرياضيات','اللغة الإنجليزية','الأحياء','الكيمياء',
@@ -1563,12 +1590,16 @@ async function addClass(){
   if(!clsGuardAdd()) return;
   const name=(document.getElementById('clName').value||'').trim();
   const code=(document.getElementById('clCode').value||'').trim();
+  const stage=(document.getElementById('clStage').value||'').trim();
   if(!name){ alert('أدخل اسم الصف.'); return; }
   if(!code){ alert('أدخل رمز الصف.'); return; }
   if(state.fullClasses.some(c=>c.code===code)){ alert('رمز الصف مستخدم من قبل. اختر رمزاً غير متكرر.'); return; }
   if(state.fullClasses.some(c=>c.name===name)){ alert('اسم الصف مستخدم من قبل. اختر اسماً غير متكرر.'); return; }
   try{
-    await mutateSharedRoster((classes)=>{ classes.push({ name, code, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null }); });
+    await mutateSharedRoster((classes, students, customSubjects, loginCodeCounters)=>{
+      const loginCode = stage ? nextClassLoginCode(stage, loginCodeCounters) : '';
+      classes.push({ name, code, stage, loginCode, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null });
+    });
   }catch(e){ alert('فشل حفظ الصف: '+e.message); return; }
   document.getElementById('clStage').value=''; onClStageChange();
   document.getElementById('clCode').value='';
@@ -1596,15 +1627,40 @@ async function delClass(code){
   saveWorkLogToCloud();
 }
 function classNameByCode(code){ const c=(state.fullClasses.length?state.fullClasses:state.classes).find(x=>x.code===code); return c? c.name : ''; }
+// توليد رمز دخول رجعي لفصل قديم أُنشئ قبل إضافة هذه الميزة (يطلب المرحلة أولاً)
+async function assignClassStage(code){
+  if(!clsGuardEdit()) return;
+  const stage = prompt('اختر المرحلة لهذا الصف بالضبط كما هي مكتوبة:\nابتدائية\nمتوسطة\nثانوية');
+  if(!stage) return;
+  if(!CLS_STAGE_LETTER[stage.trim()]){ alert('المرحلة غير صحيحة. اكتبها بالضبط: ابتدائية أو متوسطة أو ثانوية.'); return; }
+  try{
+    await mutateSharedRoster((classes, students, customSubjects, loginCodeCounters)=>{
+      const cl = classes.find(c=>c.code===code); if(!cl) return;
+      cl.stage = stage.trim();
+      cl.loginCode = nextClassLoginCode(cl.stage, loginCodeCounters);
+    });
+  }catch(e){ alert('فشل توليد الرمز: '+e.message); return; }
+  renderClasses();
+}
 function renderClasses(){
   const host=document.getElementById('classesHost'); if(!host) return;
   if(!state.classes.length){ host.innerHTML='<div class="empty">لا توجد فصول بعد. أضف فصلاً للبدء.</div>'; return; }
-  let html='<div style="overflow-x:auto"><table><thead><tr><th>الصف</th><th>الرمز</th><th>الطلاب</th><th></th></tr></thead><tbody>';
+  let html='<div style="overflow-x:auto"><table><thead><tr><th>الصف</th><th>الرمز</th><th>رمز دخول الطلاب</th><th>الطلاب</th><th></th></tr></thead><tbody>';
   state.classes.forEach(c=>{
     const cnt=state.students.filter(s=>s.classCode===c.code).length;
-    html+=`<tr><td style="text-align:right;font-weight:600">${escapeHtml(c.name)}</td><td style="font-weight:700">${escapeHtml(c.code)}</td><td>${toArabic(cnt)}</td><td><button class="ghost" style="padding:6px 8px;color:var(--bad)" onclick="delClass('${escapeHtml(c.code)}')">حذف</button></td></tr>`;
+    const loginCell = c.loginCode
+      ? `<span id="loginCode-${escapeHtml(c.code)}" style="font-weight:800;color:var(--ok);letter-spacing:1px;">…</span>`
+      : `<button class="ghost" style="padding:4px 8px;font-size:12px" onclick="assignClassStage('${escapeHtml(c.code)}')">توليد رمز</button>`;
+    html+=`<tr><td style="text-align:right;font-weight:600">${escapeHtml(c.name)}</td><td style="font-weight:700">${escapeHtml(c.code)}</td><td>${loginCell}</td><td>${toArabic(cnt)}</td><td><button class="ghost" style="padding:6px 8px;color:var(--bad)" onclick="delClass('${escapeHtml(c.code)}')">حذف</button></td></tr>`;
   });
-  host.innerHTML=html+'</tbody></table></div>';}
+  host.innerHTML=html+'</tbody></table></div>';
+  // تعبئة رمز الدخول الكامل (رمز المدرسة + رمز الفصل) بشكل غير متزامن لكل صف عنده رمز
+  state.classes.forEach(async c=>{
+    if(!c.loginCode) return;
+    const el = document.getElementById('loginCode-'+c.code);
+    if(el) el.textContent = await fullStudentLoginCode(c);
+  });
+}
 // تحديث كل القوائم المنسدلة التي تعرض الفصول (الطلاب + التصميم)
 function refreshClassDropdowns(){
   const opts = state.classes.map(c=>`<option value="${escapeHtml(c.code)}">${escapeHtml(c.name)} ${escapeHtml(c.code)}</option>`).join('');
@@ -4895,12 +4951,14 @@ async function mutateSharedRoster(mutatorFn){
     const classes = Array.isArray(data.classes) ? data.classes : [];
     const students = Array.isArray(data.students) ? data.students : [];
     const customSubjects = Array.isArray(data.customSubjects) ? data.customSubjects : [];
-    const result = mutatorFn(classes, students, customSubjects); // المُعدِّل يُعدّل المصفوفات في مكانها مباشرة
+    const loginCodeCounters = (data.loginCodeCounters && typeof data.loginCodeCounters==='object') ? data.loginCodeCounters : {};
+    const result = mutatorFn(classes, students, customSubjects, loginCodeCounters); // المُعدِّل يُعدّل المصفوفات في مكانها مباشرة
     tx.set(ref, {
-      value: JSON.stringify({ classes, students, customSubjects, teacherAdd: data.teacherAdd!==false }),
+      value: JSON.stringify({ classes, students, customSubjects, loginCodeCounters, teacherAdd: data.teacherAdd!==false }),
       updatedAt: Date.now(), schoolId: (CLS_SESSION&&CLS_SESSION.schoolId)||null, base:'roster'
     });
     state.fullClasses = classes; state.fullStudents = students; state.customSubjects = customSubjects;
+    state.loginCodeCounters = loginCodeCounters;
     return result;
   });
   recomputeVisibleRoster();

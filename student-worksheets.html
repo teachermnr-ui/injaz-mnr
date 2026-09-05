@@ -133,10 +133,14 @@
       function buildCard(item) {
         const card = document.createElement("div");
         card.className = viewMode === "list" ? "ws-list-row" : "ws-card";
+        const scoreHtml = item.sub && item.sub.totalScore ? `<span style="font-size:11px;color:var(--teal);font-weight:700;margin-top:2px;">${item.sub.totalScore}</span>` : "";
         if (viewMode === "list") {
           card.innerHTML = `
             <span style="font-size:14px;font-weight:500;">${item.w.title}</span>
-            <span class="status-pill status-${item.status}">${statusLabels[item.status]}</span>
+            <span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+              <span class="status-pill status-${item.status}">${statusLabels[item.status]}</span>
+              ${scoreHtml}
+            </span>
           `;
         } else {
           card.innerHTML = `
@@ -144,7 +148,10 @@
               <p style="margin:0;font-weight:700;font-size:15px;">${item.w.title}</p>
               <p style="margin:4px 0 0;font-size:12px;color:var(--muted);">${item.w.unit || ""} ${item.w.lesson ? "— " + item.w.lesson : ""}</p>
             </div>
-            <span class="status-pill status-${item.status}">${statusLabels[item.status]}</span>
+            <span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+              <span class="status-pill status-${item.status}">${statusLabels[item.status]}</span>
+              ${scoreHtml}
+            </span>
           `;
         }
         card.addEventListener("click", () => { window.location.href = `student-solve.html?worksheetId=${item.id}`; });

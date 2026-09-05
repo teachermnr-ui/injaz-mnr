@@ -204,7 +204,7 @@
     <!-- 4) نشر الورقة (يظهر فور الحفظ) -->
     <div class="card" id="publishCard" style="display:none;">
       <h3 style="margin-top:0">٤) نشر الورقة: <span id="publishTitle"></span></h3>
-      <p style="font-size:13px;color:var(--ink-soft);">اختر الفصل/الفصول اللي هتوصلهم الورقة.</p>
+      <p style="font-size:13px;color:var(--ink-soft);">اختر الفصل أو الفصول التي ستصل إليها الورقة.</p>
       <div id="classCheckboxes" style="margin-bottom:12px;"></div>
       <label>تاريخ الاستحقاق (اختياري)</label>
       <input type="date" id="dueDateInput">
@@ -260,7 +260,7 @@
     </div>
     <div class="card" id="pinsListCard" style="display:none;">
       <h3 style="margin-top:0">أكواد طلاب الفصل</h3>
-      <p style="font-size:12px;color:var(--ink-soft);">لو الطالب مالوش كود لسه، بيتولّد له تلقائيًا أول ما تفتح الفصل ده.</p>
+      <p style="font-size:12px;color:var(--ink-soft);">في حال عدم ظهور كود الدخول للطالب، سيتم توليده تلقائيًا فور فتح هذا الفصل.</p>
       <div id="pinsList" style="margin-top:14px;"></div>
     </div>
   </section>
@@ -767,7 +767,7 @@
         });
 
         div.querySelector(`[data-delete="${ex.id}"]`).addEventListener("click", () => {
-          if (confirm("متأكد إنك عايز تحذف التمرين ده؟")) {
+          if (confirm("هل أنت متأكد من رغبتك في حذف هذا التمرين؟")) {
             exercises.splice(idx, 1);
             renderExercises();
           }
@@ -994,7 +994,7 @@
       document.getElementById("saveStatus").textContent = "";
     }
     document.getElementById("cancelWorksheetBtn").addEventListener("click", () => {
-      if (!confirm("هيتم إلغاء كل التمارين المستخرجة والبيانات المدخلة. متابعة؟")) return;
+      if (!confirm("سيتم إلغاء جميع التمارين المستخرجة والبيانات المدخلة. هل ترغب في المتابعة؟")) return;
       resetBuildActivityForm();
     });
 
@@ -1165,7 +1165,7 @@
         statusEl.textContent = "تم نشر الورقة بنجاح — هتظهر للطلاب في الفصول المحددة.";
         statusEl.style.color = "var(--ok)";
 
-        if (confirm("تحب تحفظ نسخة من النشاط ده في بنك الأسئلة الخاص بيك؟")) {
+        if (confirm("هل ترغب في حفظ نسخة من هذا النشاط في بنك الأسئلة الخاص بك؟")) {
           try {
             const wSnap = await getDoc(doc(db, "worksheets", currentPublishId));
             if (wSnap.exists()) {
@@ -1249,7 +1249,7 @@
 
       listEl.querySelectorAll("[data-delete-draft]").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          if (!confirm("متأكد إنك عايز تحذف المسودة دي نهائيًا؟")) return;
+          if (!confirm("هل أنت متأكد من رغبتك في حذف هذه المسودة نهائيًا؟")) return;
           await deleteDoc(doc(db, "worksheets", btn.dataset.deleteDraft));
           await loadDrafts();
         });
@@ -1463,7 +1463,7 @@
 
       listEl.querySelectorAll("[data-delete-bank]").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          if (!confirm("متأكد إنك عايز تحذف الورقة نهائيًا من بنك الأسئلة؟ ده مش هينفع يترجع.")) return;
+          if (!confirm("هل أنت متأكد من رغبتك في حذف هذه الورقة نهائيًا من بنك الأسئلة؟ لا يمكن التراجع عن هذا الإجراء.")) return;
           await deleteDoc(doc(db, "questionBank", btn.dataset.deleteBank));
           await loadBank();
         });
@@ -1501,13 +1501,22 @@
       snap.docs.forEach((d) => {
         const w = d.data();
         const row = document.createElement("div");
-        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);gap:8px;";
+        row.style.cssText = "padding:10px 0;border-bottom:1px solid var(--line);";
         row.innerHTML = `
-          <div style="flex:1;min-width:0;cursor:pointer;" data-open-ws="${d.id}">
-            <p style="margin:0;font-weight:700;font-size:14px;">${w.title}${w.stopped ? ' <span style="font-size:11px;color:var(--bad);">(منتهي)</span>' : ""}</p>
-            <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""}</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <div style="flex:1;min-width:0;cursor:pointer;" data-open-ws="${d.id}">
+              <p style="margin:0;font-weight:700;font-size:14px;">${w.title}${w.stopped ? ' <span style="font-size:11px;color:var(--bad);">(منتهي)</span>' : ""}</p>
+              <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.subject ? w.subject + " — " : ""}${w.grade || ""}</p>
+              <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);">${w.unit || ""} ${w.lesson ? "— " + w.lesson : ""}</p>
+            </div>
+            <button class="btn btn-secondary small-btn" data-toggle-stop="${d.id}" style="white-space:nowrap;">${w.stopped ? "▶️ إعادة النشر" : "⏸️ إيقاف النشر"}</button>
           </div>
-          <button class="btn btn-secondary small-btn" data-toggle-stop="${d.id}" style="white-space:nowrap;">${w.stopped ? "▶️ إعادة نشر" : "⏸️ إيقاف النشر"}</button>
+          <div id="republish-${d.id}" style="display:none;margin-top:10px;padding:10px;background:var(--paper);border-radius:8px;">
+            <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px;">اختر طريقة إعادة النشر:</p>
+            <button class="btn btn-primary small-btn" data-republish-all="${d.id}" style="width:100%;margin-bottom:6px;">إعادة النشر لجميع الطلاب (حذف التسليمات الحالية والبدء من جديد)</button>
+            <button class="btn btn-secondary small-btn" data-republish-late="${d.id}" style="width:100%;margin-bottom:6px;">إعادة النشر للطلاب المتأخرين في التسليم فقط (الإبقاء على التسليمات الحالية)</button>
+            <button class="btn btn-secondary small-btn" data-republish-cancel="${d.id}" style="width:100%;">إلغاء</button>
+          </div>
         `;
         row.querySelector("[data-open-ws]").addEventListener("click", () => selectWorksheetForSubmissions(d.id, w));
         listEl.appendChild(row);
@@ -1521,26 +1530,42 @@
           const w = wDoc.data();
 
           if (!w.stopped) {
-            if (!confirm(`إيقاف نشر «${w.title}»؟ هتفضل ظاهرة للطلاب لكن مايقدروش يسلّموا، ومكتوب عليها "منتهي".`)) return;
+            if (!confirm(`هل ترغب في إيقاف نشر «${w.title}»؟ ستبقى الورقة ظاهرة للطلاب، ولكن لن يتمكنوا من التسليم، وستظهر عليها علامة "منتهي".`)) return;
             await updateDoc(doc(db, "worksheets", wId), { stopped: true });
             await loadWorksheetsForSubmissions();
             return;
           }
 
-          const choice = prompt('إعادة النشر:\n- اكتب "الكل" لإعادة فتحها لكل الطلاب (وحذف تسليماتهم الحالية عشان يبدأوا من جديد)\n- اكتب "متأخرين" لإعادة فتحها بس لمين لسه ما سلّمش (تسليمات الحاليين تفضل زي ما هي)');
-          if (!choice) return;
+          const panel = document.getElementById("republish-" + wId);
+          if (panel) panel.style.display = panel.style.display === "none" ? "block" : "none";
+        });
+      });
 
-          if (choice.trim() === "الكل") {
-            if (!confirm("هيتم حذف كل التسليمات الحالية لهذه الورقة نهائيًا. متابعة؟")) return;
-            const subsSnap = await getDocs(query(collection(db, "submissions"), where("worksheetId", "==", wId)));
-            await Promise.all(subsSnap.docs.map((sd) => deleteDoc(doc(db, "submissions", sd.id))));
-            await updateDoc(doc(db, "worksheets", wId), { stopped: false });
-          } else if (choice.trim() === "متأخرين") {
-            await updateDoc(doc(db, "worksheets", wId), { stopped: false });
-          } else {
-            alert('لازم تكتب "الكل" أو "متأخرين" بالظبط.');
-            return;
-          }
+      listEl.querySelectorAll("[data-republish-cancel]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const panel = document.getElementById("republish-" + btn.dataset.republishCancel);
+          if (panel) panel.style.display = "none";
+        });
+      });
+
+      listEl.querySelectorAll("[data-republish-late]").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const wId = btn.dataset.republishLate;
+          await updateDoc(doc(db, "worksheets", wId), { stopped: false });
+          await loadWorksheetsForSubmissions();
+        });
+      });
+
+      listEl.querySelectorAll("[data-republish-all]").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const wId = btn.dataset.republishAll;
+          if (!confirm("سيتم حذف جميع التسليمات الحالية لهذه الورقة نهائياً. هل ترغب في المتابعة؟")) return;
+          const subsSnap = await getDocs(query(collection(db, "submissions"), where("worksheetId", "==", wId)));
+          await Promise.all(subsSnap.docs.map((sd) => deleteDoc(doc(db, "submissions", sd.id))));
+          await updateDoc(doc(db, "worksheets", wId), { stopped: false });
           await loadWorksheetsForSubmissions();
         });
       });
@@ -1689,7 +1714,7 @@
       if (!el) return;
       const total = (currentWorksheet.exercises || []).reduce((sum, ex) => sum + (manualScores[ex.exerciseId] ?? 0), 0);
       const max = (currentWorksheet.exercises || []).length;
-      el.textContent = `الدرجة الكلية: ${total} من ${max}`;
+      el.textContent = `الدرجة: ${total} / ${max}`;
     }
     function openSubmissionDetail(studentName, sub) {
       currentSubmission = sub;
@@ -1778,7 +1803,7 @@
         await updateDoc(doc(db, "submissions", currentSubmission.id), {
           answers: updatedAnswers,
           status: "corrected",
-          totalScore: `${totalScore} من ${maxScore}`,
+          totalScore: `${totalScore} / ${maxScore}`,
           correctedAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });

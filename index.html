@@ -200,9 +200,9 @@ input,select{font-family:inherit;font-size:15px}
   <div class="auth-card hidden" id="studentLoginCard">
     <div class="brand-mark">ف</div>
     <h1>أوراقي</h1>
-    <p class="auth-sub">أدخل رمز PIN اللي أداك إياه معلمك</p>
+    <p class="auth-sub">أدخل رمز الدخول الذي زوّدك به المعلم</p>
     <div id="studentLoginAlert"></div>
-    <div class="field"><label>رمز PIN</label><input id="stuPin" inputmode="numeric" placeholder="مثال: 482913" style="font-size:20px;text-align:center;letter-spacing:2px;"></div>
+    <div class="field"><label>رمز الدخول</label><input id="stuPin" type="text" autocapitalize="characters" placeholder="مثال: S1482913" style="font-size:20px;text-align:center;letter-spacing:2px;"></div>
     <button class="btn" id="stuLoginBtn">دخول</button>
     <button class="btn" id="backFromStudentBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
   </div>
@@ -430,12 +430,12 @@ $('#backFromStudentBtn').onclick = ()=>{ $('#studentLoginCard').classList.add('h
 $('#stuLoginBtn').onclick = doStudentLogin;
 $('#stuPin').addEventListener('keydown',e=>{ if(e.key==='Enter') doStudentLogin(); });
 async function doStudentLogin(){
-  const pin = $('#stuPin').value.trim();
-  if(!pin){ alertBox('studentLoginAlert','err','اكتب رمز الـ PIN.'); return; }
+  const pin = $('#stuPin').value.trim().toUpperCase();
+  if(!pin){ alertBox('studentLoginAlert','err','يرجى إدخال رمز الدخول.'); return; }
   $('#stuLoginBtn').textContent='جارٍ التحقق…'; $('#stuLoginBtn').disabled=true;
   try{
     const q = await studentPinsCol().where('pin','==',pin).limit(1).get();
-    if(q.empty){ throw new Error('رمز غير صحيح — تأكد منه مع معلمك'); }
+    if(q.empty){ throw new Error('الرمز غير صحيح، يرجى التأكد منه مع المعلم'); }
     const d = q.docs[0], data = d.data();
     const stuSession = { pin, seat:data.seat, name:data.name, schoolId:data.schoolId, classCode:data.classCode };
     localStorage.setItem('stu_session', JSON.stringify(stuSession));

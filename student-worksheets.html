@@ -26,6 +26,7 @@
   .status-in-progress{background:#fdf1d8;color:#97650b;}
   .status-submitted{background:var(--teal-l);color:var(--teal);}
   .status-corrected{background:#e1f5ee;color:var(--ok);}
+  .status-ended{background:#fdecec;color:var(--bad);}
 </style>
 </head>
 <body>
@@ -85,7 +86,8 @@
       "not-started": "لم يبدأ",
       "in-progress": "جاري",
       "submitted": "مُسلّم",
-      "corrected": "مُصحح"
+      "corrected": "مُصحح",
+      "ended": "منتهي"
     };
 
     async function loadWorksheets() {
@@ -119,7 +121,8 @@
       wSnap.docs.forEach((d) => {
         const w = d.data();
         const sub = submissionByWorksheet[d.id];
-        const status = sub ? sub.status : "not-started";
+        let status = sub ? sub.status : "not-started";
+        if (w.stopped && status === "not-started") status = "ended";
         const item = { id: d.id, w, sub, status };
         if (status === "submitted" || status === "corrected") submitted.push(item);
         else pending.push(item);

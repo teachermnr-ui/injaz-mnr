@@ -115,14 +115,21 @@
         where("worksheetId", "==", worksheetId), where("studentId", "==", studentId));
       const sSnap = await getDocs(sq);
 
+      let alreadySubmitted = false;
       if (!sSnap.empty) {
         const sub = sSnap.docs[0].data();
         existingSubmissionId = sSnap.docs[0].id;
         if (sub.status === "submitted" || sub.status === "corrected") {
+          alreadySubmitted = true;
           document.getElementById("alreadyDone").style.display = "block";
           document.getElementById("doneScore").textContent =
             sub.totalScore !== null && sub.totalScore !== undefined ? sub.totalScore : "قيد المراجعة";
         }
+      }
+
+      if (worksheetData.stopped && !alreadySubmitted) {
+        document.getElementById("exercisesWrap").innerHTML = `<div class="card"><p style="font-weight:700;color:var(--bad);">⛔ انتهى استقبال الإجابات لهذه الورقة. كلّم معلمك لو محتاج تسلّم.</p></div>`;
+        return;
       }
 
       renderExercises();
@@ -497,6 +504,7 @@
           : `تم التسليم بنجاح. نتيجتك: ${score}`;
         statusEl.style.color = "var(--ok)";
         document.getElementById("submitBtn").disabled = true;
+        setTimeout(() => { window.location.href = "student-worksheets.html"; }, 1800);
       } catch (err) {
         statusEl.textContent = "حصل خطأ أثناء التسليم: " + err.message;
         statusEl.style.color = "var(--bad)";

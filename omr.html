@@ -274,14 +274,14 @@
   <section id="panel-students" class="panel active">
     <!-- ===== إضافة الفصول والمواد (موحّدة) ===== -->
     <div class="card seccard">
-      <div class="secheader" onclick="toggleSec('secAddAll',this)">
+      <div class="secheader" onclick="openAddClassesModal()">
         <div class="secicon" style="background:#eef0ff">➕</div>
         <div class="sectext"><div class="sectitle">إضافة الفصول والمواد</div><div class="secdesc">إضافة يدوية، استيراد من نور أو ملف جاهز، وإسناد المواد</div></div>
         <div class="secarrow">‹</div>
       </div>
       <div id="secAddAll" class="seccontent" style="display:none">
 
-        <div id="secManual">
+        <div id="secClassAdd">
         <div class="subcard">
           <div class="subtitle">الفصول <span class="sub">أضف الفصول أولاً قبل تسجيل الطلاب</span></div>
           <div class="row" style="margin-bottom:10px">
@@ -299,8 +299,11 @@
           <button class="primary" onclick="addClass()">➕ إضافة الصف</button>
           <div id="classesHost" style="margin-top:12px"><div class="empty">لا توجد فصول بعد. أضف فصلاً للبدء.</div></div>
         </div>
+        </div>
+
+        <div id="secStudentAdd">
         <div class="subcard">
-          <div class="subtitle">إضافة طالب <span class="sub">تسجيل فردي في قاعدة البيانات</span></div>
+          <div class="subtitle">إضافة طالب واحد <span class="sub">تسجيل فردي في قاعدة البيانات</span></div>
           <div class="row" style="margin-bottom:10px">
             <label class="field" style="flex:2">اسم الطالب<input id="stName" placeholder="مثال: محمد نجيب حكمي"></label>
             <label class="field" style="flex:1.4">رقم الهوية<input id="stSeat" inputmode="numeric" placeholder="1061532883"></label>
@@ -310,9 +313,9 @@
         </div>
         </div>
 
-        <div id="secImport">
+        <div id="secExcelImport">
         <div class="subcard">
-          <div class="subtitle">📊 استيراد من ملف Excel (نور) <span class="sub">الأسماء ورقم الهوية بدقّة</span></div>
+          <div class="subtitle">📊 من ملف أو ورقة (Excel من نور) <span class="sub">الأسماء ورقم الهوية بدقّة</span></div>
           <div class="hint" style="background:#eef6f4;border:1px solid var(--teal-l);border-radius:10px;padding:10px;margin-top:4px;line-height:1.9">
             <b>طريقة تصدير الأسماء من نور:</b><br>
             افتح <b>نور</b> ← <b>التقارير</b> ← <b>تقارير أخرى</b> ← <b>كشف بأسماء الطلاب</b> ← <b>تصدير الأسماء بالصف</b> (اختر صيغة Excel).<br>
@@ -321,8 +324,11 @@
           <input id="xlsxFile" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="onXlsxChosen(event)">
           <button class="primary" style="margin-top:10px;background:#0b7a63" onclick="document.getElementById('xlsxFile').click()">📂 اختيار ملف Excel من نور</button>
         </div>
+        </div>
+
+        <div id="secPasteImport">
         <div class="subcard">
-          <div class="subtitle">📋 استيراد نص ملصق <span class="sub">لصق يدوي</span></div>
+          <div class="subtitle">📋 إضافة طلاب متعددين <span class="sub">لصق قائمة أسماء</span></div>
           <div style="margin:4px 0 6px;font-size:12px;color:var(--muted)">الصق الصفوف يدوياً (رقم الهوية ثم الاسم، سطر لكل طالب):</div>
           <textarea id="stBulk" rows="4" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;font-weight:600;color:var(--ink);background:#fcfdfd" placeholder="1061532883&#9;محمد نجيب حكمي&#10;1061532884&#9;أحمد علي"></textarea>
           <label class="field" style="margin-top:10px">الصف الذي ستُضاف إليه الدفعة الملصقة
@@ -1956,6 +1962,52 @@ function toggleCard(id, btn){
   if(btn) btn.textContent = hidden ? '−' : '+';
 }
 // طيّ/فتح البطاقات الرئيسية في تبويب الطلاب (مع تدوير السهم)
+/* ---- نافذة "إضافة الفصول والمواد" المنبثقة (بنفس أسلوب نافذة سجل الطالب) ---- */
+function _modalRow(icon,label,onclick){
+  return `<button style="width:100%;display:flex;justify-content:space-between;align-items:center;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;font:inherit;font-size:14.5px;font-weight:600;cursor:pointer;" onclick="${onclick}">
+    <span>${icon} ${label}</span><span style="color:var(--muted)">‹</span>
+  </button>`;
+}
+function openAddClassesModal(){
+  omrModal(`
+    <div style="text-align:center;font-weight:800;font-size:17px;margin-bottom:16px;">إضافة الفصول والمواد</div>
+    <div id="addClassesModalBody">
+      ${_modalRow('➕','إضافة الفصول والطلاب',"showAddClassesChoice()")}
+      ${_modalRow('📚','إسناد المواد',"mountIntoModal('secSubjects')")}
+    </div>
+  `);
+}
+function showAddClassesChoice(){
+  document.getElementById('addClassesModalBody').innerHTML = `
+    ${_modalRow('🏫','إضافة فصل جديد',"mountIntoModal('secClassAdd')")}
+    ${_modalRow('👤','إضافة طالب واحد',"mountIntoModal('secStudentAdd')")}
+    ${_modalRow('📋','إضافة طلاب متعددين (لصق)',"mountIntoModal('secPasteImport')")}
+    ${_modalRow('📊','من ملف أو ورقة (Excel)',"mountIntoModal('secExcelImport')")}
+    <button style="width:100%;padding:10px;margin-top:6px;background:transparent;border:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;" onclick="openAddClassesModal()">‹ رجوع</button>
+  `;
+}
+function mountIntoModal(sectionId){
+  const restricted = ['secClassAdd','secStudentAdd','secExcelImport','secPasteImport'];
+  const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
+  if(restricted.includes(sectionId) && !exempt && CLS_TEACHER_ADD===false){
+    alert('إضافة الطلاب موقوفة من إدارة المدرسة حالياً.');
+    return;
+  }
+  const el = document.getElementById(sectionId);
+  const body = document.getElementById('addClassesModalBody');
+  body.innerHTML = '';
+  el.style.display = 'block';
+  body.appendChild(el);
+  const backBtn = document.createElement('button');
+  backBtn.style.cssText = 'width:100%;padding:10px;margin-top:10px;background:transparent;border:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;';
+  backBtn.textContent = '‹ رجوع';
+  backBtn.onclick = () => {
+    el.style.display = 'none';
+    document.getElementById('secAddAll').appendChild(el);
+    if(sectionId==='secSubjects') openAddClassesModal(); else showAddClassesChoice();
+  };
+  body.appendChild(backBtn);
+}
 function toggleSec(id, headerEl){
   const el = document.getElementById(id); if(!el) return;
   const hidden = el.style.display==='none';
@@ -2078,18 +2130,19 @@ const ATT_LBL = { present:'حاضر', runaway:'هارب', excused:'مستأذن'
 function attSummaryBar(list){
   const counts = { runaway:0, late:0, excused:0, absent:0, present:0 };
   list.forEach(s=>{ const att=effectiveAtt(s); const st=att?att.status:'present'; if(counts[st]!=null) counts[st]++; else counts.present++; });
+  // من اليمين لليسار: حاضر ثم غائب ثم مستأذن ثم متأخر ثم هارب
   const items = [
-    { key:'runaway', icon:'🏃', bg:'#2c2c2c' },
-    { key:'late',    icon:'⏰', bg:'#f5a623' },
-    { key:'excused', icon:'🙋', bg:'#2f8fe0' },
+    { key:'present', icon:'✅', bg:'#2fae63' },
     { key:'absent',  icon:'🚫', bg:'#e0356b' },
-    { key:'present', icon:'✅', bg:'#2fae63' }
+    { key:'excused', icon:'🙋', bg:'#2f8fe0' },
+    { key:'late',    icon:'⏰', bg:'#f5a623' },
+    { key:'runaway', icon:'🏃', bg:'#2c2c2c' }
   ];
-  return '<div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:10px;padding:14px 4px;margin-bottom:10px;background:#fff;border-radius:14px;border:1px solid var(--line)">' +
+  return '<div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:8px;padding:10px 4px;margin-bottom:10px;background:#fff;border-radius:14px;border:1px solid var(--line)">' +
     items.map(it=>`
-      <div style="display:flex;flex-direction:column;align-items:center;gap:5px;">
-        <div style="width:50px;height:50px;border-radius:50%;background:${it.bg};display:flex;align-items:center;justify-content:center;font-size:21px;">${it.icon}</div>
-        <div style="font-size:12px;font-weight:800;">${toArabic(counts[it.key])} ${ATT_LBL[it.key]}</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div style="width:38px;height:38px;border-radius:50%;background:${it.bg};display:flex;align-items:center;justify-content:center;font-size:16px;">${it.icon}</div>
+        <div style="font-size:10.5px;font-weight:800;">${toArabic(counts[it.key])} ${ATT_LBL[it.key]}</div>
       </div>`).join('') +
     '</div>';
 }
@@ -2106,11 +2159,11 @@ function renderStudents(){
   const attBg = ATT_BG, attLbl = ATT_LBL;
   const statCol = { runaway:'#2c2c2c', excused:'#1a7a4f', late:'#b97400', absent:'#c0392b' };
   const attStatuses = [
-    { key:'runaway', label:'هارب',   color:'#2c2c2c' },
-    { key:'late',    label:'متأخر',  color:'#b97400' },
-    { key:'excused', label:'مستأذن', color:'#1a7a4f' },
+    { key:'present', label:'حاضر',   color:'#1a9e5c' },
     { key:'absent',  label:'غائب',   color:'#c0392b' },
-    { key:'present', label:'حاضر',   color:'#1a9e5c' }
+    { key:'excused', label:'مستأذن', color:'#1a7a4f' },
+    { key:'late',    label:'متأخر',  color:'#b97400' },
+    { key:'runaway', label:'هارب',   color:'#2c2c2c' }
   ];
   let html = attSummaryBar(list);
   list.forEach((s,i)=>{
@@ -2227,6 +2280,16 @@ function workEntry(classCode, seat){
   return state.workLog[vkey][seat];
 }
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; }
+// اليوم + التاريخ الميلادي والهجري معاً — تُستخدم في رأس كل صفحة
+function headerDateStr(){
+  try{
+    const d = new Date();
+    const wd = new Intl.DateTimeFormat('ar-SA',{weekday:'long'}).format(d);
+    const g  = new Intl.DateTimeFormat('ar-SA-u-ca-gregory',{day:'numeric',month:'long',year:'numeric'}).format(d);
+    const h  = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{day:'numeric',month:'long',year:'numeric'}).format(d);
+    return `${wd}<br>${g}م<br>${h}هـ`;
+  }catch(e){ return ''; }
+}
 function countStatus(entry, status){ return (entry.events||[]).filter(e=>e.status===status).length; }
 
 // الحفظ في سجل الأعمال: يسجّل حالة كل طلاب العرض الحالي بتاريخ اليوم (غير المحدَّد = حاضر)
@@ -3051,6 +3114,10 @@ async function srSendNote(seat, classCode){
   try{
     const admins=await omrResolveClassAdmins(classCode);
     const info = admins && admins.length ? admins : [];
+    if(!info.length){
+      alert('لا يوجد وكيل/موجه/مساعد إداري مُسنَد لهذا الفصل حالياً — ما فيش مستقبل تتبعتله الملاحظة. اكتب الملاحظة كتذكير شخصي بدلاً من ذلك، أو راجع الأدمن ليُسنِد مستلماً للفصل.');
+      return;
+    }
     await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
       fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
       recipients:info.map(r=>r.userId), recipientsInfo:info, scope:'student',
@@ -4282,7 +4349,10 @@ let CLS_SESSION = null, CLS_NS = '', CLS_TEACHER_ADD = true, CLS_OMR_PERM = {vie
   document.addEventListener('DOMContentLoaded', function(){
     var bar = document.createElement('div');
     bar.style.cssText = 'background:#0b5a54;color:#fff;padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px';
-    bar.innerHTML = '<div style="font-weight:800;font-size:14.5px;line-height:1.35;word-break:break-word">'+ escapeHtml(CLS_SESSION.username||'') +'</div>'+
+    bar.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
+        '<div style="font-weight:800;font-size:14.5px;line-height:1.35;word-break:break-word">'+ escapeHtml(CLS_SESSION.username||'') +'</div>'+
+        '<div style="font-size:10.5px;opacity:.85;white-space:nowrap;text-align:left">'+ headerDateStr() +'</div>'+
+      '</div>'+
       '<div style="display:flex;align-items:center;gap:8px">'+
         '<a href="index.html" style="background:rgba(255,255,255,.18);color:#fff;text-decoration:none;padding:5px 13px;border-radius:9px;font-weight:700;font-size:12.5px;white-space:nowrap">🏠 الرئيسية</a>'+
         '<span style="background:rgba(255,255,255,.14);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:500;white-space:nowrap">'+(CLS_SESSION.period==='second'?'الفترة الثانية':'الفترة الأولى')+'</span>'+
@@ -4421,7 +4491,7 @@ async function clsLoadTeacherAdd(){
 function clsApplyTeacherAdd(){
   try{
     const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
-    ['secManual','secImport'].forEach(id=>{
+    ['secClassAdd','secStudentAdd','secExcelImport','secPasteImport'].forEach(id=>{
       const el=document.getElementById(id); if(!el) return;
       el.style.display = (!exempt && CLS_TEACHER_ADD===false)?'none':'';
     });

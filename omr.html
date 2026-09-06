@@ -273,7 +273,7 @@
   <!-- ================= STUDENTS ================= -->
   <section id="panel-students" class="panel active">
     <!-- ===== إضافة الفصول والمواد (موحّدة) ===== -->
-    <div class="card seccard">
+    <div class="card seccard" id="addClassesSecCard">
       <div class="secheader" onclick="openAddClassesModal()">
         <div class="secicon" style="background:#eef0ff">➕</div>
         <div class="sectext"><div class="sectitle">إضافة الفصول والمواد</div><div class="secdesc">إضافة يدوية، استيراد من نور أو ملف جاهز، وإسناد المواد</div></div>
@@ -2063,7 +2063,7 @@ function showAddClassesChoice(){
   `;
 }
 function mountIntoModal(sectionId){
-  const restricted = ['secClassAdd','secStudentAdd','secExcelImport','secPasteImport'];
+  const restricted = ['secClassAdd','secStudentAdd','secExcelImport','secPasteImport','secSubjects'];
   const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
   if(restricted.includes(sectionId) && !exempt && !CLS_CAN_ADD_MANAGE){
     alert('إضافة الفصول والطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.');
@@ -4573,10 +4573,12 @@ async function cloudGet(collection, docId){
   if(!snap.exists) return null;
   try{ return JSON.parse(snap.data().value); }catch(e){ return null; }
 }
-/* إخفاء بطاقات الإضافة عن المعلم غير المفوَّض (يظل ظاهرًا لمدير النظام/مدير المدرسة/المفوَّض بالإضافة) */
+/* إخفاء بطاقة «إضافة الفصول والمواد» بالكامل عن المعلم غير المفوَّض (يظل ظاهرًا لمدير النظام/مدير المدرسة/المفوَّض بالإضافة) */
 function clsApplyAddManage(){
   try{
     const allowed = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin'||CLS_CAN_ADD_MANAGE);
+    const mainCard = document.getElementById('addClassesSecCard');
+    if(mainCard) mainCard.style.display = allowed?'':'none';
     ['secClassAdd','secStudentAdd','secExcelImport','secPasteImport'].forEach(id=>{
       const el=document.getElementById(id); if(!el) return;
       el.style.display = allowed?'':'none';

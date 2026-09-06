@@ -50,7 +50,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import {
-      getFirestore, collection, query, where, getDocs, doc, getDoc
+      getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     /* إعدادات مشروع Firebase الموحّد — نفس مفاتيح worksheets.html/index.html */
@@ -65,14 +65,14 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    /* جلسة الطالب (PIN) */
+    /* جلسة الطالب (حساب بريد مربوط برقم الهوية) */
     let STU = null;
     try { STU = JSON.parse(localStorage.getItem('stu_session') || 'null'); } catch (e) { STU = null; }
 
-    if (!STU || !STU.pin) {
+    if (!STU || !STU.seat || !STU.googleUid) {
       document.getElementById("notLoggedIn").style.display = "block";
     } else {
-      document.getElementById("studentNameLabel").textContent = STU.name;
+      document.getElementById("studentNameLabel").textContent = STU.name || "";
       document.getElementById("stuLogoutBtn").style.display = "inline-block";
       loadWorksheets();
     }
@@ -90,6 +90,72 @@
       "ended": "منتهي"
     };
 
+    /* يجلب كل الروسترات التي يظهر فيها رقم هوية الطالب، ويفصل بين:
+       - المعتمدة: مدارس (تلقائية) + معلمون فرديون سبق للطالب تأكيدهم برمز الفصل
+       - المعلّقة: معلمون فرديون أضافوه ولم يؤكدهم بعد (تُعرض كدعوات) */
+    async function resolveMemberships() {
+      const idxSnap = await getDocs(query(
+        collection(db, "rosterIndex"),
+        where("seatList", "array-contains", String(STU.seat))
+      ));
+      const accSnap = await getDoc(doc(db, "studentAccounts", STU.accountId));
+      const linked = (accSnap.exists() ? (accSnap.data().linkedRosters || []) : []).map(String);
+
+      const approved = [];   // {rosterId, kind, classCodes}
+      const invites = [];    // {rosterId, ownerName, classNames}
+      idxSnap.docs.forEach((d) => {
+        const r = d.data();
+        const classCodes = (r.classBySeat || {})[String(STU.seat)] || [];
+        if (!classCodes.length) return;
+        if (r.kind === "solo" && !linked.includes(String(r.rosterId))) {
+          invites.push({
+            rosterId: r.rosterId, ownerName: r.ownerName || "معلم",
+            classNames: classCodes.map(cc => ((r.classMeta || {})[cc] || {}).name || cc)
+          });
+        } else {
+          approved.push({ rosterId: r.rosterId, kind: r.kind, classCodes });
+        }
+      });
+      return { approved, invites, linked };
+    }
+
+    /* دعوة من معلم فردي: يؤكدها الطالب بإدخال رمز الفصل المدموج */
+    function renderInvites(invites, wrap) {
+      invites.forEach((inv) => {
+        const box = document.createElement("div");
+        box.className = "card";
+        box.style.cssText = "border:1.5px solid var(--teal);margin-bottom:12px;";
+        box.innerHTML = `
+          <p style="margin:0 0 4px;font-weight:700;font-size:14px;">أضافك المعلم: ${inv.ownerName}</p>
+          <p style="margin:0 0 10px;font-size:13px;color:var(--muted);">الفصول: ${inv.classNames.join("، ")}</p>
+          <p style="margin:0 0 8px;font-size:12px;color:var(--muted);">أدخل رمز الفصل الذي زوّدك به المعلم لعرض أنشطته.</p>
+          <input class="inv-code" placeholder="مثال: T1H1" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:9px;font:inherit;text-align:center;letter-spacing:2px;text-transform:uppercase;">
+          <button class="btn inv-btn" style="margin-top:8px;">تأكيد</button>
+          <p class="inv-msg" style="margin:8px 0 0;font-size:12px;color:var(--bad,#c0392b);"></p>
+        `;
+        wrap.appendChild(box);
+        box.querySelector(".inv-btn").addEventListener("click", async () => {
+          const msg = box.querySelector(".inv-msg");
+          const code = box.querySelector(".inv-code").value.trim().toUpperCase();
+          if (!code) { msg.textContent = "أدخل رمز الفصل."; return; }
+          try {
+            const rSnap = await getDoc(doc(db, "rosterIndex", inv.rosterId));
+            const r = rSnap.exists() ? rSnap.data() : {};
+            const mine = (r.classBySeat || {})[String(STU.seat)] || [];
+            const ok = mine.some(cc => {
+              const lc = ((r.classMeta || {})[cc] || {}).loginCode;
+              return lc && String(lc).toUpperCase() === code;
+            });
+            if (!ok) { msg.textContent = "الرمز لا يطابق فصلك لدى هذا المعلم."; return; }
+            await updateDoc(doc(db, "studentAccounts", STU.accountId), {
+              linkedRosters: arrayUnion(String(inv.rosterId)), updatedAt: Date.now()
+            });
+            loadWorksheets();
+          } catch (e) { msg.textContent = "تعذّر التأكيد: " + e.message; }
+        });
+      });
+    }
+
     async function loadWorksheets() {
       const wrap = document.getElementById("worksheetsWrap");
       wrap.innerHTML = `<p style="font-size:13px;color:var(--muted);">جاري التحميل...</p>`;
@@ -97,28 +163,55 @@
       const settingSnap = await getDoc(doc(db, "settings", "display"));
       const viewMode = settingSnap.exists() ? settingSnap.data().worksheetView : "cards";
 
-      const wq = query(
-        collection(db, "worksheets"),
-        where("schoolId", "==", STU.schoolId),
-        where("status", "==", "published"),
-        where("assignedClassIds", "array-contains", STU.classCode)
-      );
-      const wSnap = await getDocs(wq);
+      const { approved, invites } = await resolveMemberships();
 
-      const sq = query(collection(db, "submissions"), where("studentId", "==", STU.seat));
+      // كل أكواد الفصول المعتمدة عبر جميع المعلمين والمدارس
+      const myClassCodes = [...new Set(approved.flatMap(a => a.classCodes.map(String)))];
+
+      wrap.innerHTML = "";
+      if (invites.length) renderInvites(invites, wrap);
+
+      if (!myClassCodes.length) {
+        const p = document.createElement("div");
+        p.className = "card";
+        p.innerHTML = `<p style="font-size:13px;color:var(--muted);">لا توجد أنشطة متاحة لك حالياً.</p>`;
+        wrap.appendChild(p);
+        return;
+      }
+
+      // Firestore يسمح بـ 30 قيمة كحد أقصى في array-contains-any — نقسّم على دفعات
+      const wDocs = [];
+      for (let i = 0; i < myClassCodes.length; i += 30) {
+        const chunk = myClassCodes.slice(i, i + 30);
+        const wq = query(
+          collection(db, "worksheets"),
+          where("status", "==", "published"),
+          where("assignedClassIds", "array-contains-any", chunk)
+        );
+        const s = await getDocs(wq);
+        s.docs.forEach(d => wDocs.push(d));
+      }
+      // إزالة التكرار (نشاط مسند لأكثر من فصل يخص الطالب)
+      const seen = new Set();
+      const uniqueDocs = wDocs.filter(d => (seen.has(d.id) ? false : (seen.add(d.id), true)));
+
+      const sq = query(collection(db, "submissions"), where("studentId", "==", String(STU.seat)));
       const sSnap = await getDocs(sq);
       const submissionByWorksheet = {};
       sSnap.docs.forEach((d) => { submissionByWorksheet[d.data().worksheetId] = { id: d.id, ...d.data() }; });
 
-      if (wSnap.empty) {
-        wrap.innerHTML = `<div class="card"><p style="font-size:13px;color:var(--muted);">مفيش أوراق متاحة لك حاليًا.</p></div>`;
+      if (!uniqueDocs.length) {
+        const p = document.createElement("div");
+        p.className = "card";
+        p.innerHTML = `<p style="font-size:13px;color:var(--muted);">لا توجد أنشطة متاحة لك حالياً.</p>`;
+        wrap.appendChild(p);
         return;
       }
 
-      // تقسيم: أنشطة لسه ما اتسلمتش (تتجمّع حسب المادة والمعلم) + أنشطة مُسلّمة (قائمة واحدة أسفل الصفحة)
+      // تقسيم: أنشطة لم تُسلَّم بعد (تتجمّع حسب المادة والمعلم) + أنشطة مُسلّمة (قائمة واحدة أسفل الصفحة)
       const pending = [];
       const submitted = [];
-      wSnap.docs.forEach((d) => {
+      uniqueDocs.forEach((d) => {
         const w = d.data();
         const sub = submissionByWorksheet[d.id];
         let status = sub ? sub.status : "not-started";

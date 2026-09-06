@@ -213,10 +213,15 @@ input,select{font-family:inherit;font-size:15px}
   <div class="auth-card hidden" id="studentLoginCard">
     <div class="brand-mark">ف</div>
     <h1>أوراقي</h1>
-    <p class="auth-sub">أدخل رمز الدخول الذي زوّدك به المعلم</p>
+    <p class="auth-sub">سجّل الدخول بحسابك، وستُطلب هويتك ورمز الفصل في المرة الأولى فقط</p>
     <div id="studentLoginAlert"></div>
-    <div class="field"><label>رمز الدخول</label><input id="stuPin" type="text" autocapitalize="characters" placeholder="مثال: S1482913" style="font-size:20px;text-align:center;letter-spacing:2px;"></div>
-    <button class="btn" id="stuLoginBtn">دخول</button>
+    <button class="btn" id="stuGoogleBtn">الدخول بحساب Google</button>
+    <div id="stuVerifyBox" class="hidden" style="margin-top:14px;text-align:right;">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">لتفعيل حسابك لأول مرة، أدخل رقم هويتك ورمز الفصل الذي زوّدك به معلمك.</p>
+      <div class="field"><label>رقم الهوية</label><input id="stuSeat" inputmode="numeric" placeholder="رقم الهوية"></div>
+      <div class="field"><label>رمز الفصل</label><input id="stuClassCode" autocapitalize="characters" placeholder="مثال: S1H1" style="text-align:center;letter-spacing:2px;"></div>
+      <button class="btn" id="stuVerifyBtn">تفعيل الحساب</button>
+    </div>
     <button class="btn" id="backFromStudentBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
   </div>
 
@@ -405,7 +410,7 @@ async function boot(){
   try{
     // جلسة طالب محفوظة؟ نحوّله لصفحته مباشرة بدون ما نحمّل بيانات الإدارة
     const stuSaved = JSON.parse(localStorage.getItem('stu_session')||'null');
-    if(stuSaved && stuSaved.pin){ window.location.href='student-worksheets.html'; return; }
+    if(stuSaved && stuSaved.seat && stuSaved.googleUid){ window.location.href='student-worksheets.html'; return; }
 
     await ensureSeed();
     await loadSchools();
@@ -452,21 +457,95 @@ $('#roleStudentBtn').onclick = ()=>{ $('#roleChoiceCard').classList.add('hidden'
 $('#backFromStaffBtn').onclick = ()=>{ $('#staffLoginCard').classList.add('hidden'); $('#roleChoiceCard').classList.remove('hidden'); };
 $('#backFromStudentBtn').onclick = ()=>{ $('#studentLoginCard').classList.add('hidden'); $('#roleChoiceCard').classList.remove('hidden'); };
 
-$('#stuLoginBtn').onclick = doStudentLogin;
-$('#stuPin').addEventListener('keydown',e=>{ if(e.key==='Enter') doStudentLogin(); });
-async function doStudentLogin(){
-  const pin = $('#stuPin').value.trim().toUpperCase();
-  if(!pin){ alertBox('studentLoginAlert','err','يرجى إدخال رمز الدخول.'); return; }
-  $('#stuLoginBtn').textContent='جارٍ التحقق…'; $('#stuLoginBtn').disabled=true;
+/* ========================================================================
+   دخول الطالب: تسجيل بالبريد مرة واحدة + تحقّق بالهوية ورمز الفصل مرة واحدة
+   ======================================================================== */
+let STU_PENDING_GOOGLE = null;   // بيانات حساب Google بانتظار التحقق من الهوية
+const studentAccountsCol = ()=>db.collection('studentAccounts');
+const rosterIndexCol = ()=>db.collection('rosterIndex');
+
+$('#stuGoogleBtn').onclick = doStudentGoogleLogin;
+$('#stuVerifyBtn').onclick = doStudentVerify;
+$('#stuClassCode').addEventListener('keydown',e=>{ if(e.key==='Enter') doStudentVerify(); });
+
+async function doStudentGoogleLogin(){
+  const btn = $('#stuGoogleBtn');
+  btn.textContent='جارٍ الدخول…'; btn.disabled=true;
   try{
-    const q = await studentPinsCol().where('pin','==',pin).limit(1).get();
-    if(q.empty){ throw new Error('الرمز غير صحيح، يرجى التأكد منه مع المعلم'); }
-    const d = q.docs[0], data = d.data();
-    const stuSession = { pin, seat:data.seat, name:data.name, schoolId:data.schoolId, classCode:data.classCode };
-    localStorage.setItem('stu_session', JSON.stringify(stuSession));
+    if(!firebase.auth) throw new Error('خدمة المصادقة غير متاحة. تأكد من الاتصال بالإنترنت.');
+    const res = await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    const gUser = res.user;
+    if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
+
+    const q = await studentAccountsCol().where('googleUid','==',gUser.uid).limit(1).get();
+    if(!q.empty){
+      const data = q.docs[0].data();
+      localStorage.setItem('stu_session', JSON.stringify({
+        accountId: q.docs[0].id, googleUid: gUser.uid, email: gUser.email,
+        seat: data.seat, name: data.name || gUser.displayName || ''
+      }));
+      window.location.href='student-worksheets.html';
+      return;
+    }
+    // حساب جديد: نطلب التحقق من الهوية
+    STU_PENDING_GOOGLE = { uid:gUser.uid, email:gUser.email, name:gUser.displayName||'' };
+    $('#stuGoogleBtn').classList.add('hidden');
+    $('#stuVerifyBox').classList.remove('hidden');
+    alertBox('studentLoginAlert','','');
+  }catch(e){
+    let msg = e.message||'';
+    if(e.code==='auth/operation-not-allowed') msg='دخول Google غير مُفعّل بعد في إعدادات Firebase.';
+    if(e.code==='auth/popup-closed-by-user') msg='أُغلقت نافذة الدخول قبل إتمامها.';
+    alertBox('studentLoginAlert','err',msg);
+    try{ firebase.auth().signOut(); }catch(_){}
+  }finally{ btn.textContent='الدخول بحساب Google'; btn.disabled=false; }
+}
+
+async function doStudentVerify(){
+  const seat = $('#stuSeat').value.trim();
+  const code = $('#stuClassCode').value.trim().toUpperCase();
+  if(!seat || !code){ alertBox('studentLoginAlert','err','أدخل رقم الهوية ورمز الفصل.'); return; }
+  if(!STU_PENDING_GOOGLE){ alertBox('studentLoginAlert','err','انتهت الجلسة، أعد الدخول بحساب Google.'); return; }
+  const btn = $('#stuVerifyBtn');
+  btn.textContent='جارٍ التحقق…'; btn.disabled=true;
+  try{
+    // ابحث عن الروسترات التي تحتوي رقم الهوية هذا
+    const snap = await rosterIndexCol().where('seatList','array-contains',seat).get();
+    if(snap.empty) throw new Error('رقم الهوية غير مسجّل لدى أي معلم. تأكد منه مع معلمك.');
+
+    // تحقّق أن رمز الفصل المُدخل يخص فصلاً هذا الطالب مسجَّل فيه فعلاً
+    let matched = null;
+    snap.docs.forEach(d=>{
+      const r = d.data();
+      const myClasses = (r.classBySeat||{})[seat] || [];
+      myClasses.forEach(cc=>{
+        const meta = (r.classMeta||{})[cc];
+        if(meta && meta.loginCode && String(meta.loginCode).toUpperCase() === code) matched = { rosterId:r.rosterId, classCode:cc };
+      });
+    });
+    if(!matched) throw new Error('رمز الفصل لا يطابق أي فصل أنت مسجَّل فيه. تأكد منه مع معلمك.');
+
+    // رقم الهوية لا يُربط إلا بحساب واحد — زملاء الفصل يعرفون نفس الرمز، فالرمز وحده ليس إثبات هوية
+    const taken = await studentAccountsCol().where('seat','==',seat).limit(1).get();
+    if(!taken.empty){
+      throw new Error('رقم الهوية هذا مرتبط بحساب آخر بالفعل. إن كان حسابك، سجّل الدخول بالبريد نفسه، وإلا راجع معلمك.');
+    }
+
+    const now = Date.now();
+    const payload = {
+      googleUid: STU_PENDING_GOOGLE.uid, email: STU_PENDING_GOOGLE.email,
+      name: STU_PENDING_GOOGLE.name, seat,
+      linkedRosters: [matched.rosterId],   // النسخة الفردية تحتاج تأكيداً لكل معلم على حدة
+      verifiedAt: now, updatedAt: now
+    };
+    const ref = await studentAccountsCol().add(payload);
+    localStorage.setItem('stu_session', JSON.stringify({
+      accountId: ref.id, googleUid: payload.googleUid, email: payload.email,
+      seat, name: payload.name
+    }));
     window.location.href='student-worksheets.html';
   }catch(e){ alertBox('studentLoginAlert','err',e.message); }
-  finally{ $('#stuLoginBtn').textContent='دخول'; $('#stuLoginBtn').disabled=false; }
+  finally{ btn.textContent='تفعيل الحساب'; btn.disabled=false; }
 }
 
 /* ========================================================================
@@ -1094,12 +1173,31 @@ function renderSettings(c){
     </div>
 
     <div class="card" style="border-color:#F3D6D4">
-      <div class="set-block"><h3 style="color:var(--danger-d)">مسح جميع البيانات</h3>
-        <p>يحذف كل المدارس والمستخدمين (عدا حسابك كأدمن). لا يمكن التراجع.</p></div>
-      <button class="btn danger sm" id="wipeBtn">مسح جميع البيانات</button>
+      <div class="set-block"><h3 style="color:var(--danger-d)">مسح البيانات</h3>
+        <p>حذف نهائي لا يمكن التراجع عنه. المعلمون الفرديون لا يتأثرون بأي من الخيارين — يُدارون بالإيقاف والتفعيل فقط، ولكل منهم تنظيف ملفه بنفسه.</p></div>
+      <div class="field" style="margin-bottom:10px">
+        <label>نطاق المسح</label>
+        <select id="wipeScope">
+          <option value="all">شامل لكل النظام (عدا المعلمين الفرديين)</option>
+          <option value="school">مدرسة محددة فقط</option>
+        </select>
+      </div>
+      <div class="field hidden" id="wipeSchoolField" style="margin-bottom:10px">
+        <label>اختر المدرسة</label>
+        <select id="wipeSchoolId"></select>
+      </div>
+      <button class="btn danger sm" id="wipeBtn">تنفيذ المسح</button>
     </div>`;
   $('#addSchoolBtn').onclick=()=>openSchoolModal(null);
-  $('#wipeBtn').onclick=wipeAll;
+  $('#wipeScope').onchange=()=>{
+    const isSchool = $('#wipeScope').value==='school';
+    $('#wipeSchoolField').classList.toggle('hidden', !isSchool);
+    if(isSchool){
+      $('#wipeSchoolId').innerHTML = Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`).join('')
+        || '<option value="">— لا توجد مدارس —</option>';
+    }
+  };
+  $('#wipeBtn').onclick=wipeData;
   renderSchoolsList();
 }
 function renderSchoolsList(){
@@ -1159,16 +1257,58 @@ function deleteSchool(id,name){
     catch(e){ toast('خطأ: '+e.message); }
   },true);
 }
-function wipeAll(){
-  confirmModal('مسح جميع البيانات','اكتب «تصفير» للتأكيد. سيُحذف كل شيء عدا حسابك.',async(val)=>{
+/* حذف مستندات مجموعة حسب شرط، على دفعات آمنة */
+async function wipeQuery(colName, field, op, val){
+  let n = 0;
+  const snap = field ? await db.collection(colName).where(field,op,val).get() : await db.collection(colName).get();
+  const docs = snap.docs;
+  for(let i=0;i<docs.length;i+=400){
+    const batch = db.batch();
+    docs.slice(i,i+400).forEach(d=>{ batch.delete(d.ref); n++; });
+    await batch.commit();
+  }
+  return n;
+}
+function wipeData(){
+  const scope = $('#wipeScope').value;
+  const schoolId = $('#wipeSchoolId') ? $('#wipeSchoolId').value : '';
+  if(scope==='school' && !schoolId){ toast('اختر المدرسة أولاً'); return; }
+  const title = scope==='all' ? 'مسح شامل لكل النظام' : ('مسح بيانات: '+((SCHOOLS[schoolId]||{}).name||''));
+  const msg = scope==='all'
+    ? 'سيُحذف كل المدارس والمستخدمين وبياناتهم (عدا حسابك والمعلمين الفرديين وبياناتهم). اكتب «تصفير» للتأكيد.'
+    : 'سيُحذف هذه المدرسة ومستخدموها وفصولها وطلابها وكل بياناتها. اكتب «تصفير» للتأكيد.';
+  confirmModal(title, msg, async(val)=>{
     if(val!=='تصفير'){ toast('لم تتم الكتابة بشكل صحيح'); return; }
     try{
-      const snap=await usersCol().get();
-      const batch=db.batch();
-      snap.docs.forEach(d=>{ if(d.id!==CURRENT.id) batch.delete(d.ref); });
-      await batch.commit();
-      SCHOOLS={}; await schoolsDoc().set({list:{}});
-      toast('تم مسح البيانات'); renderSettings($('#content'));
+      if(scope==='all'){
+        // المستخدمون: عدا حسابي وعدا المعلمين الفرديين
+        const uSnap = await usersCol().get();
+        const uDocs = uSnap.docs.filter(d=>d.id!==CURRENT.id && d.data().role!=='soloTeacher');
+        for(let i=0;i<uDocs.length;i+=400){
+          const b = db.batch(); uDocs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit();
+        }
+        // روستر وفهارس المدارس فقط — ملفات المعلمين الفرديين (roster_solo_*) تبقى كما هي
+        const sdSnap = await db.collection('schoolData').get();
+        const sdDocs = sdSnap.docs.filter(d=>d.id.startsWith('roster_') && !d.id.startsWith('roster_solo_'));
+        for(let i=0;i<sdDocs.length;i+=400){
+          const b = db.batch(); sdDocs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit();
+        }
+        const riSnap = await db.collection('rosterIndex').get();
+        const riDocs = riSnap.docs.filter(d=>(d.data().kind||'school')!=='solo');
+        for(let i=0;i<riDocs.length;i+=400){
+          const b = db.batch(); riDocs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit();
+        }
+        SCHOOLS={}; await schoolsDoc().set({list:{}});
+      } else {
+        await wipeQuery('users','schoolId','==',schoolId);
+        try{ await rosterDoc(schoolId).delete(); }catch(e){}
+        try{ await db.collection('rosterIndex').doc(schoolId).delete(); }catch(e){}
+        for(const col of ['worksheets','submissions','notes','exams','results','transferRequests','studentPins']){
+          try{ await wipeQuery(col,'schoolId','==',schoolId); }catch(e){}
+        }
+        delete SCHOOLS[schoolId]; await schoolsDoc().set({list:SCHOOLS});
+      }
+      toast('تم المسح'); renderSettings($('#content'));
     }catch(e){ toast('خطأ: '+e.message); }
   },true,true);
 }

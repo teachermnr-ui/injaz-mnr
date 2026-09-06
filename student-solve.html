@@ -87,7 +87,7 @@
 
     let STU = null;
     try { STU = JSON.parse(localStorage.getItem('stu_session') || 'null'); } catch (e) { STU = null; }
-    const studentId = STU ? STU.seat : null; // رقم الهوية — نفس مفتاح الطالب في روستر omr
+    const studentId = STU && STU.seat ? String(STU.seat) : null; // رقم الهوية — نفس مفتاح الطالب في روستر omr
 
     const params = new URLSearchParams(window.location.search);
     const worksheetId = params.get("worksheetId");

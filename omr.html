@@ -1628,7 +1628,7 @@ async function delClass(code){
     await mutateSharedRoster((classes, students)=>{
       const idx = classes.findIndex(c=>c.code===code);
       if(idx>=0) classes.splice(idx,1);
-      for(let i=students.length-1;i>=0;i--){ if(students[i].classCode===code) students.splice(i,1); }
+      for(let i=students.length-1;i>=0;i--){ if(students[i].classCode===code){ students[i].deleted=true; students[i].deletedAt=Date.now(); } }
     });
   }catch(e){ alert('فشل حذف الصف: '+e.message); return; }
   refreshClassDropdowns(); renderClasses(); renderStudents(); renderWorkLog();
@@ -2022,11 +2022,11 @@ async function confirmImport(){
 }
 async function delStudent(seat){
   if(!clsGuardDel()) return;
-  if(!confirm('حذف هذا الطالب؟')) return;
+  if(!confirm('حذف هذا الطالب؟ سيختفي من جميع الشاشات والسجلات والتقارير ويتوقف دخوله فوراً، مع الاحتفاظ ببياناته في قاعدة البيانات.')) return;
   try{
     await mutateSharedRoster((classes, students)=>{
-      const idx = students.findIndex(s=>s.seat===seat);
-      if(idx>=0) students.splice(idx,1);
+      const st = students.find(s=>s.seat===seat);
+      if(st){ st.deleted = true; st.deletedAt = Date.now(); }
     });
   }catch(e){ alert('فشل الحذف: '+e.message); return; }
   delete state.selectedStudents[seat];
@@ -2286,7 +2286,7 @@ function renderStudents(){
     html += `<div class="stcard" style="${cardBg}">
       <div class="top">
         <div style="flex:1;min-width:0;text-align:right">
-          <span class="nm" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${toArabic(i+1)}. ${escapeHtml(s.name)}</span>
+          <span class="nm" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${toArabic(i+1)}. ${escapeHtml(s.name)}</span>${CLS_ACTIVATED_SEATS[String(s.seat)]?' <span class="stat" style="background:#e6f6ee;color:#1a7a4f;border:1px solid #1a7a4f">مفعّل</span>':''}
           <div class="sub" style="overflow-wrap:anywhere;margin-top:3px"><span class="idlink" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${escapeHtml(s.seat)}</span> · ${escapeHtml(classNameByCode(s.classCode)||s.classCode||'—')}${statChip}</div>
           ${noteLine}
         </div>
@@ -4441,7 +4441,7 @@ const firebaseConfig = {
 let db = null, cloudReady = false, rosterLoaded = false;
 
 /* ===== ربط النظام: حارس الدخول + عزل البيانات حسب المدرسة/الفترة/المستخدم ===== */
-let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_CAN_TRANSFER = false, CLS_OMR_PERM = {view:true,edit:true,del:true}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '';
+let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_CAN_TRANSFER = false, CLS_OMR_PERM = {view:true,edit:true,del:true}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '', CLS_ACTIVATED_SEATS = {};
 (function clsAuthGuard(){
   try{ CLS_SESSION = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){ CLS_SESSION = null; }
   if(CLS_SESSION && CLS_SESSION.role==='admin' && !CLS_SESSION.schoolId){
@@ -4649,6 +4649,25 @@ async function cloudGet(collection, docId){
   try{ return JSON.parse(snap.data().value); }catch(e){ return null; }
 }
 /* إخفاء بطاقة «إضافة الفصول والمواد» بالكامل عن المعلم غير المفوَّض (يظل ظاهرًا لمدير النظام/مدير المدرسة/المفوَّض بالإضافة) */
+/* النسخة الفردية: تنظيف ملف المعلم الفردي بنفسه (فصوله وطلابه فقط) */
+async function soloWipeMyData(){
+  if(!CLS_SESSION || CLS_SESSION.role!=='soloTeacher') return;
+  const val = prompt('سيُحذف جميع فصولك وطلابك وبياناتهم نهائياً ولا يمكن التراجع.\nاكتب «تصفير» للتأكيد:');
+  if(val===null) return;
+  if(String(val).trim()!=='تصفير'){ alert('لم تتم الكتابة بشكل صحيح.'); return; }
+  try{
+    await rosterDocRef().set({
+      value: JSON.stringify({ classes:[], students:[], customSubjects:[], loginCodeCounters:{} }),
+      updatedAt: Date.now(), schoolId:null, base:'roster'
+    });
+    try{ await db.collection('rosterIndex').doc('solo_'+CLS_SESSION.userId).delete(); }catch(e){}
+    state.fullClasses=[]; state.fullStudents=[]; state.customSubjects=[]; state.loginCodeCounters={};
+    state.attendance={}; state.workLog={}; state.selectedStudents={};
+    recomputeVisibleRoster();
+    refreshClassDropdowns(); renderClasses(); renderStudents();
+    alert('تم تنظيف ملفك بالكامل.');
+  }catch(e){ alert('تعذّر التنظيف: '+e.message); }
+}
 /* النسخة الفردية: إخفاء كل ما يتعلق بالمستخدمين الآخرين (الملاحظات) وصفحة الرئيسية */
 function clsApplySoloMode(){
   if(!CLS_SESSION || CLS_SESSION.role!=='soloTeacher') return;
@@ -4657,6 +4676,16 @@ function clsApplySoloMode(){
       const el=document.getElementById(id); if(el) el.style.display='none';
     });
     document.querySelectorAll('a[href="index.html"]').forEach(a=>a.style.display='none');
+    // زر تنظيف الملف الخاص بالمعلم الفردي
+    const headerBar = document.querySelector('body>div');
+    if(headerBar && !document.getElementById('soloWipeBtn')){
+      const b = document.createElement('button');
+      b.id='soloWipeBtn';
+      b.textContent='🧹 تنظيف ملفي';
+      b.style.cssText='background:rgba(255,255,255,.18);border:none;color:#fff;padding:5px 13px;border-radius:9px;font:inherit;font-weight:700;font-size:12.5px;cursor:pointer;margin-top:4px;align-self:flex-start';
+      b.onclick = soloWipeMyData;
+      headerBar.appendChild(b);
+    }
   }catch(e){}
 }
 function clsApplyAddManage(){
@@ -5072,10 +5101,28 @@ function isClassVisible(cls){
 }
 
 // يعيد حساب state.classes/state.students (المرئي) من state.fullClasses/state.fullStudents (الكامل)
+/* أرقام هويات الطلاب الذين ربطوا حساباتهم فعلياً — لعرض شارة «مفعّل» للمعلم */
+async function loadActivatedSeats(){
+  try{
+    if(!cloudReady) return;
+    const seats = [...new Set((state.fullStudents||[]).map(s=>String(s.seat)).filter(Boolean))];
+    if(!seats.length) return;
+    const map = {};
+    // Firestore يسمح بـ 30 قيمة كحد أقصى في استعلام 'in' — نقسّم على دفعات
+    for(let i=0;i<seats.length;i+=30){
+      const chunk = seats.slice(i,i+30);
+      const snap = await db.collection('studentAccounts').where('seat','in',chunk).get();
+      snap.docs.forEach(d=>{ map[String(d.data().seat)] = true; });
+    }
+    CLS_ACTIVATED_SEATS = map;
+    renderStudents();
+  }catch(e){ /* الشارة تحسينية فقط */ }
+}
 function recomputeVisibleRoster(){
   state.classes = state.fullClasses.filter(isClassVisible);
   const visCodes = new Set(state.classes.map(c=>String(c.code)));
-  state.students = state.fullStudents.filter(s=>visCodes.has(String(s.classCode)));
+  // المحذوف منطقيًا يُستبعد تمامًا من كل الشاشات والسجلات والتقارير
+  state.students = state.fullStudents.filter(s=>!s.deleted && visCodes.has(String(s.classCode)));
 }
 
 /* حفظ آمن بمعاملة Firestore: يقرأ أحدث نسخة من روستر المدرسة وقت الحفظ فعليًا،
@@ -5101,6 +5148,42 @@ async function mutateSharedRoster(mutatorFn){
     return result;
   });
   recomputeVisibleRoster();
+  syncRosterIndex();
+}
+/* فهرس الطلاب: وثيقة واحدة لكل روستر تتيح للطالب إيجاد كل فصوله برقم هويته فقط.
+   تُكتب بعد كل تعديل على الروستر (كتابة واحدة، غير مكلفة). */
+async function syncRosterIndex(){
+  try{
+    if(!cloudReady || !CLS_SESSION) return;
+    const isSolo = CLS_SESSION.role==='soloTeacher';
+    const rosterId = isSolo ? ('solo_'+CLS_SESSION.userId) : (CLS_SESSION.schoolId||'');
+    if(!rosterId) return;
+    const ownerCode = await getSchoolCode();
+    let ownerName = CLS_SESSION.username||'';
+    if(!isSolo){
+      try{
+        const snap = await db.collection('schoolData').doc('schools').get();
+        const sc = (snap.exists?(snap.data().list||{}):{})[CLS_SESSION.schoolId];
+        if(sc && sc.name) ownerName = sc.name;
+      }catch(e){}
+    }
+    const classBySeat = {}; const seatList = [];
+    (state.fullStudents||[]).forEach(s=>{
+      if(!s.seat || s.deleted) return;            // المحذوف منطقيًا لا يُفهرس
+      const seat = String(s.seat);
+      if(!classBySeat[seat]){ classBySeat[seat]=[]; seatList.push(seat); }
+      if(s.classCode && !classBySeat[seat].includes(String(s.classCode))) classBySeat[seat].push(String(s.classCode));
+    });
+    const classMeta = {};
+    (state.fullClasses||[]).forEach(c=>{
+      // الفصول القديمة بلا رمز مولّد تُدرج بدون loginCode حتى لا يطابقها رمز المدرسة وحده
+      classMeta[String(c.code)] = { name:c.name||'', loginCode: c.loginCode ? ((ownerCode||'')+c.loginCode) : '' };
+    });
+    await db.collection('rosterIndex').doc(rosterId).set({
+      rosterId, kind: isSolo?'solo':'school', ownerCode: ownerCode||'', ownerName,
+      seatList, classBySeat, classMeta, updatedAt: Date.now()
+    });
+  }catch(e){ /* الفهرس مساعد فقط — لا يُفشل الحفظ */ }
 }
 
 /* إعداد المعلم الخاص (سجل الأعمال + الملصقات) — يفضل معزولاً لكل معلم لوحده */
@@ -5142,6 +5225,8 @@ async function loadStudentsFromCloud(manual){
     state.fullStudents = Array.isArray(rData.students) ? rData.students : [];
     state.customSubjects = Array.isArray(rData.customSubjects) ? rData.customSubjects : [];
     recomputeVisibleRoster();
+    loadActivatedSeats();
+    syncRosterIndex();
     if(typeof renderSubjectSelect==='function') renderSubjectSelect();
     if(typeof renderAssignedSubjectsList==='function') renderAssignedSubjectsList();
 

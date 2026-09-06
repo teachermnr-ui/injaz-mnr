@@ -217,36 +217,23 @@ input,select{font-family:inherit;font-size:15px}
       <div id="staffEmailForm" class="hidden" style="margin-top:6px;text-align:right;">
         <div class="field"><label>البريد الإلكتروني</label><input id="liEmail" type="email" autocomplete="username" placeholder="name@example.com"></div>
         <div class="field"><label>كلمة المرور</label><input id="liPass" type="password" autocomplete="current-password" placeholder="كلمة المرور"></div>
-        <button class="btn" id="liBtn">دخول</button>
+        <button class="btn" id="liBtn">متابعة</button>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px;">إن كان دخولك الأول، سيُنشأ حسابك ثم تُطلب بيانات التفعيل.</p>
       </div>
 
       <div class="field" style="margin-top:14px;text-align:right;"><label>الفترة</label>
         <select id="liPeriod"><option value="first">الفترة الأولى</option><option value="second">الفترة الثانية</option></select>
       </div>
-
-      <div style="display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted);font-size:12px;">
-        <span style="flex:1;height:1px;background:var(--line);"></span>أول مرة؟<span style="flex:1;height:1px;background:var(--line);"></span>
-      </div>
-      <button class="prov-btn" id="staffActivateBtn" style="border-color:var(--brand);color:var(--brand)">
-        <span class="pv-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 4v5c0 4.4-3 8.3-7 9-4-0.7-7-4.6-7-9V7l7-4z"/><path d="M9 12l2 2 4-4"/></svg></span>
-        <span class="pv-txt">تفعيل حسابي لأول مرة</span>
-      </button>
     </div>
 
+    <!-- إكمال التفعيل: يظهر تلقائياً بعد الدخول إن كان البريد غير مربوط بعد -->
     <div id="staffActivateBox" class="hidden" style="text-align:right;">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">أدخل رقم هويتك وكلمة المرور الأولية التي زوّدتك بها الإدارة، ثم اختر طريقة الدخول التي ستستخدمها لاحقاً.</p>
+      <p style="font-weight:700;margin:0 0 4px;">أكمل تفعيل حسابك</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">بريدك <b id="acEmailShown"></b> غير مربوط بعد. أدخل رقم هويتك وكلمة المرور الأولية التي زوّدتك بها الإدارة لربطه نهائياً.</p>
       <div class="field"><label>رقم الهوية</label><input id="acSeat" inputmode="numeric" placeholder="رقم الهوية"></div>
       <div class="field"><label>كلمة المرور الأولية</label><input id="acTemp" type="password" placeholder="كلمة المرور الأولية"></div>
-
-      <button class="prov-btn" id="acGoogleBtn">
-        <span class="pv-ico"><svg viewBox="0 0 48 48" width="22" height="22"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9.1h12.4c-.5 2.9-2.1 5.3-4.6 6.9l7.1 5.5c4.2-3.8 6.6-9.5 6.6-16.2z"/><path fill="#FBBC05" d="M10.4 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.8-6.1C1 16.3 0 20 0 24s1 7.7 2.6 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.9l-7.1-5.5c-2 1.3-4.6 2.1-8.8 2.1-6.4 0-11.7-3.7-13.6-9.1l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg></span>
-        <span class="pv-txt">التفعيل بحساب Google</span>
-      </button>
-
-      <div class="field"><label>أو بريدك الإلكتروني</label><input id="acEmail" type="email" placeholder="name@example.com"></div>
-      <div class="field"><label>كلمة مرور جديدة لحسابك</label><input id="acNewPass" type="password" placeholder="٦ أحرف على الأقل"></div>
       <button class="btn" id="acDoBtn">تفعيل وربط الحساب</button>
-      <button class="btn" id="acBackBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
+      <button class="btn" id="acCancelBtn" style="background:transparent;color:var(--muted);margin-top:8px;">إلغاء</button>
     </div>
 
     <button class="btn" id="backFromStaffBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
@@ -274,6 +261,7 @@ input,select{font-family:inherit;font-size:15px}
       <div class="field"><label>رقم الهوية</label><input id="stuSeat" inputmode="numeric" placeholder="رقم الهوية"></div>
       <div class="field"><label>رمز الفصل</label><input id="stuClassCode" autocapitalize="characters" placeholder="مثال: S1H1" style="text-align:center;letter-spacing:2px;"></div>
       <button class="btn" id="stuVerifyBtn">تفعيل الحساب</button>
+      <button class="btn" id="stuCancelBtn" style="background:transparent;color:var(--muted);margin-top:8px;">إلغاء</button>
     </div>
     <button class="btn" id="backFromStudentBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
   </div>
@@ -528,6 +516,7 @@ const rosterIndexCol = ()=>db.collection('rosterIndex');
 
 $('#stuGoogleBtn').onclick = doStudentGoogleLogin;
 $('#stuVerifyBtn').onclick = doStudentVerify;
+$('#stuCancelBtn').onclick = cancelStudentActivation;
 $('#stuClassCode').addEventListener('keydown',e=>{ if(e.key==='Enter') doStudentVerify(); });
 
 async function doStudentGoogleLogin(){
@@ -550,7 +539,8 @@ async function doStudentGoogleLogin(){
       return;
     }
     // حساب جديد: نطلب التحقق من الهوية
-    STU_PENDING_GOOGLE = { uid:gUser.uid, email:gUser.email, name:gUser.displayName||'' };
+    STU_PENDING_GOOGLE = { uid:gUser.uid, email:gUser.email, name:gUser.displayName||'',
+                           isNew: !!(res.additionalUserInfo && res.additionalUserInfo.isNewUser) };
     $('#stuGoogleBtn').classList.add('hidden');
     $('#stuVerifyBox').classList.remove('hidden');
     alertBox('studentLoginAlert','','');
@@ -609,6 +599,19 @@ async function doStudentVerify(){
   }catch(e){ alertBox('studentLoginAlert','err',e.message); }
   finally{ btn.textContent='تفعيل الحساب'; btn.disabled=false; }
 }
+/* إلغاء تفعيل الطالب: حذف حساب المصادقة إن أُنشئ للتو */
+async function cancelStudentActivation(){
+  const au = firebase.auth().currentUser;
+  try{
+    if(au && STU_PENDING_GOOGLE && STU_PENDING_GOOGLE.isNew) await au.delete();
+    else if(au) await firebase.auth().signOut();
+  }catch(e){ try{ await firebase.auth().signOut(); }catch(_){} }
+  STU_PENDING_GOOGLE = null;
+  $('#stuVerifyBox').classList.add('hidden');
+  $('#stuGoogleBtn').classList.remove('hidden');
+  $('#stuSeat').value=''; $('#stuClassCode').value='';
+  alertBox('studentLoginAlert','','');
+}
 
 /* ========================================================================
    الدخول
@@ -621,119 +624,138 @@ $('#staffEmailToggle').onclick = ()=>{
   f.classList.toggle('hidden');
   if(!f.classList.contains('hidden')) $('#liEmail').focus();
 };
-$('#staffActivateBtn').onclick = ()=>{ $('#staffSignInBox').classList.add('hidden'); $('#staffActivateBox').classList.remove('hidden'); alertBox('loginAlert','',''); };
-$('#acBackBtn').onclick = ()=>{ $('#staffActivateBox').classList.add('hidden'); $('#staffSignInBox').classList.remove('hidden'); alertBox('loginAlert','',''); };
-$('#acDoBtn').onclick = ()=>doStaffActivate('password');
-$('#acGoogleBtn').onclick = ()=>doStaffActivate('google');
+$('#acDoBtn').onclick = ()=>doStaffActivate();
+$('#acCancelBtn').onclick = ()=>cancelActivation();
+$('#acTemp').addEventListener('keydown',e=>{ if(e.key==='Enter') doStaffActivate(); });
 
-/* بعد نجاح المصادقة: نجد مستند المستخدم المرتبط بهذا الحساب ونفتح النظام */
-async function finishStaffLogin(authUser){
-  const period = $('#liPeriod') ? $('#liPeriod').value : 'first';
+// هل أنشأنا حساب المصادقة الآن؟ (لحذفه تلقائياً إن لم يكتمل التفعيل)
+let AUTH_JUST_CREATED = false;
+
+function authErrMsg(e){
+  const m={ 'auth/invalid-credential':'البريد أو كلمة المرور غير صحيحة',
+    'auth/wrong-password':'كلمة المرور غير صحيحة',
+    'auth/invalid-email':'صيغة البريد غير صحيحة',
+    'auth/too-many-requests':'محاولات كثيرة، انتظر قليلاً ثم أعد المحاولة',
+    'auth/popup-closed-by-user':'أُغلقت نافذة الدخول قبل إتمامها',
+    'auth/unauthorized-domain':'هذا النطاق غير مصرّح به في إعدادات Firebase',
+    'auth/weak-password':'كلمة المرور يجب ألا تقل عن ٦ أحرف' };
+  return m[e.code] || e.message || 'تعذّر الدخول';
+}
+
+/* بعد نجاح المصادقة: إمّا ندخل مباشرة، أو نطلب إكمال التفعيل */
+async function afterAuth(authUser){
   const q = await usersCol().where('authUid','==',authUser.uid).limit(1).get();
-  if(q.empty){
-    await firebase.auth().signOut();
-    throw new Error('هذا الحساب غير مربوط بأي مستخدم. استخدم «تفعيل حسابي لأول مرة» أولاً.');
-  }
+  if(q.empty){ showActivation(authUser); return; }   // بريد غير مربوط بعد
   const d=q.docs[0], data=d.data();
-  if(data.active===false){ await firebase.auth().signOut(); throw new Error('هذا الحساب معطّل. راجع المسؤول'); }
+  const period = $('#liPeriod') ? $('#liPeriod').value : 'first';
+  if(data.active===false){ await cleanSignOut(); throw new Error('هذا الحساب معطّل. راجع المسؤول'); }
   if(data.role==='soloTeacher'){
     if(data.subscriptionEnds && Date.now()>data.subscriptionEnds){
-      await firebase.auth().signOut();
+      await cleanSignOut();
       throw new Error('انتهى اشتراكك بتاريخ '+new Date(data.subscriptionEnds).toLocaleDateString('ar')+'. تواصل مع إدارة النظام.');
     }
   } else if(data.role!=='admin' && data.schoolId && SCHOOLS[data.schoolId]){
     const sc=SCHOOLS[data.schoolId];
     if(sc.activePeriod && sc.activePeriod!==period){
-      await firebase.auth().signOut();
+      await cleanSignOut();
       throw new Error('الفترة '+periodLabel(period)+' غير مُفعّلة لمدرستك حالياً');
     }
   }
+  AUTH_JUST_CREATED = false;
   CURRENT={id:d.id,...data};
   SESSION={ userId:d.id, username:data.username, role:data.role, schoolId:data.schoolId||null, period };
   localStorage.setItem('cls_session',JSON.stringify(SESSION));
   if(data.role==='soloTeacher'){ window.location.href='omr.html'; return; }
   enterApp();
 }
-function authErrMsg(e){
-  const m={ 'auth/invalid-credential':'البريد أو كلمة المرور غير صحيحة',
-    'auth/wrong-password':'كلمة المرور غير صحيحة',
-    'auth/user-not-found':'لا يوجد حساب بهذا البريد',
-    'auth/invalid-email':'صيغة البريد غير صحيحة',
-    'auth/too-many-requests':'محاولات كثيرة، انتظر قليلاً ثم أعد المحاولة',
-    'auth/popup-closed-by-user':'أُغلقت نافذة الدخول قبل إتمامها',
-    'auth/unauthorized-domain':'هذا النطاق غير مصرّح به في إعدادات Firebase',
-    'auth/email-already-in-use':'هذا البريد مستخدم بالفعل — سجّل الدخول به مباشرة',
-    'auth/weak-password':'كلمة المرور ضعيفة (٦ أحرف على الأقل)' };
-  return m[e.code] || e.message || 'تعذّر الدخول';
+async function cleanSignOut(){
+  try{ await firebase.auth().signOut(); }catch(e){}
 }
+function showActivation(authUser){
+  $('#acEmailShown').textContent = authUser.email || '';
+  $('#staffSignInBox').classList.add('hidden');
+  $('#staffActivateBox').classList.remove('hidden');
+  alertBox('loginAlert','','');
+  $('#acSeat').focus();
+}
+/* إلغاء التفعيل: نحذف حساب المصادقة إن كنّا أنشأناه للتو حتى لا تتراكم حسابات فارغة */
+async function cancelActivation(){
+  const au = firebase.auth().currentUser;
+  try{
+    if(au && AUTH_JUST_CREATED) await au.delete();
+    else await cleanSignOut();
+  }catch(e){ await cleanSignOut(); }
+  AUTH_JUST_CREATED = false;
+  $('#staffActivateBox').classList.add('hidden');
+  $('#staffSignInBox').classList.remove('hidden');
+  $('#acSeat').value=''; $('#acTemp').value='';
+  alertBox('loginAlert','','');
+}
+
 async function doLogin(){
   const em=$('#liEmail').value.trim(), p=$('#liPass').value;
   if(!em||!p){ alertBox('loginAlert','err','أدخل البريد وكلمة المرور'); return; }
-  $('#liBtn').textContent='جارٍ الدخول…'; $('#liBtn').disabled=true;
+  if(p.length<6){ alertBox('loginAlert','err','كلمة المرور يجب ألا تقل عن ٦ أحرف'); return; }
+  const btn=$('#liBtn'); btn.textContent='جارٍ المتابعة…'; btn.disabled=true;
   try{
-    const cred = await firebase.auth().signInWithEmailAndPassword(em,p);
-    await finishStaffLogin(cred.user);
+    let cred;
+    try{
+      cred = await firebase.auth().signInWithEmailAndPassword(em,p);
+      AUTH_JUST_CREATED = false;
+    }catch(err){
+      if(err.code==='auth/user-not-found' || err.code==='auth/invalid-credential'){
+        // قد يكون دخولاً أول: ننشئ حساب المصادقة ثم نطلب التفعيل
+        try{
+          cred = await firebase.auth().createUserWithEmailAndPassword(em,p);
+          AUTH_JUST_CREATED = true;
+        }catch(err2){
+          if(err2.code==='auth/email-already-in-use') throw new Error('كلمة المرور غير صحيحة لهذا البريد');
+          throw err2;
+        }
+      } else throw err;
+    }
+    await afterAuth(cred.user);
   }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
-  finally{ $('#liBtn').textContent='دخول'; $('#liBtn').disabled=false; }
+  finally{ btn.textContent='متابعة'; btn.disabled=false; }
 }
 async function staffProviderLogin(){
   const btn=$('#staffGoogleBtn'); btn.disabled=true;
   const t=btn.querySelector('.pv-txt'); const old=t.textContent; t.textContent='جارٍ الدخول…';
   try{
     const res = await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
-    await finishStaffLogin(res.user);
+    AUTH_JUST_CREATED = !!(res.additionalUserInfo && res.additionalUserInfo.isNewUser);
+    await afterAuth(res.user);
   }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
   finally{ t.textContent=old; btn.disabled=false; }
 }
 
-/* التفعيل لأول مرة: التحقق من رقم الهوية وكلمة المرور الأولية، ثم ربط حساب المصادقة ومحو كلمة المرور */
-async function doStaffActivate(mode){
+/* إكمال التفعيل: التحقق من الهوية وكلمة المرور الأولية ثم ربط حساب المصادقة */
+async function doStaffActivate(){
   const seat=$('#acSeat').value.trim(), temp=$('#acTemp').value;
   if(!seat||!temp){ alertBox('loginAlert','err','أدخل رقم الهوية وكلمة المرور الأولية'); return; }
-  const btn = mode==='google' ? $('#acGoogleBtn') : $('#acDoBtn');
-  const lblEl = btn.querySelector('.pv-txt') || btn;
-  const label = lblEl.textContent;
-  lblEl.textContent='جارٍ التفعيل…'; btn.disabled=true;
+  const au = firebase.auth().currentUser;
+  if(!au){ alertBox('loginAlert','err','انتهت الجلسة، أعد المحاولة'); await cancelActivation(); return; }
+  const btn=$('#acDoBtn'); btn.textContent='جارٍ التفعيل…'; btn.disabled=true;
   try{
     let q = await usersCol().where('loginId','==',seat).limit(1).get();
     if(q.empty) q = await usersCol().where('username','==',seat).limit(1).get();
-    if(q.empty) throw new Error('رقم الهوية غير موجود');
+    if(q.empty) throw new Error('رقم الهوية غير موجود. راجع الإدارة.');
     const d=q.docs[0], data=d.data();
     if(data.active===false) throw new Error('هذا الحساب معطّل. راجع المسؤول');
-    if(data.authUid) throw new Error('هذا الحساب مُفعّل بالفعل. سجّل الدخول ببريده المرتبط.');
+    if(data.authUid) throw new Error('هذا الحساب مُفعّل بالفعل ببريد آخر. راجع الإدارة لفك الربط.');
     if(!data.password || data.password!==temp) throw new Error('كلمة المرور الأولية غير صحيحة');
 
-    let authUser;
-    if(mode==='google'){
-      const res = await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
-      authUser = res.user;
-    } else {
-      const em=$('#acEmail').value.trim(), np=$('#acNewPass').value;
-      if(!em||!np) throw new Error('أدخل بريدك وكلمة مرور جديدة');
-      if(np.length<6) throw new Error('كلمة المرور يجب ألا تقل عن ٦ أحرف');
-      let cred;
-      try{ cred = await firebase.auth().createUserWithEmailAndPassword(em,np); }
-      catch(err){
-        if(err.code==='auth/email-already-in-use') cred = await firebase.auth().signInWithEmailAndPassword(em,np);
-        else throw err;
-      }
-      authUser = cred.user;
-    }
-    // منع ربط نفس حساب المصادقة بأكثر من مستخدم
-    const dup = await usersCol().where('authUid','==',authUser.uid).limit(1).get();
-    if(!dup.empty){ await firebase.auth().signOut(); throw new Error('هذا البريد مرتبط بمستخدم آخر بالفعل.'); }
-
     await usersCol().doc(d.id).update({
-      authUid: authUser.uid, email: authUser.email||null,
-      password: firebase.firestore.FieldValue.delete(),   // كلمة المرور الأولية لم تعد لازمة
-      mustChangePassword: false, activatedAt: Date.now(), updatedAt: Date.now()
+      authUid: au.uid, email: au.email||null,
+      password: firebase.firestore.FieldValue.delete(),
+      mustChangePassword:false, activatedAt:Date.now(), updatedAt:Date.now()
     });
-    await finishStaffLogin(authUser);
-  }catch(e){
-    alertBox('loginAlert','err',authErrMsg(e));
-    try{ if(firebase.auth().currentUser) await firebase.auth().signOut(); }catch(_){}
-  }
-  finally{ lblEl.textContent=label; btn.disabled=false; }
+    AUTH_JUST_CREATED = false;
+    $('#staffActivateBox').classList.add('hidden');
+    $('#staffSignInBox').classList.remove('hidden');
+    await afterAuth(au);
+  }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
+  finally{ btn.textContent='تفعيل وربط الحساب'; btn.disabled=false; }
 }
 
 /* ========================================================================

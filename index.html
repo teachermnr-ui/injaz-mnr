@@ -305,6 +305,7 @@ const PERM_TREE = [
     { key:'index.sent',     label:'الملاحظات المرسلة' },
     { key:'index.received', label:'الملاحظات الواردة' },
     { key:'index.absence',  label:'غياب الطلاب' },
+    { key:'index.attendanceWindow', label:'إعدادات نافذة التغيب', sub:true },
     { key:'index.studentStatus', label:'حالة الطالب' },
     { key:'index.users',    label:'المستخدمون' },
     { key:'index.settings', label:'إعدادات النظام' },
@@ -414,6 +415,7 @@ async function boot(){
 
     await ensureSeed();
     await loadSchools();
+    await loadRoleTemplates();
     const saved = JSON.parse(localStorage.getItem('cls_session')||'null');
     if(saved && saved.userId){
       const snap = await usersCol().doc(saved.userId).get();
@@ -619,7 +621,7 @@ async function doSoloGoogleLogin(){
         username: gUser.displayName || gUser.email.split('@')[0],
         email: gUser.email, googleUid: gUser.uid,
         role: 'soloTeacher', schoolId: null, teacherCode,
-        assignedClasses: [], permissions: defaultPerms('soloTeacher'),
+        assignedClasses: [], permissions: permsForNewUser('soloTeacher'),
         active: true, subscribedAt: now,
         subscriptionEnds: now + SOLO_TRIAL_DAYS*24*60*60*1000,
         createdAt: now, updatedAt: now
@@ -647,6 +649,20 @@ async function doSoloGoogleLogin(){
 }
 $('#soloGoogleBtn').onclick = doSoloGoogleLogin;
 
+/* قوالب الصلاحيات الافتراضية لكل دور — يضبطها أدمن النظام، وتُنسخ للمستخدم وقت إنشائه فقط */
+let ROLE_TEMPLATES = {};
+const roleTemplatesDoc = ()=>db.collection('schoolData').doc('roleTemplates');
+async function loadRoleTemplates(){
+  try{
+    const snap = await roleTemplatesDoc().get();
+    ROLE_TEMPLATES = snap.exists ? (snap.data().templates||{}) : {};
+  }catch(e){ ROLE_TEMPLATES = {}; }
+}
+/* الصلاحيات المطبَّقة عند إنشاء مستخدم جديد: القالب المحفوظ إن وُجد، وإلا الافتراضي المبرمج */
+function permsForNewUser(role){
+  const t = ROLE_TEMPLATES[role];
+  return (t && typeof t==='object' && Object.keys(t).length) ? JSON.parse(JSON.stringify(t)) : defaultPerms(role);
+}
 function logout(){ localStorage.removeItem('cls_session'); SESSION=null; CURRENT=null; $('#liPass').value=''; alertBox('loginAlert','',''); show('loginView'); }
 
 /* ========================================================================
@@ -1023,7 +1039,7 @@ async function openUserModal(id){
   editUser = null; 
   if(id){ const s=await usersCol().doc(id).get(); editUser={id:s.id,...s.data()}; }
   const e = editUser;
-  editPerms = e ? JSON.parse(JSON.stringify(e.permissions||defaultPerms(e.role))) : defaultPerms('teacher');
+  editPerms = e ? JSON.parse(JSON.stringify(e.permissions||defaultPerms(e.role))) : permsForNewUser('teacher');
   const schoolOpts = Object.entries(SCHOOLS).map(([sid,s])=>`<option value="${esc(sid)}" ${e&&e.schoolId===sid?'selected':''}>${esc(s.name)}</option>`).join('');
   const isAdminU = !!(e && e.role==='admin'); umReadonly=isAdminU; permReadonly=isAdminU;
   const isSchoolAdminU = !!(e && e.role==='schoolAdmin');
@@ -1056,7 +1072,7 @@ async function openUserModal(id){
   $('#umSchool').onchange=()=>{ const sid=$('#umSchool').value; loadModalClasses(sid, (e&&e.schoolId===sid)?(e.assignedClasses||[]):[]); refreshDelegationLock(sid); };
   loadModalClasses(e?e.schoolId:'', e?e.assignedClasses:[]);
   refreshDelegationLock(e?e.schoolId:($('#umSchool')?$('#umSchool').value:''));
-  $('#umRole').onchange=()=>{ editPerms=defaultPerms($('#umRole').value); renderPermTree(); toast('طُبِّقت صلاحيات الدور الافتراضية'); };
+  $('#umRole').onchange=()=>{ editPerms=permsForNewUser($('#umRole').value); renderPermTree(); toast('طُبِّقت صلاحيات الدور الافتراضية'); };
   renderPermTree();
   $('#umSave').onclick=()=>saveUser(activeState);
   if(isAdminU){
@@ -1168,6 +1184,12 @@ function renderSettings(c){
     </div>
 
     <div class="card">
+      <div class="set-block"><h3>الصلاحيات الافتراضية للأدوار</h3>
+        <p>اضبط صلاحيات كل دور لتُطبَّق تلقائياً على المستخدمين الجدد. تعديل القالب لا يغيّر صلاحيات المستخدمين المضافين سابقاً، ويمكن دائماً تعديل صلاحيات كل مستخدم على حدة.</p></div>
+      <button class="btn secondary sm" id="roleTplBtn">ضبط الصلاحيات الافتراضية</button>
+    </div>
+
+    <div class="card">
       <div class="set-block"><h3>حذف بيانات مستخدم</h3><p>حذف حساب مستخدم محدد من النظام.</p></div>
       <button class="btn secondary sm" onclick="activeTab='users';renderTabs();renderPanel()">الذهاب إلى المستخدمين</button>
     </div>
@@ -1189,6 +1211,7 @@ function renderSettings(c){
       <button class="btn danger sm" id="wipeBtn">تنفيذ المسح</button>
     </div>`;
   $('#addSchoolBtn').onclick=()=>openSchoolModal(null);
+  $('#roleTplBtn').onclick=openRoleTemplates;
   $('#wipeScope').onchange=()=>{
     const isSchool = $('#wipeScope').value==='school';
     $('#wipeSchoolField').classList.toggle('hidden', !isSchool);
@@ -1199,6 +1222,60 @@ function renderSettings(c){
   };
   $('#wipeBtn').onclick=wipeData;
   renderSchoolsList();
+}
+/* ---- محرر الصلاحيات الافتراضية للأدوار (لأدمن النظام) ---- */
+let tplRole = 'teacher', tplPerms = {};
+function openRoleTemplates(){
+  const roles = ['manager','agent','counselor','assistant','teacher','soloTeacher'];
+  modal(`<h2>الصلاحيات الافتراضية للأدوار</h2>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 12px">تُطبَّق على المستخدمين الجدد فقط عند إنشائهم.</p>
+    <div class="field"><label>الدور</label>
+      <select id="tplRoleSel">${roles.map(r=>`<option value="${r}">${esc(ROLES[r]||r)}</option>`).join('')}</select>
+    </div>
+    <div id="tplTree" style="max-height:45vh;overflow:auto;margin-top:8px"></div>
+    <div class="modal-row" style="margin-top:14px">
+      <button class="btn secondary" onclick="closeModal()">إلغاء</button>
+      <button class="btn" id="tplSave">حفظ القالب</button>
+    </div>`);
+  const loadRole = ()=>{
+    tplRole = $('#tplRoleSel').value;
+    const saved = ROLE_TEMPLATES[tplRole];
+    tplPerms = (saved && Object.keys(saved).length) ? JSON.parse(JSON.stringify(saved)) : defaultPerms(tplRole);
+    renderTplTree();
+  };
+  $('#tplRoleSel').onchange = loadRole;
+  $('#tplSave').onclick = async()=>{
+    try{
+      ROLE_TEMPLATES[tplRole] = JSON.parse(JSON.stringify(tplPerms));
+      await roleTemplatesDoc().set({ templates:ROLE_TEMPLATES, updatedAt:Date.now() });
+      toast('حُفظ القالب'); closeModal();
+    }catch(e){ toast('خطأ: '+e.message); }
+  };
+  loadRole();
+}
+function renderTplTree(){
+  const root=$('#tplTree'); if(!root) return;
+  root.innerHTML = PERM_TREE.map(g=>`<div class="perm-grp">
+    <div class="perm-head">${esc(g.label)}</div>
+    ${g.leaves.map(l=>{
+      const p=tplPerms[l.key]||{access:false,edit:false,del:false};
+      return `<div class="perm-leaf ${l.sub?'sub':''}">
+        <span class="pl-name">${l.sub?'↳ ':''}${esc(l.label)}</span>
+        <label class="chk"><input type="checkbox" data-k="${l.key}" data-f="access" ${p.access?'checked':''}> وصول</label>
+        <label class="chk"><input type="checkbox" data-k="${l.key}" data-f="edit" ${p.edit?'checked':''}> تعديل</label>
+        <label class="chk"><input type="checkbox" data-k="${l.key}" data-f="del" ${p.del?'checked':''}> حذف</label>
+      </div>`;
+    }).join('')}
+  </div>`).join('');
+  root.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+    cb.onchange=()=>{
+      const k=cb.dataset.k, f=cb.dataset.f;
+      tplPerms[k]=tplPerms[k]||{access:false,edit:false,del:false};
+      tplPerms[k][f]=cb.checked;
+      if(f==='access' && !cb.checked){ tplPerms[k].edit=false; tplPerms[k].del=false; renderTplTree(); }
+      if((f==='edit'||f==='del') && cb.checked){ tplPerms[k].access=true; renderTplTree(); }
+    };
+  });
 }
 function renderSchoolsList(){
   const wrap=$('#schoolsList');
@@ -1229,6 +1306,15 @@ function openSchoolModal(id){
       </select>
       <div class="sub-note" style="margin-top:6px">تفعيل فترة يمنع غير الأدمن من دخول الأخرى؛ تبقى الفترة السابقة متاحة للأدمن للاطلاع.</div></div>
     <div class="field"><label>عدد الفصول الدراسية</label><input id="smCount" type="number" inputmode="numeric" value="${esc(s.classCount||'')}" placeholder="مثال: ١٢"></div>
+    ${can('index.attendanceWindow','edit') ? `
+    <div class="field"><label>نافذة اعتماد التغيب</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="smAttFrom" type="time" value="${esc(s.attFrom||'07:40')}" style="flex:1">
+        <span style="color:var(--muted)">إلى</span>
+        <input id="smAttTo" type="time" value="${esc(s.attTo||'10:00')}" style="flex:1">
+      </div>
+      <div class="sub-note" style="margin-top:6px">الغياب المُسجَّل من المعلمين خارج هذه النافذة لا يُرحَّل إلى صفحة غياب الطلاب.</div>
+    </div>` : ''}
     <div class="modal-row" style="margin-top:14px">
       <button class="btn secondary" onclick="closeModal()">إلغاء</button>
       <button class="btn" id="smSave">حفظ</button>
@@ -1245,7 +1331,9 @@ function openSchoolModal(id){
       code = 'S'+(max+1);
     }
     SCHOOLS[sid]={ name, code, eduDept:$('#smEduDept').value.trim(), contactNumber:$('#smContact').value.trim(),
-      year:$('#smYear').value.trim(), activePeriod:$('#smPeriod').value, classCount:$('#smCount').value.trim() };
+      year:$('#smYear').value.trim(), activePeriod:$('#smPeriod').value, classCount:$('#smCount').value.trim(),
+      attFrom: $('#smAttFrom') ? $('#smAttFrom').value : (s.attFrom||'07:40'),
+      attTo:   $('#smAttTo')   ? $('#smAttTo').value   : (s.attTo||'10:00') };
     try{ await schoolsDoc().set({list:SCHOOLS}); toast(id?'تم تحديث المدرسة':'تمت إضافة المدرسة'); closeModal(); renderSchoolsList(); }
     catch(e){ alertBox('smAlert','err',e.message); }
   };

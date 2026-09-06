@@ -2323,7 +2323,26 @@ function openAttMenu(seat){
   window.scrollTo(0, y);   // حافظ على موضع التمرير
 }
 function closeAttMenu(){ state.attMenuSeat = null; const y=window.scrollY; renderStudents(); window.scrollTo(0,y); }
-function omrAttInWindow(){ const n=new Date(); const m=n.getHours()*60+n.getMinutes(); return m>=460 && m<600; } // 7:40–10:00 صباحاً
+/* نافذة اعتماد التغيب — تُقرأ من إعدادات المدرسة (افتراضي 7:40–10:00 صباحاً) */
+let CLS_ATT_WINDOW = { from:'07:40', to:'10:00' };
+async function loadAttWindow(){
+  try{
+    if(!cloudReady || !CLS_SESSION || !CLS_SESSION.schoolId) return;
+    const snap = await db.collection('schoolData').doc('schools').get();
+    const sc = (snap.exists?(snap.data().list||{}):{})[CLS_SESSION.schoolId];
+    if(sc){
+      if(sc.attFrom) CLS_ATT_WINDOW.from = sc.attFrom;
+      if(sc.attTo)   CLS_ATT_WINDOW.to   = sc.attTo;
+    }
+  }catch(e){}
+}
+function hhmmToMin(v){ const m=/^(\d{1,2}):(\d{2})$/.exec(String(v||'')); return m ? (parseInt(m[1],10)*60+parseInt(m[2],10)) : null; }
+function omrAttInWindow(){
+  const n=new Date(); const cur=n.getHours()*60+n.getMinutes();
+  const from = hhmmToMin(CLS_ATT_WINDOW.from); const to = hhmmToMin(CLS_ATT_WINDOW.to);
+  if(from===null || to===null) return cur>=460 && cur<600;
+  return cur>=from && cur<to;
+}
 function omrAttDateKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function omrAttDocId(seat,dk){ return 'att_'+CLS_SESSION.schoolId+'_'+CLS_SESSION.period+'_'+seat+'_'+dk; }
 async function omrPushAbsent(seat, stu){
@@ -4574,6 +4593,7 @@ function initFirebase(){
 function initFirebaseData(){
   clsWatchActive();
   clsLoadPerms();
+  loadAttWindow();
   loadExamsFromCloud();
   loadResultsFromCloud();
   loadStudentsFromCloud();

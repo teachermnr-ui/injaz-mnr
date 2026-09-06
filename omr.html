@@ -1492,6 +1492,13 @@ const CLS_STAGE_LETTER = { 'ابتدائية':'P', 'متوسطة':'M', 'ثانو
 let SCHOOL_CODE_CACHE = null;
 async function getSchoolCode(){
   if(SCHOOL_CODE_CACHE) return SCHOOL_CODE_CACHE;
+  if(CLS_SESSION && CLS_SESSION.role==='soloTeacher'){
+    try{
+      const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
+      SCHOOL_CODE_CACHE = (snap.exists && snap.data().teacherCode) || '';
+    }catch(e){ SCHOOL_CODE_CACHE=''; }
+    return SCHOOL_CODE_CACHE;
+  }
   if(!CLS_SESSION || !CLS_SESSION.schoolId) return '';
   try{
     const snap = await db.collection('schoolData').doc('schools').get();
@@ -4462,6 +4469,7 @@ let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_CAN_TRANSFE
       '</div>';
     document.body.insertBefore(bar, document.body.firstChild);
     if(CLS_SESSION.role==='admin' && CLS_SESSION.schoolId) updateAdminSchoolBadge();
+    clsApplySoloMode();
   });
 })();
 state.exams = [];
@@ -4641,6 +4649,16 @@ async function cloudGet(collection, docId){
   try{ return JSON.parse(snap.data().value); }catch(e){ return null; }
 }
 /* إخفاء بطاقة «إضافة الفصول والمواد» بالكامل عن المعلم غير المفوَّض (يظل ظاهرًا لمدير النظام/مدير المدرسة/المفوَّض بالإضافة) */
+/* النسخة الفردية: إخفاء كل ما يتعلق بالمستخدمين الآخرين (الملاحظات) وصفحة الرئيسية */
+function clsApplySoloMode(){
+  if(!CLS_SESSION || CLS_SESSION.role!=='soloTeacher') return;
+  try{
+    ['tab-notes','panel-notes','bulkNoteBtns'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.style.display='none';
+    });
+    document.querySelectorAll('a[href="index.html"]').forEach(a=>a.style.display='none');
+  }catch(e){}
+}
 function clsApplyAddManage(){
   try{
     const allowed = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin'||CLS_CAN_ADD_MANAGE);
@@ -4682,7 +4700,7 @@ async function clsLoadPerms(){
     const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
     if(!snap.exists) return;
     const u = snap.data();
-    if(u.role==='admin'||u.role==='schoolAdmin'){ CLS_OMR_PERM={view:true,edit:true,del:true}; CLS_CAN_ADD_MANAGE=true; CLS_CAN_TRANSFER=true; clsApplyAddManage(); return; }
+    if(u.role==='admin'||u.role==='schoolAdmin'||u.role==='soloTeacher'){ CLS_OMR_PERM={view:true,edit:true,del:true}; CLS_CAN_ADD_MANAGE=true; CLS_CAN_TRANSFER=true; clsApplyAddManage(); return; }
     const perm=u.permissions||{};
     const keys=['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'];
     const any=fl=>keys.some(k=>perm[k]&&perm[k][fl]);
@@ -5036,6 +5054,9 @@ function onVClassChange(sel){ CLS_ACTIVE_SUBJECT = parseVKey(sel.value).subject;
 let CLS_USER_ASSIGNED = [];
 
 function rosterDocRef(){
+  if(CLS_SESSION && CLS_SESSION.role==='soloTeacher'){
+    return db.collection('schoolData').doc('roster_solo_'+CLS_SESSION.userId);
+  }
   const sid = (CLS_SESSION && CLS_SESSION.schoolId) || 'admin';
   return db.collection('schoolData').doc('roster_' + sid);
 }

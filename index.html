@@ -172,19 +172,22 @@ input,select{font-family:inherit;font-size:15px}
 <!-- ===== Login ===== -->
 <div id="loginView" class="auth-wrap hidden">
 
-  <!-- 0) اختيار الدور -->
+  <!-- 0) اختيار البوابة -->
   <div class="auth-card" id="roleChoiceCard">
     <div class="brand-mark">ف</div>
     <h1>نظام الفصول الدراسية</h1>
-    <p class="auth-sub">أنت...</p>
-    <button class="btn" id="roleStaffBtn" style="margin-bottom:10px;">عضو تدريس</button>
-    <button class="btn" id="roleStudentBtn" style="background:var(--teal-l);color:var(--teal-d);">طالب</button>
+    <p class="auth-sub">اختر طريقة الدخول</p>
+    <button class="btn" id="roleStaffBtn" style="margin-bottom:10px;">النسخة المدرسية</button>
+    <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px;">لكامل أعضاء التدريس والإدارة داخل المدرسة</p>
+    <button class="btn" id="roleSoloBtn" style="margin-bottom:10px;">النسخة الفردية</button>
+    <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px;">معلم فردي باشتراك ذاتي، غير مرتبط بمدرسة أو إدارة</p>
+    <button class="btn" id="roleStudentBtn" style="background:var(--teal-l);color:var(--teal-d);">دخول الطالب</button>
   </div>
 
   <!-- 1أ) دخول عضو التدريس -->
   <div class="auth-card hidden" id="staffLoginCard">
     <div class="brand-mark">ف</div>
-    <h1>نظام الفصول الدراسية</h1>
+    <h1>النسخة المدرسية</h1>
     <p class="auth-sub">سجّل الدخول للمتابعة</p>
     <div id="loginAlert"></div>
     <div class="field"><label>رقم الهوية</label><input id="liUser" inputmode="numeric" autocomplete="username" placeholder="رقم الهوية"></div>
@@ -196,7 +199,17 @@ input,select{font-family:inherit;font-size:15px}
     <button class="btn" id="backFromStaffBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
   </div>
 
-  <!-- 1ب) دخول الطالب بالـ PIN -->
+  <!-- 1ب) دخول المعلم الفردي (النسخة الفردية) -->
+  <div class="auth-card hidden" id="soloLoginCard">
+    <div class="brand-mark">ف</div>
+    <h1>النسخة الفردية</h1>
+    <p class="auth-sub">سجّل الدخول بحسابك، وستحصل على فترة تجريبية ٣٠ يوماً عند أول اشتراك</p>
+    <div id="soloLoginAlert"></div>
+    <button class="btn" id="soloGoogleBtn" style="margin-bottom:10px;">الدخول بحساب Google</button>
+    <button class="btn" id="backFromSoloBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
+  </div>
+
+  <!-- 1ج) دخول الطالب بالـ PIN -->
   <div class="auth-card hidden" id="studentLoginCard">
     <div class="brand-mark">ف</div>
     <h1>أوراقي</h1>
@@ -246,6 +259,7 @@ input,select{font-family:inherit;font-size:15px}
 <!-- Firebase compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 /* =========================================================================
@@ -275,7 +289,8 @@ const ROLES = {
   agent:    'وكيل',
   counselor:'موجه طلابي',
   assistant:'مساعد إداري',
-  teacher:  'معلم'
+  teacher:  'معلم',
+  soloTeacher: 'معلم فردي'
 };
 
 /* ---------- شجرة الصلاحيات ---------- */
@@ -323,6 +338,9 @@ function defaultPerms(role){
     set('index.studentStatus',true,true,false);
   } else if(role==='assistant'){    // مساعد إداري: وصول+تعديل (الفصول والطلاب، الغياب)
     ['index.classes','index.absence'].forEach(k=>set(k,true,true,false));
+  } else if(role==='soloTeacher'){  // معلم فردي: صلاحيات كاملة على عالمه الخاص، بلا ملاحظات ولا index
+    ['omr.classes','omr.classes.addManage','omr.classes.transfer','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
+    ['worksheets.upload','worksheets.bank','worksheets.publish','worksheets.submissions'].forEach(k=>set(k,true,true,true));
   } else if(role==='teacher'){      // معلم: المرسلة/الواردة + صفحة التصحيح كاملة + أوراق العمل كاملة (بدون تفويض الإضافة/النقل — تُمنح صراحة)
     ['index.sent','index.received'].forEach(k=>set(k,true,true,false));
     ['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
@@ -394,7 +412,11 @@ async function boot(){
     const saved = JSON.parse(localStorage.getItem('cls_session')||'null');
     if(saved && saved.userId){
       const snap = await usersCol().doc(saved.userId).get();
-      if(snap.exists){ SESSION=saved; CURRENT={id:snap.id,...snap.data()}; enterApp(); return; }
+      if(snap.exists){
+        const u = snap.data();
+        if(u.role==='soloTeacher'){ window.location.href='omr.html'; return; }
+        SESSION=saved; CURRENT={id:snap.id,...u}; enterApp(); return;
+      }
     }
     show('loginView');
   }catch(e){ console.error(e); show('loginView'); alertBox('loginAlert','err','خطأ في التحميل: '+e.message); }
@@ -424,6 +446,8 @@ async function loadSchools(){
    اختيار الدور (عضو تدريس / طالب)
    ======================================================================== */
 $('#roleStaffBtn').onclick = ()=>{ $('#roleChoiceCard').classList.add('hidden'); $('#staffLoginCard').classList.remove('hidden'); };
+$('#roleSoloBtn').onclick = ()=>{ $('#roleChoiceCard').classList.add('hidden'); $('#soloLoginCard').classList.remove('hidden'); };
+$('#backFromSoloBtn').onclick = ()=>{ $('#soloLoginCard').classList.add('hidden'); $('#roleChoiceCard').classList.remove('hidden'); };
 $('#roleStudentBtn').onclick = ()=>{ $('#roleChoiceCard').classList.add('hidden'); $('#studentLoginCard').classList.remove('hidden'); };
 $('#backFromStaffBtn').onclick = ()=>{ $('#staffLoginCard').classList.add('hidden'); $('#roleChoiceCard').classList.remove('hidden'); };
 $('#backFromStudentBtn').onclick = ()=>{ $('#studentLoginCard').classList.add('hidden'); $('#roleChoiceCard').classList.remove('hidden'); };
@@ -479,6 +503,70 @@ async function doLogin(){
   }catch(e){ alertBox('loginAlert','err',e.message); }
   finally{ $('#liBtn').textContent='دخول'; $('#liBtn').disabled=false; }
 }
+
+/* ========================================================================
+   النسخة الفردية: دخول المعلم المستقل بحساب Google
+   ======================================================================== */
+const SOLO_TRIAL_DAYS = 30;
+// توليد بادئة فريدة للمعلم الفردي (T1, T2, ...) تُستخدم في رموز دخول طلابه بدل رمز المدرسة
+async function nextSoloTeacherCode(){
+  const snap = await usersCol().where('role','==','soloTeacher').get();
+  let max = 0;
+  snap.docs.forEach(d=>{
+    const c = String((d.data().teacherCode)||'');
+    const n = parseInt(c.replace(/^T/,''),10);
+    if(!isNaN(n) && n>max) max = n;
+  });
+  return 'T' + (max + 1);
+}
+async function doSoloGoogleLogin(){
+  const btn = $('#soloGoogleBtn');
+  btn.textContent='جارٍ الدخول…'; btn.disabled=true;
+  try{
+    if(!firebase.auth) throw new Error('خدمة المصادقة غير متاحة. تأكد من الاتصال بالإنترنت.');
+    const provider = new firebase.auth.GoogleAuthProvider();
+    const res = await firebase.auth().signInWithPopup(provider);
+    const gUser = res.user;
+    if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
+
+    // هل هذا الحساب مسجَّل من قبل؟
+    const q = await usersCol().where('googleUid','==',gUser.uid).limit(1).get();
+    let docId, data;
+    if(q.empty){
+      // أول دخول: إنشاء اشتراك تجريبي 30 يوماً
+      const now = Date.now();
+      const teacherCode = await nextSoloTeacherCode();
+      data = {
+        username: gUser.displayName || gUser.email.split('@')[0],
+        email: gUser.email, googleUid: gUser.uid,
+        role: 'soloTeacher', schoolId: null, teacherCode,
+        assignedClasses: [], permissions: defaultPerms('soloTeacher'),
+        active: true, subscribedAt: now,
+        subscriptionEnds: now + SOLO_TRIAL_DAYS*24*60*60*1000,
+        createdAt: now, updatedAt: now
+      };
+      const ref = await usersCol().add(data);
+      docId = ref.id;
+    } else {
+      docId = q.docs[0].id; data = q.docs[0].data();
+      if(data.active===false) throw new Error('حسابك موقوف حالياً. تواصل مع إدارة النظام.');
+      if(data.subscriptionEnds && Date.now() > data.subscriptionEnds){
+        throw new Error('انتهى اشتراكك بتاريخ ' + new Date(data.subscriptionEnds).toLocaleDateString('ar') + '. تواصل مع إدارة النظام للتجديد.');
+      }
+    }
+    CURRENT = { id:docId, ...data };
+    SESSION = { userId:docId, username:data.username, role:'soloTeacher', schoolId:null, period:'first' };
+    localStorage.setItem('cls_session', JSON.stringify(SESSION));
+    window.location.href = 'omr.html';   // المعلم الفردي يعمل داخل omr.html فقط
+  }catch(e){
+    let msg = e.message||'';
+    if(e.code==='auth/operation-not-allowed') msg='دخول Google غير مُفعّل بعد في إعدادات Firebase. فعّله من Authentication ← Sign-in method.';
+    if(e.code==='auth/popup-closed-by-user') msg='أُغلقت نافذة الدخول قبل إتمامها.';
+    alertBox('soloLoginAlert','err',msg);
+    try{ firebase.auth().signOut(); }catch(_){}
+  }finally{ btn.textContent='الدخول بحساب Google'; btn.disabled=false; }
+}
+$('#soloGoogleBtn').onclick = doSoloGoogleLogin;
 
 function logout(){ localStorage.removeItem('cls_session'); SESSION=null; CURRENT=null; $('#liPass').value=''; alertBox('loginAlert','',''); show('loginView'); }
 
@@ -761,7 +849,7 @@ async function renderUsers(c){
   $('#addUserBtn').onclick=()=>openUserModal(null);
 
   // فلتر المدرسة (يُخفى لأدمن المدرسة، فهو مقيّد على مدرسته أصلاً)
-  const opts = ['<option value="">كل المدارس</option>']
+  const opts = ['<option value="">كل المدارس</option>','<option value="__solo__">— المعلمون الفرديون —</option>']
     .concat(Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`)).join('');
   $('#uFilter').innerHTML=`<div class="field" style="margin:0"><label>عرض حسب المدرسة</label><select id="uSchoolFilter">${opts}</select></div>`;
   $('#uSchoolFilter').onchange=loadUsersList;
@@ -773,27 +861,72 @@ async function loadUsersList(){
   try{
     const snap = await usersCol().get();
     let users = snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(isSchoolScoped) users = users.filter(u=>u.schoolId===CURRENT.schoolId && u.role!=='admin');
+    if(isSchoolScoped) users = users.filter(u=>u.schoolId===CURRENT.schoolId && u.role!=='admin' && u.role!=='soloTeacher');
+    else if(filter==='__solo__') users = users.filter(u=>u.role==='soloTeacher');
     else if(filter) users = users.filter(u=>u.schoolId===filter);
+    else users = users.filter(u=>u.role!=='soloTeacher'); // المعلمون الفرديون يُعرضون عبر فلترهم الخاص
     const rank=u=>u.role==='admin'?-2:u.role==='schoolAdmin'?-1:0;
     users.sort((a,b)=>rank(a)-rank(b));
     if(!users.length){ wrap.innerHTML=`<div class="empty"><span class="e-emoji">👥</span>لا يوجد مستخدمون بعد.</div>`; return; }
     wrap.innerHTML = users.map(u=>{
-      const sc = u.schoolId&&SCHOOLS[u.schoolId]?SCHOOLS[u.schoolId].name:(u.role==='admin'?'— كل المدارس —':'بلا مدرسة');
+      const isSolo = u.role==='soloTeacher';
+      const sc = isSolo ? esc(u.email||'') : (u.schoolId&&SCHOOLS[u.schoolId]?SCHOOLS[u.schoolId].name:(u.role==='admin'?'— كل المدارس —':'بلا مدرسة'));
       const isMe = u.id===CURRENT.id;
+      let subLine = '';
+      if(isSolo){
+        const ends = u.subscriptionEnds||0;
+        const daysLeft = Math.ceil((ends - Date.now())/(24*60*60*1000));
+        const expired = ends && Date.now()>ends;
+        subLine = `<div class="umeta" style="margin-top:4px;font-weight:700;color:${expired?'var(--bad,#c0392b)':(daysLeft<=7?'#c07a00':'var(--ok,#1e8e5a)')}">`+
+          (ends ? (expired ? ('انتهى الاشتراك في '+new Date(ends).toLocaleDateString('ar')) : ('الاشتراك حتى '+new Date(ends).toLocaleDateString('ar')+' ('+daysLeft+' يوم)')) : 'بلا تاريخ اشتراك')+
+          `</div>`+
+          (u.teacherCode?`<div class="umeta">رمز المعلم: <b>${esc(u.teacherCode)}</b></div>`:'');
+      }
       return `<div class="card"><div class="urow">
         <div class="uavatar">${esc((u.username||'?')[0])}</div>
         <div class="uinfo">
           <div class="uname">${esc(u.username)} ${isMe?'<span class="pill role">أنت</span>':''}</div>
           <div class="umeta"><span class="pill role">${esc(ROLES[u.role]||u.role)}</span> · ${esc(sc)}</div>
+          ${subLine}
         </div>
         <span class="pill ${u.active===false?'off':'on'}">${u.active===false?'معطّل':'مُفعّل'}</span>
         <div class="row-actions">
+          ${isSolo?`<button class="icon-btn" onclick="editSoloSubscription('${u.id}')" title="إدارة الاشتراك">🗓</button>`:''}
           <button class="icon-btn" onclick="openUserModal('${u.id}')" title="تعديل">✏️</button>
           ${(u.role==='admin'||u.role==='schoolAdmin')?'':`<button class="icon-btn del" onclick="deleteUser('${u.id}','${esc(u.username)}')" title="حذف">🗑</button>`}
         </div></div></div>`;
     }).join('');
   }catch(e){ wrap.innerHTML=`<div class="alert err">${esc(e.message)}</div>`; }
+}
+/* إدارة اشتراك المعلم الفردي (تفعيل/إيقاف + تمديد التاريخ) — للأدمن العام */
+async function editSoloSubscription(id){
+  try{
+    const snap = await usersCol().doc(id).get();
+    if(!snap.exists) return;
+    const u = snap.data();
+    const cur = u.subscriptionEnds ? new Date(u.subscriptionEnds).toISOString().slice(0,10) : '';
+    modal('<h2>إدارة اشتراك: '+esc(u.username||'')+'</h2>'+
+      '<div class="field"><label>تاريخ انتهاء الاشتراك</label><input type="date" id="subEnd" value="'+esc(cur)+'"></div>'+
+      '<div class="field"><label>حالة الحساب</label><select id="subActive">'+
+        '<option value="1"'+(u.active!==false?' selected':'')+'>مُفعّل</option>'+
+        '<option value="0"'+(u.active===false?' selected':'')+'>موقوف</option>'+
+      '</select></div>'+
+      '<div style="display:flex;gap:8px;margin-top:12px">'+
+        '<button class="btn" onclick="saveSoloSubscription(\''+id+'\')">حفظ</button>'+
+        '<button class="btn secondary" onclick="closeModal()">إلغاء</button>'+
+      '</div>');
+  }catch(e){ toast('خطأ: '+e.message); }
+}
+async function saveSoloSubscription(id){
+  try{
+    const d = $('#subEnd').value;
+    const active = $('#subActive').value==='1';
+    await usersCol().doc(id).update({
+      subscriptionEnds: d ? new Date(d+'T23:59:59').getTime() : null,
+      active, updatedAt: Date.now()
+    });
+    closeModal(); toast('تم حفظ الاشتراك'); loadUsersList();
+  }catch(e){ toast('خطأ: '+e.message); }
 }
 
 let editUser=null, editPerms=null, permReadonly=false, umReadonly=false;

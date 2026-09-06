@@ -291,8 +291,8 @@ const PERM_TREE = [
   ]},
   { key:'omr', label:'صفحة التصحيح الآلي (omr)', leaves:[
     { key:'omr.classes',        label:'الفصول والطلاب', sub:false },
-    { key:'omr.classes.manual', label:'إضافة يدوية', sub:true },
-    { key:'omr.classes.noor',   label:'استيراد من نور', sub:true },
+    { key:'omr.classes.addManage', label:'مسؤول إضافة الفصول والطلاب', sub:true },
+    { key:'omr.classes.transfer',  label:'مسؤول نقل الطلاب بين الفصول', sub:true },
     { key:'omr.design',  label:'التصميم' },
     { key:'omr.grade',   label:'التصحيح' },
     { key:'omr.results', label:'النتائج' },
@@ -323,9 +323,9 @@ function defaultPerms(role){
     set('index.studentStatus',true,true,false);
   } else if(role==='assistant'){    // مساعد إداري: وصول+تعديل (الفصول والطلاب، الغياب)
     ['index.classes','index.absence'].forEach(k=>set(k,true,true,false));
-  } else if(role==='teacher'){      // معلم: المرسلة/الواردة + صفحة التصحيح كاملة + أوراق العمل كاملة
+  } else if(role==='teacher'){      // معلم: المرسلة/الواردة + صفحة التصحيح كاملة + أوراق العمل كاملة (بدون تفويض الإضافة/النقل — تُمنح صراحة)
     ['index.sent','index.received'].forEach(k=>set(k,true,true,false));
-    ['omr.classes','omr.classes.manual','omr.classes.noor','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
+    ['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
     ['worksheets.upload','worksheets.bank','worksheets.publish','worksheets.submissions'].forEach(k=>set(k,true,true,true));
   }
   return p;
@@ -336,6 +336,7 @@ const INDEX_TABS = [
   { key:'classes',  perm:'index.classes',  label:'الفصول والطلاب' },
   { key:'sent',     perm:'index.sent',     label:'الملاحظات المرسلة' },
   { key:'received', perm:'index.received', label:'الملاحظات الواردة' },
+  { key:'transfers', perm:'', label:'طلبات بانتظار الموافقة' },
   { key:'absence',  perm:'index.absence',  label:'غياب الطلاب' },
   { key:'studentStatus', perm:'index.studentStatus', label:'حالة الطالب' },
   { key:'users',    perm:'index.users',    label:'المستخدمون' },
@@ -511,9 +512,11 @@ $('#pwBtn').onclick = async ()=>{
 function visibleTabs(){
   if(CURRENT.role==='admin') return INDEX_TABS.slice();
   if(CURRENT.role==='schoolAdmin') return INDEX_TABS.filter(t=>t.key!=='settings');
+  const pm=CURRENT.permissions||{};
+  const canTransfer = !!(pm['omr.classes.transfer'] && pm['omr.classes.transfer'].edit);
   return INDEX_TABS.filter(t=>{
-    const pm=CURRENT.permissions||{};
-    if(t.key==='users'||t.key==='settings') return false; // للأدمن فقط
+    if(t.key==='users'||t.key==='settings') return false;
+    if(t.key==='transfers') return canTransfer;
     return pm[t.perm] && pm[t.perm].access;
   });
 }
@@ -530,6 +533,7 @@ function enterApp(){
   tabs.forEach(t=>{
     const b=document.createElement('button'); b.className='tab'; b.textContent=t.label;
     if(t.key==='received'){ const bd=document.createElement('span'); bd.id='rcvBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
+    if(t.key==='transfers'){ const bd=document.createElement('span'); bd.id='trBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
     b.onclick=()=>{ activeTab=t.key; renderTabs(); renderPanel(); };
     bar.appendChild(b);
   });
@@ -537,6 +541,7 @@ function enterApp(){
   renderTabs(); renderPanel();
   watchActive();
   if(typeof refreshUnread==='function') refreshUnread();
+  if(typeof refreshTransfersBadge==='function') refreshTransfersBadge();
 }
 let _activeUnsub=null;
 function watchActive(){
@@ -737,6 +742,7 @@ function renderPanel(){
   if(activeTab==='classes')    return renderClasses(c);
   if(activeTab==='sent')       return renderSent(c);
   if(activeTab==='received')   return renderReceived(c);
+  if(activeTab==='transfers')  return renderTransfers(c);
   if(activeTab==='absence')    return renderAbsence(c);
   if(activeTab==='studentStatus') return renderStudentStatus(c);
   const labels={classes:'الفصول والطلاب',sent:'الملاحظات المرسلة',received:'الملاحظات الواردة',absence:'غياب الطلاب'};
@@ -791,6 +797,16 @@ async function loadUsersList(){
 }
 
 let editUser=null, editPerms=null, permReadonly=false, umReadonly=false;
+let ADMIN_DELEGATION_LOCKED = false; // true = هذه المدرسة لها schoolAdmin خاص، فيُمنع admin العام من تفويض الإضافة/النقل مباشرة
+async function refreshDelegationLock(schoolId){
+  ADMIN_DELEGATION_LOCKED = false;
+  if(CURRENT.role!=='admin' || !schoolId) { renderPermTree(); return; }
+  try{
+    const snap = await usersCol().where('schoolId','==',schoolId).where('role','==','schoolAdmin').get();
+    ADMIN_DELEGATION_LOCKED = !snap.empty;
+  }catch(e){}
+  renderPermTree();
+}
 async function openUserModal(id){
   editUser = null; 
   if(id){ const s=await usersCol().doc(id).get(); editUser={id:s.id,...s.data()}; }
@@ -825,8 +841,9 @@ async function openUserModal(id){
   let activeState = !(e&&e.active===false);
   $('#umActive').onclick=()=>{activeState=true;$('#umActive').classList.add('active');$('#umInactive').classList.remove('active');};
   $('#umInactive').onclick=()=>{activeState=false;$('#umInactive').classList.add('active');$('#umActive').classList.remove('active');};
-  $('#umSchool').onchange=()=>{ const sid=$('#umSchool').value; loadModalClasses(sid, (e&&e.schoolId===sid)?(e.assignedClasses||[]):[]); };
+  $('#umSchool').onchange=()=>{ const sid=$('#umSchool').value; loadModalClasses(sid, (e&&e.schoolId===sid)?(e.assignedClasses||[]):[]); refreshDelegationLock(sid); };
   loadModalClasses(e?e.schoolId:'', e?e.assignedClasses:[]);
+  refreshDelegationLock(e?e.schoolId:($('#umSchool')?$('#umSchool').value:''));
   $('#umRole').onchange=()=>{ editPerms=defaultPerms($('#umRole').value); renderPermTree(); toast('طُبِّقت صلاحيات الدور الافتراضية'); };
   renderPermTree();
   $('#umSave').onclick=()=>saveUser(activeState);
@@ -859,13 +876,16 @@ async function loadModalClasses(schoolId, pre){
 }
 function renderPermTree(){
   const root=$('#permTree'); if(!root) return;
+  const delegationKeys = ['omr.classes.addManage','omr.classes.transfer'];
   root.innerHTML = PERM_TREE.map(g=>`<div class="perm-grp">
     <div class="perm-head">${esc(g.label)}</div>
     ${g.leaves.map(l=>{
       const p=editPerms[l.key]||{access:false,edit:false,del:false};
-      const ro = permReadonly?'disabled':'';
+      const locked = ADMIN_DELEGATION_LOCKED && delegationKeys.includes(l.key);
+      const ro = (permReadonly||locked)?'disabled':'';
+      const lockNote = locked?' <span style="color:var(--muted);font-weight:400;font-size:12px">(حصرية لمدير هذه المدرسة)</span>':'';
       return `<div class="perm-leaf ${l.sub?'sub':''}">
-        <span class="pl-name">${l.sub?'↳ ':''}${esc(l.label)}</span>
+        <span class="pl-name">${l.sub?'↳ ':''}${esc(l.label)}${lockNote}</span>
         <label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="access" ${p.access?'checked':''}> وصول</label>
         <label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="edit" ${p.edit?'checked':''}> تعديل</label>
         <label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="del" ${p.del?'checked':''}> حذف</label>
@@ -1385,7 +1405,65 @@ async function resolveRecipients(opts){
   else if(opts.kind==='toPeers'){ const other=opts.fromRole==='agent'?'counselor':'agent'; recs=users.filter(u=>u.role===other); }
   return recs.map(u=>({userId:u.id,name:u.username,role:u.role}));
 }
-let unreadNotes=0;
+const transferRequestsCol = ()=>db.collection('transferRequests');
+async function renderTransfers(c){
+  c.innerHTML = '<div class="panel-head"><h2>طلبات بانتظار الموافقة</h2></div><div id="trList"><div class="empty"><span class="spin"></span></div></div>';
+  try{
+    let q = transferRequestsCol().where('status','==','pending');
+    if(CURRENT.role!=='admin') q = q.where('schoolId','==',CURRENT.schoolId);
+    const snap = await q.get();
+    let arr = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.createdAt-a.createdAt);
+    $('#trList').innerHTML = arr.length ? arr.map(r=>transferCard(r)).join('') : '<div class="empty"><span class="e-emoji">✅</span>لا توجد طلبات نقل معلّقة.</div>';
+  }catch(e){ $('#trList').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
+}
+function transferCard(r){
+  const schoolName = (SCHOOLS[r.schoolId]&&SCHOOLS[r.schoolId].name) ? ' · '+esc(SCHOOLS[r.schoolId].name) : '';
+  return '<div class="card"><div class="uinfo">'+
+    '<div class="uname" style="font-size:14px">طلب من: '+esc(r.requestedByName||'')+schoolName+'</div>'+
+    '<div class="umeta" style="margin:6px 0">الطالب: <b>'+esc(r.studentName||'')+'</b> ('+esc(r.studentSeat||'')+')</div>'+
+    '<div class="umeta">من: '+esc(r.fromClassName||'—')+' ← إلى: <b>'+esc(r.toClassName||'')+'</b></div>'+
+    '<div class="umeta">'+new Date(r.createdAt).toLocaleString('ar')+'</div>'+
+    '<div style="display:flex;gap:8px;margin-top:10px">'+
+      '<button class="btn sm" onclick="approveTransfer(\''+r.id+'\')">✓ موافقة</button>'+
+      '<button class="btn secondary sm" onclick="rejectTransfer(\''+r.id+'\')">✕ رفض</button>'+
+    '</div></div></div>';
+}
+async function approveTransfer(id){
+  try{
+    const doc = await transferRequestsCol().doc(id).get();
+    if(!doc.exists){ toast('الطلب غير موجود.'); renderTransfers($('#content')); return; }
+    const r = doc.data();
+    await db.runTransaction(async (tx)=>{
+      const ref = rosterDoc(r.schoolId);
+      const snap = await tx.get(ref);
+      const d = snap.exists ? JSON.parse(snap.data().value||'{}') : {};
+      const students = Array.isArray(d.students) ? d.students : [];
+      const st = students.find(s=>String(s.seat)===String(r.studentSeat));
+      if(st) st.classCode = r.toClassCode;
+      tx.set(ref, { value: JSON.stringify({ ...d, students }), updatedAt: Date.now(), schoolId: r.schoolId, base:'roster' });
+    });
+    await transferRequestsCol().doc(id).update({ status:'approved', resolvedAt:Date.now(), resolvedByName:CURRENT.username });
+    toast('تم قبول طلب النقل.'); renderTransfers($('#content')); refreshTransfersBadge();
+  }catch(e){ toast('خطأ: '+e.message); }
+}
+async function rejectTransfer(id){
+  try{
+    await transferRequestsCol().doc(id).update({ status:'rejected', resolvedAt:Date.now(), resolvedByName:CURRENT.username });
+    toast('تم رفض طلب النقل.'); renderTransfers($('#content')); refreshTransfersBadge();
+  }catch(e){ toast('خطأ: '+e.message); }
+}
+async function refreshTransfersBadge(){
+  const bd=$('#trBadge'); if(!bd) return;
+  if(CURRENT.role!=='admin' && CURRENT.role!=='schoolAdmin' && !((CURRENT.permissions||{})['omr.classes.transfer']||{}).edit){ bd.style.display='none'; return; }
+  try{
+    let q = transferRequestsCol().where('status','==','pending');
+    if(CURRENT.role!=='admin') q = q.where('schoolId','==',CURRENT.schoolId);
+    const snap = await q.get();
+    const n = snap.size;
+    bd.textContent = n; bd.style.display = n>0?'inline-flex':'none';
+  }catch(e){ bd.style.display='none'; }
+}
+
 async function studentNoteCount(seat){
   try{ const snap=await notesCol().where('studentSeat','==',String(seat)).get();
     return snap.docs.map(d=>d.data()).filter(n=>n.schoolId===CURRENT.schoolId && n.period===SESSION.period).length;

@@ -2065,8 +2065,8 @@ function showAddClassesChoice(){
 function mountIntoModal(sectionId){
   const restricted = ['secClassAdd','secStudentAdd','secExcelImport','secPasteImport'];
   const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
-  if(restricted.includes(sectionId) && !exempt && CLS_TEACHER_ADD===false){
-    alert('إضافة الطلاب موقوفة من إدارة المدرسة حالياً.');
+  if(restricted.includes(sectionId) && !exempt && !CLS_CAN_ADD_MANAGE){
+    alert('إضافة الفصول والطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.');
     return;
   }
   const el = document.getElementById(sectionId);
@@ -2103,7 +2103,7 @@ function updateBulkBar(){
   const sc=document.getElementById('selCount');
   if(sc) sc.textContent = `${toArabic(sel.length)} محدّد`;
   const nb=document.getElementById('bulkNoteBtns');
-  if(nb) nb.style.display = (typeof CLS_TEACHER_ADD!=='undefined' && CLS_TEACHER_ADD===false)?'none':'';
+  if(nb) nb.style.display = '';
 }
 function bulkMove(){
   if(!clsGuardEdit()) return;
@@ -2113,11 +2113,22 @@ function bulkMove(){
   const ans = prompt(`نقل ${toArabic(sel.length)} طالباً إلى أي صف؟ اكتب رمز الصف:\n\n${list}`);
   if(ans===null) return;
   const code = ans.trim();
-  if(!state.classes.some(c=>c.code===code)){ alert('رمز صف غير موجود.'); return; }
-  state.students.forEach(s=>{ if(state.selectedStudents[s.seat]) s.classCode=code; });
+  const toClass = state.classes.find(c=>c.code===code);
+  if(!toClass){ alert('رمز صف غير موجود.'); return; }
+  const students = state.students.filter(s=>state.selectedStudents[s.seat]);
   state.selectedStudents={};
-  renderClasses(); renderStudents(); saveStudentsToCloud();
-  alert('تم نقل الطلاب إلى الصف المحدّد.');
+  if(clsCanTransferDirect()){
+    students.forEach(s=>{ s.classCode=code; });
+    renderClasses(); renderStudents(); saveStudentsToCloud();
+    alert('تم نقل الطلاب إلى الصف المحدّد.');
+  } else {
+    Promise.all(students.map(s=>{
+      const fromClass = state.classes.find(c=>String(c.code)===String(s.classCode));
+      return createTransferRequest(s, fromClass, toClass);
+    }))
+      .then(()=>{ renderStudents(); alert(`تم إرسال ${toArabic(students.length)} طلب نقل، بانتظار موافقة مدير المدرسة أو المفوَّض بالنقل.`); })
+      .catch(e=>alert('تعذّر إرسال بعض طلبات النقل: '+e.message));
+  }
 }
 let _omrNoteCtx=null;
 function omrModal(html){
@@ -4331,8 +4342,17 @@ function doMoveStudentOmr(seat){
   const to=(document.getElementById('mvClsOmr')||{}).value; if(!to) return;
   const st=state.students.find(s=>s.seat===seat); if(!st) return;
   if(state.students.some(x=>x.seat===seat && String(x.classCode)===String(to))){ alert('الطالب موجود في الفصل الهدف.'); return; }
-  st.classCode=to; closeOmrModal(); renderStudents(); saveStudentsToCloud();
-  alert('تم نقل الطالب.');
+  const toClass = state.classes.find(c=>String(c.code)===String(to));
+  const fromClass = state.classes.find(c=>String(c.code)===String(st.classCode));
+  closeOmrModal();
+  if(clsCanTransferDirect()){
+    st.classCode=to; renderStudents(); saveStudentsToCloud();
+    alert('تم نقل الطالب.');
+  } else {
+    createTransferRequest(st, fromClass, toClass)
+      .then(()=>alert('تم إرسال طلب النقل، بانتظار موافقة مدير المدرسة أو المفوَّض بالنقل.'))
+      .catch(e=>alert('تعذّر إرسال طلب النقل: '+e.message));
+  }
 }
 async function renderOmrNotes(){
   const host=document.getElementById('omrNotesHost'); if(!host) return;
@@ -4414,7 +4434,7 @@ const firebaseConfig = {
 let db = null, cloudReady = false, rosterLoaded = false;
 
 /* ===== ربط النظام: حارس الدخول + عزل البيانات حسب المدرسة/الفترة/المستخدم ===== */
-let CLS_SESSION = null, CLS_NS = '', CLS_TEACHER_ADD = true, CLS_OMR_PERM = {view:true,edit:true,del:true}, CLS_STU_STATUS = {};
+let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_CAN_TRANSFER = false, CLS_OMR_PERM = {view:true,edit:true,del:true}, CLS_STU_STATUS = {};
 (function clsAuthGuard(){
   try{ CLS_SESSION = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){ CLS_SESSION = null; }
   if(!CLS_SESSION || !CLS_SESSION.userId){
@@ -4525,7 +4545,6 @@ function initFirebase(){
     db = firebase.firestore();
     cloudReady = true;
     setCloudStatus('ok','✅ متصل بقاعدة البيانات.');
-    clsLoadTeacherAdd();
     clsWatchActive();
     clsLoadPerms();
     loadExamsFromCloud();
@@ -4554,30 +4573,37 @@ async function cloudGet(collection, docId){
   if(!snap.exists) return null;
   try{ return JSON.parse(snap.data().value); }catch(e){ return null; }
 }
-/* قراءة مفتاح «إضافة الطلاب للمعلمين» على مستوى المدرسة (غير معزول بالمعلم) */
-async function clsLoadTeacherAdd(){
+/* إخفاء بطاقات الإضافة عن المعلم غير المفوَّض (يظل ظاهرًا لمدير النظام/مدير المدرسة/المفوَّض بالإضافة) */
+function clsApplyAddManage(){
   try{
-    if(!CLS_SESSION || !CLS_SESSION.schoolId){ clsApplyTeacherAdd(); return; }
-    const snap = await db.collection('schoolData').doc('roster_'+CLS_SESSION.schoolId).get();
-    if(snap.exists){ const d = JSON.parse(snap.data().value||'{}'); CLS_TEACHER_ADD = (d.teacherAdd!==false); }
-  }catch(e){}
-  clsApplyTeacherAdd();
-}
-/* عند الإيقاف: إخفاء بطاقتي «إضافة يدوية» و«استيراد من نور» كاملتين */
-function clsApplyTeacherAdd(){
-  try{
-    const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
+    const allowed = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin'||CLS_CAN_ADD_MANAGE);
     ['secClassAdd','secStudentAdd','secExcelImport','secPasteImport'].forEach(id=>{
       const el=document.getElementById(id); if(!el) return;
-      el.style.display = (!exempt && CLS_TEACHER_ADD===false)?'none':'';
+      el.style.display = allowed?'':'none';
     });
   }catch(e){}
 }
 function clsGuardAdd(){
   if(CLS_OMR_PERM.edit===false){ alert('ليس لديك صلاحية التعديل في صفحة التصحيح.'); return false; }
   const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
-  if(!exempt && CLS_TEACHER_ADD===false){ alert('إضافة الطلاب موقوفة من إدارة المدرسة حالياً.'); return false; }
+  if(!exempt && !CLS_CAN_ADD_MANAGE){ alert('إضافة الفصول والطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه. تواصل مع إدارة المدرسة.'); return false; }
   return true;
+}
+// هل يملك المستخدم صلاحية تنفيذ نقل الطالب مباشرة (بدون موافقة)؟
+function clsCanTransferDirect(){
+  return (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin'||CLS_CAN_TRANSFER);
+}
+// إنشاء طلب نقل معلّق بانتظار موافقة مدير المدرسة أو المفوَّض بالنقل
+async function createTransferRequest(student, fromClass, toClass){
+  if(!CLS_SESSION || !CLS_SESSION.schoolId) throw new Error('حسابك غير مرتبط بمدرسة.');
+  await db.collection('transferRequests').add({
+    schoolId: CLS_SESSION.schoolId,
+    studentSeat: student.seat, studentName: student.name,
+    fromClassCode: fromClass?fromClass.code:'', fromClassName: fromClass?fromClass.name:'',
+    toClassCode: toClass.code, toClassName: toClass.name,
+    requestedByUserId: (CLS_SESSION&&CLS_SESSION.userId)||null, requestedByName: (CLS_SESSION&&CLS_SESSION.username)||'',
+    status: 'pending', createdAt: Date.now()
+  });
 }
 function clsGuardEdit(){ if(CLS_OMR_PERM.edit===false){ alert('ليس لديك صلاحية التعديل في صفحة التصحيح (مشاهدة فقط).'); return false; } return true; }
 function clsGuardDel(){ if(CLS_OMR_PERM.del===false){ alert('ليس لديك صلاحية الحذف في صفحة التصحيح.'); return false; } return true; }
@@ -4587,12 +4613,15 @@ async function clsLoadPerms(){
     const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
     if(!snap.exists) return;
     const u = snap.data();
-    if(u.role==='admin'||u.role==='schoolAdmin'){ CLS_OMR_PERM={view:true,edit:true,del:true}; return; }
+    if(u.role==='admin'||u.role==='schoolAdmin'){ CLS_OMR_PERM={view:true,edit:true,del:true}; CLS_CAN_ADD_MANAGE=true; CLS_CAN_TRANSFER=true; clsApplyAddManage(); return; }
     const perm=u.permissions||{};
-    const keys=['omr.classes','omr.classes.manual','omr.classes.noor','omr.design','omr.grade','omr.results','omr.worklog'];
+    const keys=['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'];
     const any=fl=>keys.some(k=>perm[k]&&perm[k][fl]);
     CLS_OMR_PERM={ view:any('access'), edit:any('edit'), del:any('del') };
+    CLS_CAN_ADD_MANAGE = !!(perm['omr.classes.addManage'] && perm['omr.classes.addManage'].edit);
+    CLS_CAN_TRANSFER = !!(perm['omr.classes.transfer'] && perm['omr.classes.transfer'].edit);
     if(!CLS_OMR_PERM.view){ alert('ليس لديك صلاحية الوصول إلى صفحة التصحيح.'); location.replace('index.html'); }
+    clsApplyAddManage();
   }catch(e){}
 }
 /* طرد المستخدم فور تعطيله (أو عند التحديث إن كان معطّلاً) */
@@ -5022,7 +5051,6 @@ async function loadStudentsFromCloud(manual){
     state.fullClasses = Array.isArray(rData.classes) ? rData.classes : [];
     state.fullStudents = Array.isArray(rData.students) ? rData.students : [];
     state.customSubjects = Array.isArray(rData.customSubjects) ? rData.customSubjects : [];
-    CLS_TEACHER_ADD = (rData.teacherAdd!==false);
     recomputeVisibleRoster();
     if(typeof renderSubjectSelect==='function') renderSubjectSelect();
     if(typeof renderAssignedSubjectsList==='function') renderAssignedSubjectsList();

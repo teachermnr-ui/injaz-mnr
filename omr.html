@@ -4434,9 +4434,16 @@ const firebaseConfig = {
 let db = null, cloudReady = false, rosterLoaded = false;
 
 /* ===== ربط النظام: حارس الدخول + عزل البيانات حسب المدرسة/الفترة/المستخدم ===== */
-let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_CAN_TRANSFER = false, CLS_OMR_PERM = {view:true,edit:true,del:true}, CLS_STU_STATUS = {};
+let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_CAN_TRANSFER = false, CLS_OMR_PERM = {view:true,edit:true,del:true}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '';
 (function clsAuthGuard(){
   try{ CLS_SESSION = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){ CLS_SESSION = null; }
+  if(CLS_SESSION && CLS_SESSION.role==='admin' && !CLS_SESSION.schoolId){
+    try{
+      const pick = sessionStorage.getItem('cls_admin_school');
+      if(pick) CLS_SESSION.schoolId = pick;
+      CLS_ADMIN_SCHOOL_NAME = sessionStorage.getItem('cls_admin_school_name') || '';
+    }catch(e){}
+  }
   if(!CLS_SESSION || !CLS_SESSION.userId){
     location.replace('index.html');   // غير مسجّل دخول → صفحة الدخول
     return;
@@ -4454,6 +4461,7 @@ let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_CAN_TRANSFE
         '<span style="background:rgba(255,255,255,.14);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:500;white-space:nowrap">'+(CLS_SESSION.period==='second'?'الفترة الثانية':'الفترة الأولى')+'</span>'+
       '</div>';
     document.body.insertBefore(bar, document.body.firstChild);
+    if(CLS_SESSION.role==='admin' && CLS_SESSION.schoolId) updateAdminSchoolBadge();
   });
 })();
 state.exams = [];
@@ -4545,16 +4553,75 @@ function initFirebase(){
     db = firebase.firestore();
     cloudReady = true;
     setCloudStatus('ok','✅ متصل بقاعدة البيانات.');
-    clsWatchActive();
-    clsLoadPerms();
-    loadExamsFromCloud();
-    loadResultsFromCloud();
-    loadStudentsFromCloud();
-    loadSavedRecords();
-    loadWorkLog();
   }catch(e){
     setCloudStatus('err','خطأ في الاتصال: '+e.message);
+    return;
   }
+  if(CLS_SESSION.role==='admin' && !CLS_SESSION.schoolId){
+    showAdminSchoolPicker();
+  } else {
+    initFirebaseData();
+  }
+}
+function initFirebaseData(){
+  clsWatchActive();
+  clsLoadPerms();
+  loadExamsFromCloud();
+  loadResultsFromCloud();
+  loadStudentsFromCloud();
+  loadSavedRecords();
+  loadWorkLog();
+}
+/* اختيار مدرسة للعمل عليها — يظهر فقط لحساب admin العام (ليس له schoolId ثابت) */
+async function showAdminSchoolPicker(){
+  const ov=document.createElement('div');
+  ov.id='adminSchoolPickOv';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(11,90,84,.96);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;padding:22px 18px;max-width:420px;width:100%;max-height:80vh;overflow:auto">'+
+    '<h3 style="margin:0 0 6px">اختر المدرسة</h3>'+
+    '<div style="color:#888;font-size:13px;margin-bottom:14px">حسابك (مدير النظام) غير مرتبط بمدرسة محددة — اختر أي مدرسة تريد العمل عليها الآن.</div>'+
+    '<div id="adminSchoolPickList">جاري التحميل…</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  let schools={};
+  try{
+    const snap = await db.collection('schoolData').doc('schools').get();
+    schools = snap.exists ? (snap.data().list||{}) : {};
+  }catch(e){}
+  const listEl = document.getElementById('adminSchoolPickList');
+  const ids = Object.keys(schools);
+  if(!ids.length){ listEl.innerHTML='<div style="color:var(--bad,#c0392b)">لا توجد مدارس مسجّلة بعد.</div>'; return; }
+  listEl.innerHTML = ids.map(sid=>
+    '<button style="width:100%;text-align:right;display:block;padding:12px 14px;margin-bottom:8px;border:1.5px solid var(--line,#d7dede);border-radius:10px;background:#fff;font:inherit;font-weight:700;font-size:14px;cursor:pointer" data-sid="'+escapeHtml(sid)+'">'+escapeHtml(schools[sid].name||sid)+(schools[sid].code?(' <span style="color:#888;font-weight:400;font-size:12px">('+escapeHtml(schools[sid].code)+')</span>'):'')+'</button>'
+  ).join('');
+  listEl.querySelectorAll('button[data-sid]').forEach(btn=>{
+    btn.onclick=()=>{
+      const sid = btn.dataset.sid;
+      try{
+        sessionStorage.setItem('cls_admin_school', sid);
+        sessionStorage.setItem('cls_admin_school_name', schools[sid].name||sid);
+      }catch(e){}
+      location.reload();
+    };
+  });
+}
+/* شارة تعرض للأدمن اسم المدرسة الحالية بأعلى الصفحة، مع زر لتغييرها */
+function updateAdminSchoolBadge(){
+  if(CLS_SESSION.role!=='admin') return;
+  let badge = document.getElementById('adminSchoolBadge');
+  if(!badge){
+    badge = document.createElement('div');
+    badge.id='adminSchoolBadge';
+    badge.style.cssText='display:flex;align-items:center;gap:8px;margin-top:4px';
+    const headerBar = document.querySelector('body>div'); // الشريط العلوي المُنشأ في clsAuthGuard
+    if(headerBar) headerBar.appendChild(badge);
+  }
+  badge.innerHTML = '<span style="background:rgba(255,255,255,.14);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:600">🏫 '+escapeHtml(CLS_ADMIN_SCHOOL_NAME||CLS_SESSION.schoolId||'')+'</span>'+
+    '<button onclick="switchAdminSchool()" style="background:rgba(255,255,255,.18);border:none;color:#fff;padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:700;cursor:pointer">تغيير المدرسة</button>';
+}
+function switchAdminSchool(){
+  try{ sessionStorage.removeItem('cls_admin_school'); sessionStorage.removeItem('cls_admin_school_name'); }catch(e){}
+  location.reload();
 }
 // قراءة/كتابة وثيقة في مجموعة مستقلة (مشروع OMR منفصل)
 async function cloudSet(collection, docId, obj){

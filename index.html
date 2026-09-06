@@ -184,18 +184,40 @@ input,select{font-family:inherit;font-size:15px}
     <button class="btn" id="roleStudentBtn" style="background:var(--teal-l);color:var(--teal-d);">دخول الطالب</button>
   </div>
 
-  <!-- 1أ) دخول عضو التدريس -->
+  <!-- 1أ) دخول النظام المدرسي (Firebase Authentication) -->
   <div class="auth-card hidden" id="staffLoginCard">
     <div class="brand-mark">ف</div>
     <h1>النسخة المدرسية</h1>
-    <p class="auth-sub">سجّل الدخول للمتابعة</p>
+    <p class="auth-sub">سجّل الدخول بحسابك للمتابعة</p>
     <div id="loginAlert"></div>
-    <div class="field"><label>رقم الهوية</label><input id="liUser" inputmode="numeric" autocomplete="username" placeholder="رقم الهوية"></div>
-    <div class="field"><label>كلمة المرور</label><input id="liPass" type="password" autocomplete="current-password" placeholder="كلمة المرور"></div>
-    <div class="field"><label>الفترة</label>
-      <select id="liPeriod"><option value="first">الفترة الأولى</option><option value="second">الفترة الثانية</option></select>
+
+    <div id="staffSignInBox">
+      <button class="btn" id="staffGoogleBtn">الدخول بحساب Google</button>
+      <div style="display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted);font-size:12px;">
+        <span style="flex:1;height:1px;background:var(--line);"></span>أو<span style="flex:1;height:1px;background:var(--line);"></span>
+      </div>
+      <div class="field"><label>البريد الإلكتروني</label><input id="liEmail" type="email" autocomplete="username" placeholder="name@example.com"></div>
+      <div class="field"><label>كلمة المرور</label><input id="liPass" type="password" autocomplete="current-password" placeholder="كلمة المرور"></div>
+      <div class="field"><label>الفترة</label>
+        <select id="liPeriod"><option value="first">الفترة الأولى</option><option value="second">الفترة الثانية</option></select>
+      </div>
+      <button class="btn" id="liBtn">دخول</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;">إن كنت تدخل لأول مرة، استخدم زر Google أو أنشئ كلمة مرور لبريدك من زر التفعيل أدناه.</p>
+      <button class="btn" id="staffActivateBtn" style="background:var(--teal-l);color:var(--teal-d);margin-top:6px;">تفعيل حسابي لأول مرة</button>
     </div>
-    <button class="btn" id="liBtn">دخول</button>
+
+    <div id="staffActivateBox" class="hidden" style="text-align:right;">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">أدخل رقم هويتك وكلمة المرور الأولية التي زوّدتك بها الإدارة، مع البريد الذي ستدخل به لاحقاً.</p>
+      <div class="field"><label>رقم الهوية</label><input id="acSeat" inputmode="numeric" placeholder="رقم الهوية"></div>
+      <div class="field"><label>كلمة المرور الأولية</label><input id="acTemp" type="password" placeholder="كلمة المرور الأولية"></div>
+      <div class="field"><label>بريدك الإلكتروني</label><input id="acEmail" type="email" placeholder="name@example.com"></div>
+      <div class="field"><label>كلمة مرور جديدة لحسابك</label><input id="acNewPass" type="password" placeholder="٦ أحرف على الأقل"></div>
+      <button class="btn" id="acDoBtn">تفعيل وربط الحساب</button>
+      <button class="btn" id="acBackBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;">يمكنك بدل ذلك الضغط على «الدخول بحساب Google» بعد إدخال الهوية وكلمة المرور الأولية أعلاه.</p>
+      <button class="btn" id="acGoogleBtn" style="background:var(--teal-l);color:var(--teal-d);">تفعيل عبر حساب Google</button>
+    </div>
+
     <button class="btn" id="backFromStaffBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
   </div>
 
@@ -418,12 +440,18 @@ async function boot(){
     await loadRoleTemplates();
     const saved = JSON.parse(localStorage.getItem('cls_session')||'null');
     if(saved && saved.userId){
-      const snap = await usersCol().doc(saved.userId).get();
-      if(snap.exists){
+      // لا تُستعاد الجلسة إلا بوجود مصادقة Firebase حيّة مطابقة لها
+      const au = await new Promise(res=>{
+        const un = firebase.auth().onAuthStateChanged(u=>{ un(); res(u); });
+      });
+      const snap = au ? await usersCol().doc(saved.userId).get() : null;
+      if(snap && snap.exists && snap.data().authUid === au.uid && snap.data().active!==false){
         const u = snap.data();
         if(u.role==='soloTeacher'){ window.location.href='omr.html'; return; }
         SESSION=saved; CURRENT={id:snap.id,...u}; enterApp(); return;
       }
+      localStorage.removeItem('cls_session');
+      try{ if(au) await firebase.auth().signOut(); }catch(e){}
     }
     show('loginView');
   }catch(e){ console.error(e); show('loginView'); alertBox('loginAlert','err','خطأ في التحميل: '+e.message); }
@@ -435,10 +463,11 @@ async function ensureSeed(){
   if(!sd.exists){ await schoolsDoc().set({ list:{} }); }
   const adminQ = await usersCol().where('role','==','admin').limit(1).get();
   if(adminQ.empty){
+    // حساب الأدمن الأول: يُفعَّل مرة واحدة بربط بريد حقيقي، ثم تُمحى كلمة المرور الأولية
     await usersCol().add({
       loginId:'1000000000', username:'admin', password:'admin123', role:'admin', schoolId:null,
       assignedClasses:[], permissions:defaultPerms('admin'),
-      mustChangePassword:true, active:true,
+      mustChangePassword:false, active:true,
       createdAt:Date.now(), updatedAt:Date.now()
     });
   }
@@ -555,34 +584,118 @@ async function doStudentVerify(){
    ======================================================================== */
 $('#liBtn').onclick = doLogin;
 $('#liPass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+$('#staffGoogleBtn').onclick = ()=>staffProviderLogin();
+$('#staffActivateBtn').onclick = ()=>{ $('#staffSignInBox').classList.add('hidden'); $('#staffActivateBox').classList.remove('hidden'); alertBox('loginAlert','',''); };
+$('#acBackBtn').onclick = ()=>{ $('#staffActivateBox').classList.add('hidden'); $('#staffSignInBox').classList.remove('hidden'); alertBox('loginAlert','',''); };
+$('#acDoBtn').onclick = ()=>doStaffActivate('password');
+$('#acGoogleBtn').onclick = ()=>doStaffActivate('google');
+
+/* بعد نجاح المصادقة: نجد مستند المستخدم المرتبط بهذا الحساب ونفتح النظام */
+async function finishStaffLogin(authUser){
+  const period = $('#liPeriod') ? $('#liPeriod').value : 'first';
+  const q = await usersCol().where('authUid','==',authUser.uid).limit(1).get();
+  if(q.empty){
+    await firebase.auth().signOut();
+    throw new Error('هذا الحساب غير مربوط بأي مستخدم. استخدم «تفعيل حسابي لأول مرة» أولاً.');
+  }
+  const d=q.docs[0], data=d.data();
+  if(data.active===false){ await firebase.auth().signOut(); throw new Error('هذا الحساب معطّل. راجع المسؤول'); }
+  if(data.role==='soloTeacher'){
+    if(data.subscriptionEnds && Date.now()>data.subscriptionEnds){
+      await firebase.auth().signOut();
+      throw new Error('انتهى اشتراكك بتاريخ '+new Date(data.subscriptionEnds).toLocaleDateString('ar')+'. تواصل مع إدارة النظام.');
+    }
+  } else if(data.role!=='admin' && data.schoolId && SCHOOLS[data.schoolId]){
+    const sc=SCHOOLS[data.schoolId];
+    if(sc.activePeriod && sc.activePeriod!==period){
+      await firebase.auth().signOut();
+      throw new Error('الفترة '+periodLabel(period)+' غير مُفعّلة لمدرستك حالياً');
+    }
+  }
+  CURRENT={id:d.id,...data};
+  SESSION={ userId:d.id, username:data.username, role:data.role, schoolId:data.schoolId||null, period };
+  localStorage.setItem('cls_session',JSON.stringify(SESSION));
+  if(data.role==='soloTeacher'){ window.location.href='omr.html'; return; }
+  enterApp();
+}
+function authErrMsg(e){
+  const m={ 'auth/invalid-credential':'البريد أو كلمة المرور غير صحيحة',
+    'auth/wrong-password':'كلمة المرور غير صحيحة',
+    'auth/user-not-found':'لا يوجد حساب بهذا البريد',
+    'auth/invalid-email':'صيغة البريد غير صحيحة',
+    'auth/too-many-requests':'محاولات كثيرة، انتظر قليلاً ثم أعد المحاولة',
+    'auth/popup-closed-by-user':'أُغلقت نافذة الدخول قبل إتمامها',
+    'auth/unauthorized-domain':'هذا النطاق غير مصرّح به في إعدادات Firebase',
+    'auth/email-already-in-use':'هذا البريد مستخدم بالفعل — سجّل الدخول به مباشرة',
+    'auth/weak-password':'كلمة المرور ضعيفة (٦ أحرف على الأقل)' };
+  return m[e.code] || e.message || 'تعذّر الدخول';
+}
 async function doLogin(){
-  const u=$('#liUser').value.trim(), p=$('#liPass').value, period=$('#liPeriod').value;
-  if(!u||!p){ alertBox('loginAlert','err','أدخل رقم الهوية وكلمة المرور'); return; }
+  const em=$('#liEmail').value.trim(), p=$('#liPass').value;
+  if(!em||!p){ alertBox('loginAlert','err','أدخل البريد وكلمة المرور'); return; }
   $('#liBtn').textContent='جارٍ الدخول…'; $('#liBtn').disabled=true;
   try{
-    let q = await usersCol().where('loginId','==',u).limit(1).get();
-    if(q.empty){
-      // توافق مع حسابات أُنشئت قبل هذا التحديث (مفيش رقم هوية مسجّل بعد)
-      q = await usersCol().where('username','==',u).limit(1).get();
-    }
-    if(q.empty){ throw new Error('رقم الهوية غير موجود'); }
-    const doc=q.docs[0], data=doc.data();
-    if(data.password!==p){ throw new Error('كلمة المرور غير صحيحة'); }
-    if(data.active===false){ throw new Error('هذا الحساب معطّل. راجع المسؤول'); }
-    // التحقق من تجميد الفترة لغير الأدمن
-    if(data.role!=='admin' && data.schoolId && SCHOOLS[data.schoolId]){
-      const sc=SCHOOLS[data.schoolId];
-      if(sc.activePeriod && sc.activePeriod!==period){
-        throw new Error('الفترة '+periodLabel(period)+' غير مُفعّلة لمدرستك حالياً');
-      }
-    }
-    CURRENT={id:doc.id,...data};
-    SESSION={ userId:doc.id, username:data.username, role:data.role, schoolId:data.schoolId||null, period };
-    localStorage.setItem('cls_session',JSON.stringify(SESSION));
-    if(data.mustChangePassword){ openChangePw(true); }
-    else enterApp();
-  }catch(e){ alertBox('loginAlert','err',e.message); }
+    const cred = await firebase.auth().signInWithEmailAndPassword(em,p);
+    await finishStaffLogin(cred.user);
+  }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
   finally{ $('#liBtn').textContent='دخول'; $('#liBtn').disabled=false; }
+}
+async function staffProviderLogin(){
+  const btn=$('#staffGoogleBtn'); btn.textContent='جارٍ الدخول…'; btn.disabled=true;
+  try{
+    const res = await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    await finishStaffLogin(res.user);
+  }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
+  finally{ btn.textContent='الدخول بحساب Google'; btn.disabled=false; }
+}
+
+/* التفعيل لأول مرة: التحقق من رقم الهوية وكلمة المرور الأولية، ثم ربط حساب المصادقة ومحو كلمة المرور */
+async function doStaffActivate(mode){
+  const seat=$('#acSeat').value.trim(), temp=$('#acTemp').value;
+  if(!seat||!temp){ alertBox('loginAlert','err','أدخل رقم الهوية وكلمة المرور الأولية'); return; }
+  const btn = mode==='google' ? $('#acGoogleBtn') : $('#acDoBtn');
+  const label = btn.textContent;
+  btn.textContent='جارٍ التفعيل…'; btn.disabled=true;
+  try{
+    let q = await usersCol().where('loginId','==',seat).limit(1).get();
+    if(q.empty) q = await usersCol().where('username','==',seat).limit(1).get();
+    if(q.empty) throw new Error('رقم الهوية غير موجود');
+    const d=q.docs[0], data=d.data();
+    if(data.active===false) throw new Error('هذا الحساب معطّل. راجع المسؤول');
+    if(data.authUid) throw new Error('هذا الحساب مُفعّل بالفعل. سجّل الدخول ببريده المرتبط.');
+    if(!data.password || data.password!==temp) throw new Error('كلمة المرور الأولية غير صحيحة');
+
+    let authUser;
+    if(mode==='google'){
+      const res = await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      authUser = res.user;
+    } else {
+      const em=$('#acEmail').value.trim(), np=$('#acNewPass').value;
+      if(!em||!np) throw new Error('أدخل بريدك وكلمة مرور جديدة');
+      if(np.length<6) throw new Error('كلمة المرور يجب ألا تقل عن ٦ أحرف');
+      let cred;
+      try{ cred = await firebase.auth().createUserWithEmailAndPassword(em,np); }
+      catch(err){
+        if(err.code==='auth/email-already-in-use') cred = await firebase.auth().signInWithEmailAndPassword(em,np);
+        else throw err;
+      }
+      authUser = cred.user;
+    }
+    // منع ربط نفس حساب المصادقة بأكثر من مستخدم
+    const dup = await usersCol().where('authUid','==',authUser.uid).limit(1).get();
+    if(!dup.empty){ await firebase.auth().signOut(); throw new Error('هذا البريد مرتبط بمستخدم آخر بالفعل.'); }
+
+    await usersCol().doc(d.id).update({
+      authUid: authUser.uid, email: authUser.email||null,
+      password: firebase.firestore.FieldValue.delete(),   // كلمة المرور الأولية لم تعد لازمة
+      mustChangePassword: false, activatedAt: Date.now(), updatedAt: Date.now()
+    });
+    await finishStaffLogin(authUser);
+  }catch(e){
+    alertBox('loginAlert','err',authErrMsg(e));
+    try{ if(firebase.auth().currentUser) await firebase.auth().signOut(); }catch(_){}
+  }
+  finally{ btn.textContent=label; btn.disabled=false; }
 }
 
 /* ========================================================================
@@ -611,7 +724,7 @@ async function doSoloGoogleLogin(){
     if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
 
     // هل هذا الحساب مسجَّل من قبل؟
-    const q = await usersCol().where('googleUid','==',gUser.uid).limit(1).get();
+    const q = await usersCol().where('authUid','==',gUser.uid).limit(1).get();
     let docId, data;
     if(q.empty){
       // أول دخول: إنشاء اشتراك تجريبي 30 يوماً
@@ -619,7 +732,7 @@ async function doSoloGoogleLogin(){
       const teacherCode = await nextSoloTeacherCode();
       data = {
         username: gUser.displayName || gUser.email.split('@')[0],
-        email: gUser.email, googleUid: gUser.uid,
+        email: gUser.email, authUid: gUser.uid,
         role: 'soloTeacher', schoolId: null, teacherCode,
         assignedClasses: [], permissions: permsForNewUser('soloTeacher'),
         active: true, subscribedAt: now,
@@ -663,7 +776,7 @@ function permsForNewUser(role){
   const t = ROLE_TEMPLATES[role];
   return (t && typeof t==='object' && Object.keys(t).length) ? JSON.parse(JSON.stringify(t)) : defaultPerms(role);
 }
-function logout(){ localStorage.removeItem('cls_session'); SESSION=null; CURRENT=null; $('#liPass').value=''; alertBox('loginAlert','',''); show('loginView'); }
+function logout(){ try{ firebase.auth().signOut(); }catch(e){} localStorage.removeItem('cls_session'); SESSION=null; CURRENT=null; if($('#liPass'))$('#liPass').value=''; alertBox('loginAlert','',''); show('loginView'); }
 
 /* ========================================================================
    تغيير كلمة المرور
@@ -679,14 +792,18 @@ function openChangePw(forced){
 $('#pwSkip').onclick = ()=> enterApp();
 $('#pwBtn').onclick = async ()=>{
   const o=$('#pwOld').value, n=$('#pwNew').value, n2=$('#pwNew2').value;
-  if(o!==CURRENT.password){ alertBox('pwAlert','err','كلمة المرور الحالية غير صحيحة'); return; }
-  if(n.length<4){ alertBox('pwAlert','err','كلمة المرور الجديدة قصيرة جداً'); return; }
+  if(n.length<6){ alertBox('pwAlert','err','كلمة المرور الجديدة يجب ألا تقل عن ٦ أحرف'); return; }
   if(n!==n2){ alertBox('pwAlert','err','التأكيد لا يطابق الجديدة'); return; }
+  const au = firebase.auth().currentUser;
+  if(!au){ alertBox('pwAlert','err','لا توجد جلسة مصادقة. أعد تسجيل الدخول.'); return; }
+  const isPasswordAcct = (au.providerData||[]).some(p=>p.providerId==='password');
+  if(!isPasswordAcct){ alertBox('pwAlert','err','حسابك يدخل عبر Google — غيّر كلمة المرور من إعدادات حساب Google.'); return; }
   try{
-    await usersCol().doc(CURRENT.id).update({ password:n, mustChangePassword:false, updatedAt:Date.now() });
-    CURRENT.password=n; CURRENT.mustChangePassword=false;
+    const cred = firebase.auth.EmailAuthProvider.credential(au.email, o);
+    await au.reauthenticateWithCredential(cred);
+    await au.updatePassword(n);
     toast('تم تغيير كلمة المرور'); enterApp();
-  }catch(e){ alertBox('pwAlert','err',e.message); }
+  }catch(e){ alertBox('pwAlert','err', (typeof authErrMsg==='function'? authErrMsg(e) : e.message)); }
 };
 
 /* ========================================================================
@@ -875,7 +992,7 @@ async function renderStudentStatus(c){
     '<div class="card" id="ssForm"><div class="empty"><span class="spin"></span></div></div>'+
     '<h3 style="margin:16px 4px 8px;font-size:15px">الطلاب الذين لهم حالات مسجّلة</h3><div id="ssRecords"></div>';
   let classes=[],students=[];
-  try{ const sp=await rosterDoc(CURRENT.schoolId).get(); if(sp.exists){ const d=JSON.parse(sp.data().value||'{}'); classes=Array.isArray(d.classes)?d.classes:[]; students=Array.isArray(d.students)?d.students:[]; } }catch(e){}
+  try{ const sp=await rosterDoc(CURRENT.schoolId).get(); if(sp.exists){ const d=JSON.parse(sp.data().value||'{}'); classes=Array.isArray(d.classes)?d.classes:[]; students=(Array.isArray(d.students)?d.students:[]).filter(x=>!x.deleted); } }catch(e){}
   SS_DATA={classes,students}; SS_SEL=null;
   paintSSForm(canEdit); paintSSRecords();
 }
@@ -903,7 +1020,8 @@ async function saveStudentStatusOne(){
   SS_SEL.social=($('#ssSocial').value||'').trim(); SS_SEL.health=($('#ssHealth').value||'').trim();
   try{
     const sp=await rosterDoc(CURRENT.schoolId).get(); const d=sp.exists?JSON.parse(sp.data().value||'{}'):{};
-    await rosterDoc(CURRENT.schoolId).set({ value:JSON.stringify({classes:d.classes||SS_DATA.classes, students:SS_DATA.students, teacherAdd:d.teacherAdd!==false}), updatedAt:Date.now(), schoolId:CURRENT.schoolId, base:'roster' });
+    const keptDel = (Array.isArray(d.students)?d.students:[]).filter(x=>x.deleted);
+    await rosterDoc(CURRENT.schoolId).set({ value:JSON.stringify(Object.assign({}, d, {classes:d.classes||SS_DATA.classes, students:SS_DATA.students.concat(keptDel)})), updatedAt:Date.now(), schoolId:CURRENT.schoolId, base:'roster' });
     toast('تم حفظ حالة الطالب'); paintSSRecords();
   }catch(e){ toast('خطأ: '+e.message); }
 }
@@ -987,6 +1105,7 @@ async function loadUsersList(){
         <span class="pill ${u.active===false?'off':'on'}">${u.active===false?'معطّل':'مُفعّل'}</span>
         <div class="row-actions">
           ${isSolo?`<button class="icon-btn" onclick="editSoloSubscription('${u.id}')" title="إدارة الاشتراك">🗓</button>`:''}
+          ${u.authUid?`<button class="icon-btn" onclick="unlinkUserAccount('${u.id}','${esc(u.username)}')" title="فك ربط البريد">🔓</button>`:''}
           <button class="icon-btn" onclick="openUserModal('${u.id}')" title="تعديل">✏️</button>
           ${(u.role==='admin'||u.role==='schoolAdmin')?'':`<button class="icon-btn del" onclick="deleteUser('${u.id}','${esc(u.username)}')" title="حذف">🗑</button>`}
         </div></div></div>`;
@@ -1054,7 +1173,13 @@ async function openUserModal(id){
       <option value="">— اختر المدرسة —</option>${schoolOpts}</select></div>
     <div class="field"><label>رقم الهوية</label><input id="umUser" inputmode="numeric" value="${e?esc(e.loginId||''):''}" placeholder="رقم الهوية — أرقام فقط (يُستخدم للدخول)"></div>
     <div class="field"><label>اسم المستخدم</label><input id="umDisplayName" value="${e?esc(e.username):''}" placeholder="الاسم الظاهر في الموقع"></div>
-    <div class="field"><label>كلمة المرور</label><input id="umPass" value="${e?esc(e.password):''}" placeholder="كلمة المرور"></div>
+    ${e && e.authUid
+      ? `<div class="field"><label>حالة الحساب المرتبط</label>
+           <div class="sub-note" style="margin:0;color:var(--ok,#1a7a4f);font-weight:700">✔ مُفعّل ومرتبط بالبريد: ${esc(e.email||'—')}</div>
+           <div class="sub-note" style="margin-top:4px">لتغيير البريد استخدم زر «فك ربط البريد» من قائمة المستخدمين.</div></div>`
+      : `<div class="field"><label>كلمة المرور الأولية <span style="color:var(--muted);font-weight:400">(للتفعيل مرة واحدة فقط)</span></label>
+           <input id="umPass" value="${e?esc(e.password||''):''}" placeholder="يسلّمها المستخدم عند أول تفعيل">
+           <div class="sub-note" style="margin-top:4px">يستخدمها المستخدم مع رقم هويته لربط بريده، ثم تُمحى تلقائياً.</div></div>`}
     <div class="field"><label>الدور</label><select id="umRole">${roleOpts}</select></div>
     <div class="field"><label>الفصول المسندة <span style="color:var(--muted);font-weight:400">(اختر فصلاً أو أكثر)</span></label>
       <div id="umClassesHost"><div class="sub-note" style="margin:0">اختر المدرسة أولاً.</div></div></div>
@@ -1128,41 +1253,43 @@ function renderPermTree(){
   });
 }
 async function saveUser(active){
-  if(editUser && editUser.role==='admin'){
-    const pass=$('#umPass').value;
-    if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور'); return; }
+  const linked = !!(editUser && editUser.authUid);
+  const passEl = $('#umPass');
+  if(editUser && (editUser.role==='admin' || editUser.role==='schoolAdmin')){
+    const isAdm = editUser.role==='admin';
+    const upd = { role:editUser.role, schoolId:isAdm?null:editUser.schoolId, assignedClasses:[],
+                  permissions:defaultPerms(editUser.role), active:isAdm?true:active,
+                  mustChangePassword:false, updatedAt:Date.now() };
+    if(!linked){
+      const pass = passEl ? passEl.value : '';
+      if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور الأولية'); return; }
+      upd.password = pass;
+    }
     try{
-      await usersCol().doc(editUser.id).update({ password:pass, role:'admin', schoolId:null, assignedClasses:[], permissions:defaultPerms('admin'), active:true, mustChangePassword:false, updatedAt:Date.now() });
-      toast('تم تحديث كلمة مرور الأدمن'); closeModal(); loadUsersList();
+      await usersCol().doc(editUser.id).update(upd);
+      toast(isAdm?'تم تحديث حساب الأدمن':'تم تحديث حساب أدمن المدرسة'); closeModal(); loadUsersList();
     }catch(e){ alertBox('umAlert','err',e.message); }
     return;
   }
-  if(editUser && editUser.role==='schoolAdmin'){
-    const pass=$('#umPass').value;
-    if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور'); return; }
-    try{
-      await usersCol().doc(editUser.id).update({ password:pass, role:'schoolAdmin', schoolId:editUser.schoolId, assignedClasses:[], permissions:defaultPerms('schoolAdmin'), active, updatedAt:Date.now() });
-      toast('تم تحديث حساب أدمن المدرسة'); closeModal(); loadUsersList();
-    }catch(e){ alertBox('umAlert','err',e.message); }
-    return;
-  }
-  const school=$('#umSchool').value, loginId=$('#umUser').value.trim(), displayName=$('#umDisplayName').value.trim(), pass=$('#umPass').value,
+  const school=$('#umSchool').value, loginId=$('#umUser').value.trim(),
+        displayName=$('#umDisplayName').value.trim(),
+        pass = passEl ? passEl.value : '',
         role=$('#umRole').value,
         classes=[...document.querySelectorAll('.umCls:checked')].map(x=>x.value);
   if(!school){ alertBox('umAlert','err','اختر المدرسة'); return; }
   if(!loginId){ alertBox('umAlert','err','أدخل رقم الهوية'); return; }
   if(!/^[0-9]+$/.test(loginId)){ alertBox('umAlert','err','رقم الهوية يجب أن يكون أرقاماً فقط'); return; }
   if(!displayName){ alertBox('umAlert','err','أدخل اسم المستخدم'); return; }
-  if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور'); return; }
+  if(!linked && !pass){ alertBox('umAlert','err','أدخل كلمة المرور الأولية'); return; }
   try{
-    // فحص تفرّد رقم الهوية (المُستخدم للدخول)
     const q=await usersCol().where('loginId','==',loginId).get();
     const clash=q.docs.find(d=> d.id!==(editUser&&editUser.id));
     if(clash){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
-    const payload={ loginId, username:displayName, password:pass, role, schoolId:school, assignedClasses:classes,
+    const payload={ loginId, username:displayName, role, schoolId:school, assignedClasses:classes,
       permissions:editPerms, active, updatedAt:Date.now() };
+    if(!linked) payload.password = pass;   // كلمة المرور الأولية تبقى حتى يفعّل المستخدم حسابه
     if(editUser){ await usersCol().doc(editUser.id).update(payload); toast('تم تحديث المستخدم'); }
-    else { payload.mustChangePassword=true; payload.createdAt=Date.now(); await usersCol().add(payload); toast('تمت إضافة المستخدم'); }
+    else { payload.mustChangePassword=false; payload.createdAt=Date.now(); await usersCol().add(payload); toast('تمت إضافة المستخدم — سلّمه رقم الهوية وكلمة المرور الأولية للتفعيل'); }
     closeModal(); loadUsersList();
   }catch(e){ alertBox('umAlert','err',e.message); }
 }
@@ -1222,6 +1349,23 @@ function renderSettings(c){
   };
   $('#wipeBtn').onclick=wipeData;
   renderSchoolsList();
+}
+/* فك ربط بريد مستخدم (لمن غيّر بريده أو فقده) — يعيد تعيين كلمة مرور أولية للتفعيل من جديد */
+function unlinkUserAccount(id,name){
+  const temp = 'T' + Math.floor(100000 + Math.random()*900000);
+  confirmModal('فك ربط الحساب',
+    `سيُفك ربط بريد «${name}» ولن يستطيع الدخول به.\nكلمة المرور الأولية الجديدة للتفعيل هي:\n\n${temp}\n\nسلّمها له ليعيد التفعيل ببريده الجديد. متابعة؟`,
+    async()=>{
+      try{
+        await usersCol().doc(id).update({
+          authUid: firebase.firestore.FieldValue.delete(),
+          email: firebase.firestore.FieldValue.delete(),
+          password: temp, activatedAt: null, updatedAt: Date.now()
+        });
+        toast('فُك الربط — كلمة المرور الأولية: '+temp);
+        loadUsersList();
+      }catch(e){ toast('خطأ: '+e.message); }
+    },true);
 }
 /* ---- محرر الصلاحيات الافتراضية للأدوار (لأدمن النظام) ---- */
 let tplRole = 'teacher', tplPerms = {};
@@ -1429,21 +1573,26 @@ async function renderClasses(c){
   c.innerHTML=`<div class="panel-head"><h2>الفصول والطلاب</h2></div><div id="rRoot"><div class="empty"><span class="spin"></span></div></div>`;
   await loadRoster();
 }
+let RRosterRaw = {};   // نسخة كاملة من وثيقة الروستر للحفاظ على الحقول غير المعروضة هنا
 async function loadRoster(){
   if(!RSchoolId){ $('#rRoot').innerHTML=`<div class="empty"><span class="e-emoji">🏫</span>أنشئ مدرسة أولاً من إعدادات النظام.</div>`; return; }
   try{
     const snap=await rosterDoc(RSchoolId).get();
     const d = snap.exists ? JSON.parse(snap.data().value||'{}') : {};
-    RClasses=Array.isArray(d.classes)?d.classes:[]; RStudents=Array.isArray(d.students)?d.students:[];
+    RRosterRaw = d;
+    RClasses=Array.isArray(d.classes)?d.classes:[]; RStudents=(Array.isArray(d.students)?d.students:[]).filter(x=>!x.deleted);
     RTeacherAdd = (d.teacherAdd!==false);
-  }catch(e){ RClasses=[];RStudents=[]; }
+  }catch(e){ RClasses=[];RStudents=[]; RRosterRaw={}; }
   const hasC=RClasses.length>0;
   RUI={ ed:{teacherAdd:!hasC, noor:!hasC, manual:!hasC, paste:!hasC}, openStage:null, openClass:null };
   await loadAbsenceCounts();
   paintClasses();
 }
 async function saveRoster(){
-  await rosterDoc(RSchoolId).set({ value:JSON.stringify({classes:RClasses,students:RStudents,teacherAdd:RTeacherAdd}), updatedAt:Date.now(), schoolId:RSchoolId, base:'roster' });
+  // الطلاب المحذوفون منطقياً مُستبعدون من العرض — نُعيدهم عند الحفظ حتى لا يُمحوا نهائياً
+  const kept = (Array.isArray(RRosterRaw.students)?RRosterRaw.students:[]).filter(x=>x.deleted);
+  const merged = Object.assign({}, RRosterRaw, { classes:RClasses, students:RStudents.concat(kept) });
+  await rosterDoc(RSchoolId).set({ value:JSON.stringify(merged), updatedAt:Date.now(), schoolId:RSchoolId, base:'roster' });
 }
 function paintClasses(){
   let html='';

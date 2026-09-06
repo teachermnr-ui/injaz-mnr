@@ -573,6 +573,7 @@
 <!-- Firebase (compat) — يُربط بمشروعك نفسه -->
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <!-- مولّد رمز QR (لطباعة باركود كل طالب) -->
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <!-- قارئ رمز QR موثوق (لفكّ الباركود أثناء التصحيح) -->
@@ -4591,6 +4592,7 @@ function initFirebase(){
   }
 }
 function initFirebaseData(){
+  clsVerifyAuth();
   clsWatchActive();
   clsLoadPerms();
   loadAttWindow();
@@ -4761,6 +4763,28 @@ async function clsLoadPerms(){
   }catch(e){}
 }
 /* طرد المستخدم فور تعطيله (أو عند التحديث إن كان معطّلاً) */
+/* التأكد من وجود جلسة مصادقة حقيقية مطابقة للجلسة المخزّنة — وإلا يُطرد المستخدم للدخول */
+function clsVerifyAuth(){
+  try{
+    if(!firebase.auth) return;
+    firebase.auth().onAuthStateChanged(async (au)=>{
+      if(!au){
+        try{ localStorage.removeItem('cls_session'); }catch(e){}
+        alert('انتهت جلستك. يرجى تسجيل الدخول من جديد.');
+        location.replace('index.html');
+        return;
+      }
+      try{
+        const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
+        if(!snap.exists || snap.data().authUid !== au.uid){
+          await firebase.auth().signOut();
+          try{ localStorage.removeItem('cls_session'); }catch(e){}
+          location.replace('index.html');
+        }
+      }catch(e){}
+    });
+  }catch(e){}
+}
 function clsWatchActive(){
   try{
     if(!CLS_SESSION || !CLS_SESSION.userId) return;
@@ -5265,7 +5289,7 @@ async function loadStudentsFromCloud(manual){
 
     rosterLoaded = true;
     try{ const _fu = await cloudGet('results','followup'); state.followup = (_fu && typeof _fu==='object' && !Array.isArray(_fu)) ? _fu : {}; }catch(e){ state.followup = {}; }
-    clsApplyTeacherAdd();
+    clsApplyAddManage();
     refreshClassDropdowns(); renderClasses(); renderStudents();
     if(typeof renderWlHeader==='function') autofillWlHeader().then(renderWlHeader);
     if(typeof renderWlSetup==='function') renderWlSetup();

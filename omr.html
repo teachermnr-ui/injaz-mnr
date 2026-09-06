@@ -1593,6 +1593,7 @@ async function addClass(){
   const stage=(document.getElementById('clStage').value||'').trim();
   if(!name){ alert('أدخل اسم الصف.'); return; }
   if(!code){ alert('أدخل رمز الصف.'); return; }
+  if(!stage){ alert('اختر المرحلة أولًا.'); return; }
   if(state.fullClasses.some(c=>c.code===code)){ alert('رمز الصف مستخدم من قبل. اختر رمزاً غير متكرر.'); return; }
   if(state.fullClasses.some(c=>c.name===name)){ alert('اسم الصف مستخدم من قبل. اختر اسماً غير متكرر.'); return; }
   try{
@@ -1784,7 +1785,8 @@ function onXlsxChosen(ev){
       if(!className) className = 'صف';
       // اقتراح رمز الصف تلقائياً من الصف والفصل (أول ثانوي=100، ثاني=200، ثالث=300 + الفصل)
       const code = suggestClassCode(grade, section);
-      pendingImport = { groups:[{ className, students: allStudents, code }] };
+      const stage = suggestClassStage(grade || className);
+      pendingImport = { groups:[{ className, students: allStudents, code, stage }] };
       openImportReview();
     }catch(err){ alert('تعذّرت قراءة الملف: '+err.message); }
   };
@@ -1799,6 +1801,14 @@ function suggestClassCode(grade, section){
   else if(/الثالث|ثالث/.test(g)) base = 300;
   const sec = parseInt(normalizeDigits(String(section||'')).replace(/[^0-9]/g,''),10);
   if(base && !isNaN(sec)) return String(base + sec);
+  return '';
+}
+// اقتراح المرحلة تلقائياً من نص الصف (اسم الصف المستورد غالبًا يحتوي كلمة المرحلة صراحة)
+function suggestClassStage(text){
+  const t = String(text||'');
+  if(/ابتدائ/.test(t)) return 'ابتدائية';
+  if(/متوسط/.test(t)) return 'متوسطة';
+  if(/ثانوي/.test(t)) return 'ثانوية';
   return '';
 }
 // تحليل ملف Excel المُصدَّر من نور: الصف/الفصل من الترويسة + الأسماء والهويات من الجدول
@@ -1918,9 +1928,16 @@ function openImportReview(){
     </div>`;
   }
   pendingImport.groups.forEach((g,gi)=>{
+    const stageOpts = ['ابتدائية','متوسطة','ثانوية'].map(s=>`<option value="${s}" ${g.stage===s?'selected':''}>${s==='ابتدائية'?'الابتدائية':s==='متوسطة'?'المتوسطة':'الثانوية'}</option>`).join('');
     html += `<div class="subcard" style="margin-bottom:12px">
       <div style="font-weight:800;color:var(--teal-d)">${escapeHtml(g.className)}</div>
       <div class="hint" style="margin:4px 0 8px">عدد الطلاب المكتشفين: <b>${toArabic(g.students.length)}</b></div>
+      <label class="field" style="margin-bottom:6px">المرحلة ${g.stage?'<span style="color:var(--ok);font-weight:700">(اقتُرحت تلقائياً — تأكّد منها)</span>':'<span style="color:var(--bad);font-weight:700">(إلزامي)</span>'}
+        <select id="impStage${gi}" onchange="setImportStage(${gi},this.value)">
+          <option value="">— اختر —</option>
+          ${stageOpts}
+        </select>
+      </label>
       <label class="field" style="margin-bottom:6px">رمز الصف لهذا الصف ${g.code?'<span style="color:var(--ok);font-weight:700">(اقتُرح تلقائياً)</span>':''}
         <input id="impCode${gi}" inputmode="numeric" value="${escapeHtml(g.code||'')}" placeholder="مثال: 108" oninput="setImportCode(${gi},this.value)">
       </label>
@@ -1940,6 +1957,7 @@ function openImportReview(){
   document.getElementById('importReviewOverlay').style.display='block';
 }
 function setImportCode(gi, val){ pendingImport.groups[gi].code = normalizeDigits(val).trim(); }
+function setImportStage(gi, val){ pendingImport.groups[gi].stage = val; }
 function setImportName(gi, si, val){ pendingImport.groups[gi].students[si].name = val; }
 function showOcrDiag(){
   const err = window.__ocrErr || '';
@@ -1954,22 +1972,24 @@ function closeImportReview(){ document.getElementById('importReviewOverlay').sty
 async function confirmImport(){
   if(!clsGuardAdd()) return;
   if(!pendingImport) return;
-  // تحقّق: كل صف يحتاج رمزاً
+  // تحقّق: كل صف يحتاج رمزاً ومرحلة
   for(const g of pendingImport.groups){
     if(!g.code){ alert(`اكتب رمز الصف لـ«${g.className}» أولاً.`); return; }
+    if(!g.stage){ alert(`اختر المرحلة لـ«${g.className}» أولاً.`); return; }
   }
   // تحقّق التكرار بين الرموز المُدخلة
   const codes = pendingImport.groups.map(g=>g.code);
   if(new Set(codes).size !== codes.length){ alert('هناك رمز صف مكرّر بين الصفوف. اجعل كل رمز فريداً.'); return; }
   let addedClasses=0, addedStudents=0, updated=0; const dups=[];
   try{
-    await mutateSharedRoster((classes, students)=>{
+    await mutateSharedRoster((classes, students, customSubjects, loginCodeCounters)=>{
       pendingImport.groups.forEach(g=>{
         let cls = classes.find(c=>c.code===g.code);
         if(!cls){
           let nm = g.className; let n=2;
           while(classes.some(c=>c.name===nm)) nm = g.className+' ('+(n++)+')';
-          cls = { name: nm, code: g.code, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null };
+          const loginCode = nextClassLoginCode(g.stage, loginCodeCounters);
+          cls = { name: nm, code: g.code, stage: g.stage, loginCode, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null };
           classes.push(cls); addedClasses++;
         }
         g.students.forEach(s=>{
@@ -4608,7 +4628,7 @@ async function clsProvisionFromSchool(){
     assigned.forEach(code=>{
       const mc = mClasses.find(c=>norm(c.code)===code); if(!mc) return;
       const realCode = String(mc.code);
-      if(!state.classes.some(c=>norm(c.code)===code)){ state.classes.push({name:mc.name, code:realCode}); changed=true; }
+      if(!state.classes.some(c=>norm(c.code)===code)){ state.classes.push({name:mc.name, code:realCode, stage:mc.stage||'', loginCode:mc.loginCode||''}); changed=true; }
       mStudents.filter(s=>norm(s.classCode)===code).forEach(s=>{
         const exists = state.students.some(x=> s.seat && x.seat===s.seat && norm(x.classCode)===code);
         if(!exists){ state.students.push({seat:s.seat, name:s.name, classCode:realCode}); changed=true; }

@@ -2357,7 +2357,7 @@ function omrAttInWindow(){
   return cur>=from && cur<to;
 }
 function omrAttDateKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function omrAttDocId(seat,dk){ return 'att_'+CLS_SESSION.schoolId+'_'+CLS_SESSION.period+'_'+seat+'_'+dk; }
+function omrAttDocId(seat,dk){ return 'att_'+CLS_SESSION.schoolId+'_'+CLS_SESSION.period+'_'+CLS_SESSION.userId+'_'+seat+'_'+dk; }
 async function omrPushAbsent(seat, stu){
   if(!CLS_SESSION || !CLS_SESSION.schoolId) return;
   if(!omrAttInWindow()) return;   // اعتماد التغيب فقط بين 7:40 و10:00 صباحاً

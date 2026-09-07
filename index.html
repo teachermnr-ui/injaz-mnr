@@ -482,18 +482,12 @@ async function boot(){
 
 /* إنشاء أدمن افتراضي + سجل مدارس فارغ عند أول تشغيل */
 async function ensureSeed(){
-  const sd = await schoolsDoc().get();
-  if(!sd.exists){ await schoolsDoc().set({ list:{} }); }
-  const adminQ = await usersCol().where('role','==','admin').limit(1).get();
-  if(adminQ.empty){
-    // حساب الأدمن الأول: يُفعَّل مرة واحدة بربط بريد حقيقي، ثم تُمحى كلمة المرور الأولية
-    await usersCol().add({
-      loginId:'1000000000', username:'admin', password:'admin123', role:'admin', schoolId:null,
-      assignedClasses:[], permissions:defaultPerms('admin'),
-      mustChangePassword:false, active:true,
-      createdAt:Date.now(), updatedAt:Date.now()
-    });
-  }
+  // القواعد الصارمة تمنع الإنشاء من غير الأدمن — لذا نتجاهل الرفض بهدوء.
+  // أول أدمن يُنشأ يدوياً مرة واحدة (انظر تعليمات التنصيب).
+  try{
+    const sd = await schoolsDoc().get();
+    if(!sd.exists){ await schoolsDoc().set({ list:{} }); }
+  }catch(e){}
 }
 
 async function loadSchools(){
@@ -745,19 +739,26 @@ async function doStaffActivate(){
   if(!au){ alertBox('loginAlert','err','انتهت الجلسة، أعد المحاولة'); await cancelActivation(); return; }
   const btn=$('#acDoBtn'); btn.textContent='جارٍ التفعيل…'; btn.disabled=true;
   try{
-    let q = await usersCol().where('loginId','==',seat).limit(1).get();
-    if(q.empty) q = await usersCol().where('username','==',seat).limit(1).get();
-    if(q.empty) throw new Error('رقم الهوية غير موجود. راجع الإدارة.');
+    let q = await usersCol().where('loginId','==',seat).limit(1).get().catch(()=>({empty:true,docs:[]}));
+    if(q.empty) q = await usersCol().where('username','==',seat).limit(1).get().catch(()=>({empty:true,docs:[]}));
+    if(q.empty) throw new Error('رقم الهوية غير موجود، أو لا تملك صلاحية قراءته. راجع الإدارة.');
     const d=q.docs[0], data=d.data();
     if(data.active===false) throw new Error('هذا الحساب معطّل. راجع المسؤول');
     if(data.authUid) throw new Error('هذا الحساب مُفعّل بالفعل ببريد آخر. راجع الإدارة لفك الربط.');
     if(!data.password || data.password!==temp) throw new Error('كلمة المرور الأولية غير صحيحة');
 
-    await usersCol().doc(d.id).update({
+    // ينتقل المستند إلى معرّف يساوي authUid حتى تستطيع القواعد قراءة الدور مباشرة
+    const payload = Object.assign({}, data, {
       authUid: au.uid, email: au.email||null,
-      password: firebase.firestore.FieldValue.delete(),
       mustChangePassword:false, activatedAt:Date.now(), updatedAt:Date.now()
     });
+    delete payload.password;
+    if(d.id === au.uid){
+      await usersCol().doc(au.uid).set(payload);
+    } else {
+      await usersCol().doc(au.uid).set(payload);
+      try{ await usersCol().doc(d.id).delete(); }catch(e){}
+    }
     AUTH_JUST_CREATED = false;
     $('#staffActivateBox').classList.add('hidden');
     $('#staffSignInBox').classList.remove('hidden');
@@ -807,8 +808,9 @@ async function doSoloGoogleLogin(){
         subscriptionEnds: now + SOLO_TRIAL_DAYS*24*60*60*1000,
         createdAt: now, updatedAt: now
       };
-      const ref = await usersCol().add(data);
-      docId = ref.id;
+      // معرّف المستند = authUid ليتوافق مع قواعد الأمان
+      await usersCol().doc(gUser.uid).set(data);
+      docId = gUser.uid;
     } else {
       docId = q.docs[0].id; data = q.docs[0].data();
       if(data.active===false) throw new Error('حسابك موقوف حالياً. تواصل مع إدارة النظام.');
@@ -989,7 +991,7 @@ async function renderAbsence(c){
 function paintAbsence(){
   if(!ABS_CACHE){ return; }
   const {arr,canEdit}=ABS_CACHE;
-  const days={}; arr.forEach(a=>{ if(a.status==='absent') days[a.seat]=(days[a.seat]||0)+1; });
+  const days={}; arr.forEach(a=>{ if(a.status==='absent') days[a.seat+'|'+(a.markedBy||'')]=(days[a.seat+'|'+(a.markedBy||'')]||0)+1; });
   const byDate={}; arr.forEach(a=>{ (byDate[a.date]=byDate[a.date]||[]).push(a); });
   const dates=Object.keys(byDate).sort((a,b)=>String(b).localeCompare(String(a)));
   const root=$('#absRoot'); if(!root) return;
@@ -1005,7 +1007,7 @@ function paintAbsence(){
         '<span style="color:var(--muted);font-size:18px">'+(open?'▴':'▾')+'</span>'+
         '<button class="btn ghost sm" onclick="event.stopPropagation();printAbsDay(\''+dt+'\')" title="طباعة PDF">🖨️ PDF</button>'+
       '</div>'+
-      (open?'<div style="padding:0 12px 12px">'+list.map(a=>absRow(a,days[a.seat]||0,canEdit)).join('')+'</div>':'')+
+      (open?'<div style="padding:0 12px 12px">'+list.map(a=>absRow(a,days[a.seat+'|'+(a.markedBy||'')]||0,canEdit)).join('')+'</div>':'')+
     '</div>';
   }).join('');
 }
@@ -1014,10 +1016,10 @@ function printAbsDay(dt){
   if(!ABS_CACHE) return;
   const norm=x=>_normN(x);
   const list=ABS_CACHE.arr.filter(a=>a.date===dt).sort((a,b)=>norm(a.classCode).localeCompare(norm(b.classCode),undefined,{numeric:true}));
-  const days={}; ABS_CACHE.arr.forEach(a=>{ if(a.status==='absent') days[a.seat]=(days[a.seat]||0)+1; });
+  const days={}; ABS_CACHE.arr.forEach(a=>{ if(a.status==='absent'){ const k=a.seat+'|'+(a.markedBy||''); days[k]=(days[k]||0)+1; } });
   let title=dt; try{ title=new Date(dt+'T00:00:00').toLocaleDateString('ar',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }catch(e){}
   const rows=list.map((a,i)=>{ const st=a.status==='excused'?('مستأذن'+(a.excuseTime?(' '+a.excuseTime):'')):a.status==='late'?('متأخر'+(a.entryTime?(' '+a.entryTime):'')):'غائب';
-    return '<tr><td>'+(i+1)+'</td><td>'+esc(a.seat)+'</td><td>'+esc(a.name)+'</td><td>'+esc(a.className||a.classCode||'')+'</td><td>'+st+'</td><td>'+(days[a.seat]||0)+'</td></tr>'; }).join('');
+    return '<tr><td>'+(i+1)+'</td><td>'+esc(a.seat)+'</td><td>'+esc(a.name)+'</td><td>'+esc(a.className||a.classCode||'')+'</td><td>'+st+'</td><td>'+(days[a.seat+'|'+(a.markedBy||'')]||0)+'</td></tr>'; }).join('');
   const w=window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
   w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>غياب '+esc(title)+'</title>'+
     '<style>body{font-family:Tahoma,Arial;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #999;padding:8px;text-align:center;font-size:13px}th{background:#eee}</style></head><body>'+
@@ -1037,7 +1039,8 @@ function absRow(a,dayCount,canEdit){
   return '<div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px;background:'+bg+'">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'+
       '<div><div style="font-weight:700">'+esc(a.name)+'</div>'+
-      '<div class="umeta">'+esc(a.seat)+' · '+esc(a.className||a.classCode||'')+'</div></div>'+
+      '<div class="umeta">'+esc(a.seat)+' · '+esc(a.className||a.classCode||'')+'</div>'+
+      (a.markedByName?'<div class="umeta" style="margin-top:2px">سجّله: <b>'+esc(a.markedByName)+'</b></div>':'')+'</div>'+
       '<div style="text-align:left;white-space:nowrap"><div style="font-weight:700;font-size:13px">'+stLbl+'</div>'+
       '<div class="umeta" style="margin-top:4px">أيام الغياب: <b>'+dayCount+'</b></div></div>'+
     '</div>'+ctrl+'</div>';

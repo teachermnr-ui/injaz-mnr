@@ -268,16 +268,14 @@
     </div>
   </section>
 
-  <!-- ================= أكواد الدخول ================= -->
+  <!-- ================= رموز دخول الفصول ================= -->
   <section id="panel-pins" class="panel">
     <div class="card">
-      <h3 style="margin-top:0">اختر فصل</h3>
-      <select id="pinsClassSelect"><option value="">جاري تحميل الفصول...</option></select>
-    </div>
-    <div class="card" id="pinsListCard" style="display:none;">
-      <h3 style="margin-top:0">أكواد طلاب الفصل</h3>
-      <p style="font-size:12px;color:var(--ink-soft);">في حال عدم ظهور كود الدخول للطالب، سيتم توليده تلقائيًا فور فتح هذا الفصل.</p>
-      <div id="pinsList" style="margin-top:14px;"></div>
+      <h3 style="margin-top:0">رموز دخول الطلاب</h3>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.9;">
+        لكل فصل رمز واحد يُوزَّع على طلابه. يدخل الطالب بحسابه (بريد Google) ويُدخل رقم هويته مع رمز فصله <b>مرة واحدة فقط</b> لتفعيل حسابه، ثم تظهر له أنشطته تلقائياً بعد ذلك.
+      </p>
+      <div id="pinsList" style="margin-top:14px;">جاري التحميل...</div>
     </div>
   </section>
 
@@ -288,6 +286,7 @@
     import {
       getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, setDoc, getDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     /* إعدادات مشروع Firebase الموحّد — عدّلها بمفاتيح المشروع الجديد فور توفرها */
     const firebaseConfig = {
@@ -300,6 +299,11 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+    // قواعد Firestore تمنع أي قراءة قبل المصادقة — ننتظر جاهزية الجلسة
+    const authReady = new Promise((resolve)=>{
+      const un = onAuthStateChanged(auth, (u)=>{ un(); resolve(u); });
+    });
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
@@ -309,6 +313,13 @@
     if (!CLS_SESSION || !CLS_SESSION.userId) {
       location.replace('index.html');
     }
+    // القواعد تمنع القراءة قبل المصادقة — نتحقق من الجلسة الحيّة
+    authReady.then((au) => {
+      if (!au) {
+        try { localStorage.removeItem('cls_session'); } catch (e) {}
+        location.replace('index.html');
+      }
+    });
     const currentTeacher = { uid: CLS_SESSION.userId, name: CLS_SESSION.username, schoolId: CLS_SESSION.schoolId };
 
     function headerDateStr() {
@@ -1677,7 +1688,7 @@
 
       const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
       let rosterStudents = [];
-      try { rosterStudents = JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").students || []; } catch (e) { rosterStudents = []; }
+      try { rosterStudents = (JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").students || []).filter(x=>!x.deleted); } catch (e) { rosterStudents = []; }
       const students = rosterStudents.filter((s) => classCodes.includes(String(s.classCode)));
 
       const subsQ = query(collection(db, "submissions"), where("worksheetId", "==", worksheetId));
@@ -1899,11 +1910,10 @@
       }
     });
 
-    /* ================= أكواد الدخول ================= */
+    /* ================= رموز دخول الفصول ================= */
     async function loadPinsClasses() {
-      const sel = document.getElementById("pinsClassSelect");
-      sel.innerHTML = `<option value="">جاري التحميل...</option>`;
-
+      const listEl = document.getElementById("pinsList");
+      listEl.innerHTML = "جاري التحميل...";
       try {
         const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
         let classes = [];
@@ -1911,73 +1921,40 @@
 
         const userSnap = await getDoc(doc(db, "users", currentTeacher.uid));
         const userData = userSnap.exists() ? userSnap.data() : {};
-        if (userData.role !== "admin" && Array.isArray(userData.assignedClasses) && userData.assignedClasses.length) {
+        if (userData.role !== "admin" && userData.role !== "schoolAdmin" &&
+            Array.isArray(userData.assignedClasses) && userData.assignedClasses.length) {
           classes = classes.filter((c) => userData.assignedClasses.includes(String(c.code)));
         }
+        if (!classes.length) { listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">لا توجد فصول متاحة لك.</p>`; return; }
 
-        if (classes.length === 0) {
-          sel.innerHTML = `<option value="">مفيش فصول متاحة لك</option>`;
-          return;
-        }
-        sel.innerHTML = `<option value="">اختر فصل...</option>` +
-          classes.map((c) => `<option value="${c.code}">${c.code}${c.name ? " - " + c.name : ""}</option>`).join("");
+        // بادئة الرمز: رمز المدرسة (S1...) أو رمز المعلم الفردي (T1...)
+        let ownerCode = "";
+        try {
+          if (userData.role === "soloTeacher") ownerCode = userData.teacherCode || "";
+          else {
+            const schoolsSnap = await getDoc(doc(db, "schoolData", "schools"));
+            const list = schoolsSnap.exists() ? (schoolsSnap.data().list || {}) : {};
+            ownerCode = (list[currentTeacher.schoolId] && list[currentTeacher.schoolId].code) || "";
+          }
+        } catch (e3) { ownerCode = ""; }
+
+        listEl.innerHTML = "";
+        classes.forEach((c) => {
+          const full = c.loginCode ? (ownerCode + c.loginCode) : "";
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);gap:10px;";
+          row.innerHTML = `
+            <span style="font-size:14px;">${c.name || ""} <span style="color:var(--ink-soft);font-size:12px;">(${c.code})</span></span>
+            ${full
+              ? `<strong style="font-size:17px;letter-spacing:2px;color:var(--teal);">${full}</strong>`
+              : `<span style="font-size:12px;color:var(--bad);">لا يوجد رمز — ولّده من صفحة إدارة الصف</span>`}
+          `;
+          listEl.appendChild(row);
+        });
       } catch (err) {
-        sel.innerHTML = `<option value="">حصل خطأ</option>`;
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--bad);">تعذّر التحميل: ${err.message}</p>`;
       }
     }
-
-    document.getElementById("pinsClassSelect").addEventListener("change", async (e) => {
-      const classCode = e.target.value;
-      const card = document.getElementById("pinsListCard");
-      const listEl = document.getElementById("pinsList");
-      if (!classCode) { card.style.display = "none"; return; }
-
-      card.style.display = "block";
-      listEl.innerHTML = "جاري التحميل...";
-
-      const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
-      let rosterStudents = [];
-      try { rosterStudents = JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").students || []; } catch (e2) { rosterStudents = []; }
-      const students = rosterStudents.filter((s) => String(s.classCode) === classCode);
-
-      if (students.length === 0) {
-        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">مفيش طلاب في الفصل ده.</p>`;
-        return;
-      }
-
-      // نجيب الأكواد الموجودة بالفعل لطلاب المدرسة دي
-      const pinsSnap = await getDocs(query(collection(db, "studentPins"), where("schoolId", "==", currentTeacher.schoolId)));
-      const pinsBySeat = {};
-      pinsSnap.docs.forEach((d) => { pinsBySeat[d.data().seat] = d.data().pin; });
-
-      // رمز المدرسة (S1, S2...) — يُلصق ببداية أي كود جديد يتولّد
-      let schoolCode = "";
-      try {
-        const schoolsSnap = await getDoc(doc(db, "schoolData", "schools"));
-        const list = schoolsSnap.exists() ? (schoolsSnap.data().list || {}) : {};
-        schoolCode = (list[currentTeacher.schoolId] && list[currentTeacher.schoolId].code) || "";
-      } catch (e3) { schoolCode = ""; }
-
-      const existingPins = new Set(Object.values(pinsBySeat));
-      listEl.innerHTML = "";
-      for (const s of students) {
-        let pin = pinsBySeat[s.seat];
-        if (!pin) {
-          do { pin = schoolCode + String(Math.floor(100000 + Math.random() * 900000)); } while (existingPins.has(pin));
-          existingPins.add(pin);
-          await addDoc(collection(db, "studentPins"), {
-            pin, schoolId: currentTeacher.schoolId, seat: s.seat, name: s.name, classCode, createdAt: serverTimestamp()
-          });
-        }
-        const row = document.createElement("div");
-        row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);";
-        row.innerHTML = `
-          <span style="font-size:14px;">${s.name}</span>
-          <strong style="font-size:16px;letter-spacing:1px;color:var(--teal);">${pin}</strong>
-        `;
-        listEl.appendChild(row);
-      }
-    });
   </script>
 
 </body>

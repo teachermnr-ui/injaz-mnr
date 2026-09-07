@@ -369,6 +369,16 @@
           <select id="stViewClass" onchange="onVClassChange(this);renderStudents()"><option value="">— اختر الصف —</option></select>
         </label>
         <div id="studentsHost"><div class="empty">اختر الصف لعرض طلابه.</div></div>
+        <div id="bulkActionsBar" style="display:none;position:sticky;bottom:56px;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px;box-shadow:0 4px 14px rgba(0,0,0,.10);z-index:19">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span id="selCount" style="font-weight:800;color:var(--teal-d);font-size:13px"></span>
+            <button class="ghost" style="padding:6px 10px;font-size:12.5px" onclick="bulkMove()">نقل إلى صف</button>
+            <span id="bulkNoteBtns" style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="ghost" style="padding:6px 10px;font-size:12.5px" onclick="bulkNote('وكيل')">ملاحظة للوكيل</button>
+              <button class="ghost" style="padding:6px 10px;font-size:12.5px" onclick="bulkNote('مرشد')">ملاحظة للموجه</button>
+            </span>
+          </div>
+        </div>
         <p class="hint" style="margin:10px 0 0;line-height:1.9">📌 <b>عرض سجل الطالب:</b> اضغط رقم الهوية.<br>📌 <b>تسجيل الحضور والغياب والتأخّر:</b> استخدم الأزرار الظاهرة تحت اسم الطالب مباشرة.<br>📌 <b>نقل الطالب أو حذفه:</b> من الزرّين بجانب بطاقته. <b>إرسال ملاحظة عن طالب:</b> من تبويب «الملاحظات».</p>
         <button class="primary" style="position:sticky;bottom:8px;margin-top:12px;width:100%;background:#0b7a63;box-shadow:0 4px 14px rgba(11,122,99,.35);z-index:20" onclick="commitAttendance()">💾 حفظ</button>
       </div>
@@ -2111,7 +2121,7 @@ function updateBulkBar(){
   const sc=document.getElementById('selCount');
   if(sc) sc.textContent = `${toArabic(sel.length)} محدّد`;
   const nb=document.getElementById('bulkNoteBtns');
-  if(nb) nb.style.display = '';
+  if(nb) nb.style.display = (CLS_SESSION && CLS_SESSION.role==='soloTeacher') ? 'none' : '';
 }
 function bulkMove(){
   if(!clsGuardEdit()) return;
@@ -2287,7 +2297,9 @@ function renderStudents(){
     html += `<div class="stcard" style="${cardBg}">
       <div class="top">
         <div style="flex:1;min-width:0;text-align:right">
-          <span class="nm" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${toArabic(i+1)}. ${escapeHtml(s.name)}</span>${CLS_ACTIVATED_SEATS[String(s.seat)]?' <span class="stat" style="background:#e6f6ee;color:#1a7a4f;border:1px solid #1a7a4f">مفعّل</span>':''}
+          <label style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;margin-left:6px;cursor:pointer">
+            <input type="checkbox" ${state.selectedStudents[s.seat]?'checked':''} onchange="toggleSelStudent('${escapeHtml(s.seat)}',this.checked)" style="width:17px;height:17px;accent-color:var(--teal-d,#0b5a54);cursor:pointer">
+          </label><span class="nm" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${toArabic(i+1)}. ${escapeHtml(s.name)}</span>${CLS_ACTIVATED_SEATS[String(s.seat)]?' <span class="stat" style="background:#e6f6ee;color:#1a7a4f;border:1px solid #1a7a4f">مفعّل</span>':''}
           <div class="sub" style="overflow-wrap:anywhere;margin-top:3px"><span class="idlink" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${escapeHtml(s.seat)}</span> · ${escapeHtml(classNameByCode(s.classCode)||s.classCode||'—')}${statChip}</div>
           ${noteLine}
         </div>
@@ -4585,11 +4597,20 @@ function initFirebase(){
     setCloudStatus('err','خطأ في الاتصال: '+e.message);
     return;
   }
-  if(CLS_SESSION.role==='admin' && !CLS_SESSION.schoolId){
-    showAdminSchoolPicker();
-  } else {
-    initFirebaseData();
-  }
+  // القواعد تمنع القراءة قبل المصادقة — ننتظر جاهزية الجلسة أولاً
+  firebase.auth().onAuthStateChanged(function(au){
+    if(!au){
+      try{ localStorage.removeItem('cls_session'); }catch(e){}
+      alert('انتهت جلستك. يرجى تسجيل الدخول من جديد.');
+      location.replace('index.html');
+      return;
+    }
+    if(CLS_SESSION.role==='admin' && !CLS_SESSION.schoolId){
+      showAdminSchoolPicker();
+    } else {
+      initFirebaseData();
+    }
+  });
 }
 function initFirebaseData(){
   clsVerifyAuth();
@@ -4763,14 +4784,13 @@ async function clsLoadPerms(){
   }catch(e){}
 }
 /* طرد المستخدم فور تعطيله (أو عند التحديث إن كان معطّلاً) */
-/* التأكد من وجود جلسة مصادقة حقيقية مطابقة للجلسة المخزّنة — وإلا يُطرد المستخدم للدخول */
+/* التأكد أن حساب المصادقة مطابق للمستخدم المخزّن في الجلسة */
 function clsVerifyAuth(){
   try{
     if(!firebase.auth) return;
     firebase.auth().onAuthStateChanged(async (au)=>{
       if(!au){
         try{ localStorage.removeItem('cls_session'); }catch(e){}
-        alert('انتهت جلستك. يرجى تسجيل الدخول من جديد.');
         location.replace('index.html');
         return;
       }
@@ -4828,27 +4848,6 @@ async function clsProvisionFromSchool(){
 }
 
 /* ---- الاختبارات (الإعدادات + المفتاح) ---- */
-async function saveExam(){
-  const name = (document.getElementById('examName').value||'').trim();
-  if(!name){ alert('اكتب اسماً للاختبار.'); return; }
-  if(!cloudReady){ alert('قاعدة البيانات غير مهيّأة. الصق إعدادات Firebase أولاً.'); return; }
-  readCfg();
-  const exam = {
-    id: 'x' + Date.now().toString(36),
-    name,
-    cfg: JSON.parse(JSON.stringify(state.cfg)),
-    key: state.key.slice(),
-    savedAt: new Date().toLocaleString('ar-SA')
-  };
-  state.exams = state.exams.filter(e=>e.name!==name); // استبدال بنفس الاسم
-  state.exams.push(exam);
-  try{
-    await cloudSet('exams', 'all', state.exams);
-    document.getElementById('examName').value='';
-    renderExams();
-    setCloudStatus('ok', `✅ حُفظ الاختبار «${name}».`);
-  }catch(e){ alert('فشل الحفظ: '+e.message); }
-}
 async function loadExamsFromCloud(){
   if(!cloudReady) return;
   try{

@@ -454,25 +454,29 @@ async function boot(){
     const stuSaved = JSON.parse(localStorage.getItem('stu_session')||'null');
     if(stuSaved && stuSaved.seat && stuSaved.googleUid){ window.location.href='student-worksheets.html'; return; }
 
+    // القواعد الجديدة تمنع أي قراءة قبل المصادقة، لذا نؤجّل تحميل البيانات إلى ما بعد الدخول
+    const au = await new Promise(res=>{
+      const un = firebase.auth().onAuthStateChanged(u=>{ un(); res(u); });
+    });
+    if(!au){ show('loginView'); return; }
+
     await ensureSeed();
     await loadSchools();
     await loadRoleTemplates();
     const saved = JSON.parse(localStorage.getItem('cls_session')||'null');
     if(saved && saved.userId){
-      // لا تُستعاد الجلسة إلا بوجود مصادقة Firebase حيّة مطابقة لها
-      const au = await new Promise(res=>{
-        const un = firebase.auth().onAuthStateChanged(u=>{ un(); res(u); });
-      });
-      const snap = au ? await usersCol().doc(saved.userId).get() : null;
-      if(snap && snap.exists && snap.data().authUid === au.uid && snap.data().active!==false){
+      const snap = await usersCol().doc(saved.userId).get();
+      if(snap.exists && snap.data().authUid === au.uid && snap.data().active!==false){
         const u = snap.data();
         if(u.role==='soloTeacher'){ window.location.href='omr.html'; return; }
         SESSION=saved; CURRENT={id:snap.id,...u}; enterApp(); return;
       }
       localStorage.removeItem('cls_session');
-      try{ if(au) await firebase.auth().signOut(); }catch(e){}
     }
+    // مصادقة بلا جلسة صالحة: نُكمل التدفّق المعتاد (دخول أو إكمال تفعيل)
     show('loginView');
+    try{ await afterAuth(au); }catch(e){ alertBox('loginAlert','err',e.message); }
+    return;
   }catch(e){ console.error(e); show('loginView'); alertBox('loginAlert','err','خطأ في التحميل: '+e.message); }
 }
 
@@ -644,6 +648,10 @@ function authErrMsg(e){
 
 /* بعد نجاح المصادقة: إمّا ندخل مباشرة، أو نطلب إكمال التفعيل */
 async function afterAuth(authUser){
+  // بعد المصادقة صار بإمكاننا القراءة — نحمّل البيانات الأساسية إن لم تُحمّل بعد
+  if(!Object.keys(SCHOOLS||{}).length){
+    try{ await ensureSeed(); await loadSchools(); await loadRoleTemplates(); }catch(e){}
+  }
   const q = await usersCol().where('authUid','==',authUser.uid).limit(1).get();
   if(q.empty){ showActivation(authUser); return; }   // بريد غير مربوط بعد
   const d=q.docs[0], data=d.data();

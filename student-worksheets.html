@@ -52,6 +52,7 @@
     import {
       getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     /* إعدادات مشروع Firebase الموحّد — نفس مفاتيح worksheets.html/index.html */
     const firebaseConfig = {
@@ -64,21 +65,31 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+    // قواعد Firestore تمنع أي قراءة قبل المصادقة — ننتظر جاهزية الجلسة
+    const authReady = new Promise((resolve)=>{
+      const un = onAuthStateChanged(auth, (u)=>{ un(); resolve(u); });
+    });
 
     /* جلسة الطالب (حساب بريد مربوط برقم الهوية) */
     let STU = null;
     try { STU = JSON.parse(localStorage.getItem('stu_session') || 'null'); } catch (e) { STU = null; }
 
-    if (!STU || !STU.seat || !STU.googleUid) {
-      document.getElementById("notLoggedIn").style.display = "block";
-    } else {
+    (async () => {
+      const au = await authReady;
+      if (!STU || !STU.seat || !STU.googleUid || !au) {
+        localStorage.removeItem("stu_session");
+        document.getElementById("notLoggedIn").style.display = "block";
+        return;
+      }
       document.getElementById("studentNameLabel").textContent = STU.name || "";
       document.getElementById("stuLogoutBtn").style.display = "inline-block";
       loadWorksheets();
-    }
+    })();
 
     document.getElementById("stuLogoutBtn").addEventListener("click", () => {
       localStorage.removeItem("stu_session");
+      try { auth.signOut(); } catch (e) {}
       window.location.href = "index.html";
     });
 

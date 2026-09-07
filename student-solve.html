@@ -72,6 +72,7 @@
     import {
       getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     /* إعدادات مشروع Firebase الموحّد — نفس مفاتيح باقي الصفحات */
     const firebaseConfig = {
@@ -84,6 +85,11 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+    // قواعد Firestore تمنع أي قراءة قبل المصادقة — ننتظر جاهزية الجلسة
+    const authReady = new Promise((resolve)=>{
+      const un = onAuthStateChanged(auth, (u)=>{ un(); resolve(u); });
+    });
 
     let STU = null;
     try { STU = JSON.parse(localStorage.getItem('stu_session') || 'null'); } catch (e) { STU = null; }
@@ -96,11 +102,14 @@
     let existingSubmissionId = null;
     const studentAnswers = {}; // exerciseId -> value(s)
 
-    if (!studentId || !worksheetId) {
-      document.getElementById("notLoggedIn").style.display = "block";
-    } else {
+    (async () => {
+      const au = await authReady;
+      if (!studentId || !worksheetId || !au) {
+        document.getElementById("notLoggedIn").style.display = "block";
+        return;
+      }
       init();
-    }
+    })();
 
     async function init() {
       const wDoc = await getDoc(doc(db, "worksheets", worksheetId));

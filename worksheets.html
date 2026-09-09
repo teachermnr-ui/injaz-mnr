@@ -222,6 +222,13 @@
       <h3 style="margin-top:0">٤) نشر الورقة: <span id="publishTitle"></span></h3>
       <p style="font-size:13px;color:var(--ink-soft);">اختر الفصل أو الفصول التي ستصل إليها الورقة.</p>
       <div id="classCheckboxes" style="margin-bottom:12px;"></div>
+      <label>هدف النشاط <span style="color:var(--bad)">*</span></label>
+      <select id="activityTargetInput" style="margin-bottom:4px;">
+        <option value="part">المشاركة والتفاعل والأنشطة الصفية</option>
+        <option value="hw" selected>الواجبات والتطبيقات الصفية</option>
+        <option value="proj">المشروعات والبحث</option>
+      </select>
+      <p style="font-size:12px;color:var(--ink-soft);margin:0 0 12px;">عند إغلاق النشر تُرحَّل درجات الطلاب إلى سجل المتابعة كملصق في هذا البند (موزونة من ١٠).</p>
       <label>تاريخ الاستحقاق (اختياري)</label>
       <input type="date" id="dueDateInput">
       <br><br>
@@ -258,6 +265,11 @@
     <div class="card" id="studentsCard" style="display:none;">
       <h3 style="margin-top:0">٢) الطلاب — <span id="selectedWsTitle"></span></h3>
       <div id="studentsList"></div>
+      <div id="closePublishWrap" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:none;">
+        <p style="font-size:13px;color:var(--ink-soft);margin:0 0 10px;">عند إغلاق النشر تُرحَّل درجات جميع الطلاب إلى سجل المتابعة كملصقات (موزونة من ١٠)، ومن لم يسلّم يأخذ صفراً. لا يمكن التراجع.</p>
+        <button class="btn btn-primary" id="closePublishBtn" style="background:var(--bad);">🔒 إغلاق النشر وترحيل الدرجات</button>
+        <p id="closePublishStatus" style="font-size:13px;margin-top:10px;"></p>
+      </div>
     </div>
 
     <div class="card" id="detailCard" style="display:none;">
@@ -1249,9 +1261,11 @@
 
       try {
         const dueDateVal = document.getElementById("dueDateInput").value;
+        const activityTarget = document.getElementById("activityTargetInput").value || "hw";
         await updateDoc(doc(db, "worksheets", currentPublishId), {
           status: "published",
           assignedClassIds: selected,
+          activityTarget,
           dueDate: dueDateVal || null,
           publishedAt: serverTimestamp()
         });
@@ -1679,6 +1693,18 @@
 
       const listEl = document.getElementById("studentsList");
       listEl.innerHTML = "جاري التحميل...";
+      const cpWrap = document.getElementById("closePublishWrap");
+      const cpStatus = document.getElementById("closePublishStatus");
+      cpStatus.textContent = "";
+      if (w.status === "closed") {
+        cpWrap.style.display = "block";
+        document.getElementById("closePublishBtn").style.display = "none";
+        cpStatus.textContent = "🔒 هذا النشاط مُغلق وتم ترحيل درجاته إلى سجل المتابعة.";
+        cpStatus.style.color = "var(--ok)";
+      } else {
+        cpWrap.style.display = "block";
+        document.getElementById("closePublishBtn").style.display = "inline-block";
+      }
 
       const classCodes = w.assignedClassIds || [];
       if (classCodes.length === 0) {
@@ -1723,6 +1749,86 @@
         listEl.appendChild(row);
       });
     }
+
+    /* ---------- إغلاق النشر: ترحيل الدرجات إلى سجل المتابعة كملصقات ----------
+       الملصقات خاصة بالنظام ولا تظهر في قائمة الملصقات اليدوية. */
+    const DIGITAL_STICKERS = {
+      part: { name: "مشاركة رقمية", icon: "💻", cat: "part" },
+      hw:   { name: "واجب رقمي",   icon: "💻", cat: "hw"   },
+      proj: { name: "مشروع رقمي",  icon: "💻", cat: "proj" }
+    };
+    document.getElementById("closePublishBtn").addEventListener("click", async () => {
+      if (!currentWorksheetId) return;
+      const btn = document.getElementById("closePublishBtn");
+      const st  = document.getElementById("closePublishStatus");
+      if (!confirm("إغلاق النشر وترحيل الدرجات إلى سجل المتابعة؟ لا يمكن التراجع.")) return;
+      btn.disabled = true; st.style.color = "var(--ink-soft)"; st.textContent = "جاري الترحيل...";
+      try {
+        const wSnap = await getDoc(doc(db, "worksheets", currentWorksheetId));
+        if (!wSnap.exists()) throw new Error("النشاط غير موجود.");
+        const w = wSnap.data();
+        if (w.status === "closed") throw new Error("هذا النشاط مُغلق بالفعل.");
+
+        const target = w.activityTarget || "hw";
+        const meta = DIGITAL_STICKERS[target] || DIGITAL_STICKERS.hw;
+        const classCodes = w.assignedClassIds || [];
+        if (!classCodes.length) throw new Error("النشاط غير مسند لأي فصل.");
+
+        // طلاب الفصول المستهدفة
+        const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+        let rosterStudents = [];
+        try { rosterStudents = (JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").students || []).filter(x=>!x.deleted); } catch (e) {}
+        const students = rosterStudents.filter((x) => classCodes.includes(String(x.classCode)));
+        if (!students.length) throw new Error("لا يوجد طلاب في الفصول المستهدفة.");
+
+        // التسليمات
+        const subsSnap = await getDocs(query(collection(db, "submissions"), where("worksheetId", "==", currentWorksheetId)));
+        const subBy = {};
+        subsSnap.docs.forEach((d) => { subBy[String(d.data().studentId)] = d.data(); });
+
+        // الدرجة الكاملة للنشاط
+        const maxScore = (w.exercises || []).reduce((sum, ex) => sum + (ex.maxScore ?? 1), 0) || 1;
+
+        // سجل المتابعة يُخزَّن في مجموعة exams بمفتاح followup + namespace المعلم
+        const ns = "_" + currentTeacher.schoolId + "_" + (CLS_SESSION.period || "first") + "_" + currentTeacher.uid;
+        const fuRef = doc(db, "results", "followup" + ns);
+        const fuSnap = await getDoc(fuRef);
+        let followup = {};
+        try { followup = fuSnap.exists() ? JSON.parse(fuSnap.data().value || "{}") : {}; } catch (e) { followup = {}; }
+
+        const now = Date.now();
+        students.forEach((stu) => {
+          const seat = String(stu.seat);
+          const sub = subBy[seat];
+          let earned = 0;
+          if (sub && sub.totalScore != null) {
+            const m = String(sub.totalScore).match(/([\d.]+)\s*\/\s*([\d.]+)/);
+            const got = m ? parseFloat(m[1]) : parseFloat(sub.totalScore);
+            const outOf = m ? parseFloat(m[2]) : maxScore;
+            if (!isNaN(got) && outOf > 0) earned = Math.round((got / outOf) * 10 * 10) / 10;
+          }
+          if (!followup[seat]) followup[seat] = [];
+          followup[seat].push({
+            id: "dg" + now + "_" + seat,
+            sid: "digital_" + currentWorksheetId,
+            icon: meta.icon, name: meta.name,
+            earned, cat: meta.cat, digital: true, ts: now
+          });
+        });
+
+        await setDoc(fuRef, { value: JSON.stringify(followup), updatedAt: now, base: "followup",
+          schoolId: currentTeacher.schoolId, period: (CLS_SESSION.period || "first"), userId: currentTeacher.uid });
+        await updateDoc(doc(db, "worksheets", currentWorksheetId), { status: "closed", closedAt: serverTimestamp() });
+
+        st.style.color = "var(--ok)";
+        st.textContent = `تم الإغلاق وترحيل درجات ${students.length} طالباً إلى سجل المتابعة كـ«${meta.name}».`;
+        btn.style.display = "none";
+      } catch (err) {
+        st.style.color = "var(--bad)";
+        st.textContent = "تعذّر الإغلاق: " + err.message;
+        btn.disabled = false;
+      }
+    });
 
     // ---------- عرض مقارنة إجابة الطالب بالإجابة الصحيحة لكل نوع تمرين ----------
     function renderAnswerCompare(ex, ans) {

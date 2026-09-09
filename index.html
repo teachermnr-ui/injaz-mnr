@@ -345,7 +345,7 @@ const PERM_TREE = [
     { key:'index.classes',  label:'الفصول والطلاب' },
     { key:'index.sent',     label:'الملاحظات المرسلة' },
     { key:'index.received', label:'الملاحظات الواردة' },
-    { key:'index.absence',  label:'غياب الطلاب' },
+    { key:'index.absence',  label:'تأخر وغياب الطلاب' },
     { key:'index.attendanceWindow', label:'إعدادات نافذة التغيب', sub:true },
     { key:'index.studentStatus', label:'حالة الطالب' },
     { key:'index.users',    label:'المستخدمون' },
@@ -354,7 +354,6 @@ const PERM_TREE = [
   { key:'omr', label:'صفحة التصحيح الآلي (omr)', leaves:[
     { key:'omr.classes',        label:'الفصول والطلاب', sub:false },
     { key:'omr.classes.addManage', label:'مسؤول إضافة الفصول والطلاب', sub:true },
-    { key:'omr.classes.transfer',  label:'مسؤول نقل الطلاب بين الفصول', sub:true },
     { key:'omr.design',  label:'التصميم' },
     { key:'omr.grade',   label:'التصحيح' },
     { key:'omr.results', label:'النتائج' },
@@ -386,7 +385,7 @@ function defaultPerms(role){
   } else if(role==='assistant'){    // مساعد إداري: وصول+تعديل (الفصول والطلاب، الغياب)
     ['index.classes','index.absence'].forEach(k=>set(k,true,true,false));
   } else if(role==='soloTeacher'){  // معلم فردي: صلاحيات كاملة على عالمه الخاص، بلا ملاحظات ولا index
-    ['omr.classes','omr.classes.addManage','omr.classes.transfer','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
+    ['omr.classes','omr.classes.addManage','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
     ['worksheets.upload','worksheets.bank','worksheets.publish','worksheets.submissions'].forEach(k=>set(k,true,true,true));
   } else if(role==='teacher'){      // معلم: المرسلة/الواردة + صفحة التصحيح كاملة + أوراق العمل كاملة (بدون تفويض الإضافة/النقل — تُمنح صراحة)
     ['index.sent','index.received'].forEach(k=>set(k,true,true,false));
@@ -401,8 +400,7 @@ const INDEX_TABS = [
   { key:'classes',  perm:'index.classes',  label:'الفصول والطلاب' },
   { key:'sent',     perm:'index.sent',     label:'الملاحظات المرسلة' },
   { key:'received', perm:'index.received', label:'الملاحظات الواردة' },
-  { key:'transfers', perm:'', label:'طلبات بانتظار الموافقة' },
-  { key:'absence',  perm:'index.absence',  label:'غياب الطلاب' },
+  { key:'absence',  perm:'index.absence',  label:'تأخر وغياب الطلاب' },
   { key:'studentStatus', perm:'index.studentStatus', label:'حالة الطالب' },
   { key:'users',    perm:'index.users',    label:'المستخدمون' },
   { key:'settings', perm:'index.settings', label:'إعدادات النظام' },
@@ -442,7 +440,6 @@ const periodLabel = p=> p==='second'?'الفترة الثانية':'الفترة
 /* ---------- Firestore: مراجع ثابتة (لا مجموعات جديدة) ---------- */
 const usersCol   = ()=>db.collection('users');
 const schoolsDoc = ()=>db.collection('schoolData').doc('schools'); // سجل واحد بكل المدارس (map)
-const studentPinsCol = ()=>db.collection('studentPins');
 
 /* ========================================================================
    التهيئة
@@ -883,10 +880,8 @@ function visibleTabs(){
   if(CURRENT.role==='admin') return INDEX_TABS.slice();
   if(CURRENT.role==='schoolAdmin') return INDEX_TABS.filter(t=>t.key!=='settings');
   const pm=CURRENT.permissions||{};
-  const canTransfer = !!(pm['omr.classes.transfer'] && pm['omr.classes.transfer'].edit);
   return INDEX_TABS.filter(t=>{
     if(t.key==='users'||t.key==='settings') return false;
-    if(t.key==='transfers') return canTransfer;
     return pm[t.perm] && pm[t.perm].access;
   });
 }
@@ -903,7 +898,6 @@ function enterApp(){
   tabs.forEach(t=>{
     const b=document.createElement('button'); b.className='tab'; b.textContent=t.label;
     if(t.key==='received'){ const bd=document.createElement('span'); bd.id='rcvBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
-    if(t.key==='transfers'){ const bd=document.createElement('span'); bd.id='trBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
     b.onclick=()=>{ activeTab=t.key; renderTabs(); renderPanel(); };
     bar.appendChild(b);
   });
@@ -911,7 +905,6 @@ function enterApp(){
   renderTabs(); renderPanel();
   watchActive();
   if(typeof refreshUnread==='function') refreshUnread();
-  if(typeof refreshTransfersBadge==='function') refreshTransfersBadge();
 }
 let _activeUnsub=null;
 function watchActive(){
@@ -930,24 +923,6 @@ function renderTabs(){
 $('#tbOmr').onclick = ()=>{ window.location.href='omr.html'; };
 $('#tbPw').onclick  = ()=>{ openChangePw(false); };
 $('#tbOut').onclick = ()=>{ logout(); };
-function openMenu(){
-  const school = CURRENT.schoolId && SCHOOLS[CURRENT.schoolId] ? SCHOOLS[CURRENT.schoolId].name : 'كل المدارس';
-  const omrKeys=['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'];
-  const showOmr = CURRENT.role==='admin' || omrKeys.some(k=>can(k,'access'));
-  modal('<div class="m-grab"></div>'+
-    '<div class="m-head"><div class="m-av">'+esc((CURRENT.username||'?')[0])+'</div>'+
-      '<div class="m-id"><div class="nm">'+esc(CURRENT.username)+'</div>'+
-      '<div class="sb">'+esc(ROLES[CURRENT.role]||CURRENT.role)+' · '+esc(school)+'</div>'+
-      '<span class="m-chip">'+esc(periodLabel(SESSION.period))+'</span></div></div>'+
-    '<button class="m-row" id="mPw"><span class="mi">🔑</span><span class="ml">تغيير كلمة المرور</span><span class="mc">‹</span></button>'+
-    (showOmr?'<button class="m-row primary" id="mOmr"><span class="mi">📝</span><span class="ml">إدارة الصف</span><span class="mc">‹</span></button>':'')+
-    '<button class="m-row danger" id="mOut"><span class="mi">⏻</span><span class="ml">تسجيل الخروج</span><span class="mc">‹</span></button>'+
-    '<button class="m-close" onclick="closeModal()">إغلاق</button>');
-  $('#mPw').onclick=()=>{ closeModal(); openChangePw(false); };
-  if($('#mOmr')) $('#mOmr').onclick=()=>{ window.location.href='omr.html'; };
-  $('#mOut').onclick=()=>{ closeModal(); logout(); };
-}
-
 /* ========================================================================
    عرض اللوحات
    ======================================================================== */
@@ -956,12 +931,15 @@ const attCol = ()=>db.collection('attendance');
 let RABS={}, SS_DATA={classes:[],students:[]}, SS_SEL=null, ABS_CACHE=null, ABS_OPEN={};
 function attDateKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function attDocIdFor(sid,period,seat,dk){ return 'att_'+sid+'_'+period+'_'+seat+'_'+dk; }
-async function markStudentAbsent(seat,name,classCode,className){
+async function markStudentAbsent(seat,name,classCode,className,status,entryTime){
   const sid=RSchoolId||CURRENT.schoolId; const dk=attDateKey();
-  await attCol().doc(attDocIdFor(sid,SESSION.period,seat,dk)).set({
+  const payload={
     schoolId:sid, period:SESSION.period, seat:String(seat), name:name||'',
-    classCode:String(classCode||''), className:className||'', date:dk, status:'absent',
-    markedBy:CURRENT.id, markedByName:CURRENT.username, ts:Date.now() }, {merge:true});
+    classCode:String(classCode||''), className:className||'', date:dk,
+    status:status||'absent', source:'index',   // مسجَّل من الصفحة الرئيسية
+    markedBy:CURRENT.id, markedByName:CURRENT.username, ts:Date.now() };
+  if(status==='late' && entryTime) payload.entryTime=entryTime;
+  await attCol().doc(attDocIdFor(sid,SESSION.period,seat,dk)).set(payload,{merge:true});
 }
 async function loadAbsenceCounts(){
   RABS={};
@@ -970,17 +948,30 @@ async function loadAbsenceCounts(){
     snap.docs.map(d=>d.data()).filter(a=>a.period===SESSION.period && a.status==='absent').forEach(a=>{ RABS[a.seat]=(RABS[a.seat]||0)+1; });
   }catch(e){}
 }
-function markAbsentFromClasses(seat,code){
+function markAbsentFromClasses(seat,code,status){
   const st=RStudents.find(x=>x.seat===seat&&String(x.classCode)===String(code))||RStudents.find(x=>x.seat===seat); if(!st) return;
   const cl=RClasses.find(c=>String(c.code)===String(code))||{};
-  confirmModal('تغييب طالب','تسجيل «'+esc(st.name)+'» غائباً اليوم؟ سينتقل إلى تبويب غياب الطلاب.',async()=>{
-    try{ await markStudentAbsent(seat,st.name,code,cl.name||''); await loadAbsenceCounts(); toast('تم تسجيل الغياب'); paintClasses(); }
+  if(status==='late'){
+    modal('<h2>تسجيل تأخّر</h2><div class="sub-note">'+esc(st.name)+'</div>'+
+      '<div class="field"><label>وقت الدخول</label><select id="lateTime">'+hoursOptions()+'</select></div>'+
+      '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="lateOk">حفظ</button></div>');
+    $('#lateOk').onclick=async()=>{
+      const t=$('#lateTime').value;
+      try{ await markStudentAbsent(seat,st.name,code,cl.name||'','late',t); await loadAbsenceCounts(); closeModal(); toast('تم تسجيل التأخّر'); paintClasses(); }
+      catch(e){ toast('خطأ: '+e.message); }
+    };
+    return;
+  }
+  confirmModal('تغييب طالب','تسجيل «'+esc(st.name)+'» غائباً اليوم؟ سينتقل إلى تبويب تأخر وغياب الطلاب.',async()=>{
+    try{ await markStudentAbsent(seat,st.name,code,cl.name||'','absent'); await loadAbsenceCounts(); toast('تم تسجيل الغياب'); paintClasses(); }
     catch(e){ toast('خطأ: '+e.message); }
   });
 }
 async function renderAbsence(c){
-  const canEdit=can('index.absence','edit');
-  c.innerHTML='<div class="panel-head"><h2>غياب الطلاب</h2></div><div class="sub-note">يُعتمد التغيب من المعلم بين 7:40 و10:00 صباحاً، أو يدوياً من «الفصول والطلاب». اضغط اليوم لطيّ/فتح بطاقته.</div><div id="absRoot"><div class="empty"><span class="spin"></span></div></div>';
+  // التعديل صلاحية إشرافية: مدير النظام/المدرسة أو مَن فُوِّض صراحةً بتعديل الغياب
+  const canEdit = (CURRENT.role==='admin' || CURRENT.role==='schoolAdmin'
+                   || !!((CURRENT.permissions||{})['index.absence']||{}).edit);
+  c.innerHTML='<div class="panel-head"><h2>تأخر وغياب الطلاب</h2></div><div class="sub-note">يُعتمد التغيب من المعلم بين 7:40 و10:00 صباحاً، أو يدوياً من «الفصول والطلاب». اضغط اليوم لطيّ/فتح بطاقته.</div><div id="absRoot"><div class="empty"><span class="spin"></span></div></div>';
   try{
     let q=attCol(); if(CURRENT.schoolId) q=q.where('schoolId','==',CURRENT.schoolId);
     const snap=await q.get();
@@ -1007,7 +998,17 @@ function paintAbsence(){
         '<span style="color:var(--muted);font-size:18px">'+(open?'▴':'▾')+'</span>'+
         '<button class="btn ghost sm" onclick="event.stopPropagation();printAbsDay(\''+dt+'\')" title="طباعة PDF">🖨️ PDF</button>'+
       '</div>'+
-      (open?'<div style="padding:0 12px 12px">'+list.map(a=>absRow(a,days[a.seat+'|'+(a.markedBy||'')]||0,canEdit)).join('')+'</div>':'')+
+      (open?(function(){
+        const absList  = list.filter(a=>a.status!=='late');
+        // التأخير لا يظهر هنا إلا إذا سُجِّل من الصفحة الرئيسية نفسها
+        const lateList = list.filter(a=>a.status==='late' && a.source==='index');
+        const sec=(t,arr)=> arr.length
+          ? '<div class="umeta" style="font-weight:800;margin:6px 2px 6px;color:var(--brand)">'+t+' ('+arr.length+')</div>'
+            + arr.map(a=>absRow(a,days[a.seat+'|'+(a.markedBy||'')]||0,canEdit)).join('')
+          : '';
+        const body = sec('الغياب',absList) + sec('التأخر',lateList);
+        return '<div style="padding:0 12px 12px">'+(body||'<div class="umeta" style="padding:6px 2px">لا توجد سجلات.</div>')+'</div>';
+      })():'')+
     '</div>';
   }).join('');
 }
@@ -1031,18 +1032,21 @@ function printAbsDay(dt){
 function absRow(a,dayCount,canEdit){
   const bg = a.status==='excused'?'#FFF7E6':a.status==='late'?'#FFF1E0':'#FDECEC';
   const stLbl = a.status==='excused'?('🟡 مستأذن'+(a.excuseTime?(' · '+esc(a.excuseTime)):'')):a.status==='late'?('🟠 متأخر'+(a.entryTime?(' · دخول '+esc(a.entryTime)):'')):'🔴 غائب';
-  const ctrl = canEdit ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'+
-      '<button class="btn ghost sm" onclick="absSet(\''+a.id+'\',\'present\')">✅ حاضر</button>'+
-      '<button class="btn ghost sm" onclick="absSet(\''+a.id+'\',\'late\')">🟠 متأخر</button>'+
-      '<button class="btn ghost sm" onclick="absSet(\''+a.id+'\',\'excused\')">🟡 مستأذن</button>'+
-    '</div>' : '';
+  const ctrl = canEdit ? '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)">'+
+      '<div class="umeta" style="margin-bottom:6px;font-weight:700">تعديل حالة الغياب إلى</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<button class="btn ghost sm" onclick="absSet(\''+a.id+'\',\'present\')">✅ حاضر</button>'+
+        '<button class="btn ghost sm" onclick="absSet(\''+a.id+'\',\'late\')">🟠 متأخر</button>'+
+        '<button class="btn ghost sm" onclick="absSet(\''+a.id+'\',\'excused\')">🟡 مستأذن</button>'+
+      '</div></div>' : '';
   return '<div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px;background:'+bg+'">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'+
       '<div><div style="font-weight:700">'+esc(a.name)+'</div>'+
       '<div class="umeta">'+esc(a.seat)+' · '+esc(a.className||a.classCode||'')+'</div>'+
       (a.markedByName?'<div class="umeta" style="margin-top:2px">سجّله: <b>'+esc(a.markedByName)+'</b></div>':'')+'</div>'+
       '<div style="text-align:left;white-space:nowrap"><div style="font-weight:700;font-size:13px">'+stLbl+'</div>'+
-      '<div class="umeta" style="margin-top:4px">أيام الغياب: <b>'+dayCount+'</b></div></div>'+
+      '<div style="margin-top:6px;font-size:12.5px;color:var(--muted)">أيام الغياب</div>'+
+      '<div style="font-weight:900;font-size:20px;color:'+(dayCount>=3?'#c0392b':dayCount>0?'#c07a00':'var(--muted)')+';line-height:1.1">'+dayCount+'</div></div>'+
     '</div>'+ctrl+'</div>';
 }
 function hoursOptions(){
@@ -1054,7 +1058,7 @@ async function absSet(id,status){
   modal('<h2>'+(status==='late'?'تسجيل تأخّر':'تسجيل استئذان')+'</h2>'+
     '<div class="field"><label>'+lbl+'</label><select id="absTime">'+hoursOptions()+'</select></div>'+
     '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="absTimeOk">حفظ</button></div>');
-  $('#absTimeOk').onclick=async()=>{ const t=$('#absTime').value; const upd={status}; if(status==='late')upd.entryTime=t; else upd.excuseTime=t;
+  $('#absTimeOk').onclick=async()=>{ const t=$('#absTime').value; const upd={status, source:'index'}; if(status==='late')upd.entryTime=t; else upd.excuseTime=t;
     try{ await attCol().doc(id).update(upd); }catch(e){} closeModal(); renderAbsence($('#content')); };
 }
 async function renderStudentStatus(c){
@@ -1114,7 +1118,6 @@ function renderPanel(){
   if(activeTab==='classes')    return renderClasses(c);
   if(activeTab==='sent')       return renderSent(c);
   if(activeTab==='received')   return renderReceived(c);
-  if(activeTab==='transfers')  return renderTransfers(c);
   if(activeTab==='absence')    return renderAbsence(c);
   if(activeTab==='studentStatus') return renderStudentStatus(c);
   const labels={classes:'الفصول والطلاب',sent:'الملاحظات المرسلة',received:'الملاحظات الواردة',absence:'غياب الطلاب'};
@@ -1300,7 +1303,7 @@ async function loadModalClasses(schoolId, pre){
 }
 function renderPermTree(){
   const root=$('#permTree'); if(!root) return;
-  const delegationKeys = ['omr.classes.addManage','omr.classes.transfer'];
+  const delegationKeys = ['omr.classes.addManage'];
   root.innerHTML = PERM_TREE.map(g=>`<div class="perm-grp">
     <div class="perm-head">${esc(g.label)}</div>
     ${g.leaves.map(l=>{
@@ -1354,7 +1357,15 @@ async function saveUser(active){
   if(!linked && !pass){ alertBox('umAlert','err','أدخل كلمة المرور الأولية'); return; }
   try{
     const q=await usersCol().where('loginId','==',loginId).get();
-    const clash=q.docs.find(d=> d.id!==(editUser&&editUser.id));
+    // المقارنة بمعرّف المستند وحده لا تكفي: المعرّف تغيّر إلى authUid بعد التفعيل،
+    // فنستثني أيضاً المستند الذي يطابق authUid أو loginId للمستخدم الجاري تعديله
+    const clash = q.docs.find(d=>{
+      if(!editUser) return true;
+      if(d.id === editUser.id) return false;
+      if(editUser.authUid && d.data().authUid === editUser.authUid) return false;
+      if(editUser.loginId && d.data().loginId === editUser.loginId) return false;
+      return true;
+    });
     if(clash){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
     const payload={ loginId, username:displayName, role, schoolId:school, assignedClasses:classes,
       permissions:editPerms, active, updatedAt:Date.now() };
@@ -1606,7 +1617,7 @@ function wipeData(){
         await wipeQuery('users','schoolId','==',schoolId);
         try{ await rosterDoc(schoolId).delete(); }catch(e){}
         try{ await db.collection('rosterIndex').doc(schoolId).delete(); }catch(e){}
-        for(const col of ['worksheets','submissions','notes','exams','results','transferRequests','studentPins']){
+        for(const col of ['worksheets','submissions','notes','exams','results']){
           try{ await wipeQuery(col,'schoolId','==',schoolId); }catch(e){}
         }
         delete SCHOOLS[schoolId]; await schoolsDoc().set({list:SCHOOLS});
@@ -1737,7 +1748,8 @@ function studentRowR(s,canDel,canEdit){
     '<div style="display:flex;gap:6px;align-items:center">'+
       '<span style="font-family:monospace;color:var(--muted);font-size:12.5px;min-width:90px">'+esc(s.seat||'—')+'</span>'+
       '<span style="flex:1;font-size:14px">'+esc(s.name)+'</span>'+
-      (canAbs?'<button class="icon-btn" onclick="markAbsentFromClasses(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')" title="تغييب اليوم">🔴</button>':'')+
+      (canAbs?'<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:var(--bad);border-color:var(--bad)" onclick="markAbsentFromClasses(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\',\'absent\')" title="تسجيل غياب اليوم">غائب</button>'+
+       '<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:#c07a00;border-color:#c07a00" onclick="markAbsentFromClasses(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\',\'late\')" title="تسجيل تأخّر اليوم">متأخر</button>':'')+
       (canEdit?'<button class="icon-btn" onclick="moveStudent(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')" title="نقل">↔️</button>':'')+
       (canDel?'<button class="icon-btn del" onclick="delStudent(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')" title="حذف">✕</button>':'')+
     '</div>'+meta+
@@ -1775,54 +1787,6 @@ function renderStagesHtml(canDel,canEdit){
   }).join('');
 }
 /* importBlockHtml استُبدلت بـ editorCardsHtml */
-function wireImport(){
-  const fb=$('#rXlsxBtn'), fi=$('#rXlsx'); if(fb&&fi){ fb.onclick=()=>fi.click(); fi.onchange=onSchoolXlsx; }
-  const ac=$('#rAddCl'); if(ac) ac.onclick=addClassR;
-  const pb=$('#rPasteBtn'); if(pb) pb.onclick=pasteImport;
-  const on=$('#rTaOn'), off=$('#rTaOff');
-  if(on&&off){ on.onclick=()=>setTeacherAdd(true); off.onclick=()=>setTeacherAdd(false); }
-}
-async function setTeacherAdd(val){
-  RTeacherAdd=val; await saveRoster(); paintClasses();
-  toast(val?'تم تفعيل إضافة الطلاب للمعلمين':'تم إيقاف إضافة الطلاب للمعلمين');
-}
-function addClassR(){
-  const name=($('#rClName').value||'').trim(), code=($('#rClCode').value||'').trim();
-  if(!name||!code){ toast('أدخل اسم الفصل ورمزه'); return; }
-  if(RClasses.some(c=>c.code===code)){ toast('رمز الفصل مستخدم مسبقاً'); return; }
-  RClasses.push({name,code}); saveRoster().then(()=>{ paintClasses(); toast('أُضيف الفصل'); });
-}
-function pasteImport(){
-  const code=$('#rPasteCl').value; if(!code){ toast('اختر الفصل أولاً'); return; }
-  const lines=($('#rPaste').value||'').split('\n').map(l=>l.trim()).filter(Boolean);
-  let n=0;
-  const dups=[];
-  lines.forEach(line=>{
-    const m=normalizeDigits(line).match(/(\d{6,})/);
-    const seat=m?m[1]:'';
-    const name=cleanCell(normalizeDigits(line).replace(/\d{6,}/,''));
-    if(!name||name.length<3) return;
-    const r=upsertStudentR({seat,name,classCode:code});
-    if(r.status==='dup') dups.push({name,seat,cls:clsName(r.dupClass)}); else n++;
-  });
-  if(n||dups.length){ saveRoster().then(()=>{ paintClasses(); if(dups.length) alertDupes(dups,n); else toast('استُورد '+n+' طالب'); }); $('#rPaste').value=''; }
-  else toast('لم يُعثر على أسماء صالحة');
-}
-function upsertStudentR(st){
-  if(st.seat){
-    const ex=RStudents.find(x=>x.seat===st.seat);
-    if(ex){
-      if(String(ex.classCode)===String(st.classCode)){ ex.name=st.name; return {status:'updated'}; }
-      return {status:'dup', dupClass:ex.classCode};   // موجود في صف آخر
-    }
-  }
-  RStudents.push(st); return {status:'added'};
-}
-function clsName(code){ return (RClasses.find(c=>String(c.code)===String(code))||{}).name||code; }
-function alertDupes(dups, added){
-  const list=dups.slice(0,60).map(d=>'<div style="padding:5px 0;border-top:1px solid var(--line);font-size:13px"><b>'+esc(d.name)+'</b> ('+esc(d.seat||'')+') — موجود مسبقاً في: <b>'+esc(d.cls)+'</b></div>').join('');
-  modal('<h2>تنبيه: طلاب مكرّرون</h2><p style="color:var(--muted);margin:0 0 8px">لا يمكن وجود الطالب في أكثر من صف (رقم الهوية مفتاح فريد). تم تجاهل '+dups.length+' طالباً، وأُضيف '+added+'.</p><div style="max-height:42vh;overflow:auto">'+list+'</div><button class="btn" style="margin-top:12px" onclick="closeModal()">حسناً</button>');
-}
 async function delClass(code){
   confirmModal('حذف فصل','سيُحذف الفصل وكل طلابه من روستر المدرسة. متابعة؟',async()=>{
     RClasses=RClasses.filter(c=>c.code!==code); RStudents=RStudents.filter(s=>s.classCode!==code);
@@ -1845,132 +1809,8 @@ function moveStudent(seat,fromCode){
     '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="mvBtn">نقل</button></div>');
   $('#mvBtn').onclick=async()=>{ const to=$('#mvCls').value; if(!to)return; if(RStudents.some(x=>x.seat===seat&&String(x.classCode)===String(to))){ toast('الطالب موجود في الفصل الهدف'); return; } st.classCode=to; await saveRoster(); closeModal(); paintClasses(); toast('تم نقل الطالب'); };
 }
-function onSchoolXlsx(ev){
-  const file=ev.target.files&&ev.target.files[0]; ev.target.value='';
-  if(!file) return;
-  if(typeof XLSX==='undefined'){ toast('مكتبة Excel لم تُحمّل بعد'); return; }
-  const reader=new FileReader();
-  reader.onload=(e)=>{
-    try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      let grade='',section='',allStudents=[];const seen={};
-      wb.SheetNames.forEach(sn=>{ const ws=wb.Sheets[sn]; if(!ws)return;
-        const rows=XLSX.utils.sheet_to_json(ws,{header:1,blankrows:false,defval:''});
-        const p=parseExcelRoster(rows);
-        if(!grade&&p.grade)grade=p.grade; if(!section&&p.section)section=p.section;
-        (p.students||[]).forEach(st=>{ const key=st.seat||('name:'+st.name); if(seen[key])return; seen[key]=1; allStudents.push(st); });
-      });
-      if(!allStudents.length){ toast('لم يُعثر على طلاب صالحين في الملف'); return; }
-      let className=grade||''; if(section) className=(className?className+' ':'')+section; if(!className)className='صف';
-      pendingGroups=[{className,students:allStudents,code:suggestClassCode(grade,section)}];
-      showImpReview();
-    }catch(err){ toast('تعذّرت قراءة الملف: '+err.message); }
-  };
-  reader.readAsArrayBuffer(file);
-}
-function showImpReview(){
-  const host=$('#rImpReview'); if(!host) return;
-  host.innerHTML = pendingGroups.map((g,i)=>
-    '<div class="card" style="box-shadow:none;background:var(--surface-2);margin-top:10px">'+
-    '<div class="uname" style="margin-bottom:8px">'+esc(g.className)+' — '+g.students.length+' طالب</div>'+
-    '<div class="field" style="margin:0"><label>رمز الفصل</label><input id="rgc-'+i+'" value="'+esc(g.code)+'" placeholder="مثال: 108"></div>'+
-    '</div>').join('') +
-    '<button class="btn sm" id="rImpConfirm" style="margin-top:10px">✅ تأكيد الاستيراد وإنشاء الفصل</button>';
-  $('#rImpConfirm').onclick=confirmImpReview;
-}
-async function confirmImpReview(){
-  let total=0; const dups=[];
-  pendingGroups.forEach((g,i)=>{
-    const code=(($('#rgc-'+i)||{}).value||'').trim(); if(!code) return;
-    if(!RClasses.some(c=>String(c.code)===String(code))) RClasses.push({name:g.className,code});
-    g.students.forEach(st=>{
-      const r=upsertStudentR({seat:st.seat,name:st.name,classCode:code});
-      if(r.status==='dup') dups.push({name:st.name,seat:st.seat,cls:clsName(r.dupClass)}); else total++;
-    });
-  });
-  if(!total && !dups.length){ toast('أدخل رمز الفصل'); return; }
-  await saveRoster(); pendingGroups=null; paintClasses();
-  if(dups.length) alertDupes(dups,total); else toast('استُورد '+total+' طالب');
-}
-
 /* ---- محلّل نور (منقول حرفياً من omr.html لمطابقة السلوك) ---- */
 function normalizeDigits(s){ return String(s||'').replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]).replace(/[۰-۹]/g,d=>'0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]); }
-function normalizeSeat(s){ return String(s||'').replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]).replace(/\D/g,''); }
-function cleanCell(s){ return String(s||'').replace(/[|:：ـ]/g,' ').replace(/\s+/g,' ').trim(); }
-function suggestClassCode(grade, section){
-  const g=String(grade||''); let base=0;
-  if(/الأول|اول|الاول/.test(g)) base=100;
-  else if(/الثاني|ثاني/.test(g)) base=200;
-  else if(/الثالث|ثالث/.test(g)) base=300;
-  const sec=parseInt(normalizeDigits(String(section||'')).replace(/[^0-9]/g,''),10);
-  if(base && !isNaN(sec)) return String(base+sec);
-  return '';
-}
-function parseExcelRoster(rows){
-  if(!rows || !rows.length) return { students:[] };
-  const cell=(r,c)=>(rows[r]&&rows[r][c]!=null)?String(rows[r][c]).trim():'';
-  const headerValueOf=(labelRe)=>{
-    for(let r=0;r<Math.min(rows.length,20);r++){
-      const row=rows[r]||[]; let labelCol=-1;
-      row.forEach((c,ci)=>{ const t=String(c==null?'':c).trim(); if(t&&labelRe.test(t)&&labelCol<0) labelCol=ci; });
-      if(labelCol<0) continue;
-      let best='',bestDist=1e9;
-      row.forEach((c,ci)=>{ const t=String(c==null?'':c).trim();
-        if(!t||t===':'||t==='：') return; if(labelRe.test(t)) return;
-        if(/المملكة|وزارة|الإدارة|الادارة|العامة|بمنطقة/.test(t)) return;
-        const d=Math.abs(ci-labelCol); if(d<bestDist){ bestDist=d; best=t; } });
-      if(best) return best;
-    }
-    return '';
-  };
-  let headerIdx=-1,nameCol=-1,idCol=-1;
-  for(let r=0;r<rows.length;r++){
-    const row=rows[r]||[]; let nC=-1,iC=-1;
-    row.forEach((c,ci)=>{ const t=String(c==null?'':c).trim();
-      if(/^الاسم$/.test(t)||/اسم الطالب/.test(t)) nC=ci;
-      if(/السجل المدني|رقم الهوية|الهوية|السجل/.test(t)) iC=ci; });
-    if(nC>=0&&iC>=0){ headerIdx=r; nameCol=nC; idCol=iC; break; }
-  }
-  let grade=headerValueOf(/^الصف$/), section=headerValueOf(/^الفصل$/);
-  const secDigits=normalizeDigits(section).replace(/[^0-9]/g,''); if(secDigits) section=secDigits;
-  const students=[]; const seen={};
-  if(headerIdx>=0){
-    for(let r=headerIdx+1;r<rows.length;r++){
-      const name=cleanCell(cell(r,nameCol)); let seat=normalizeSeat(cell(r,idCol));
-      if(!name||name.replace(/\s/g,'').length<3) continue;
-      if(/الاسم|السجل|المدني/.test(name)) continue;
-      if(seat&&seen[seat]) continue; if(seat) seen[seat]=1;
-      students.push({seat,name});
-    }
-    return { students, grade, section };
-  }
-  let hIdx=-1,iC=-1,nC=-1,cC=-1;
-  for(let r=0;r<Math.min(rows.length,6);r++){
-    (rows[r]||[]).forEach((c,ci)=>{ const t=String(c||'').trim();
-      if(/هوية|سجل|مدني|رقم/.test(t)&&iC<0){iC=ci;hIdx=r;}
-      if(/اسم|الطالب/.test(t)&&nC<0){nC=ci;hIdx=r;}
-      if(/صف|فصل/.test(t)&&cC<0)cC=ci; });
-    if(iC>=0&&nC>=0)break;
-  }
-  const start=hIdx>=0?hIdx+1:0;
-  for(let r=start;r<rows.length;r++){
-    const row=rows[r]||[]; if(!row.length)continue;
-    let seat='',name='';
-    if(iC>=0||nC>=0){
-      seat=normalizeSeat(row[iC>=0?iC:0]);
-      name=cleanCell(String(row[nC>=0?nC:1]!=null?row[nC>=0?nC:1]:''));
-    }else{
-      const idc=row.findIndex(c=>normalizeSeat(c).length>=9);
-      seat=idc>=0?normalizeSeat(row[idc]):'';
-      name=cleanCell(row.filter((c,i)=>i!==idc).map(c=>String(c||'').trim()).filter(x=>/[أ-ي]/.test(x)).sort((a,b)=>b.length-a.length)[0]||'');
-    }
-    if(!name||name.length<3)continue;
-    if(seat&&seen[seat])continue; if(seat)seen[seat]=1;
-    students.push({seat,name});
-  }
-  return { students, grade, section };
-}
-
 /* ========================================================================
    نظام الملاحظات — المرسلة / الواردة + التوجيه التلقائي
    ======================================================================== */
@@ -1985,64 +1825,6 @@ async function resolveRecipients(opts){
   if(opts.kind==='toTeacher') recs=users.filter(u=>u.role==='teacher'&&hasClass(u));
   else if(opts.kind==='toPeers'){ const other=opts.fromRole==='agent'?'counselor':'agent'; recs=users.filter(u=>u.role===other); }
   return recs.map(u=>({userId:u.id,name:u.username,role:u.role}));
-}
-const transferRequestsCol = ()=>db.collection('transferRequests');
-async function renderTransfers(c){
-  c.innerHTML = '<div class="panel-head"><h2>طلبات بانتظار الموافقة</h2></div><div id="trList"><div class="empty"><span class="spin"></span></div></div>';
-  try{
-    let q = transferRequestsCol().where('status','==','pending');
-    if(CURRENT.role!=='admin') q = q.where('schoolId','==',CURRENT.schoolId);
-    const snap = await q.get();
-    let arr = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.createdAt-a.createdAt);
-    $('#trList').innerHTML = arr.length ? arr.map(r=>transferCard(r)).join('') : '<div class="empty"><span class="e-emoji">✅</span>لا توجد طلبات نقل معلّقة.</div>';
-  }catch(e){ $('#trList').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
-}
-function transferCard(r){
-  const schoolName = (SCHOOLS[r.schoolId]&&SCHOOLS[r.schoolId].name) ? ' · '+esc(SCHOOLS[r.schoolId].name) : '';
-  return '<div class="card"><div class="uinfo">'+
-    '<div class="uname" style="font-size:14px">طلب من: '+esc(r.requestedByName||'')+schoolName+'</div>'+
-    '<div class="umeta" style="margin:6px 0">الطالب: <b>'+esc(r.studentName||'')+'</b> ('+esc(r.studentSeat||'')+')</div>'+
-    '<div class="umeta">من: '+esc(r.fromClassName||'—')+' ← إلى: <b>'+esc(r.toClassName||'')+'</b></div>'+
-    '<div class="umeta">'+new Date(r.createdAt).toLocaleString('ar')+'</div>'+
-    '<div style="display:flex;gap:8px;margin-top:10px">'+
-      '<button class="btn sm" onclick="approveTransfer(\''+r.id+'\')">✓ موافقة</button>'+
-      '<button class="btn secondary sm" onclick="rejectTransfer(\''+r.id+'\')">✕ رفض</button>'+
-    '</div></div></div>';
-}
-async function approveTransfer(id){
-  try{
-    const doc = await transferRequestsCol().doc(id).get();
-    if(!doc.exists){ toast('الطلب غير موجود.'); renderTransfers($('#content')); return; }
-    const r = doc.data();
-    await db.runTransaction(async (tx)=>{
-      const ref = rosterDoc(r.schoolId);
-      const snap = await tx.get(ref);
-      const d = snap.exists ? JSON.parse(snap.data().value||'{}') : {};
-      const students = Array.isArray(d.students) ? d.students : [];
-      const st = students.find(s=>String(s.seat)===String(r.studentSeat));
-      if(st) st.classCode = r.toClassCode;
-      tx.set(ref, { value: JSON.stringify({ ...d, students }), updatedAt: Date.now(), schoolId: r.schoolId, base:'roster' });
-    });
-    await transferRequestsCol().doc(id).update({ status:'approved', resolvedAt:Date.now(), resolvedByName:CURRENT.username });
-    toast('تم قبول طلب النقل.'); renderTransfers($('#content')); refreshTransfersBadge();
-  }catch(e){ toast('خطأ: '+e.message); }
-}
-async function rejectTransfer(id){
-  try{
-    await transferRequestsCol().doc(id).update({ status:'rejected', resolvedAt:Date.now(), resolvedByName:CURRENT.username });
-    toast('تم رفض طلب النقل.'); renderTransfers($('#content')); refreshTransfersBadge();
-  }catch(e){ toast('خطأ: '+e.message); }
-}
-async function refreshTransfersBadge(){
-  const bd=$('#trBadge'); if(!bd) return;
-  if(CURRENT.role!=='admin' && CURRENT.role!=='schoolAdmin' && !((CURRENT.permissions||{})['omr.classes.transfer']||{}).edit){ bd.style.display='none'; return; }
-  try{
-    let q = transferRequestsCol().where('status','==','pending');
-    if(CURRENT.role!=='admin') q = q.where('schoolId','==',CURRENT.schoolId);
-    const snap = await q.get();
-    const n = snap.size;
-    bd.textContent = n; bd.style.display = n>0?'inline-flex':'none';
-  }catch(e){ bd.style.display='none'; }
 }
 
 async function studentNoteCount(seat){

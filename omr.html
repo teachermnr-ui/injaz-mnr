@@ -272,6 +272,15 @@
 
   <!-- ================= STUDENTS ================= -->
   <section id="panel-students" class="panel active">
+    <!-- ===== بيانات الفصول (عرض الرموز) ===== -->
+    <div class="card seccard" id="classInfoSecCard">
+      <div class="secheader" onclick="openClassInfoModal()">
+        <div class="secicon" style="background:#e6f6f2">🏫</div>
+        <div class="sectext"><div class="sectitle">بيانات الفصول</div><div class="secdesc">أسماء الفصول ورموز دخول الطلاب وأعدادهم</div></div>
+        <div class="secarrow">‹</div>
+      </div>
+    </div>
+
     <!-- ===== إضافة الفصول والمواد (موحّدة) ===== -->
     <div class="card seccard" id="addClassesSecCard">
       <div class="secheader" onclick="openAddClassesModal()">
@@ -372,7 +381,6 @@
         <div id="bulkActionsBar" style="display:none;position:sticky;bottom:56px;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px;box-shadow:0 4px 14px rgba(0,0,0,.10);z-index:19">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span id="selCount" style="font-weight:800;color:var(--teal-d);font-size:13px"></span>
-            <button class="ghost" style="padding:6px 10px;font-size:12.5px" onclick="bulkMove()">نقل إلى صف</button>
             <span id="bulkNoteBtns" style="display:flex;gap:6px;flex-wrap:wrap">
               <button class="ghost" style="padding:6px 10px;font-size:12.5px" onclick="bulkNote('وكيل')">ملاحظة للوكيل</button>
               <button class="ghost" style="padding:6px 10px;font-size:12.5px" onclick="bulkNote('مرشد')">ملاحظة للموجه</button>
@@ -516,9 +524,18 @@
     <div class="card">
       <h2>سجل الأعمال</h2>
       <div id="cloudStatus" class="status info" style="margin-bottom:10px">جارٍ التهيئة…</div>
-      <label class="field">عرض سجل الصف
-        <select id="wlViewClass" onchange="onVClassChange(this);renderWorkLog()"><option value="">— اختر الصف —</option></select>
-      </label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label class="field" style="flex:1;min-width:170px">عرض سجل الصف
+          <select id="wlViewClass" onchange="onVClassChange(this);renderWorkLog()"><option value="">— اختر الصف —</option></select>
+        </label>
+        <label class="field" style="flex:1;min-width:150px">فترة الرصد
+          <select id="wlActivePeriod" onchange="onWlPeriodChange()">
+            <option value="0">الفترة الأولى</option>
+            <option value="1">الفترة الثانية</option>
+          </select>
+        </label>
+      </div>
+      <div class="hint" id="wlPeriodHint" style="margin:-4px 0 10px">الدرجات تُرصد في الفترة المحددة أعلاه.</div>
       <div id="workLogHost"><div class="empty">اختر صفاً لعرض سجل أعماله.</div></div>
       <div class="row no-print" style="margin-top:10px">
         <button class="ghost" onclick="loadWorkLog(true)">🔄 تحديث السجل</button>
@@ -644,40 +661,8 @@ const FIDUCIALS = [ {x:70,y:70}, {x:930,y:70}, {x:930,y:1344}, {x:70,y:1344} ];
 const FID_SIZE = 46;
 
 // أعمدة أرقام بدءاً من startX نحو اليسار
-function idColsFromX(startX, count, group, digitsTop, r, vGap, colGap){
-  const cols=[]; let x=startX;
-  for(let c=0;c<count;c++){
-    const b=[]; for(let d=0;d<10;d++) b.push({ d, cx:x, cy:digitsTop+d*vGap, r });
-    cols.push({ group, idx:c, cx:x, bubbles:b }); x -= colGap;
-  }
-  return { cols, nextX:x };
-}
 // رقم الجلوس (وربما الصف) في الأعلى
-function computeIdTop(topY, seatOnly, CW){
-  CW = CW || CANVAS_W;
-  const cfg=state.cfg;
-  if(!cfg.idEnabled) return { enabled:false, bottomY:topY, cols:[], mode:'top' };
-  const seatN=cfg.seatDigits, gradeN=seatOnly?0:cfg.gradeDigits;
-  const r=8, vGap=18, colGap=28, digitsTop=topY+34;
-  const sres=idColsFromX(CW-72-r, seatN, 'seat', digitsTop, r, vGap, colGap);
-  let cols=sres.cols, gradeRightX=null;
-  if(gradeN>0){ const gx=sres.nextX-colGap*1.3; gradeRightX=gx+r+6; cols=cols.concat(idColsFromX(gx,gradeN,'grade',digitsTop,r,vGap,colGap).cols); }
-  return { enabled:true, bottomY:digitsTop+9*vGap+r, cols, digitsTop, r, vGap, seatN, gradeN, mode:'top',
-           seatRightX:CW-72, gradeRightX, labelY:topY+16 };
-}
 // رقم الجلوس + الصف داخل صندوق بيانات الطالب الجانبي
-function computeIdBox(box){
-  const cfg=state.cfg;
-  if(!cfg.idEnabled) return { enabled:false, bottomY:box.y, cols:[], mode:'box' };
-  const seatN=cfg.seatDigits, gradeN=cfg.gradeDigits;
-  const r=8, vGap=26, colGap=27, digitsTop=box.y+196;
-  const sres=idColsFromX(box.right-22-r, seatN, 'seat', digitsTop, r, vGap, colGap);
-  let cols=sres.cols, gradeRightX=null;
-  if(gradeN>0){ const gx=sres.nextX-colGap*1.2; gradeRightX=gx+r+6; cols=cols.concat(idColsFromX(gx,gradeN,'grade',digitsTop,r,vGap,colGap).cols); }
-  return { enabled:true, bottomY:digitsTop+9*vGap+r, cols, digitsTop, r, vGap, seatN, gradeN, mode:'box',
-           seatRightX:box.right-22, gradeRightX, labelY:digitsTop-18 };
-}
-
 function computeLayout(){
   const cfg = state.cfg;
   if(cfg.sheetType === 'qa') return computeLayoutQA();   // A4 أفقي مستقل
@@ -1129,12 +1114,6 @@ function onSheetTypeChange(){
   renderSections();
   renderSheet();
 }
-function onQrModeChange(){
-  const on = document.getElementById('cfgQrMode').checked;
-  document.getElementById('qrModeHint').style.display = on ? 'block' : 'none';
-  renderSheet();
-}
-
 // يبني الـ SVG الكامل لورقة واحدة حسب الشكل المختار، اختيارياً لطالب بعينه
 function buildSheetSVG(L, student){
   const type = state.cfg.sheetType;
@@ -1705,17 +1684,6 @@ function upsertStudentIn(students, st){
   students.push(st); return {status:'added'};
 }
 // التسلسل التلقائي لرقم الهوية عند غيابه: Class-<رمز الصف>-<رقم> — يفحص كل طلاب المدرسة تفاديًا للتعارض
-function nextAutoSeat(classCode){
-  const prefix = `Class-${classCode}-`;
-  let max = 0;
-  (state.fullStudents.length?state.fullStudents:state.students).forEach(s=>{
-    if(s.seat && s.seat.indexOf(prefix)===0){
-      const n = parseInt(s.seat.slice(prefix.length),10);
-      if(!isNaN(n) && n>max) max=n;
-    }
-  });
-  return prefix + (max+1);
-}
 async function addStudentManual(){
   if(!clsGuardAdd()) return;
   if(!state.classes.length){ alert('أضف فصلاً واحداً على الأقل قبل تسجيل الطلاب.'); return; }
@@ -1972,6 +1940,7 @@ function openImportReview(){
     </div>`;
   });
   body.innerHTML = html;
+  closeOmrModal();   // إغلاق نافذة الإضافة قبل فتح نافذة المراجعة حتى لا تتراكبا
   document.getElementById('importReviewOverlay').style.display='block';
 }
 function setImportCode(gi, val){ pendingImport.groups[gi].code = normalizeDigits(val).trim(); }
@@ -2032,6 +2001,7 @@ async function confirmImport(){
   alert(msg);
 }
 async function delStudent(seat){
+  if(!canManageStudents()){ alert('حذف الطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
   if(!clsGuardDel()) return;
   if(!confirm('حذف هذا الطالب؟ سيختفي من جميع الشاشات والسجلات والتقارير ويتوقف دخوله فوراً، مع الاحتفاظ ببياناته في قاعدة البيانات.')) return;
   try{
@@ -2061,6 +2031,40 @@ function _modalRow(icon,label,onclick){
   return `<button style="width:100%;display:flex;justify-content:space-between;align-items:center;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;font:inherit;font-size:14.5px;font-weight:600;cursor:pointer;" onclick="${onclick}">
     <span>${icon} ${label}</span><span style="color:var(--muted)">‹</span>
   </button>`;
+}
+/* بيانات الفصول: يعرض للمعلم فصوله المسندة له فقط مع رموز دخول طلابه */
+async function openClassInfoModal(){
+  const canDelete = canManageStudents();
+  const rows = state.classes.map(c=>{
+    const cnt = state.students.filter(s=>String(s.classCode)===String(c.code)).length;
+    const codeCell = c.loginCode
+      ? '<span id="ciCode-'+escapeHtml(c.code)+'" style="font-weight:800;color:var(--ok,#1a7a4f);letter-spacing:1px">…</span>'
+      : (canDelete
+          ? '<button class="ghost" style="padding:4px 8px;font-size:12px" onclick="assignClassStage(\''+escapeHtml(c.code)+'\')">توليد رمز</button>'
+          : '<span style="color:var(--muted);font-size:12px">—</span>');
+    return '<tr>'+
+      '<td style="text-align:right;font-weight:600">'+escapeHtml(c.name)+'</td>'+
+      '<td style="font-weight:700">'+escapeHtml(c.code)+'</td>'+
+      '<td>'+codeCell+'</td>'+
+      '<td>'+toArabic(cnt)+'</td>'+
+      (canDelete?'<td><button class="ghost" style="padding:6px 8px;color:var(--bad)" onclick="delClass(\''+escapeHtml(c.code)+'\')">حذف</button></td>':'')+
+    '</tr>';
+  }).join('');
+
+  omrModal(
+    '<div style="text-align:center;font-weight:800;font-size:17px;margin-bottom:6px;">بيانات الفصول</div>'+
+    '<div class="hint" style="text-align:center;margin-bottom:14px">رمز دخول الطلاب يُسلَّم لطلاب الفصل لتفعيل حساباتهم مرة واحدة.</div>'+
+    (state.classes.length
+      ? '<div style="overflow-x:auto"><table><thead><tr><th>الصف</th><th>الرمز</th><th>رمز دخول الطلاب</th><th>الطلاب</th>'+(canDelete?'<th></th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'
+      : '<div class="empty">لا توجد فصول متاحة لك.</div>')
+  );
+
+  // تعبئة الرموز الكاملة (رمز المدرسة/المعلم + رمز الفصل)
+  state.classes.forEach(async c=>{
+    if(!c.loginCode) return;
+    const el=document.getElementById('ciCode-'+c.code);
+    if(el) el.textContent = await fullStudentLoginCode(c);
+  });
 }
 function openAddClassesModal(){
   omrModal(`
@@ -2123,32 +2127,6 @@ function updateBulkBar(){
   const nb=document.getElementById('bulkNoteBtns');
   if(nb) nb.style.display = (CLS_SESSION && CLS_SESSION.role==='soloTeacher') ? 'none' : '';
 }
-function bulkMove(){
-  if(!clsGuardEdit()) return;
-  const sel=selectedSeats(); if(!sel.length) return;
-  if(!state.classes.length){ alert('لا توجد فصول.'); return; }
-  const list = state.classes.map((c,i)=>`${i+1}) ${c.name} (${c.code})`).join('\n');
-  const ans = prompt(`نقل ${toArabic(sel.length)} طالباً إلى أي صف؟ اكتب رمز الصف:\n\n${list}`);
-  if(ans===null) return;
-  const code = ans.trim();
-  const toClass = state.classes.find(c=>c.code===code);
-  if(!toClass){ alert('رمز صف غير موجود.'); return; }
-  const students = state.students.filter(s=>state.selectedStudents[s.seat]);
-  state.selectedStudents={};
-  if(clsCanTransferDirect()){
-    students.forEach(s=>{ s.classCode=code; });
-    renderClasses(); renderStudents(); saveStudentsToCloud();
-    alert('تم نقل الطلاب إلى الصف المحدّد.');
-  } else {
-    Promise.all(students.map(s=>{
-      const fromClass = state.classes.find(c=>String(c.code)===String(s.classCode));
-      return createTransferRequest(s, fromClass, toClass);
-    }))
-      .then(()=>{ renderStudents(); alert(`تم إرسال ${toArabic(students.length)} طلب نقل، بانتظار موافقة مدير المدرسة أو المفوَّض بالنقل.`); })
-      .catch(e=>alert('تعذّر إرسال بعض طلبات النقل: '+e.message));
-  }
-}
-let _omrNoteCtx=null;
 function omrModal(html){
   closeOmrModal();
   const ov=document.createElement('div'); ov.id='omrModalOv';
@@ -2278,7 +2256,11 @@ function renderStudents(){
     const cardBg = (att && attBg[att.status]) ? `background:${attBg[att.status]}` : '';
     const noteOpen = state.attMenuSeat===s.seat;
     const statChip = att ? ` · <span class="stat" style="background:#fff;color:${statCol[att.status]||'#555'};border:1px solid ${statCol[att.status]||'#555'}">${attLbl[att.status]}</span>` : '';
-    const noteLine = (att && att.note) ? `<div class="sub" style="color:#555">📝 ${escapeHtml(att.note)}</div>` : '';
+    let noteDate = '';
+    if(att && att.note && att.noteAt){
+      try{ noteDate = ' <span style="color:var(--muted);font-size:11px">· '+new Date(att.noteAt).toLocaleDateString('ar',{day:'numeric',month:'long'})+'</span>'; }catch(e){}
+    }
+    const noteLine = (att && att.note) ? `<div class="sub" style="color:#555">📝 ${escapeHtml(att.note)}${noteDate}</div>` : '';
 
     const attRow = `<div class="attbtns" style="margin-top:8px;">` +
       attStatuses.map(st=>{
@@ -2305,8 +2287,9 @@ function renderStudents(){
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;flex:0 0 auto">
           <button onclick="openAttMenu('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--line);background:#fff;color:#555;border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">📝 ملاحظة</button>
+          ${canManageStudents()?`
           <button onclick="moveStudentOmr('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--teal-d,#0b5a54);background:#fff;color:var(--teal-d,#0b5a54);border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">↔️ نقل</button>
-          <button onclick="delStudent('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--bad);background:#fff;color:var(--bad);border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">🗑 حذف</button>
+          <button onclick="delStudent('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--bad);background:#fff;color:var(--bad);border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">🗑 حذف</button>`:''}
         </div>
       </div>
       ${attRow}
@@ -2335,7 +2318,25 @@ function openAttMenu(seat){
   renderStudents();
   window.scrollTo(0, y);   // حافظ على موضع التمرير
 }
-function closeAttMenu(){ state.attMenuSeat = null; const y=window.scrollY; renderStudents(); window.scrollTo(0,y); }
+function closeAttMenu(){
+  // الزر يقول «حفظ الملاحظة وإغلاق» — نحفظها فعلياً مع تاريخها قبل الإغلاق
+  const seat = state.attMenuSeat;
+  const noteEl = document.getElementById('attNote');
+  if(seat && noteEl){
+    const note = (noteEl.value||'').trim();
+    const cur = state.attendance[seat];
+    const prevNote = cur ? (cur.note||'') : '';
+    if(note !== prevNote){
+      if(note){
+        state.attendance[seat] = Object.assign({ status:(cur&&cur.status)||'present' }, cur||{}, { note, noteAt: Date.now() });
+      } else if(cur){
+        delete cur.note; delete cur.noteAt;
+      }
+      saveStudentsToCloud();
+    }
+  }
+  state.attMenuSeat = null; const y=window.scrollY; renderStudents(); window.scrollTo(0,y);
+}
 /* نافذة اعتماد التغيب — تُقرأ من إعدادات المدرسة (افتراضي 7:40–10:00 صباحاً) */
 let CLS_ATT_WINDOW = { from:'07:40', to:'10:00' };
 async function loadAttWindow(){
@@ -2386,6 +2387,7 @@ function setAttendance(seat,status){
     }
   } else {
     state.attendance[seat] = { status, note, ts: Date.now() };
+    if(note) state.attendance[seat].noteAt = Date.now();
   }
   const _stu = findStudent(seat);
   if(_stu){ if(status==='absent') omrPushAbsent(seat,_stu); else if(status==='present') omrRemoveAbsent(seat); }
@@ -2401,8 +2403,8 @@ function setAttendance(seat,status){
 function workEntry(classCode, seat){
   const vkey = makeVKey(classCode, CLS_ACTIVE_SUBJECT);
   if(!state.workLog[vkey]) state.workLog[vkey] = {};
-  if(!state.workLog[vkey][seat]) state.workLog[vkey][seat] = { events:[], exams:{}, bands:{}, attempts:{} };
-  if(!state.workLog[vkey][seat].attempts) state.workLog[vkey][seat].attempts = {};
+  if(!state.workLog[vkey][seat]) state.workLog[vkey][seat] = { events:[], exams:{}, bands:{}, scores:{} };
+  if(!state.workLog[vkey][seat].scores) state.workLog[vkey][seat].scores = {};
   return state.workLog[vkey][seat];
 }
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; }
@@ -2416,8 +2418,6 @@ function headerDateStr(){
     return `${wd}<br>${g}م<br>${h}هـ`;
   }catch(e){ return ''; }
 }
-function countStatus(entry, status){ return (entry.events||[]).filter(e=>e.status===status).length; }
-
 // الحفظ في سجل الأعمال: يسجّل حالة كل طلاب العرض الحالي بتاريخ اليوم (غير المحدَّد = حاضر)
 function commitAttendance(){
   const filter = document.getElementById('stViewClass') ? document.getElementById('stViewClass').value : '';
@@ -2460,16 +2460,6 @@ function purgeStaleAttendance(){
 setInterval(purgeStaleAttendance, 60*1000);
 
 // إرسال درجات اختبار فترة إلى سجل الأعمال (يُستدعى من «حفظ الدرجات» في النتائج)
-function pushExamGradesToWorkLog(periodLabel, rows){
-  rows.forEach(r=>{
-    const st = findStudent(r.seat||'');
-    if(!st) return;
-    const entry = workEntry(st.classCode, st.seat);
-    entry.exams[periodLabel] = `${r.correct}/${r.total}`;
-  });
-  saveWorkLogToCloud();
-}
-
 async function saveWorkLogToCloud(){
   if(!cloudReady) return;
   try{ await cloudSet('results','worklog', state.workLog); }catch(e){}
@@ -2484,6 +2474,27 @@ async function loadWorkLog(manual){
   }catch(e){ if(manual) alert('فشل التحميل: '+e.message); }
 }
 // جدول سجل الأعمال الرسمي: بنود الفترتين (قابلة للإدخال) + المجاميع + النهائي + الغياب/التأخّر
+/* فترة الرصد الفرعية النشطة داخل منظومة الفترة الحالية */
+function wlPeriodIndex(){
+  const el=document.getElementById('wlActivePeriod');
+  const i = el ? +el.value : 0;
+  return (i===1) ? 1 : 0;
+}
+function onWlPeriodChange(){
+  try{ localStorage.setItem('wl_active_period'+(CLS_NS||''), String(wlPeriodIndex())); }catch(e){}
+  const h=document.getElementById('wlPeriodHint');
+  const p=(state.workCfg.periods||[])[wlPeriodIndex()];
+  if(h&&p) h.textContent='الدرجات تُرصد الآن في «'+p.name+'».';
+  renderWorkLog();
+}
+function restoreWlPeriod(){
+  try{
+    const v=localStorage.getItem('wl_active_period'+(CLS_NS||''));
+    const el=document.getElementById('wlActivePeriod');
+    if(el && v!=null) el.value = (v==='1'?'1':'0');
+  }catch(e){}
+  onWlPeriodChange();
+}
 function renderWorkLog(){
   const host = document.getElementById('workLogHost'); if(!host) return;
   const sel = document.getElementById('wlViewClass');
@@ -2508,7 +2519,7 @@ function renderWorkLog(){
   });
   let html='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="min-width:900px"><thead><tr>'+head1+'</tr><tr>'+head2+'</tr></thead><tbody>';
   studs.forEach((s,idx)=>{
-    const e = log[s.seat] || { events:[], attempts:{} };
+    const e = log[s.seat] || { events:[], scores:{} };
     let cells = `
       <td style="color:#888">${toArabic(idx+1)}</td>
       <td style="text-align:right"><span style="cursor:pointer;color:#1f5fb0;font-weight:600;text-decoration:underline" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${escapeHtml(s.name)}</span></td>`;
@@ -2517,9 +2528,8 @@ function renderWorkLog(){
       cells += `<td style="color:${absD?'var(--bad)':'inherit'};font-weight:700">${toArabic(absD)}</td>`;
       p.items.filter(it=>!it.hidden).forEach(it=>{
         const v = itemValue(e, it);
-        const n = (e.attempts&&e.attempts[it.id]&&e.attempts[it.id].length)||0;
         const disp = v!=null ? `<span style="font-weight:700">${toArabic(v)}</span>` : '<span style="color:#bbb">—</span>';
-        cells += `<td style="cursor:pointer" onclick="openBandEditor('${escapeHtml(s.seat)}','${it.id}')" title="اضغط للتعديل/إضافة محاولة">${disp}${n>1?`<br><span style="font-size:9px;color:var(--muted)">(${toArabic(n)} محاولات)</span>`:''}</td>`;
+        cells += `<td style="cursor:pointer" onclick="openBandEditor('${escapeHtml(s.seat)}','${it.id}')" title="اضغط لإدخال/تعديل الدرجة">${disp}</td>`;
       });
       (p.groups||[]).forEach(g=>{ const gv=groupValue(e,p,g); cells += `<td style="background:#f6eef1;font-weight:800;color:#7a1f3d">${gv!=null?toArabic(gv):'—'}</td>`; });
       const ps = periodSum(e,p);
@@ -2536,79 +2546,86 @@ function openBandEditor(seat, itemId){
   let item=null, period=null;
   state.workCfg.periods.forEach(p=>{ const it=p.items.find(x=>x.id===itemId); if(it){item=it;period=p;} });
   if(!item) return;
-  if(!entry.attempts[itemId]) entry.attempts[itemId]=[];
-  const att = entry.attempts[itemId];
-  const rows = att.map((r,i)=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-    <span style="flex:1">محاولة ${toArabic(i+1)}: <b>${toArabic(round1(r*item.max))}</b> من ${toArabic(item.max)} <span style="color:var(--muted)">(${toArabic(Math.round(r*100))}٪)</span></span>
-    <button class="ghost" style="padding:4px 10px;color:var(--bad);border-color:var(--bad)" onclick="delAttempt('${escapeHtml(seat)}','${itemId}',${i})">حذف</button>
-  </div>`).join('') || '<div class="hint">لا محاولات بعد (الطالب يُعدّ غائباً في هذا البند).</div>';
-  const avg = itemRatioAvg(entry,itemId);
+  const cur = itemValue(entry, item);
   const body = document.getElementById('stRecordBody');
   const classCount = state.students.filter(x=>x.classCode===s.classCode).length;
+  const catKey = (itemId||'').endsWith('_part')?'part' : (itemId||'').endsWith('_hw')?'hw' : (itemId||'').endsWith('_proj')?'proj' : null;
+
   body.innerHTML = `<div style="text-align:right;font-weight:800;font-size:16px">${escapeHtml(item.name)} <span style="color:var(--muted);font-size:13px">(الوزن ${toArabic(item.max)})</span></div>
     <div style="text-align:right;font-size:12px;color:var(--muted);margin-bottom:12px">${escapeHtml(period.name)}</div>
     <div style="text-align:right;font-weight:700;font-size:13px;color:var(--ink);margin-bottom:6px">— درجة الطالب: ${escapeHtml(s.name)} —</div>
-    <div style="margin-bottom:10px">${rows}</div>
-    <div style="padding:8px;background:#f6eef1;border-radius:8px;margin-bottom:10px;font-weight:700;color:var(--teal-d)">الدرجة النسبية الحالية لهذا الطالب: ${avg!=null?toArabic(round1(avg*item.max)):'—'} من ${toArabic(item.max)}</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
-      <input id="newAttempt" type="number" min="0" max="${item.max}" step="0.5" placeholder="درجة من ${item.max} لهذا الطالب" style="flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit">
-      <button class="primary" style="padding:9px 14px" onclick="addAttempt('${escapeHtml(seat)}','${itemId}')">إضافة لهذا الطالب</button>
+    <div style="padding:10px;background:#f6eef1;border-radius:8px;margin-bottom:12px;font-weight:700;color:var(--teal-d)">الدرجة الحالية: ${cur!=null?toArabic(cur):'—'} من ${toArabic(item.max)}</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <input id="bandScore" type="number" min="0" max="${item.max}" step="0.5" value="${cur!=null?cur:''}" placeholder="درجة من ${item.max}" style="flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit">
+      <button class="primary" style="padding:9px 14px" onclick="saveBandScore('${escapeHtml(seat)}','${itemId}')">حفظ</button>
     </div>
+    ${catKey?`<div style="background:#eef6f4;border:1px solid var(--teal-l);border-radius:10px;padding:10px;margin-bottom:12px">
+      <div style="font-weight:800;color:var(--teal-d);margin-bottom:6px">⬇️ استيراد من سجل المتابعة</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">يجلب مجموع ملصقات «${escapeHtml(item.name)}» لهذا الطالب كدرجة قابلة للتعديل.</div>
+      <div style="display:flex;gap:8px">
+        <button class="ghost" style="flex:1;padding:9px" onclick="importFromFollow('${escapeHtml(seat)}','${itemId}','${catKey}',false)">لهذا الطالب</button>
+        <button class="ghost" style="flex:1;padding:9px" onclick="importFromFollow('${escapeHtml(seat)}','${itemId}','${catKey}',true)">لكل الصف</button>
+      </div>
+    </div>`:''}
     <div style="background:#eef6f4;border:1px solid var(--teal-l);border-radius:10px;padding:10px">
-      <div style="font-weight:800;color:var(--teal-d);margin-bottom:6px">⚡ إضافة الدرجة لجميع طلاب الصف (${toArabic(classCount)})</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">تُضاف كمحاولة جديدة لكل طلاب «${escapeHtml(classNameByCode(s.classCode)||s.classCode)}» دفعة واحدة.</div>
+      <div style="font-weight:800;color:var(--teal-d);margin-bottom:6px">⚡ إعطاء الدرجة لجميع طلاب الصف (${toArabic(classCount)})</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">تُسجَّل الدرجة نفسها لكل طلاب «${escapeHtml(classNameByCode(s.classCode)||s.classCode)}».</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <input id="newAttemptAll" type="number" min="0" max="${item.max}" step="0.5" placeholder="درجة من ${item.max} للجميع" style="flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit">
-        <button class="primary" style="padding:9px 14px;background:#0b7a63" onclick="addAttemptAll('${escapeHtml(seat)}','${itemId}')">للجميع</button>
+        <input id="bandScoreAll" type="number" min="0" max="${item.max}" step="0.5" placeholder="درجة من ${item.max} للجميع" style="flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit">
+        <button class="primary" style="padding:9px 14px;background:#0b7a63" onclick="saveBandScoreAll('${escapeHtml(seat)}','${itemId}')">للجميع</button>
       </div>
     </div>`;
+  closeOmrModal();
   document.getElementById('stRecordOverlay').style.display='block';
 }
-// إضافة الدرجة كمحاولة جديدة لجميع طلاب الصف دفعة واحدة
-function addAttemptAll(seat, itemId){
+function saveBandScore(seat, itemId){
   const s = findStudent(seat); if(!s) return;
   let item=null; state.workCfg.periods.forEach(p=>{ const it=p.items.find(x=>x.id===itemId); if(it)item=it; });
   if(!item) return;
-  const val = parseFloat(document.getElementById('newAttemptAll').value);
-  if(isNaN(val)){ alert('أدخل درجة صحيحة لإضافتها للجميع.'); return; }
-  if(val < 0){ alert('الدرجة لا يمكن أن تكون أقل من صفر.'); return; }
-  if(val > item.max){ alert(`لا يمكن إدخال درجة أكبر من الموزونة (${toArabic(item.max)}) لهذا البند.`); return; }
-  const ratio = Math.max(0, Math.min(1, val/(item.max||1)));
-  const classmates = state.students.filter(x=>x.classCode===s.classCode);
-  if(!classmates.length){ alert('لا يوجد طلاب في هذا الصف.'); return; }
-  if(!confirm(`إضافة الدرجة ${toArabic(val)} من ${toArabic(item.max)} كمحاولة جديدة لـ${toArabic(classmates.length)} طالباً في «${item.name}»؟`)) return;
-  classmates.forEach(st=>{
-    const entry = workEntry(st.classCode, st.seat);
-    if(!entry.attempts[itemId]) entry.attempts[itemId]=[];
-    entry.attempts[itemId].push(ratio);
-  });
-  saveWorkLogToCloud();
-  openBandEditor(seat, itemId);
-  renderWorkLog();
-  alert(`تمت إضافة الدرجة لـ${toArabic(classmates.length)} طالباً ✅`);
+  const raw = document.getElementById('bandScore').value;
+  const entry = workEntry(s.classCode, s.seat);
+  if(raw===''){ setItemScore(entry,itemId,null); }
+  else{
+    const v = parseFloat(raw);
+    if(isNaN(v) || v<0 || v>item.max){ alert('أدخل درجة بين 0 و'+item.max); return; }
+    setItemScore(entry,itemId,v);
+  }
+  saveWorkLogToCloud(); renderWorkLog(); openBandEditor(seat,itemId);
 }
-function addAttempt(seat, itemId){
+function saveBandScoreAll(seat, itemId){
   const s = findStudent(seat); if(!s) return;
   let item=null; state.workCfg.periods.forEach(p=>{ const it=p.items.find(x=>x.id===itemId); if(it)item=it; });
   if(!item) return;
-  const val = parseFloat(document.getElementById('newAttempt').value);
-  if(isNaN(val)){ alert('أدخل درجة صحيحة.'); return; }
-  if(val < 0){ alert('الدرجة لا يمكن أن تكون أقل من صفر.'); return; }
-  if(val > item.max){ alert(`لا يمكن إدخال درجة أكبر من الموزونة (${toArabic(item.max)}) لهذا البند.`); return; }
-  const entry = workEntry(s.classCode, s.seat);
-  if(!entry.attempts[itemId]) entry.attempts[itemId]=[];
-  entry.attempts[itemId].push(Math.max(0, Math.min(1, val/(item.max||1))));
-  saveWorkLogToCloud();
-  openBandEditor(seat, itemId);
-  renderWorkLog();
+  const v = parseFloat(document.getElementById('bandScoreAll').value);
+  if(isNaN(v) || v<0 || v>item.max){ alert('أدخل درجة بين 0 و'+item.max); return; }
+  const studs = state.students.filter(x=>String(x.classCode)===String(s.classCode));
+  if(!studs.length) return;
+  if(!confirm('تسجيل الدرجة '+v+' في «'+item.name+'» لجميع طلاب الصف ('+studs.length+')؟')) return;
+  studs.forEach(x=>{ setItemScore(workEntry(x.classCode,x.seat), itemId, v); });
+  saveWorkLogToCloud(); renderWorkLog(); openBandEditor(seat,itemId);
+  alert('تم تسجيل الدرجة لـ'+studs.length+' طالباً.');
 }
-function delAttempt(seat, itemId, idx){
+/* استيراد درجة البند من مجموع ملصقات سجل المتابعة (لا يُصفّر المتابعة) */
+function importFromFollow(seat, itemId, catKey, forAll){
   const s = findStudent(seat); if(!s) return;
-  const entry = workEntry(s.classCode, s.seat);
-  if(entry.attempts[itemId]){ entry.attempts[itemId].splice(idx,1); if(!entry.attempts[itemId].length) delete entry.attempts[itemId]; }
-  saveWorkLogToCloud();
-  openBandEditor(seat, itemId);
-  renderWorkLog();
+  let item=null; state.workCfg.periods.forEach(p=>{ const it=p.items.find(x=>x.id===itemId); if(it)item=it; });
+  if(!item) return;
+  const grab = (sd)=>{
+    const sums = fuCatSum(sd);
+    const raw = (sums && sums.sums && sums.sums[catKey]) || 0;
+    return round1(Math.min(Math.max(raw,0), +item.max||0));   // يُقصَر على وزن البند
+  };
+  if(forAll){
+    const studs = state.students.filter(x=>String(x.classCode)===String(s.classCode));
+    if(!studs.length) return;
+    if(!confirm('استيراد درجات «'+item.name+'» من سجل المتابعة لجميع طلاب الصف ('+studs.length+')؟')) return;
+    studs.forEach(x=>{ setItemScore(workEntry(x.classCode,x.seat), itemId, grab(x.seat)); });
+    saveWorkLogToCloud(); renderWorkLog(); openBandEditor(seat,itemId);
+    alert('تم الاستيراد لـ'+studs.length+' طالباً. يمكنك تعديل أي درجة.');
+  } else {
+    setItemScore(workEntry(s.classCode,s.seat), itemId, grab(seat));
+    saveWorkLogToCloud(); renderWorkLog(); openBandEditor(seat,itemId);
+  }
 }
 // واجهة إعداد بنود السجل (الأسماء/الأوزان/الإخفاء)
 function renderWlSetup(){
@@ -2895,7 +2912,7 @@ function removeFu(seat,fid){
 }
 function fuCatSum(seat){
   const sums={part:0,hw:0,proj:0}, cnt={part:0,hw:0,proj:0};
-  fuList(seat).forEach(e=>{ if(sums[e.cat]==null){sums[e.cat]=0;cnt[e.cat]=0;} sums[e.cat]+=(+e.score||0); cnt[e.cat]++; });
+  fuList(seat).forEach(e=>{ if(sums[e.cat]==null){sums[e.cat]=0;cnt[e.cat]=0;} sums[e.cat]+=(+(e.earned!=null?e.earned:e.score)||0); cnt[e.cat]++; });
   return {sums,cnt};
 }
 function renderRecordView(){
@@ -3000,6 +3017,7 @@ function openExportDialog(mode){
   body.innerHTML = periodPick
     + `<p class="hint" style="margin:0 0 6px">اختر لون التقرير:</p>
        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${colorBtns}</div>`;
+  closeOmrModal();
   document.getElementById('exportOverlay').style.display='block';
 }
 function closeExportDialog(){ document.getElementById('exportOverlay').style.display='none'; }
@@ -3045,7 +3063,7 @@ function openWorkLogExport(code, pal, scope){
   });
   let rows='';
   studs.forEach((s,idx)=>{
-    const e = log[s.seat]||{events:[],attempts:{}};
+    const e = log[s.seat]||{events:[],scores:{}};
     let tds = `<td class="num">${toArabic(idx+1)}</td><td class="nm" contenteditable>${escapeHtml(s.name)}</td>`;
     periods.forEach(p=>{
       tds += `<td>${toArabic(absenceDays(e))}</td>`;
@@ -3074,28 +3092,17 @@ function openDetailedExport(code, periodIdx, pal){
   const win = window.open('', '_blank');
   if(!win){ alert('فضلاً اسمح بالنوافذ المنبثقة للتصدير.'); return; }
   const vis = p.items.filter(it=>!it.hidden);
-  // أقصى عدد محاولات لكل بند عبر طلاب الصف (لتوحيد الأعمدة)
-  const maxAtt = {};
-  vis.forEach(it=>{ let m=1; studs.forEach(s=>{ const e=log[s.seat]; const n=(e&&e.attempts&&e.attempts[it.id]&&e.attempts[it.id].length)||0; if(n>m)m=n; }); maxAtt[it.id]=m; });
-  let head1=`<th rowspan="2" class="num">م</th><th rowspan="2">اسم الطالب</th><th rowspan="2" class="it">أيام الغياب</th>`, head2='';
-  vis.forEach(it=>{
-    head1 += `<th colspan="${maxAtt[it.id]+1}" class="pr">${escapeHtml(it.name)} (${toArabic(it.max)})</th>`;
-    for(let k=0;k<maxAtt[it.id];k++) head2 += `<th class="it">م${toArabic(k+1)}</th>`;
-    head2 += `<th class="tot">النسبي</th>`;
-  });
+  let head1=`<th class="num">م</th><th>اسم الطالب</th><th class="it">أيام الغياب</th>`, head2='';
+  vis.forEach(it=>{ head1 += `<th class="pr">${escapeHtml(it.name)} (${toArabic(it.max)})</th>`; });
   let rows='';
   studs.forEach((s,idx)=>{
-    const e=log[s.seat]||{events:[],attempts:{}};
+    const e=log[s.seat]||{events:[],scores:{}};
     let tds=`<td class="num">${toArabic(idx+1)}</td><td class="nm" contenteditable>${escapeHtml(s.name)}</td><td>${toArabic(absenceDays(e))}</td>`;
-    vis.forEach(it=>{
-      const att=(e.attempts&&e.attempts[it.id])||[];
-      for(let k=0;k<maxAtt[it.id];k++){ const r=att[k]; tds += `<td contenteditable>${r!=null?toArabic(round1(r*it.max)):''}</td>`; }
-      const v=itemValue(e,it); tds += `<td class="tot">${v!=null?toArabic(v):''}</td>`;
-    });
+    vis.forEach(it=>{ const v=itemValue(e,it); tds += `<td class="tot" contenteditable>${v!=null?toArabic(v):''}</td>`; });
     rows += `<tr>${tds}</tr>`;
   });
   const logo = moeLogoInline(150);
-  win.document.write(buildExportHTML({ title:`تفصيل ${p.name} — ${className}`, pal, logo, h, className, subject: v.subject||'', head1, head2, rows, landscape:true, subtitle:`تفصيل المحاولات — ${p.name}` }));
+  win.document.write(buildExportHTML({ title:`تفصيل ${p.name} — ${className}`, pal, logo, h, className, subject: v.subject||'', head1, head2, rows, landscape:true, subtitle:`تفصيل الدرجات — ${p.name}` }));
   win.document.close();
 }
 
@@ -3161,6 +3168,32 @@ function buildExportHTML(o){
 }
 
 // نافذة سجل الطالب: تواريخ الغياب/التأخر/الحضور وملاحظاتها
+/* عرض تواريخ وقائع التواجد والسلوك (غياب/تأخر/استئذان/هروب) مع أسماء الأيام */
+function showBehDates(seat, status, label){
+  const st = findStudent(seat); if(!st) return;
+  const vkey = makeVKey(st.classCode, CLS_ACTIVE_SUBJECT);
+  const entry = (state.workLog[vkey] && state.workLog[vkey][seat]) || { events:[] };
+  const list = (entry.events||[]).filter(e=>e.status===status);
+  if(!list.length){ alert('لا توجد سجلات لـ«'+label+'».'); return; }
+  const rows = list.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).map((e,i)=>{
+    let dayName='', dateTxt = e.date || '—';
+    try{
+      const d=new Date(e.date+'T00:00:00');
+      dayName = d.toLocaleDateString('ar',{weekday:'long'});
+      dateTxt = d.toLocaleDateString('ar',{year:'numeric',month:'long',day:'numeric'});
+    }catch(err){}
+    const extra = e.entryTime? (' · دخول '+escapeHtml(e.entryTime)) : (e.excuseTime? (' · '+escapeHtml(e.excuseTime)) : '');
+    return '<div style="display:flex;justify-content:space-between;gap:8px;padding:9px 4px;border-bottom:1px solid var(--line)">'+
+      '<span style="color:var(--muted);min-width:22px">'+toArabic(i+1)+'</span>'+
+      '<span style="flex:1;text-align:right"><b>'+escapeHtml(dayName)+'</b> · '+escapeHtml(dateTxt)+extra+'</span></div>';
+  }).join('');
+  omrModal(
+    '<div style="text-align:center;font-weight:800;font-size:16px;margin-bottom:4px">'+escapeHtml(label)+'</div>'+
+    '<div class="hint" style="text-align:center;margin-bottom:12px">'+escapeHtml(st.name)+' — '+toArabic(list.length)+'</div>'+
+    '<div style="max-height:52vh;overflow:auto">'+rows+'</div>'+
+    '<button class="ghost" style="width:100%;margin-top:12px;padding:10px" onclick="closeOmrModal()">إغلاق</button>'
+  );
+}
 function openStudentRecord(seat){
   const s = findStudent(seat); if(!s) return;
   const vkey = makeVKey(s.classCode, CLS_ACTIVE_SUBJECT);
@@ -3182,16 +3215,16 @@ function openStudentRecord(seat){
     '<div class="fucircs" style="margin-top:0">'+circles+'</div></div>';
 
   // التواجد والسلوك (٣ بطاقات)
-  const behBox=(ic,val,lbl,bg,col)=>'<div style="flex:1;min-width:0;background:'+bg+';border-radius:12px;padding:12px 6px;text-align:center">'+
+  const behBox=(ic,val,lbl,bg,col,st)=>'<div onclick="showBehDates(\''+escapeHtml(String(seat))+'\',\''+st+'\',\''+escapeHtml(lbl)+'\')" style="flex:1;min-width:0;background:'+bg+';border-radius:12px;padding:12px 6px;text-align:center;cursor:'+(val>0?'pointer':'default')+'">'+
     '<div style="font-size:20px">'+ic+'</div><div style="font-weight:800;font-size:19px;color:'+col+';margin-top:4px">'+toArabic(val)+'</div>'+
-    '<div style="font-size:11px;color:var(--muted);margin-top:2px">'+lbl+'</div></div>';
+    '<div style="font-size:11px;color:var(--muted);margin-top:2px">'+lbl+(val>0?' ⌄':'')+'</div></div>';
   const behCard = '<div style="background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
     '<div style="text-align:right;font-weight:800;color:var(--ink);margin-bottom:10px">👤 التواجد والسلوك</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-      behBox('🙋',nExcused,'عدد الاستئذانات','#eaf1fb','#2e73cc')+
-      behBox('❌',nAbsent,'عدد أيام الغياب','#fbecec','#c0392b')+
-      behBox('🕐',nLate,'عدد التأخّرات','#fff5e6','#c9870a')+
-      behBox('🏃',nRunaway,'عدد مرات الهروب','#eeeeee','#2c2c2c')+
+      behBox('🙋',nExcused,'عدد الاستئذانات','#eaf1fb','#2e73cc','excused')+
+      behBox('❌',nAbsent,'عدد أيام الغياب','#fbecec','#c0392b','absent')+
+      behBox('🕐',nLate,'عدد التأخّرات','#fff5e6','#c9870a','late')+
+      behBox('🏃',nRunaway,'عدد مرات الهروب','#eeeeee','#2c2c2c','runaway')+
     '</div></div>';
 
   // أعمال السنة (٤ صناديق)
@@ -3217,6 +3250,7 @@ function openStudentRecord(seat){
 
   const body = document.getElementById('stRecordBody');
   body.innerHTML = idCard + followCard + behCard + workCard + notesCard;
+  closeOmrModal();
   document.getElementById('stRecordOverlay').style.display='block';
   srLoadNotes(seat);
 }
@@ -3320,6 +3354,7 @@ function openQEditor(){
     }
   }
   body.innerHTML = html || '<div class="empty">حدّد الأقسام أولاً.</div>';
+  closeOmrModal();
   document.getElementById('qEditorOverlay').style.display='block';
 }
 function closeQEditor(){ document.getElementById('qEditorOverlay').style.display='none'; }
@@ -4312,18 +4347,6 @@ async function omrResolveClassAdmins(classCode){
     .filter(u=>u.active!==false && (u.role==='agent'||u.role==='counselor'||u.role==='assistant') && (u.assignedClasses||[]).map(norm).includes(norm(classCode)))
     .map(u=>({userId:u.id,name:u.username,role:u.role}));
 }
-async function omrSendNote(seat,classCode,className,studentName,text){
-  try{
-    const info=await omrResolveClassAdmins(classCode);
-    if(!info.length){ alert('لا يوجد وكيل أو موجه مرتبط بهذا الفصل.'); return; }
-    await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
-      fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:'teacher',
-      recipients:info.map(r=>r.userId), recipientsInfo:info, scope:'student',
-      studentSeat:seat, studentName:studentName, classCode:classCode, className:className,
-      text:text, createdAt:Date.now(), replies:[] });
-    alert('تم إرسال الملاحظة إلى '+info.length+' مستقبِل.'); renderOmrNotes();
-  }catch(e){ alert('فشل الإرسال: '+e.message); }
-}
 async function omrReplyNote(id){
   const t=prompt('اكتب ردّك:'); if(!t||!t.trim()) return;
   try{
@@ -4361,6 +4384,7 @@ async function omrSendNoteTo(rid,seat,classCode,className,studentName,text){
   }catch(e){ alert('فشل الإرسال: '+(e.message||e)); }
 }
 function moveStudentOmr(seat){
+  if(!canManageStudents()){ alert('نقل الطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
   if(!clsGuardEdit()) return;
   const st=state.students.find(s=>s.seat===seat); if(!st) return;
   const opts=state.classes.filter(c=>String(c.code)!==String(st.classCode)).map(c=>'<option value="'+escapeHtml(c.code)+'">'+escapeHtml(c.name)+'</option>').join('');
@@ -4381,17 +4405,9 @@ function doMoveStudentOmr(seat){
   const to=(document.getElementById('mvClsOmr')||{}).value; if(!to) return;
   const st=state.students.find(s=>s.seat===seat); if(!st) return;
   if(state.students.some(x=>x.seat===seat && String(x.classCode)===String(to))){ alert('الطالب موجود في الفصل الهدف.'); return; }
-  const toClass = state.classes.find(c=>String(c.code)===String(to));
-  const fromClass = state.classes.find(c=>String(c.code)===String(st.classCode));
   closeOmrModal();
-  if(clsCanTransferDirect()){
-    st.classCode=to; renderStudents(); saveStudentsToCloud();
-    alert('تم نقل الطالب.');
-  } else {
-    createTransferRequest(st, fromClass, toClass)
-      .then(()=>alert('تم إرسال طلب النقل، بانتظار موافقة مدير المدرسة أو المفوَّض بالنقل.'))
-      .catch(e=>alert('تعذّر إرسال طلب النقل: '+e.message));
-  }
+  st.classCode=to; renderStudents(); saveStudentsToCloud();
+  alert('تم نقل الطالب.');
 }
 async function renderOmrNotes(){
   const host=document.getElementById('omrNotesHost'); if(!host) return;
@@ -4473,7 +4489,7 @@ const firebaseConfig = {
 let db = null, cloudReady = false, rosterLoaded = false;
 
 /* ===== ربط النظام: حارس الدخول + عزل البيانات حسب المدرسة/الفترة/المستخدم ===== */
-let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_CAN_TRANSFER = false, CLS_OMR_PERM = {view:true,edit:true,del:true}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '', CLS_ACTIVATED_SEATS = {};
+let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_OMR_PERM = {view:true,edit:true,del:true}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '', CLS_ACTIVATED_SEATS = {};
 (function clsAuthGuard(){
   try{ CLS_SESSION = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){ CLS_SESSION = null; }
   if(CLS_SESSION && CLS_SESSION.role==='admin' && !CLS_SESSION.schoolId){
@@ -4545,18 +4561,18 @@ function periodTotal(p){ return (p.items||[]).filter(it=>!it.hidden).reduce((s,i
 // وزن بند مجمّع = مجموع أوزان أجزائه الظاهرة
 function groupMax(p, g){ return g.parts.reduce((s,id)=>{ const it=p.items.find(x=>x.id===id); return s+(it&&!it.hidden?(+it.max||0):0); },0); }
 // متوسّط المحاولات النسبي لبند (0..1) أو null إن لا محاولات (غائب)
-function itemRatioAvg(entry, id){
-  const a = entry.attempts && entry.attempts[id];
-  if(a && a.length){
-    const valid = a.filter(y=>(+y||0) > 0);
-    if(valid.length){ const s=valid.reduce((x,y)=>x+(+y||0),0); return s/valid.length; }
-  }
-  return null;
-}
-// قيمة بند للطالب = المتوسّط النسبي × وزن البند (أو null إن غائب)
+// قيمة بند للطالب = الدرجة المخزّنة مباشرة (أو null إن لم تُدخل)
 function itemValue(entry, item){
-  const r = itemRatioAvg(entry, item.id);
-  return r==null ? null : round1(r*(+item.max||0));
+  const v = entry.scores && entry.scores[item.id];
+  if(v==null || v==='') return null;
+  const n = +v; if(isNaN(n)) return null;
+  return round1(Math.min(Math.max(n,0), +item.max||0));
+}
+// تعيين درجة بند لطالب
+function setItemScore(entry, itemId, val){
+  if(!entry.scores) entry.scores = {};
+  if(val==null || val==='') delete entry.scores[itemId];
+  else entry.scores[itemId] = +val;
 }
 // قيمة بند مجمّع = مجموع قيم أجزائه الظاهرة (null إن كلها غائبة)
 function groupValue(entry, p, g){
@@ -4742,27 +4758,16 @@ function clsApplyAddManage(){
     });
   }catch(e){}
 }
+/* نقل الطالب وحذفه: لمدير النظام/المدرسة والمفوَّض والمعلم المستقل فقط — لا لمعلم المدرسة */
+function canManageStudents(){
+  return CLS_USER_ROLE==='admin' || CLS_USER_ROLE==='schoolAdmin'
+      || CLS_USER_ROLE==='soloTeacher' || CLS_CAN_ADD_MANAGE;
+}
 function clsGuardAdd(){
   if(CLS_OMR_PERM.edit===false){ alert('ليس لديك صلاحية التعديل في صفحة التصحيح.'); return false; }
   const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
   if(!exempt && !CLS_CAN_ADD_MANAGE){ alert('إضافة الفصول والطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه. تواصل مع إدارة المدرسة.'); return false; }
   return true;
-}
-// هل يملك المستخدم صلاحية تنفيذ نقل الطالب مباشرة (بدون موافقة)؟
-function clsCanTransferDirect(){
-  return (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin'||CLS_CAN_TRANSFER);
-}
-// إنشاء طلب نقل معلّق بانتظار موافقة مدير المدرسة أو المفوَّض بالنقل
-async function createTransferRequest(student, fromClass, toClass){
-  if(!CLS_SESSION || !CLS_SESSION.schoolId) throw new Error('حسابك غير مرتبط بمدرسة.');
-  await db.collection('transferRequests').add({
-    schoolId: CLS_SESSION.schoolId,
-    studentSeat: student.seat, studentName: student.name,
-    fromClassCode: fromClass?fromClass.code:'', fromClassName: fromClass?fromClass.name:'',
-    toClassCode: toClass.code, toClassName: toClass.name,
-    requestedByUserId: (CLS_SESSION&&CLS_SESSION.userId)||null, requestedByName: (CLS_SESSION&&CLS_SESSION.username)||'',
-    status: 'pending', createdAt: Date.now()
-  });
 }
 function clsGuardEdit(){ if(CLS_OMR_PERM.edit===false){ alert('ليس لديك صلاحية التعديل في صفحة التصحيح (مشاهدة فقط).'); return false; } return true; }
 function clsGuardDel(){ if(CLS_OMR_PERM.del===false){ alert('ليس لديك صلاحية الحذف في صفحة التصحيح.'); return false; } return true; }
@@ -4772,13 +4777,12 @@ async function clsLoadPerms(){
     const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
     if(!snap.exists) return;
     const u = snap.data();
-    if(u.role==='admin'||u.role==='schoolAdmin'||u.role==='soloTeacher'){ CLS_OMR_PERM={view:true,edit:true,del:true}; CLS_CAN_ADD_MANAGE=true; CLS_CAN_TRANSFER=true; clsApplyAddManage(); return; }
+    if(u.role==='admin'||u.role==='schoolAdmin'||u.role==='soloTeacher'){ CLS_OMR_PERM={view:true,edit:true,del:true}; CLS_CAN_ADD_MANAGE=true; clsApplyAddManage(); return; }
     const perm=u.permissions||{};
     const keys=['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'];
     const any=fl=>keys.some(k=>perm[k]&&perm[k][fl]);
     CLS_OMR_PERM={ view:any('access'), edit:any('edit'), del:any('del') };
     CLS_CAN_ADD_MANAGE = !!(perm['omr.classes.addManage'] && perm['omr.classes.addManage'].edit);
-    CLS_CAN_TRANSFER = !!(perm['omr.classes.transfer'] && perm['omr.classes.transfer'].edit);
     if(!CLS_OMR_PERM.view){ alert('ليس لديك صلاحية الوصول إلى صفحة التصحيح.'); location.replace('index.html'); }
     clsApplyAddManage();
   }catch(e){}
@@ -4817,36 +4821,6 @@ function clsWatchActive(){
   }catch(e){}
 }
 /* تزويد روستر المعلم من روستر المدرسة حسب الفصول المسندة له (دمج تراكمي بلا تعارض) */
-async function clsProvisionFromSchool(){
-  try{
-    if(!CLS_SESSION || !CLS_SESSION.schoolId || !CLS_SESSION.userId) return;
-    const uref = await db.collection('users').doc(CLS_SESSION.userId).get();
-    if(!uref.exists) return;
-    const u = uref.data();
-    if(u.role!=='teacher') return;
-    const norm = x=>normalizeDigits(String(x||'')).trim();
-    const assigned = (u.assignedClasses||[]).map(norm).filter(Boolean);
-    if(!assigned.length) return;
-    const snap = await db.collection('schoolData').doc('roster_'+CLS_SESSION.schoolId).get();
-    if(!snap.exists) return;
-    const d = JSON.parse(snap.data().value||'{}');
-    const mClasses = Array.isArray(d.classes)?d.classes:[];
-    const mStudents = Array.isArray(d.students)?d.students:[];
-    mStudents.forEach(ms=>{ if(ms.seat) CLS_STU_STATUS[String(ms.seat)]={social:ms.social||'',health:ms.health||''}; });
-    let changed=false;
-    assigned.forEach(code=>{
-      const mc = mClasses.find(c=>norm(c.code)===code); if(!mc) return;
-      const realCode = String(mc.code);
-      if(!state.classes.some(c=>norm(c.code)===code)){ state.classes.push({name:mc.name, code:realCode, stage:mc.stage||'', loginCode:mc.loginCode||''}); changed=true; }
-      mStudents.filter(s=>norm(s.classCode)===code).forEach(s=>{
-        const exists = state.students.some(x=> s.seat && x.seat===s.seat && norm(x.classCode)===code);
-        if(!exists){ state.students.push({seat:s.seat, name:s.name, classCode:realCode}); changed=true; }
-      });
-    });
-    if(changed){ try{ await saveStudentsToCloud(false); }catch(e){} }
-  }catch(e){}
-}
-
 /* ---- الاختبارات (الإعدادات + المفتاح) ---- */
 async function loadExamsFromCloud(){
   if(!cloudReady) return;
@@ -4885,6 +4859,7 @@ function saveGradesToRecord(){
     showTab('cloud'); return;
   }
   gradeTypeStep('root');
+  closeOmrModal();
   document.getElementById('gradeTypeOverlay').style.display='block';
 }
 function closeGradeType(){ document.getElementById('gradeTypeOverlay').style.display='none'; }
@@ -4893,8 +4868,9 @@ function gradeTypeStep(step, data){
   const btn = (label,onclick,bg)=>`<button class="primary" style="width:100%;margin-bottom:8px;${bg||''}" onclick="${onclick}">${label}</button>`;
   const cfg = state.workCfg;
   if(step==='root'){
-    body.innerHTML = `<p class="hint" style="margin-top:0">اختر الفترة:</p>`
-      + cfg.periods.map((p,pi)=>btn(`📅 ${escapeHtml(p.name)}`, `gradeTypeStep('item',{pi:${pi}})`)).join('');
+    const act = (typeof wlPeriodIndex==='function') ? wlPeriodIndex() : 0;
+    body.innerHTML = `<p class="hint" style="margin-top:0">اختر فترة الرصد التي تُرحَّل إليها الدرجات:</p>`
+      + cfg.periods.map((p,pi)=>btn(`📅 ${escapeHtml(p.name)}${pi===act?' ✓':''}`, `gradeTypeStep('item',{pi:${pi}})`, pi===act?'background:#0b7a63':'')).join('');
   } else if(step==='item'){
     const p = cfg.periods[data.pi];
     body.innerHTML = `<p class="hint" style="margin-top:0">اختر البند في «${escapeHtml(p.name)}»:</p>`
@@ -4919,7 +4895,7 @@ function prepWeigh(target){
   pendingGrade = { target, item };
   gradeTypeStep('weigh');
 }
-// إضافة محاولة نسبية لكل طالب صُحّحت ورقته
+// ترحيل درجات التصحيح الآلي إلى بند سجل الأعمال (درجة موزونة على وزن البند)
 function commitBandGrades(){
   if(!pendingGrade) return;
   const item = pendingGrade.item;
@@ -4927,10 +4903,8 @@ function commitBandGrades(){
   state.results.forEach(r=>{
     const st=findStudent(r.seat); if(!st){ unmatched++; return; }
     const entry=workEntry(st.classCode, st.seat);
-    if(!entry.attempts) entry.attempts={};
-    if(!entry.attempts[item.id]) entry.attempts[item.id]=[];
     const ratio = r.total ? r.correct/r.total : 0;
-    entry.attempts[item.id].push(round1(ratio*100)/100);   // نسبة 0..1
+    setItemScore(entry, item.id, round1(ratio*(+item.max||0)));   // درجة مباشرة موزونة
     matched++;
   });
   saveWorkLogToCloud();
@@ -5306,6 +5280,7 @@ window.addEventListener('load', ()=>{
   refreshClassDropdowns();
   renderClasses();
   renderStudents();
+  if(typeof restoreWlPeriod==='function') restoreWlPeriod();
   collapseStudentCards();
   { const flc=document.getElementById('flCard'); if(flc) flc.classList.add('show'); }
   const wrap=document.getElementById('canvasWrap');

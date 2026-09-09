@@ -351,7 +351,7 @@ const PERM_TREE = [
     { key:'index.users',    label:'المستخدمون' },
     { key:'index.settings', label:'إعدادات النظام' },
   ]},
-  { key:'omr', label:'صفحة التصحيح الآلي (omr)', leaves:[
+  { key:'omr', label:'إدارة الصفوف', leaves:[
     { key:'omr.classes',        label:'الفصول والطلاب', sub:false },
     { key:'omr.classes.addManage', label:'مسؤول إضافة الفصول والطلاب', sub:true },
     { key:'omr.design',  label:'التصميم' },
@@ -403,6 +403,7 @@ const INDEX_TABS = [
   { key:'absence',  perm:'index.absence',  label:'تأخر وغياب الطلاب' },
   { key:'studentStatus', perm:'index.studentStatus', label:'حالة الطالب' },
   { key:'users',    perm:'index.users',    label:'المستخدمون' },
+  { key:'userPerms', perm:'index.users',   label:'الصلاحيات الخاصة' },
   { key:'settings', perm:'index.settings', label:'إعدادات النظام' },
 ];
 
@@ -465,6 +466,14 @@ async function boot(){
       const snap = await usersCol().doc(saved.userId).get();
       if(snap.exists && snap.data().authUid === au.uid && snap.data().active!==false){
         const u = snap.data();
+        const schoolBlock = schoolLoginBlockReason(u, saved.period);
+        if(schoolBlock){
+          localStorage.removeItem('cls_session');
+          show('loginView');
+          try{ await cleanSignOut(); }catch(e){}
+          alertBox('loginAlert','err',schoolBlock);
+          return;
+        }
         if(u.role==='soloTeacher'){ window.location.href='omr.html'; return; }
         SESSION=saved; CURRENT={id:snap.id,...u}; enterApp(); return;
       }
@@ -638,6 +647,17 @@ function authErrMsg(e){
 }
 
 /* بعد نجاح المصادقة: إمّا ندخل مباشرة، أو نطلب إكمال التفعيل */
+/* سبب منع الدخول بحكم حالة المدرسة أو فترة تفعيلها أو الفترة النشطة (بند ٦ و٧) — يُستخدم عند الدخول الطازج واستعادة الجلسة */
+function schoolLoginBlockReason(data, period){
+  if(data.role==='admin' || data.role==='soloTeacher' || !data.schoolId || !SCHOOLS[data.schoolId]) return null;
+  const sc = SCHOOLS[data.schoolId];
+  if(sc.active===false) return 'مدرستك موقوفة حالياً من إدارة النظام. تواصل مع المسؤول.';
+  const todayStr = new Date().toISOString().slice(0,10);
+  if(sc.activeFrom && todayStr < sc.activeFrom) return 'لم تبدأ فترة تفعيل مدرستك بعد (تبدأ في '+sc.activeFrom+').';
+  if(sc.activeTo && todayStr > sc.activeTo) return 'انتهت فترة تفعيل مدرستك في '+sc.activeTo+'. تواصل مع إدارة النظام.';
+  if(sc.activePeriod && sc.activePeriod!==period) return 'الفترة '+periodLabel(period)+' غير مُفعّلة لمدرستك حالياً';
+  return null;
+}
 async function afterAuth(authUser){
   // بعد المصادقة صار بإمكاننا القراءة — نحمّل البيانات الأساسية إن لم تُحمّل بعد
   if(!Object.keys(SCHOOLS||{}).length){
@@ -653,12 +673,9 @@ async function afterAuth(authUser){
       await cleanSignOut();
       throw new Error('انتهى اشتراكك بتاريخ '+new Date(data.subscriptionEnds).toLocaleDateString('ar')+'. تواصل مع إدارة النظام.');
     }
-  } else if(data.role!=='admin' && data.schoolId && SCHOOLS[data.schoolId]){
-    const sc=SCHOOLS[data.schoolId];
-    if(sc.activePeriod && sc.activePeriod!==period){
-      await cleanSignOut();
-      throw new Error('الفترة '+periodLabel(period)+' غير مُفعّلة لمدرستك حالياً');
-    }
+  } else {
+    const block = schoolLoginBlockReason(data, period);
+    if(block){ await cleanSignOut(); throw new Error(block); }
   }
   AUTH_JUST_CREATED = false;
   CURRENT={id:d.id,...data};
@@ -1114,6 +1131,7 @@ function paintSSRecords(){
 function renderPanel(){
   const c=$('#content');
   if(activeTab==='users')      return renderUsers(c);
+  if(activeTab==='userPerms')  return renderUserPerms(c);
   if(activeTab==='settings')   return renderSettings(c);
   if(activeTab==='classes')    return renderClasses(c);
   if(activeTab==='sent')       return renderSent(c);
@@ -1217,50 +1235,49 @@ async function saveSoloSubscription(id){
   }catch(e){ toast('خطأ: '+e.message); }
 }
 
-let editUser=null, editPerms=null, permReadonly=false, umReadonly=false;
+let editUser=null;
 let ADMIN_DELEGATION_LOCKED = false; // true = هذه المدرسة لها schoolAdmin خاص، فيُمنع admin العام من تفويض الإضافة/النقل مباشرة
 async function refreshDelegationLock(schoolId){
   ADMIN_DELEGATION_LOCKED = false;
-  if(CURRENT.role!=='admin' || !schoolId) { renderPermTree(); return; }
+  if(CURRENT.role!=='admin' || !schoolId) return;
   try{
     const snap = await usersCol().where('schoolId','==',schoolId).where('role','==','schoolAdmin').get();
     ADMIN_DELEGATION_LOCKED = !snap.empty;
   }catch(e){}
-  renderPermTree();
 }
 async function openUserModal(id){
-  editUser = null; 
+  editUser = null;
   if(id){ const s=await usersCol().doc(id).get(); editUser={id:s.id,...s.data()}; }
   const e = editUser;
-  editPerms = e ? JSON.parse(JSON.stringify(e.permissions||defaultPerms(e.role))) : permsForNewUser('teacher');
   const schoolOpts = Object.entries(SCHOOLS).map(([sid,s])=>`<option value="${esc(sid)}" ${e&&e.schoolId===sid?'selected':''}>${esc(s.name)}</option>`).join('');
-  const isAdminU = !!(e && e.role==='admin'); umReadonly=isAdminU; permReadonly=isAdminU;
+  const isAdminU = !!(e && e.role==='admin');
   const isSchoolAdminU = !!(e && e.role==='schoolAdmin');
   const canGrantSchoolAdmin = CURRENT.role==='admin';
   const roleOpts = Object.entries(ROLES).filter(([k])=> (k!=='admin' || isAdminU) && (k!=='schoolAdmin' || canGrantSchoolAdmin || isSchoolAdminU)).map(([k,v])=>`<option value="${k}" ${e&&e.role===k?'selected':''}>${esc(v)}</option>`).join('');
-  modal(`<h2>${e?'تعديل مستخدم':'إضافة مستخدم'}</h2>
+  // بعد الحفظ الأول: لا يُعدَّل من هذا النموذج شيء عدا التفعيل/الإيقاف (بند ١٠)
+  const locked = !!e;
+  modal(`<h2>${e?'بيانات مستخدم':'إضافة مستخدم'}</h2>
     <div id="umAlert"></div>
+    ${locked?'<div class="sub-note" style="margin:0 0 10px;color:var(--accent)">🔒 بعد الإنشاء لا يُعدَّل من هنا سوى حالة التفعيل. لتعديل الدور أو الصلاحيات استخدم تبويب «الصلاحيات الخاصة».</div>':''}
     <div class="field" style="margin-bottom:6px"><label>حالة الحساب</label>
       <div class="chip-toggle"><button type="button" class="chip ${!e||e.active!==false?'active':''}" id="umActive">مُفعّل</button>
       <button type="button" class="chip ${e&&e.active===false?'active':''}" id="umInactive">معطّل</button></div></div>
-    <div class="field"><label>المدرسة</label><select id="umSchool">
+    <div class="field"><label>المدرسة</label><select id="umSchool" ${locked?'disabled':''}>
       <option value="">— اختر المدرسة —</option>${schoolOpts}</select></div>
-    <div class="field"><label>رقم الهوية</label><input id="umUser" inputmode="numeric" value="${e?esc(e.loginId||''):''}" placeholder="رقم الهوية — أرقام فقط (يُستخدم للدخول)"></div>
-    <div class="field"><label>اسم المستخدم</label><input id="umDisplayName" value="${e?esc(e.username):''}" placeholder="الاسم الظاهر في الموقع"></div>
-    ${e && e.authUid
-      ? `<div class="field"><label>حالة الحساب المرتبط</label>
-           <div class="sub-note" style="margin:0;color:var(--ok,#1a7a4f);font-weight:700">✔ مُفعّل ومرتبط بالبريد: ${esc(e.email||'—')}</div>
-           <div class="sub-note" style="margin-top:4px">لتغيير البريد استخدم زر «فك ربط البريد» من قائمة المستخدمين.</div></div>`
-      : `<div class="field"><label>كلمة المرور الأولية <span style="color:var(--muted);font-weight:400">(للتفعيل مرة واحدة فقط)</span></label>
-           <input id="umPass" value="${e?esc(e.password||''):''}" placeholder="يسلّمها المستخدم عند أول تفعيل">
-           <div class="sub-note" style="margin-top:4px">يستخدمها المستخدم مع رقم هويته لربط بريده، ثم تُمحى تلقائياً.</div></div>`}
-    <div class="field"><label>الدور</label><select id="umRole">${roleOpts}</select></div>
+    <div class="field"><label>رقم الهوية</label><input id="umUser" inputmode="numeric" value="${e?esc(e.loginId||''):''}" placeholder="رقم الهوية — أرقام فقط (يُستخدم للدخول)" ${locked?'disabled':''}></div>
+    <div class="field"><label>اسم المستخدم</label><input id="umDisplayName" value="${e?esc(e.username):''}" placeholder="الاسم الظاهر في الموقع" ${locked?'disabled':''}></div>
+    <div class="field"><label>البريد المرتبط</label>
+      ${e && e.authUid
+        ? `<div class="sub-note" style="margin:0;color:var(--ok,#1a7a4f);font-weight:700">✔ مُفعّل ومرتبط بالبريد: ${esc(e.email||'—')}</div>`
+        : `<div class="sub-note" style="margin:0;color:var(--muted)">لم يُفعَّل الحساب بعد — لا يوجد بريد مرتبط.</div>`}
+    </div>
+    ${!e ? `<div class="field"><label>كلمة المرور الأولية <span style="color:var(--muted);font-weight:400">(للتفعيل مرة واحدة فقط)</span></label>
+           <input id="umPass" placeholder="يسلّمها المستخدم عند أول تفعيل">
+           <div class="sub-note" style="margin-top:4px">يستخدمها المستخدم مع رقم هويته لربط بريده، ثم تُمحى تلقائياً.</div></div>` : ''}
+    <div class="field"><label>الدور</label><select id="umRole" ${locked?'disabled':''}>${roleOpts}</select></div>
+    ${!locked ? `<div class="sub-note" style="margin-top:-4px">تُطبَّق صلاحيات هذا الدور تلقائياً من «إعدادات النظام ← ضبط الصلاحيات الافتراضية».</div>` : ''}
     <div class="field"><label>الفصول المسندة <span style="color:var(--muted);font-weight:400">(اختر فصلاً أو أكثر)</span></label>
       <div id="umClassesHost"><div class="sub-note" style="margin:0">اختر المدرسة أولاً.</div></div></div>
-    <div class="divider"></div>
-    <label style="font-weight:700;font-size:14px">الصفحات والصلاحيات</label>
-    <div class="sub-note" style="margin-top:4px">حدّد الوصول، ولكل بند: يسمح بالتعديل / الحذف.</div>
-    <div class="perm-tree" id="permTree"></div>
     <div class="modal-row" style="margin-top:16px">
       <button class="btn secondary" onclick="closeModal()">إلغاء</button>
       <button class="btn" id="umSave">حفظ</button>
@@ -1268,24 +1285,17 @@ async function openUserModal(id){
   let activeState = !(e&&e.active===false);
   $('#umActive').onclick=()=>{activeState=true;$('#umActive').classList.add('active');$('#umInactive').classList.remove('active');};
   $('#umInactive').onclick=()=>{activeState=false;$('#umInactive').classList.add('active');$('#umActive').classList.remove('active');};
-  $('#umSchool').onchange=()=>{ const sid=$('#umSchool').value; loadModalClasses(sid, (e&&e.schoolId===sid)?(e.assignedClasses||[]):[]); refreshDelegationLock(sid); };
+  if(!locked){
+    $('#umSchool').onchange=()=>{ const sid=$('#umSchool').value; loadModalClasses(sid, []); refreshDelegationLock(sid); };
+    refreshDelegationLock($('#umSchool')?$('#umSchool').value:'');
+  }
   loadModalClasses(e?e.schoolId:'', e?e.assignedClasses:[]);
-  refreshDelegationLock(e?e.schoolId:($('#umSchool')?$('#umSchool').value:''));
-  $('#umRole').onchange=()=>{ editPerms=permsForNewUser($('#umRole').value); renderPermTree(); toast('طُبِّقت صلاحيات الدور الافتراضية'); };
-  renderPermTree();
   $('#umSave').onclick=()=>saveUser(activeState);
-  if(isAdminU){
-    ['umSchool','umUser','umRole','umDisplayName'].forEach(id=>{ const el=$('#'+id); if(el) el.disabled=true; });
-    ['umActive','umInactive'].forEach(id=>{ const el=$('#'+id); if(el){ el.onclick=null; el.style.opacity='.55'; el.style.pointerEvents='none'; } });
-    const al=$('#umAlert'); if(al) al.innerHTML='<div class="sub-note" style="margin:0 0 8px;color:var(--accent)">🔒 حساب الأدمن: كل الصلاحيات والفصول ممنوحة وبلا مدرسة محددة. لا يمكن تعديل سوى <b>كلمة المرور</b>.</div>';
-  } else if(isSchoolAdminU){
-    ['umSchool','umUser','umRole','umDisplayName'].forEach(id=>{ const el=$('#'+id); if(el) el.disabled=true; });
-    const al=$('#umAlert'); if(al) al.innerHTML='<div class="sub-note" style="margin:0 0 8px;color:var(--accent)">🔒 حساب أدمن المدرسة: كل الصلاحيات والفصول ممنوحة داخل مدرسته تلقائياً. لا يمكن تعديل سوى <b>كلمة المرور وحالة التفعيل</b>.</div>';
-  } else if(CURRENT.role==='schoolAdmin'){
-    // أدمن المدرسة يضيف/يعدّل مستخدمين داخل مدرسته فقط — المدرسة مقفولة على مدرسته
+  if(CURRENT.role==='schoolAdmin' && !locked){
+    // أدمن المدرسة يضيف مستخدمين داخل مدرسته فقط — المدرسة مقفولة على مدرسته
     const schEl=$('#umSchool');
     if(schEl){ schEl.value = CURRENT.schoolId; schEl.disabled = true; }
-    loadModalClasses(CURRENT.schoolId, e?e.assignedClasses:[]);
+    loadModalClasses(CURRENT.schoolId, []);
   }
 }
 async function loadModalClasses(schoolId, pre){
@@ -1298,21 +1308,115 @@ async function loadModalClasses(schoolId, pre){
   const preset=(pre||[]).map(String);
   host.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:8px">'+classes.map(c=>
     '<label style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface-2);font-weight:600;font-size:13.5px;cursor:pointer">'+
-    '<input type="checkbox" class="umCls" '+(umReadonly?'disabled ':'')+'value="'+esc(c.code)+'" '+(preset.includes(String(c.code))?'checked':'')+' style="width:17px;height:17px;accent-color:var(--accent)">'+esc(c.name)+'</label>'
+    '<input type="checkbox" class="umCls" value="'+esc(c.code)+'" '+(preset.includes(String(c.code))?'checked':'')+' style="width:17px;height:17px;accent-color:var(--accent)">'+esc(c.name)+'</label>'
   ).join('')+'</div>';
 }
-function renderPermTree(){
-  const root=$('#permTree'); if(!root) return;
-  const delegationKeys = ['omr.classes.addManage'];
+async function saveUser(active){
+  const linked = !!(editUser && editUser.authUid);
+  // بعد الإنشاء الأول: لا يُحفَظ من هذا النموذج شيء عدا حالة التفعيل (بند ١٠)
+  if(editUser){
+    try{
+      await usersCol().doc(editUser.id).update({ active, updatedAt:Date.now() });
+      toast('تم تحديث حالة الحساب'); closeModal(); loadUsersList();
+    }catch(e){ alertBox('umAlert','err',e.message); }
+    return;
+  }
+  // إنشاء أدمن/أدمن مدرسة جديد
+  if($('#umRole').value==='admin' || $('#umRole').value==='schoolAdmin'){
+    const isAdm=$('#umRole').value==='admin';
+    const pass = $('#umPass') ? $('#umPass').value : '';
+    if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور الأولية'); return; }
+    const school = isAdm ? null : $('#umSchool').value;
+    if(!isAdm && !school){ alertBox('umAlert','err','اختر المدرسة'); return; }
+    try{
+      await usersCol().add({ role:$('#umRole').value, schoolId:school, assignedClasses:[],
+        permissions:permsForNewUser($('#umRole').value), active:true, password:pass,
+        mustChangePassword:false, createdAt:Date.now(), updatedAt:Date.now() });
+      toast('تمت الإضافة — سلّمه كلمة المرور الأولية للتفعيل'); closeModal(); loadUsersList();
+    }catch(e){ alertBox('umAlert','err',e.message); }
+    return;
+  }
+  const school=$('#umSchool').value, loginId=$('#umUser').value.trim(),
+        displayName=$('#umDisplayName').value.trim(),
+        pass = $('#umPass') ? $('#umPass').value : '',
+        role=$('#umRole').value,
+        classes=[...document.querySelectorAll('.umCls:checked')].map(x=>x.value);
+  if(!school){ alertBox('umAlert','err','اختر المدرسة'); return; }
+  if(!loginId){ alertBox('umAlert','err','أدخل رقم الهوية'); return; }
+  if(!/^[0-9]+$/.test(loginId)){ alertBox('umAlert','err','رقم الهوية يجب أن يكون أرقاماً فقط'); return; }
+  if(!displayName){ alertBox('umAlert','err','أدخل اسم المستخدم'); return; }
+  if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور الأولية'); return; }
+  try{
+    const q=await usersCol().where('loginId','==',loginId).get();
+    if(q.docs.length){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
+    // الصلاحيات تُطبَّق تلقائياً من قالب الدور — لا تُعدَّل هنا (بند ١٠)
+    const payload={ loginId, username:displayName, role, schoolId:school, assignedClasses:classes,
+      permissions:permsForNewUser(role), active, password:pass,
+      mustChangePassword:false, createdAt:Date.now(), updatedAt:Date.now() };
+    await usersCol().add(payload);
+    toast('تمت إضافة المستخدم — سلّمه رقم الهوية وكلمة المرور الأولية للتفعيل');
+    closeModal(); loadUsersList();
+  }catch(e){ alertBox('umAlert','err',e.message); }
+}
+/* ========================================================================
+   تبويب "الصلاحيات الخاصة" — يعدّل الدور والصلاحيات لمستخدم مُفعَّل ومرتبط
+   ببريد فقط. منفصل تماماً عن نموذج إضافة/تعديل المستخدم (بند ١١).
+   ======================================================================== */
+let upSelectedUser = null, upEditPerms = null;
+async function renderUserPerms(c){
+  const isSchoolScoped = CURRENT.role==='schoolAdmin';
+  c.innerHTML = `<div class="panel-head"><h2>الصلاحيات الخاصة</h2></div>
+    <div class="sub-note">اختر مستخدماً مُفعَّلاً لتعديل دوره وصلاحياته. الاختيار مقصور على الحسابات المرتبطة ببريد فعلياً.</div>
+    <div class="field" style="margin:12px 0"><label>المستخدم</label>
+      <select id="upUserSelect"><option value="">— اختر مستخدماً —</option></select>
+    </div>
+    <div id="upBody"></div>`;
+  try{
+    const snap = await usersCol().get();
+    let users = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.authUid);
+    if(isSchoolScoped) users = users.filter(u=>u.schoolId===CURRENT.schoolId && u.role!=='admin' && u.role!=='schoolAdmin');
+    users.sort((a,b)=>(a.username||'').localeCompare(b.username||'','ar'));
+    const sel = $('#upUserSelect');
+    sel.innerHTML += users.map(u=>`<option value="${u.id}">${esc(u.username)} — ${esc(ROLES[u.role]||u.role)}${u.email?' ('+esc(u.email)+')':''}</option>`).join('');
+    sel.onchange = ()=>loadUserPermsEditor(sel.value);
+  }catch(e){ $('#upBody').innerHTML = `<div class="alert err">${esc(e.message)}</div>`; }
+}
+async function loadUserPermsEditor(id){
+  const host = $('#upBody');
+  if(!id){ host.innerHTML=''; upSelectedUser=null; return; }
+  host.innerHTML = `<div class="empty"><span class="spin"></span></div>`;
+  const snap = await usersCol().doc(id).get();
+  if(!snap.exists){ host.innerHTML = `<div class="empty">المستخدم غير موجود.</div>`; return; }
+  upSelectedUser = {id:snap.id, ...snap.data()};
+  const u = upSelectedUser;
+  const isAdminU = u.role==='admin', isSchoolAdminU = u.role==='schoolAdmin';
+  upEditPerms = JSON.parse(JSON.stringify(u.permissions || defaultPerms(u.role)));
+  const canGrantSchoolAdmin = CURRENT.role==='admin';
+  const roleOpts = Object.entries(ROLES).filter(([k])=> (k!=='admin' || isAdminU) && (k!=='schoolAdmin' || canGrantSchoolAdmin || isSchoolAdminU)).map(([k,v])=>`<option value="${k}" ${u.role===k?'selected':''}>${esc(v)}</option>`).join('');
+  host.innerHTML = `<div class="card">
+      <div class="umeta" style="margin-bottom:10px">البريد: <b>${esc(u.email||'—')}</b></div>
+      <div class="field"><label>الدور</label><select id="upRole" ${(isAdminU||isSchoolAdminU)?'disabled':''}>${roleOpts}</select></div>
+      ${(isAdminU||isSchoolAdminU)?'<div class="sub-note">حساب '+(isAdminU?'الأدمن العام':'أدمن المدرسة')+' يملك كل الصلاحيات دائماً بحكم دوره، ولا تتغيّر بتعديل الشجرة.</div>':''}
+      <div class="divider"></div>
+      <label style="font-weight:700;font-size:14px">الصفحات والصلاحيات</label>
+      <div class="perm-tree" id="upPermTree"></div>
+      <div class="modal-row" style="margin-top:16px"><button class="btn" id="upSaveBtn">حفظ</button></div>
+      <div id="upAlert"></div>
+    </div>`;
+  $('#upRole').onchange = ()=>{ upEditPerms = permsForNewUser($('#upRole').value); renderUpPermTree(); toast('طُبِّقت صلاحيات الدور الافتراضية — عدّلها إن أردت'); };
+  renderUpPermTree();
+  $('#upSaveBtn').onclick = saveUserPerms;
+}
+function renderUpPermTree(){
+  const root=$('#upPermTree'); if(!root) return;
+  const isPrivileged = upSelectedUser && (upSelectedUser.role==='admin' || upSelectedUser.role==='schoolAdmin');
   root.innerHTML = PERM_TREE.map(g=>`<div class="perm-grp">
     <div class="perm-head">${esc(g.label)}</div>
     ${g.leaves.map(l=>{
-      const p=editPerms[l.key]||{access:false,edit:false,del:false};
-      const locked = ADMIN_DELEGATION_LOCKED && delegationKeys.includes(l.key);
-      const ro = (permReadonly||locked)?'disabled':'';
-      const lockNote = locked?' <span style="color:var(--muted);font-weight:400;font-size:12px">(حصرية لمدير هذه المدرسة)</span>':'';
+      const p=upEditPerms[l.key]||{access:false,edit:false,del:false};
+      const ro = isPrivileged?'disabled':'';
       return `<div class="perm-leaf ${l.sub?'sub':''}">
-        <span class="pl-name">${l.sub?'↳ ':''}${esc(l.label)}${lockNote}</span>
+        <span class="pl-name">${l.sub?'↳ ':''}${esc(l.label)}</span>
         <label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="access" ${p.access?'checked':''}> وصول</label>
         <label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="edit" ${p.edit?'checked':''}> تعديل</label>
         <label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="del" ${p.del?'checked':''}> حذف</label>
@@ -1321,59 +1425,24 @@ function renderPermTree(){
   </div>`).join('');
   root.querySelectorAll('input[type=checkbox]').forEach(cb=>{
     cb.onchange=()=>{ const k=cb.dataset.k,f=cb.dataset.f;
-      editPerms[k]=editPerms[k]||{access:false,edit:false,del:false}; editPerms[k][f]=cb.checked;
-      if(f!=='access'&&cb.checked){ editPerms[k].access=true; renderPermTree(); }
+      upEditPerms[k]=upEditPerms[k]||{access:false,edit:false,del:false}; upEditPerms[k][f]=cb.checked;
+      if(f!=='access'&&cb.checked){ upEditPerms[k].access=true; renderUpPermTree(); }
     };
   });
 }
-async function saveUser(active){
-  const linked = !!(editUser && editUser.authUid);
-  const passEl = $('#umPass');
-  if(editUser && (editUser.role==='admin' || editUser.role==='schoolAdmin')){
-    const isAdm = editUser.role==='admin';
-    const upd = { role:editUser.role, schoolId:isAdm?null:editUser.schoolId, assignedClasses:[],
-                  permissions:defaultPerms(editUser.role), active:isAdm?true:active,
-                  mustChangePassword:false, updatedAt:Date.now() };
-    if(!linked){
-      const pass = passEl ? passEl.value : '';
-      if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور الأولية'); return; }
-      upd.password = pass;
-    }
-    try{
-      await usersCol().doc(editUser.id).update(upd);
-      toast(isAdm?'تم تحديث حساب الأدمن':'تم تحديث حساب أدمن المدرسة'); closeModal(); loadUsersList();
-    }catch(e){ alertBox('umAlert','err',e.message); }
-    return;
-  }
-  const school=$('#umSchool').value, loginId=$('#umUser').value.trim(),
-        displayName=$('#umDisplayName').value.trim(),
-        pass = passEl ? passEl.value : '',
-        role=$('#umRole').value,
-        classes=[...document.querySelectorAll('.umCls:checked')].map(x=>x.value);
-  if(!school){ alertBox('umAlert','err','اختر المدرسة'); return; }
-  if(!loginId){ alertBox('umAlert','err','أدخل رقم الهوية'); return; }
-  if(!/^[0-9]+$/.test(loginId)){ alertBox('umAlert','err','رقم الهوية يجب أن يكون أرقاماً فقط'); return; }
-  if(!displayName){ alertBox('umAlert','err','أدخل اسم المستخدم'); return; }
-  if(!linked && !pass){ alertBox('umAlert','err','أدخل كلمة المرور الأولية'); return; }
+async function saveUserPerms(){
+  if(!upSelectedUser) return;
+  const role = $('#upRole') ? $('#upRole').value : upSelectedUser.role;
+  const isPrivileged = role==='admin' || role==='schoolAdmin';
   try{
-    const q=await usersCol().where('loginId','==',loginId).get();
-    // المقارنة بمعرّف المستند وحده لا تكفي: المعرّف تغيّر إلى authUid بعد التفعيل،
-    // فنستثني أيضاً المستند الذي يطابق authUid أو loginId للمستخدم الجاري تعديله
-    const clash = q.docs.find(d=>{
-      if(!editUser) return true;
-      if(d.id === editUser.id) return false;
-      if(editUser.authUid && d.data().authUid === editUser.authUid) return false;
-      if(editUser.loginId && d.data().loginId === editUser.loginId) return false;
-      return true;
+    await usersCol().doc(upSelectedUser.id).update({
+      role,
+      permissions: isPrivileged ? defaultPerms(role) : upEditPerms,
+      updatedAt: Date.now()
     });
-    if(clash){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
-    const payload={ loginId, username:displayName, role, schoolId:school, assignedClasses:classes,
-      permissions:editPerms, active, updatedAt:Date.now() };
-    if(!linked) payload.password = pass;   // كلمة المرور الأولية تبقى حتى يفعّل المستخدم حسابه
-    if(editUser){ await usersCol().doc(editUser.id).update(payload); toast('تم تحديث المستخدم'); }
-    else { payload.mustChangePassword=false; payload.createdAt=Date.now(); await usersCol().add(payload); toast('تمت إضافة المستخدم — سلّمه رقم الهوية وكلمة المرور الأولية للتفعيل'); }
-    closeModal(); loadUsersList();
-  }catch(e){ alertBox('umAlert','err',e.message); }
+    alertBox('upAlert','ok','تم حفظ الدور والصلاحيات.');
+    toast('تم الحفظ');
+  }catch(e){ alertBox('upAlert','err',e.message); }
 }
 async function deleteUser(id,name){
   confirmModal('حذف مستخدم', `سيُحذف المستخدم «${name}» نهائياً. متابعة؟`, async()=>{
@@ -1404,31 +1473,19 @@ function renderSettings(c){
     </div>
 
     <div class="card" style="border-color:#F3D6D4">
-      <div class="set-block"><h3 style="color:var(--danger-d)">مسح البيانات</h3>
-        <p>حذف نهائي لا يمكن التراجع عنه. المعلمون الفرديون لا يتأثرون بأي من الخيارين — يُدارون بالإيقاف والتفعيل فقط، ولكل منهم تنظيف ملفه بنفسه.</p></div>
+      <div class="set-block"><h3 style="color:var(--danger-d)">مسح بيانات مدرسة</h3>
+        <p>حذف نهائي لا يمكن التراجع عنه، لمدرسة واحدة بكل بياناتها. المعلمون الفرديون خارج هذا النظام تمامًا — يُدارون بالإيقاف والتفعيل فقط، ولكل منهم تنظيف ملفه بنفسه.</p></div>
       <div class="field" style="margin-bottom:10px">
-        <label>نطاق المسح</label>
-        <select id="wipeScope">
-          <option value="all">شامل لكل النظام (عدا المعلمين الفرديين)</option>
-          <option value="school">مدرسة محددة فقط</option>
-        </select>
-      </div>
-      <div class="field hidden" id="wipeSchoolField" style="margin-bottom:10px">
         <label>اختر المدرسة</label>
-        <select id="wipeSchoolId"></select>
+        <select id="wipeSchoolId"><option value="">— اختر مدرسة —</option></select>
       </div>
       <button class="btn danger sm" id="wipeBtn">تنفيذ المسح</button>
     </div>`;
   $('#addSchoolBtn').onclick=()=>openSchoolModal(null);
   $('#roleTplBtn').onclick=openRoleTemplates;
-  $('#wipeScope').onchange=()=>{
-    const isSchool = $('#wipeScope').value==='school';
-    $('#wipeSchoolField').classList.toggle('hidden', !isSchool);
-    if(isSchool){
-      $('#wipeSchoolId').innerHTML = Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`).join('')
-        || '<option value="">— لا توجد مدارس —</option>';
-    }
-  };
+  $('#wipeSchoolId').innerHTML = '<option value="">— اختر مدرسة —</option>'
+    + (Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`).join('')
+       || '');
   $('#wipeBtn').onclick=wipeData;
   renderSchoolsList();
 }
@@ -1518,13 +1575,24 @@ function renderSchoolsList(){
       </div></div></div>`).join('');
 }
 function openSchoolModal(id){
-  const s = id?SCHOOLS[id]:{name:'',eduDept:'',contactNumber:'',year:'',activePeriod:'first',classCount:''};
+  const s = id?SCHOOLS[id]:{name:'',eduDept:'',contactNumber:'',year:'',activePeriod:'first',classCount:'',active:true,activeFrom:'',activeTo:''};
   modal(`<h2>${id?'تعديل مدرسة':'إضافة مدرسة'}</h2>
     <div id="smAlert"></div>
+    <div class="field"><label>حالة المدرسة</label>
+      <div class="chip-toggle"><button type="button" class="chip ${s.active!==false?'active':''}" id="smActive">مُفعَّلة</button>
+      <button type="button" class="chip ${s.active===false?'active':''}" id="smInactive">موقوفة</button></div>
+      <div class="sub-note" style="margin-top:6px">عند الإيقاف يُمنع دخول جميع مستخدمي هذه المدرسة إلى النظام دون استثناء.</div></div>
     <div class="field"><label>اسم المدرسة</label><input id="smName" value="${esc(s.name)}" placeholder="اسم المدرسة"></div>
     <div class="field"><label>إدارة التعليم</label><input id="smEduDept" value="${esc(s.eduDept||'')}" placeholder="مثال: إدارة التعليم بمنطقة الرياض"></div>
     <div class="field"><label>رقم التواصل</label><input id="smContact" value="${esc(s.contactNumber||'')}" inputmode="tel" placeholder="رقم جوال أو هاتف"></div>
     <div class="field"><label>العام الدراسي</label><input id="smYear" value="${esc(s.year||'')}" placeholder="مثال: ١٤٤٧/١٤٤٨ هـ"></div>
+    <div class="field"><label>فترة تفعيل المدرسة</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="smActiveFrom" type="date" value="${esc(s.activeFrom||'')}" style="flex:1">
+        <span style="color:var(--muted)">إلى</span>
+        <input id="smActiveTo" type="date" value="${esc(s.activeTo||'')}" style="flex:1">
+      </div>
+      <div class="sub-note" style="margin-top:6px">اختياري — اتركهما فارغين لتفعيل بلا حدود زمنية.</div></div>
     <div class="field"><label>الفترة المُفعّلة</label>
       <select id="smPeriod">
         <option value="first" ${s.activePeriod!=='second'?'selected':''}>الفترة الأولى</option>
@@ -1545,6 +1613,9 @@ function openSchoolModal(id){
       <button class="btn secondary" onclick="closeModal()">إلغاء</button>
       <button class="btn" id="smSave">حفظ</button>
     </div>`);
+  let smActiveState = s.active!==false;
+  $('#smActive').onclick=()=>{smActiveState=true;$('#smActive').classList.add('active');$('#smInactive').classList.remove('active');};
+  $('#smInactive').onclick=()=>{smActiveState=false;$('#smInactive').classList.add('active');$('#smActive').classList.remove('active');};
   $('#smSave').onclick=async()=>{
     const name=$('#smName').value.trim();
     if(!name){ alertBox('smAlert','err','أدخل اسم المدرسة'); return; }
@@ -1558,6 +1629,12 @@ function openSchoolModal(id){
     }
     SCHOOLS[sid]={ name, code, eduDept:$('#smEduDept').value.trim(), contactNumber:$('#smContact').value.trim(),
       year:$('#smYear').value.trim(), activePeriod:$('#smPeriod').value, classCount:$('#smCount').value.trim(),
+      active: smActiveState,
+      activeFrom: $('#smActiveFrom').value || '',
+      activeTo:   $('#smActiveTo').value   || '',
+      // نسخة رقمية (مللي ثانية) من فترة التفعيل — تقرؤها قواعد Firestore مباشرة دون تحليل تواريخ
+      activeFromMs: $('#smActiveFrom').value ? new Date($('#smActiveFrom').value+'T00:00:00').getTime() : null,
+      activeToMs:   $('#smActiveTo').value   ? new Date($('#smActiveTo').value+'T23:59:59').getTime()   : null,
       attFrom: $('#smAttFrom') ? $('#smAttFrom').value : (s.attFrom||'07:40'),
       attTo:   $('#smAttTo')   ? $('#smAttTo').value   : (s.attTo||'10:00') };
     try{ await schoolsDoc().set({list:SCHOOLS}); toast(id?'تم تحديث المدرسة':'تمت إضافة المدرسة'); closeModal(); renderSchoolsList(); }
@@ -1584,44 +1661,20 @@ async function wipeQuery(colName, field, op, val){
   return n;
 }
 function wipeData(){
-  const scope = $('#wipeScope').value;
   const schoolId = $('#wipeSchoolId') ? $('#wipeSchoolId').value : '';
-  if(scope==='school' && !schoolId){ toast('اختر المدرسة أولاً'); return; }
-  const title = scope==='all' ? 'مسح شامل لكل النظام' : ('مسح بيانات: '+((SCHOOLS[schoolId]||{}).name||''));
-  const msg = scope==='all'
-    ? 'سيُحذف كل المدارس والمستخدمين وبياناتهم (عدا حسابك والمعلمين الفرديين وبياناتهم). اكتب «تصفير» للتأكيد.'
-    : 'سيُحذف هذه المدرسة ومستخدموها وفصولها وطلابها وكل بياناتها. اكتب «تصفير» للتأكيد.';
+  if(!schoolId){ toast('اختر المدرسة أولاً'); return; }
+  const title = 'مسح بيانات: '+((SCHOOLS[schoolId]||{}).name||'');
+  const msg = 'سيُحذف هذه المدرسة ومستخدموها وفصولها وطلابها وكل بياناتها، بما فيها سجلات التأخر والغياب. اكتب «تصفير» للتأكيد.';
   confirmModal(title, msg, async(val)=>{
     if(val!=='تصفير'){ toast('لم تتم الكتابة بشكل صحيح'); return; }
     try{
-      if(scope==='all'){
-        // المستخدمون: عدا حسابي وعدا المعلمين الفرديين
-        const uSnap = await usersCol().get();
-        const uDocs = uSnap.docs.filter(d=>d.id!==CURRENT.id && d.data().role!=='soloTeacher');
-        for(let i=0;i<uDocs.length;i+=400){
-          const b = db.batch(); uDocs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit();
-        }
-        // روستر وفهارس المدارس فقط — ملفات المعلمين الفرديين (roster_solo_*) تبقى كما هي
-        const sdSnap = await db.collection('schoolData').get();
-        const sdDocs = sdSnap.docs.filter(d=>d.id.startsWith('roster_') && !d.id.startsWith('roster_solo_'));
-        for(let i=0;i<sdDocs.length;i+=400){
-          const b = db.batch(); sdDocs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit();
-        }
-        const riSnap = await db.collection('rosterIndex').get();
-        const riDocs = riSnap.docs.filter(d=>(d.data().kind||'school')!=='solo');
-        for(let i=0;i<riDocs.length;i+=400){
-          const b = db.batch(); riDocs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit();
-        }
-        SCHOOLS={}; await schoolsDoc().set({list:{}});
-      } else {
-        await wipeQuery('users','schoolId','==',schoolId);
-        try{ await rosterDoc(schoolId).delete(); }catch(e){}
-        try{ await db.collection('rosterIndex').doc(schoolId).delete(); }catch(e){}
-        for(const col of ['worksheets','submissions','notes','exams','results']){
-          try{ await wipeQuery(col,'schoolId','==',schoolId); }catch(e){}
-        }
-        delete SCHOOLS[schoolId]; await schoolsDoc().set({list:SCHOOLS});
+      await wipeQuery('users','schoolId','==',schoolId);
+      try{ await rosterDoc(schoolId).delete(); }catch(e){}
+      try{ await db.collection('rosterIndex').doc(schoolId).delete(); }catch(e){}
+      for(const col of ['worksheets','submissions','notes','exams','results','attendance']){
+        try{ await wipeQuery(col,'schoolId','==',schoolId); }catch(e){}
       }
+      delete SCHOOLS[schoolId]; await schoolsDoc().set({list:SCHOOLS});
       toast('تم المسح'); renderSettings($('#content'));
     }catch(e){ toast('خطأ: '+e.message); }
   },true,true);

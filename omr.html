@@ -1604,7 +1604,7 @@ async function addClass(){
   refreshClassDropdowns(); renderClasses(); renderStudents();
 }
 async function delClass(code){
-  if(!clsGuardDel()) return;
+  if(!clsGuardDelSec('classes')) return;
   const studs = state.students.filter(s=>s.classCode===code);
   const cl = state.classes.find(c=>c.code===code);
   const msg = studs.length>0
@@ -1627,7 +1627,7 @@ async function delClass(code){
 function classNameByCode(code){ const c=(state.fullClasses.length?state.fullClasses:state.classes).find(x=>x.code===code); return c? c.name : ''; }
 // توليد رمز دخول رجعي لفصل قديم أُنشئ قبل إضافة هذه الميزة (يطلب المرحلة أولاً)
 async function assignClassStage(code){
-  if(!clsGuardEdit()) return;
+  if(!clsGuardEditSec('classes')) return;
   const stage = prompt('اختر المرحلة لهذا الصف بالضبط كما هي مكتوبة:\nابتدائية\nمتوسطة\nثانوية');
   if(!stage) return;
   if(!CLS_STAGE_LETTER[stage.trim()]){ alert('المرحلة غير صحيحة. اكتبها بالضبط: ابتدائية أو متوسطة أو ثانوية.'); return; }
@@ -2002,7 +2002,7 @@ async function confirmImport(){
 }
 async function delStudent(seat){
   if(!canManageStudents()){ alert('حذف الطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
-  if(!clsGuardDel()) return;
+  if(!clsGuardDelSec('classes')) return;
   if(!confirm('حذف هذا الطالب؟ سيختفي من جميع الشاشات والسجلات والتقارير ويتوقف دخوله فوراً، مع الاحتفاظ ببياناته في قاعدة البيانات.')) return;
   try{
     await mutateSharedRoster((classes, students)=>{
@@ -2375,7 +2375,7 @@ async function omrRemoveAbsent(seat){
   try{ const dk=omrAttDateKey(); await db.collection('attendance').doc(omrAttDocId(seat,dk)).delete(); }catch(e){}
 }
 function setAttendance(seat,status){
-  if(!clsGuardEdit()) return;
+  if(!clsGuardEditSec('worklog')) return;
   const noteEl = document.getElementById('attNote');
   const note = noteEl ? (noteEl.value||'').trim() : '';
   if(status==='present'){
@@ -2828,7 +2828,7 @@ function renderFollowView(){
   }).join('');
 }
 function openStickerPalette(seat){
-  if(!clsGuardEdit()) return;
+  if(!clsGuardEditSec('worklog')) return;
   ensureStickers();
   const en=enabledStickers();
   const head='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'+
@@ -2902,7 +2902,7 @@ function commitSticker(seat, sid, earned){
   if(document.getElementById('recordOv') && document.getElementById('recordOv').classList.contains('show')) renderRecordView();
 }
 function removeFu(seat,fid){
-  if(!clsGuardDel()) return;
+  if(!clsGuardDelSec('worklog')) return;
   if(!confirm('إزالة هذا الملصق من الطالب؟')) return;
   const fk = fuKey(seat);
   const arr=state.followup&&state.followup[fk]; if(!arr) return;
@@ -3267,7 +3267,7 @@ async function srLoadNotes(seat){
   }catch(e){ host.innerHTML='<div class="hint">تعذّر تحميل الملاحظات.</div>'; }
 }
 async function srSendNote(seat, classCode){
-  if(!clsGuardEdit()) return;
+  if(!clsGuardEditSec('worklog')) return;
   const ta=document.getElementById('srNoteText'); const text=(ta&&ta.value||'').trim();
   if(!text){ alert('اكتب نص الملاحظة أولاً.'); return; }
   const s=findStudent(seat); const className=classNameByCode(classCode)||classCode;
@@ -4385,7 +4385,7 @@ async function omrSendNoteTo(rid,seat,classCode,className,studentName,text){
 }
 function moveStudentOmr(seat){
   if(!canManageStudents()){ alert('نقل الطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
-  if(!clsGuardEdit()) return;
+  if(!clsGuardEditSec('classes')) return;
   const st=state.students.find(s=>s.seat===seat); if(!st) return;
   const opts=state.classes.filter(c=>String(c.code)!==String(st.classCode)).map(c=>'<option value="'+escapeHtml(c.code)+'">'+escapeHtml(c.name)+'</option>').join('');
   if(!opts){ alert('لا يوجد فصل آخر للنقل إليه.'); return; }
@@ -4489,7 +4489,7 @@ const firebaseConfig = {
 let db = null, cloudReady = false, rosterLoaded = false;
 
 /* ===== ربط النظام: حارس الدخول + عزل البيانات حسب المدرسة/الفترة/المستخدم ===== */
-let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_OMR_PERM = {view:true,edit:true,del:true}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '', CLS_ACTIVATED_SEATS = {};
+let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_SEC_PERM = {classes:{access:true,edit:true,del:true},design:{access:true,edit:true,del:true},grade:{access:true,edit:true,del:true},results:{access:true,edit:true,del:true},worklog:{access:true,edit:true,del:true}}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '', CLS_ACTIVATED_SEATS = {};
 (function clsAuthGuard(){
   try{ CLS_SESSION = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){ CLS_SESSION = null; }
   if(CLS_SESSION && CLS_SESSION.role==='admin' && !CLS_SESSION.schoolId){
@@ -4764,28 +4764,65 @@ function canManageStudents(){
       || CLS_USER_ROLE==='soloTeacher' || CLS_CAN_ADD_MANAGE;
 }
 function clsGuardAdd(){
-  if(CLS_OMR_PERM.edit===false){ alert('ليس لديك صلاحية التعديل في صفحة التصحيح.'); return false; }
+  if(!clsGuardEditSec('classes')) return false;
   const exempt = (CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin');
   if(!exempt && !CLS_CAN_ADD_MANAGE){ alert('إضافة الفصول والطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه. تواصل مع إدارة المدرسة.'); return false; }
   return true;
 }
-function clsGuardEdit(){ if(CLS_OMR_PERM.edit===false){ alert('ليس لديك صلاحية التعديل في صفحة التصحيح (مشاهدة فقط).'); return false; } return true; }
-function clsGuardDel(){ if(CLS_OMR_PERM.del===false){ alert('ليس لديك صلاحية الحذف في صفحة التصحيح.'); return false; } return true; }
 async function clsLoadPerms(){
   try{
     if(!CLS_SESSION || !CLS_SESSION.userId) return;
     const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
     if(!snap.exists) return;
     const u = snap.data();
-    if(u.role==='admin'||u.role==='schoolAdmin'||u.role==='soloTeacher'){ CLS_OMR_PERM={view:true,edit:true,del:true}; CLS_CAN_ADD_MANAGE=true; clsApplyAddManage(); return; }
+    const full={access:true,edit:true,del:true};
+    if(u.role==='admin'||u.role==='schoolAdmin'||u.role==='soloTeacher'){
+      CLS_SEC_PERM={classes:full,design:full,grade:full,results:full,worklog:full};
+      CLS_CAN_ADD_MANAGE=true; clsApplyAddManage(); clsApplySectionPerms(); return;
+    }
     const perm=u.permissions||{};
-    const keys=['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'];
-    const any=fl=>keys.some(k=>perm[k]&&perm[k][fl]);
-    CLS_OMR_PERM={ view:any('access'), edit:any('edit'), del:any('del') };
+    const dflt={access:false,edit:false,del:false};
+    CLS_SEC_PERM={
+      classes: perm['omr.classes'] || dflt,
+      design:  perm['omr.design']  || dflt,
+      grade:   perm['omr.grade']   || dflt,
+      results: perm['omr.results'] || dflt,
+      worklog: perm['omr.worklog'] || dflt,
+    };
     CLS_CAN_ADD_MANAGE = !!(perm['omr.classes.addManage'] && perm['omr.classes.addManage'].edit);
-    if(!CLS_OMR_PERM.view){ alert('ليس لديك صلاحية الوصول إلى صفحة التصحيح.'); location.replace('index.html'); }
+    const hasAnyAccess = Object.values(CLS_SEC_PERM).some(p=>p.access);
+    if(!hasAnyAccess){ alert('ليس لديك صلاحية الوصول إلى أي قسم في إدارة الصفوف.'); location.replace('index.html'); return; }
     clsApplyAddManage();
+    clsApplySectionPerms();
   }catch(e){}
+}
+/* إخفاء تبويبات الأقسام التي لا يملك المستخدم وصولاً إليها، وتفعيل/تعطيل التعديل والحذف لكل قسم بمفرده */
+function clsApplySectionPerms(){
+  const map={ students:'classes', design:'design', grade:'grade', results:'results', cloud:'worklog' };
+  Object.entries(map).forEach(([tabId,secKey])=>{
+    const tabBtn = document.getElementById('tab-'+tabId);
+    const p = CLS_SEC_PERM[secKey];
+    if(tabBtn) tabBtn.style.display = (p && p.access) ? '' : 'none';
+  });
+  // إن كان التبويب النشط حالياً غير مسموح، ننتقل لأول تبويب متاح
+  const activeTab = Object.keys(map).find(id=>{
+    const el=document.getElementById('panel-'+id); return el && el.classList.contains('active');
+  });
+  if(activeTab && CLS_SEC_PERM[map[activeTab]] && !CLS_SEC_PERM[map[activeTab]].access){
+    const firstAllowed = Object.keys(map).find(id=>CLS_SEC_PERM[map[id]] && CLS_SEC_PERM[map[id]].access);
+    if(firstAllowed) showTab(firstAllowed);
+  }
+}
+/* فحص تعديل/حذف خاص بقسم بعينه (لا علم عام مُجمَّع) */
+function clsGuardEditSec(secKey, msg){
+  const p = CLS_SEC_PERM[secKey];
+  if(!p || !p.edit){ alert(msg||'ليس لديك صلاحية التعديل في هذا القسم.'); return false; }
+  return true;
+}
+function clsGuardDelSec(secKey, msg){
+  const p = CLS_SEC_PERM[secKey];
+  if(!p || !p.del){ alert(msg||'ليس لديك صلاحية الحذف في هذا القسم.'); return false; }
+  return true;
 }
 /* طرد المستخدم فور تعطيله (أو عند التحديث إن كان معطّلاً) */
 /* التأكد أن حساب المصادقة مطابق للمستخدم المخزّن في الجلسة */
@@ -4851,7 +4888,7 @@ function renderExams(){
 let pendingGrade = null;
 function round1(x){ return Math.round((+x||0)*10)/10; }
 function saveGradesToRecord(){
-  if(!clsGuardEdit()) return;
+  if(!clsGuardEditSec('worklog')) return;
   if(!state.results.length){ alert('لا توجد نتائج لحفظها. صحّح بطاقات أولاً.'); return; }
   const cfg = state.workCfg;
   if(!cfg || !cfg.periods || !cfg.periods.length || cfg.periods.every(p=>!(p.items||[]).length)){

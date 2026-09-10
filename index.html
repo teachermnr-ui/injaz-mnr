@@ -1341,14 +1341,21 @@ async function saveUser(active){
     try{
       if(editUser){
         // تعديل حساب بانتظار التفعيل — تحديث نفس المستند، لا إنشاء نسخة جديدة
+        const loginId=$('#umUser').value.trim(), displayName=$('#umDisplayName').value.trim();
         await usersCol().doc(editUser.id).update({ role:$('#umRole').value, schoolId:school,
-          password:pass, active, updatedAt:Date.now() });
+          loginId, username:displayName, password:pass, active, updatedAt:Date.now() });
         toast('تم تحديث الحساب'); closeModal(); loadUsersList();
       } else {
-        await usersCol().add({ role:$('#umRole').value, schoolId:school, assignedClasses:[],
+        const loginId=$('#umUser').value.trim(), displayName=$('#umDisplayName').value.trim();
+        if(!loginId){ alertBox('umAlert','err','أدخل رقم الهوية'); return; }
+        if(!/^[0-9]+$/.test(loginId)){ alertBox('umAlert','err','رقم الهوية يجب أن يكون أرقاماً فقط'); return; }
+        if(!displayName){ alertBox('umAlert','err','أدخل اسم المستخدم'); return; }
+        const q=await usersCol().where('loginId','==',loginId).get();
+        if(q.docs.length){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
+        await usersCol().add({ loginId, username:displayName, role:$('#umRole').value, schoolId:school, assignedClasses:[],
           permissions:permsForNewUser($('#umRole').value), active:true, password:pass,
           mustChangePassword:false, createdAt:Date.now(), updatedAt:Date.now() });
-        toast('تمت الإضافة — سلّمه كلمة المرور الأولية للتفعيل'); closeModal(); loadUsersList();
+        toast('تمت الإضافة — سلّمه رقم الهوية وكلمة المرور الأولية للتفعيل'); closeModal(); loadUsersList();
       }
     }catch(e){ alertBox('umAlert','err',e.message); }
     return;
@@ -1600,7 +1607,6 @@ function renderSchoolsList(){
         <div class="umeta">${esc(s.eduDept||'—')} · ${esc(s.year||'—')} · الفترة المُفعّلة: ${esc(periodLabel(s.activePeriod||'first'))} · فصول: ${esc(s.classCount||'—')}</div></div>
       <div class="row-actions">
         <button class="icon-btn" onclick="openSchoolModal('${esc(id)}')" title="تعديل">✏️</button>
-        <button class="icon-btn del" onclick="deleteSchool('${esc(id)}','${esc(s.name)}')" title="حذف">🗑</button>
       </div></div></div>`).join('');
 }
 function openSchoolModal(id){
@@ -1669,13 +1675,6 @@ function openSchoolModal(id){
     try{ await schoolsDoc().set({list:SCHOOLS}); toast(id?'تم تحديث المدرسة':'تمت إضافة المدرسة'); closeModal(); renderSchoolsList(); }
     catch(e){ alertBox('smAlert','err',e.message); }
   };
-}
-function deleteSchool(id,name){
-  confirmModal('حذف مدرسة',`سيُحذف سجل المدرسة «${name}». (لن يحذف هذا حسابات مستخدميها). متابعة؟`,async()=>{
-    delete SCHOOLS[id];
-    try{ await schoolsDoc().set({list:SCHOOLS}); toast('تم حذف المدرسة'); renderSchoolsList(); }
-    catch(e){ toast('خطأ: '+e.message); }
-  },true);
 }
 /* حذف مستندات مجموعة حسب شرط، على دفعات آمنة */
 async function wipeQuery(colName, field, op, val){

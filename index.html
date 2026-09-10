@@ -771,7 +771,8 @@ async function doStaffActivate(){
       await usersCol().doc(au.uid).set(payload);
     } else {
       await usersCol().doc(au.uid).set(payload);
-      try{ await usersCol().doc(d.id).delete(); }catch(e){}
+      // القديم لا يُحذف (صلاحية الحذف مقصورة على الأدمن) — يُعلَّم بدل ذلك ويُستبعَد من كل القوائم
+      try{ await usersCol().doc(d.id).update({ migratedTo: au.uid }); }catch(e){}
     }
     AUTH_JUST_CREATED = false;
     $('#staffActivateBox').classList.add('hidden');
@@ -895,8 +896,11 @@ $('#pwBtn').onclick = async ()=>{
    ======================================================================== */
 function visibleTabs(){
   if(CURRENT.role==='admin') return INDEX_TABS.slice();
-  if(CURRENT.role==='schoolAdmin') return INDEX_TABS.filter(t=>t.key!=='settings');
   const pm=CURRENT.permissions||{};
+  if(CURRENT.role==='schoolAdmin'){
+    // يخضع لصلاحياته المخزَّنة كأي دور آخر — "إعدادات النظام" وحدها تبقى حصرًا لأدمن النظام
+    return INDEX_TABS.filter(t=> t.key!=='settings' && pm[t.perm] && pm[t.perm].access);
+  }
   return INDEX_TABS.filter(t=>{
     if(t.key==='users'||t.key==='settings') return false;
     return pm[t.perm] && pm[t.perm].access;
@@ -1165,7 +1169,7 @@ async function loadUsersList(){
   const wrap=$('#usersList'); const filter = isSchoolScoped ? CURRENT.schoolId : ($('#uSchoolFilter')?$('#uSchoolFilter').value:'');
   try{
     const snap = await usersCol().get();
-    let users = snap.docs.map(d=>({id:d.id,...d.data()}));
+    let users = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>!u.migratedTo);
     if(isSchoolScoped) users = users.filter(u=>u.schoolId===CURRENT.schoolId && u.role!=='admin' && u.role!=='soloTeacher');
     else if(filter==='__solo__') users = users.filter(u=>u.role==='soloTeacher');
     else if(filter) users = users.filter(u=>u.schoolId===filter);
@@ -1194,12 +1198,13 @@ async function loadUsersList(){
           <div class="umeta"><span class="pill role">${esc(ROLES[u.role]||u.role)}</span> · ${esc(sc)}</div>
           ${subLine}
         </div>
-        <span class="pill ${u.active===false?'off':'on'}">${u.active===false?'معطّل':'مُفعّل'}</span>
+        <span class="pill ${u.active===false?'off':'on'}">${u.active===false?'موقوف':'غير موقوف'}</span>
+        <span class="pill ${u.authUid?'on':'off'}">${u.authUid?'مُفعَّل ومرتبط':'بانتظار التفعيل'}</span>
         <div class="row-actions">
           ${isSolo?`<button class="icon-btn" onclick="editSoloSubscription('${u.id}')" title="إدارة الاشتراك">🗓</button>`:''}
           ${u.authUid?`<button class="icon-btn" onclick="unlinkUserAccount('${u.id}','${esc(u.username)}')" title="فك ربط البريد">🔓</button>`:''}
           <button class="icon-btn" onclick="openUserModal('${u.id}')" title="تعديل">✏️</button>
-          ${(u.role==='admin'||u.role==='schoolAdmin')?'':`<button class="icon-btn del" onclick="deleteUser('${u.id}','${esc(u.username)}')" title="حذف">🗑</button>`}
+          ${(u.role==='admin' || (u.role==='schoolAdmin' && CURRENT.role!=='admin'))?'':`<button class="icon-btn del" onclick="deleteUser('${u.id}','${esc(u.username)}')" title="حذف">🗑</button>`}
         </div></div></div>`;
     }).join('');
   }catch(e){ wrap.innerHTML=`<div class="alert err">${esc(e.message)}</div>`; }
@@ -1248,6 +1253,7 @@ async function refreshDelegationLock(schoolId){
 async function openUserModal(id){
   editUser = null;
   if(id){ const s=await usersCol().doc(id).get(); editUser={id:s.id,...s.data()}; }
+  if(editUser && editUser.migratedTo){ toast('هذا السجل انتقل إلى حساب مُفعَّل آخر، ولا يُدار من هنا.'); loadUsersList(); return; }
   const e = editUser;
   const schoolOpts = Object.entries(SCHOOLS).map(([sid,s])=>`<option value="${esc(sid)}" ${e&&e.schoolId===sid?'selected':''}>${esc(s.name)}</option>`).join('');
   const isAdminU = !!(e && e.role==='admin');
@@ -1261,8 +1267,8 @@ async function openUserModal(id){
     ${locked && !isAdminU?'<div class="sub-note" style="margin:0 0 10px;color:var(--accent)">🔒 بعد الإنشاء لا يُعدَّل من هنا سوى حالة التفعيل. لتعديل الدور أو الصلاحيات استخدم تبويب «الصلاحيات الخاصة».</div>':''}
     ${isAdminU?'<div class="sub-note" style="margin:0 0 10px;color:var(--accent)">🔒 حساب الأدمن العام لا يُدار من هذه الشاشة — تفعيله أو إيقافه يتم من قواعد البيانات مباشرة فقط.</div>':''}
     ${!isAdminU ? `<div class="field" style="margin-bottom:6px"><label>حالة الحساب</label>
-      <div class="chip-toggle"><button type="button" class="chip ${!e||e.active!==false?'active':''}" id="umActive">مُفعّل</button>
-      <button type="button" class="chip ${e&&e.active===false?'active':''}" id="umInactive">معطّل</button></div></div>` : ''}
+      <div class="chip-toggle"><button type="button" class="chip ${!e||e.active!==false?'active':''}" id="umActive">غير موقوف</button>
+      <button type="button" class="chip ${e&&e.active===false?'active':''}" id="umInactive">موقوف</button></div></div>` : ''}
     <div class="field"><label>المدرسة</label><select id="umSchool" ${locked?'disabled':''}>
       <option value="">— اختر المدرسة —</option>${schoolOpts}</select></div>
     <div class="field"><label>رقم الهوية</label><input id="umUser" inputmode="numeric" value="${e?esc(e.loginId||''):''}" placeholder="رقم الهوية — أرقام فقط (يُستخدم للدخول)" ${locked?'disabled':''}></div>
@@ -1398,8 +1404,8 @@ async function loadUserPermsEditor(id){
   const roleOpts = Object.entries(ROLES).filter(([k])=> (k!=='admin' || isAdminU) && (k!=='schoolAdmin' || canGrantSchoolAdmin || isSchoolAdminU)).map(([k,v])=>`<option value="${k}" ${u.role===k?'selected':''}>${esc(v)}</option>`).join('');
   host.innerHTML = `<div class="card">
       <div class="umeta" style="margin-bottom:10px">البريد: <b>${esc(u.email||'—')}</b></div>
-      <div class="field"><label>الدور</label><select id="upRole" ${(isAdminU||isSchoolAdminU)?'disabled':''}>${roleOpts}</select></div>
-      ${(isAdminU||isSchoolAdminU)?'<div class="sub-note">حساب '+(isAdminU?'الأدمن العام':'أدمن المدرسة')+' يملك كل الصلاحيات دائماً بحكم دوره، ولا تتغيّر بتعديل الشجرة.</div>':''}
+      <div class="field"><label>الدور</label><select id="upRole" ${isAdminU?'disabled':''}>${roleOpts}</select></div>
+      ${isAdminU?'<div class="sub-note">حساب الأدمن العام يملك كل الصلاحيات دائماً بحكم دوره، ولا تتغيّر بتعديل الشجرة.</div>':''}
       <div class="divider"></div>
       <label style="font-weight:700;font-size:14px">الصفحات والصلاحيات</label>
       <div class="perm-tree" id="upPermTree"></div>
@@ -1412,7 +1418,7 @@ async function loadUserPermsEditor(id){
 }
 function renderUpPermTree(){
   const root=$('#upPermTree'); if(!root) return;
-  const isPrivileged = upSelectedUser && (upSelectedUser.role==='admin' || upSelectedUser.role==='schoolAdmin');
+  const isPrivileged = upSelectedUser && upSelectedUser.role==='admin';
   root.innerHTML = PERM_TREE.map(g=>`<div class="perm-grp">
     <div class="perm-head">${esc(g.label)}</div>
     ${g.leaves.map(l=>{
@@ -1436,7 +1442,7 @@ function renderUpPermTree(){
 async function saveUserPerms(){
   if(!upSelectedUser) return;
   const role = $('#upRole') ? $('#upRole').value : upSelectedUser.role;
-  const isPrivileged = role==='admin' || role==='schoolAdmin';
+  const isPrivileged = role==='admin';
   try{
     await usersCol().doc(upSelectedUser.id).update({
       role,
@@ -1702,7 +1708,7 @@ function confirmModal(title,msg,onYes,danger,withInput){
    تبويب الفصول والطلاب — روستر المدرسة العام
    ======================================================================== */
 let RClasses=[], RStudents=[], RSchoolId=null, pendingGroups=null, RTeacherAdd=true, RUI={ed:{},openStage:null,openClass:null};
-function can(k,f){ if(CURRENT.role==='admin'||CURRENT.role==='schoolAdmin') return true; const p=(CURRENT.permissions||{})[k]; return !!(p&&p[f]); }
+function can(k,f){ if(CURRENT.role==='admin') return true; const p=(CURRENT.permissions||{})[k]; return !!(p&&p[f]); }
 const rosterDoc = sid => db.collection('schoolData').doc('roster_'+sid);
 
 async function renderClasses(c){

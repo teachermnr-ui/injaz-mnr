@@ -1258,10 +1258,11 @@ async function openUserModal(id){
   const locked = !!e;
   modal(`<h2>${e?'بيانات مستخدم':'إضافة مستخدم'}</h2>
     <div id="umAlert"></div>
-    ${locked?'<div class="sub-note" style="margin:0 0 10px;color:var(--accent)">🔒 بعد الإنشاء لا يُعدَّل من هنا سوى حالة التفعيل. لتعديل الدور أو الصلاحيات استخدم تبويب «الصلاحيات الخاصة».</div>':''}
-    <div class="field" style="margin-bottom:6px"><label>حالة الحساب</label>
+    ${locked && !isAdminU?'<div class="sub-note" style="margin:0 0 10px;color:var(--accent)">🔒 بعد الإنشاء لا يُعدَّل من هنا سوى حالة التفعيل. لتعديل الدور أو الصلاحيات استخدم تبويب «الصلاحيات الخاصة».</div>':''}
+    ${isAdminU?'<div class="sub-note" style="margin:0 0 10px;color:var(--accent)">🔒 حساب الأدمن العام لا يُدار من هذه الشاشة — تفعيله أو إيقافه يتم من قواعد البيانات مباشرة فقط.</div>':''}
+    ${!isAdminU ? `<div class="field" style="margin-bottom:6px"><label>حالة الحساب</label>
       <div class="chip-toggle"><button type="button" class="chip ${!e||e.active!==false?'active':''}" id="umActive">مُفعّل</button>
-      <button type="button" class="chip ${e&&e.active===false?'active':''}" id="umInactive">معطّل</button></div></div>
+      <button type="button" class="chip ${e&&e.active===false?'active':''}" id="umInactive">معطّل</button></div></div>` : ''}
     <div class="field"><label>المدرسة</label><select id="umSchool" ${locked?'disabled':''}>
       <option value="">— اختر المدرسة —</option>${schoolOpts}</select></div>
     <div class="field"><label>رقم الهوية</label><input id="umUser" inputmode="numeric" value="${e?esc(e.loginId||''):''}" placeholder="رقم الهوية — أرقام فقط (يُستخدم للدخول)" ${locked?'disabled':''}></div>
@@ -1276,12 +1277,13 @@ async function openUserModal(id){
            <div class="sub-note" style="margin-top:4px">يستخدمها المستخدم مع رقم هويته لربط بريده، ثم تُمحى تلقائياً.</div></div>` : ''}
     <div class="field"><label>الدور</label><select id="umRole" ${locked?'disabled':''}>${roleOpts}</select></div>
     ${!locked ? `<div class="sub-note" style="margin-top:-4px">تُطبَّق صلاحيات هذا الدور تلقائياً من «إعدادات النظام ← ضبط الصلاحيات الافتراضية».</div>` : ''}
-    <div class="field"><label>الفصول المسندة <span style="color:var(--muted);font-weight:400">(اختر فصلاً أو أكثر)</span></label>
-      <div id="umClassesHost"><div class="sub-note" style="margin:0">اختر المدرسة أولاً.</div></div></div>
+    ${!isAdminU ? `<div class="field"><label>الفصول المسندة <span style="color:var(--muted);font-weight:400">(اختر فصلاً أو أكثر)</span></label>
+      <div id="umClassesHost"><div class="sub-note" style="margin:0">اختر المدرسة أولاً.</div></div></div>` : ''}
     <div class="modal-row" style="margin-top:16px">
-      <button class="btn secondary" onclick="closeModal()">إلغاء</button>
-      <button class="btn" id="umSave">حفظ</button>
+      <button class="btn secondary" onclick="closeModal()">${isAdminU?'إغلاق':'إلغاء'}</button>
+      ${!isAdminU ? '<button class="btn" id="umSave">حفظ</button>' : ''}
     </div>`);
+  if(isAdminU) return;   // لا شيء آخر يُفعَّل لحساب الأدمن — عرض فقط
   let activeState = !(e&&e.active===false);
   $('#umActive').onclick=()=>{activeState=true;$('#umActive').classList.add('active');$('#umInactive').classList.remove('active');};
   $('#umInactive').onclick=()=>{activeState=false;$('#umInactive').classList.add('active');$('#umActive').classList.remove('active');};
@@ -1373,8 +1375,8 @@ async function renderUserPerms(c){
     <div id="upBody"></div>`;
   try{
     const snap = await usersCol().get();
-    let users = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.authUid);
-    if(isSchoolScoped) users = users.filter(u=>u.schoolId===CURRENT.schoolId && u.role!=='admin' && u.role!=='schoolAdmin');
+    let users = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.authUid && u.role!=='admin');
+    if(isSchoolScoped) users = users.filter(u=>u.schoolId===CURRENT.schoolId && u.role!=='schoolAdmin');
     users.sort((a,b)=>(a.username||'').localeCompare(b.username||'','ar'));
     const sel = $('#upUserSelect');
     sel.innerHTML += users.map(u=>`<option value="${u.id}">${esc(u.username)} — ${esc(ROLES[u.role]||u.role)}${u.email?' ('+esc(u.email)+')':''}</option>`).join('');
@@ -1387,6 +1389,7 @@ async function loadUserPermsEditor(id){
   host.innerHTML = `<div class="empty"><span class="spin"></span></div>`;
   const snap = await usersCol().doc(id).get();
   if(!snap.exists){ host.innerHTML = `<div class="empty">المستخدم غير موجود.</div>`; return; }
+  if(snap.data().role==='admin'){ host.innerHTML = `<div class="empty">حساب الأدمن العام لا يُدار من هذه الشاشة.</div>`; return; }
   upSelectedUser = {id:snap.id, ...snap.data()};
   const u = upSelectedUser;
   const isAdminU = u.role==='admin', isSchoolAdminU = u.role==='schoolAdmin';

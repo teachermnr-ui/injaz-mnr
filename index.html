@@ -1260,11 +1260,13 @@ async function openUserModal(id){
   const isSchoolAdminU = !!(e && e.role==='schoolAdmin');
   const canGrantSchoolAdmin = CURRENT.role==='admin';
   const roleOpts = Object.entries(ROLES).filter(([k])=> (k!=='admin' || isAdminU) && (k!=='schoolAdmin' || canGrantSchoolAdmin || isSchoolAdminU)).map(([k,v])=>`<option value="${k}" ${e&&e.role===k?'selected':''}>${esc(v)}</option>`).join('');
-  // بعد الحفظ الأول: لا يُعدَّل من هذا النموذج شيء عدا التفعيل/الإيقاف (بند ١٠)
-  const locked = !!e;
+  const linked = !!(e && e.authUid);
+  // القفل يبدأ فقط بعد اكتمال الربط الفعلي بالبريد — لا بمجرد وجود المستخدم في القاعدة
+  const locked = linked;
   modal(`<h2>${e?'بيانات مستخدم':'إضافة مستخدم'}</h2>
     <div id="umAlert"></div>
-    ${locked && !isAdminU?'<div class="sub-note" style="margin:0 0 10px;color:var(--accent)">🔒 بعد الإنشاء لا يُعدَّل من هنا سوى حالة التفعيل. لتعديل الدور أو الصلاحيات استخدم تبويب «الصلاحيات الخاصة».</div>':''}
+    ${locked && !isAdminU?'<div class="sub-note" style="margin:0 0 10px;color:var(--accent)">🔒 هذا الحساب مُفعَّل ومرتبط ببريد — لا يُعدَّل من هنا سوى حالة التفعيل. لتعديل الدور أو الصلاحيات استخدم تبويب «الصلاحيات الخاصة».</div>':''}
+    ${e && !linked && !isAdminU?'<div class="sub-note" style="margin:0 0 10px;color:var(--muted)">⏳ الحساب بانتظار التفعيل — البيانات أدناه ما زالت قابلة للتعديل، وتبقى ظاهرة لتسليمها للمستخدم عند الحاجة.</div>':''}
     ${isAdminU?'<div class="sub-note" style="margin:0 0 10px;color:var(--accent)">🔒 حساب الأدمن العام لا يُدار من هذه الشاشة — تفعيله أو إيقافه يتم من قواعد البيانات مباشرة فقط.</div>':''}
     ${!isAdminU ? `<div class="field" style="margin-bottom:6px"><label>حالة الحساب</label>
       <div class="chip-toggle"><button type="button" class="chip ${!e||e.active!==false?'active':''}" id="umActive">غير موقوف</button>
@@ -1274,12 +1276,12 @@ async function openUserModal(id){
     <div class="field"><label>رقم الهوية</label><input id="umUser" inputmode="numeric" value="${e?esc(e.loginId||''):''}" placeholder="رقم الهوية — أرقام فقط (يُستخدم للدخول)" ${locked?'disabled':''}></div>
     <div class="field"><label>اسم المستخدم</label><input id="umDisplayName" value="${e?esc(e.username):''}" placeholder="الاسم الظاهر في الموقع" ${locked?'disabled':''}></div>
     <div class="field"><label>البريد المرتبط</label>
-      ${e && e.authUid
+      ${linked
         ? `<div class="sub-note" style="margin:0;color:var(--ok,#1a7a4f);font-weight:700">✔ مُفعّل ومرتبط بالبريد: ${esc(e.email||'—')}</div>`
         : `<div class="sub-note" style="margin:0;color:var(--muted)">لم يُفعَّل الحساب بعد — لا يوجد بريد مرتبط.</div>`}
     </div>
-    ${!e ? `<div class="field"><label>كلمة المرور الأولية <span style="color:var(--muted);font-weight:400">(للتفعيل مرة واحدة فقط)</span></label>
-           <input id="umPass" placeholder="يسلّمها المستخدم عند أول تفعيل">
+    ${!linked ? `<div class="field"><label>كلمة المرور الأولية <span style="color:var(--muted);font-weight:400">(للتفعيل مرة واحدة فقط)</span></label>
+           <input id="umPass" value="${e?esc(e.password||''):''}" placeholder="يسلّمها المستخدم عند أول تفعيل">
            <div class="sub-note" style="margin-top:4px">يستخدمها المستخدم مع رقم هويته لربط بريده، ثم تُمحى تلقائياً.</div></div>` : ''}
     <div class="field"><label>الدور</label><select id="umRole" ${locked?'disabled':''}>${roleOpts}</select></div>
     ${!locked ? `<div class="sub-note" style="margin-top:-4px">تُطبَّق صلاحيات هذا الدور تلقائياً من «إعدادات النظام ← ضبط الصلاحيات الافتراضية».</div>` : ''}
@@ -1321,8 +1323,8 @@ async function loadModalClasses(schoolId, pre){
 }
 async function saveUser(active){
   const linked = !!(editUser && editUser.authUid);
-  // بعد الإنشاء الأول: لا يُحفَظ من هذا النموذج شيء عدا حالة التفعيل (بند ١٠)
-  if(editUser){
+  if(editUser && linked){
+    // مربوط فعليًا ببريد — لا يُحفَظ من هذا النموذج شيء عدا حالة التفعيل
     try{
       await usersCol().doc(editUser.id).update({ active, updatedAt:Date.now() });
       toast('تم تحديث حالة الحساب'); closeModal(); loadUsersList();
@@ -1356,7 +1358,18 @@ async function saveUser(active){
   if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور الأولية'); return; }
   try{
     const q=await usersCol().where('loginId','==',loginId).get();
-    if(q.docs.length){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
+    const clash = q.docs.find(d=> !editUser || d.id!==editUser.id);
+    if(clash){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
+    if(editUser){
+      // حساب بانتظار التفعيل — تعديل بياناته كاملة مسموح حتى يُفعَّل فعليًا
+      await usersCol().doc(editUser.id).update({
+        loginId, username:displayName, role, schoolId:school, assignedClasses:classes,
+        permissions: (role!==editUser.role) ? permsForNewUser(role) : (editUser.permissions||permsForNewUser(role)),
+        active, password:pass, updatedAt:Date.now()
+      });
+      toast('تم تحديث بيانات المستخدم'); closeModal(); loadUsersList();
+      return;
+    }
     // الصلاحيات تُطبَّق تلقائياً من قالب الدور — لا تُعدَّل هنا (بند ١٠)
     const payload={ loginId, username:displayName, role, schoolId:school, assignedClasses:classes,
       permissions:permsForNewUser(role), active, password:pass,

@@ -1331,7 +1331,7 @@ async function saveUser(active){
     }catch(e){ alertBox('umAlert','err',e.message); }
     return;
   }
-  // إنشاء أدمن/أدمن مدرسة جديد
+  // إنشاء أو تعديل أدمن/أدمن مدرسة
   if($('#umRole').value==='admin' || $('#umRole').value==='schoolAdmin'){
     const isAdm=$('#umRole').value==='admin';
     const pass = $('#umPass') ? $('#umPass').value : '';
@@ -1339,10 +1339,17 @@ async function saveUser(active){
     const school = isAdm ? null : $('#umSchool').value;
     if(!isAdm && !school){ alertBox('umAlert','err','اختر المدرسة'); return; }
     try{
-      await usersCol().add({ role:$('#umRole').value, schoolId:school, assignedClasses:[],
-        permissions:permsForNewUser($('#umRole').value), active:true, password:pass,
-        mustChangePassword:false, createdAt:Date.now(), updatedAt:Date.now() });
-      toast('تمت الإضافة — سلّمه كلمة المرور الأولية للتفعيل'); closeModal(); loadUsersList();
+      if(editUser){
+        // تعديل حساب بانتظار التفعيل — تحديث نفس المستند، لا إنشاء نسخة جديدة
+        await usersCol().doc(editUser.id).update({ role:$('#umRole').value, schoolId:school,
+          password:pass, active, updatedAt:Date.now() });
+        toast('تم تحديث الحساب'); closeModal(); loadUsersList();
+      } else {
+        await usersCol().add({ role:$('#umRole').value, schoolId:school, assignedClasses:[],
+          permissions:permsForNewUser($('#umRole').value), active:true, password:pass,
+          mustChangePassword:false, createdAt:Date.now(), updatedAt:Date.now() });
+        toast('تمت الإضافة — سلّمه كلمة المرور الأولية للتفعيل'); closeModal(); loadUsersList();
+      }
     }catch(e){ alertBox('umAlert','err',e.message); }
     return;
   }

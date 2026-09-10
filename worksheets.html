@@ -326,10 +326,25 @@
       location.replace('index.html');
     }
     // القواعد تمنع القراءة قبل المصادقة — نتحقق من الجلسة الحيّة
-    authReady.then((au) => {
+    authReady.then(async (au) => {
       if (!au) {
         try { localStorage.removeItem('cls_session'); } catch (e) {}
         location.replace('index.html');
+        return;
+      }
+      // بند ١٣: صلاحية "الأنشطة الرقمية" تتحكم بالوصول لهذه الصفحة كاملة
+      if (CLS_SESSION.role !== 'admin' && CLS_SESSION.role !== 'soloTeacher') {
+        try {
+          const uSnap = await getDoc(doc(db, "users", CLS_SESSION.userId));
+          const perm = (uSnap.exists() && uSnap.data().permissions) || {};
+          const allowed = !!(perm['worksheets.enabled'] && perm['worksheets.enabled'].edit);
+          if (!allowed) {
+            document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:inherit">'
+              + '<h2>ليست لديك صلاحية الوصول إلى الأنشطة الرقمية</h2>'
+              + '<a href="index.html">العودة للرئيسية</a></div>';
+            return;
+          }
+        } catch (e) {}
       }
     });
     const currentTeacher = { uid: CLS_SESSION.userId, name: CLS_SESSION.username, schoolId: CLS_SESSION.schoolId };

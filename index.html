@@ -342,28 +342,28 @@ const ROLES = {
 /* ---------- شجرة الصلاحيات ---------- */
 const PERM_TREE = [
   { key:'index', label:'الصفحة الرئيسية', leaves:[
-    { key:'index.classes',  label:'الفصول والطلاب' },
+    { key:'index.classes',  label:'انضباط الطلاب', only:['access'] },
     { key:'index.sent',     label:'الملاحظات المرسلة' },
     { key:'index.received', label:'الملاحظات الواردة' },
     { key:'index.absence',  label:'تأخر وغياب الطلاب' },
-    { key:'index.attendanceWindow', label:'إعدادات نافذة التغيب', sub:true },
-    { key:'index.studentStatus', label:'حالة الطالب' },
-    { key:'index.users',    label:'المستخدمون' },
-    { key:'index.settings', label:'إعدادات النظام' },
+    { key:'index.attendanceWindow', label:'إعدادات نافذة التغيب', sub:true, only:['edit'] },
+    { key:'index.studentStatus', label:'حالات الطلاب' },
+    { key:'index.users',    label:'المستخدمون', only:['access'] },
+    { key:'index.users.perms', label:'الصلاحيات الخاصة', sub:true, only:['edit'] },
   ]},
   { key:'omr', label:'إدارة الصفوف', leaves:[
-    { key:'omr.classes',        label:'الفصول والطلاب', sub:false },
-    { key:'omr.classes.addManage', label:'مسؤول إضافة الفصول والطلاب', sub:true },
+    { key:'omr.classes',        label:'الفصول والطلاب', only:['access'] },
+    { key:'omr.classes.addManage', label:'إضافة الفصول والطلاب', sub:true, only:['edit'] },
+    { key:'omr.classes.subjects',  label:'إسناد المواد', sub:true, only:['edit'] },
+    { key:'omr.classes.info',      label:'بيانات الفصول', sub:true, only:['access'] },
+    { key:'omr.classes.names',     label:'أسماء الطلاب', sub:true, only:['access'] },
     { key:'omr.design',  label:'التصميم' },
     { key:'omr.grade',   label:'التصحيح' },
     { key:'omr.results', label:'النتائج' },
     { key:'omr.worklog', label:'سجل الأعمال' },
   ]},
-  { key:'worksheets', label:'أوراق العمل الإلكترونية', leaves:[
-    { key:'worksheets.upload',      label:'رفع وتحويل الأسئلة' },
-    { key:'worksheets.bank',        label:'بنك الأسئلة' },
-    { key:'worksheets.publish',     label:'نشر الأوراق' },
-    { key:'worksheets.submissions', label:'متابعة التسليمات والتصحيح' },
+  { key:'worksheets', label:'الأنشطة الرقمية', leaves:[
+    { key:'worksheets.enabled', label:'الأنشطة الرقمية', only:['edit'] },
   ]},
 ];
 const ALL_PERM_KEYS = PERM_TREE.flatMap(g=>g.leaves.map(l=>l.key));
@@ -373,8 +373,13 @@ function defaultPerms(role){
   const p = {}; ALL_PERM_KEYS.forEach(k=>p[k]={access:false,edit:false,del:false});
   const set=(k,a,e,d)=>{ if(p[k]) p[k]={access:!!a,edit:!!e,del:!!d}; };
   if(role==='admin'){ ALL_PERM_KEYS.forEach(k=>p[k]={access:true,edit:true,del:true}); return p; }
-  if(role==='schoolAdmin'){ ALL_PERM_KEYS.forEach(k=>p[k]={access:true,edit:true,del:true}); return p; }
-  if(role==='manager'){            // الرئيسية كاملة عدا المستخدمون/الإعدادات — مشاهدة فقط
+  if(role==='schoolAdmin'){
+    // كل شيء عدا "الصلاحيات الخاصة" — لا تُفعَّل افتراضيًا لأحد سوى الأدمن العام، حتى أدمن المدرسة
+    ALL_PERM_KEYS.forEach(k=>p[k]={access:true,edit:true,del:true});
+    set('index.users.perms', false,false,false);
+    return p;
+  }
+  if(role==='manager'){            // الرئيسية كاملة عدا المستخدمون — مشاهدة فقط
     ['index.classes','index.sent','index.received','index.absence','index.studentStatus'].forEach(k=>set(k,true,false,false));
   } else if(role==='agent'){        // وكيل: وصول+تعديل (المرسلة، الواردة، الغياب)
     ['index.sent','index.received','index.absence'].forEach(k=>set(k,true,true,false));
@@ -385,26 +390,26 @@ function defaultPerms(role){
   } else if(role==='assistant'){    // مساعد إداري: وصول+تعديل (الفصول والطلاب، الغياب)
     ['index.classes','index.absence'].forEach(k=>set(k,true,true,false));
   } else if(role==='soloTeacher'){  // معلم فردي: صلاحيات كاملة على عالمه الخاص، بلا ملاحظات ولا index
-    ['omr.classes','omr.classes.addManage','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
-    ['worksheets.upload','worksheets.bank','worksheets.publish','worksheets.submissions'].forEach(k=>set(k,true,true,true));
-  } else if(role==='teacher'){      // معلم: المرسلة/الواردة + صفحة التصحيح كاملة + أوراق العمل كاملة (بدون تفويض الإضافة/النقل — تُمنح صراحة)
+    ['omr.classes','omr.classes.addManage','omr.classes.subjects','omr.classes.info','omr.classes.names','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
+    set('worksheets.enabled',true,true,false);
+  } else if(role==='teacher'){      // معلم: المرسلة/الواردة + إدارة الصفوف كاملة (بدون تفويض الإضافة/الإسناد — تُمنح صراحة) + الأنشطة الرقمية
     ['index.sent','index.received'].forEach(k=>set(k,true,true,false));
-    ['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
-    ['worksheets.upload','worksheets.bank','worksheets.publish','worksheets.submissions'].forEach(k=>set(k,true,true,true));
+    ['omr.classes','omr.classes.info','omr.classes.names','omr.design','omr.grade','omr.results','omr.worklog'].forEach(k=>set(k,true,true,true));
+    set('worksheets.enabled',true,true,false);
   }
   return p;
 }
 
 /* مفاتيح تبويبات index التي يتحكم بها العرض */
 const INDEX_TABS = [
-  { key:'classes',  perm:'index.classes',  label:'الفصول والطلاب' },
+  { key:'classes',  perm:'index.classes',  label:'انضباط الطلاب' },
   { key:'sent',     perm:'index.sent',     label:'الملاحظات المرسلة' },
   { key:'received', perm:'index.received', label:'الملاحظات الواردة' },
   { key:'absence',  perm:'index.absence',  label:'تأخر وغياب الطلاب' },
-  { key:'studentStatus', perm:'index.studentStatus', label:'حالة الطالب' },
+  { key:'studentStatus', perm:'index.studentStatus', label:'حالات الطلاب' },
   { key:'users',    perm:'index.users',    label:'المستخدمون' },
-  { key:'userPerms', perm:'index.users',   label:'الصلاحيات الخاصة' },
-  { key:'settings', perm:'index.settings', label:'إعدادات النظام' },
+  { key:'userPerms', perm:'index.users.perms', label:'الصلاحيات الخاصة' },
+  { key:'settings', perm:'',               label:'إعدادات النظام' },
 ];
 
 /* ---------- حالة ---------- */
@@ -725,7 +730,7 @@ async function doLogin(){
           cred = await firebase.auth().createUserWithEmailAndPassword(em,p);
           AUTH_JUST_CREATED = true;
         }catch(err2){
-          if(err2.code==='auth/email-already-in-use') throw new Error('كلمة المرور غير صحيحة لهذا البريد');
+          if(err2.code==='auth/email-already-in-use') throw new Error('هذا البريد مسجَّل مسبقاً — إن كنت فعّلت حسابك عبر Google، اضغط «المتابعة بحساب Google» بدل كلمة المرور.');
           throw err2;
         }
       } else throw err;
@@ -992,7 +997,40 @@ async function renderAbsence(c){
   // التعديل صلاحية إشرافية: مدير النظام/المدرسة أو مَن فُوِّض صراحةً بتعديل الغياب
   const canEdit = (CURRENT.role==='admin' || CURRENT.role==='schoolAdmin'
                    || !!((CURRENT.permissions||{})['index.absence']||{}).edit);
-  c.innerHTML='<div class="panel-head"><h2>تأخر وغياب الطلاب</h2></div><div class="sub-note">يُعتمد التغيب من المعلم بين 7:40 و10:00 صباحاً، أو يدوياً من «الفصول والطلاب». اضغط اليوم لطيّ/فتح بطاقته.</div><div id="absRoot"><div class="empty"><span class="spin"></span></div></div>';
+  const canWindow = can('index.attendanceWindow','edit');
+  const windowBlock = canWindow ? `
+    <div class="card" id="attWindowCard" style="margin-bottom:14px">
+      <div class="set-block"><h3>إعدادات نافذة التغيب</h3>
+        <p>الغياب المُسجَّل من المعلمين خارج هذه النافذة لا يُرحَّل إلى هذه الصفحة.</p></div>
+      ${CURRENT.role==='admin' ? `<div class="field"><label>المدرسة</label>
+        <select id="awSchool">${Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`).join('')}</select></div>` : ''}
+      <div class="field"><label>نافذة اعتماد التغيب</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="awFrom" type="time" style="flex:1">
+          <span style="color:var(--muted)">إلى</span>
+          <input id="awTo" type="time" style="flex:1">
+        </div></div>
+      <button class="btn secondary sm" id="awSave">حفظ النافذة</button>
+      <div id="awAlert"></div>
+    </div>` : '';
+  c.innerHTML='<div class="panel-head"><h2>تأخر وغياب الطلاب</h2></div><div class="sub-note">يُعتمد التغيب من المعلم بين 7:40 و10:00 صباحاً، أو يدوياً من «الفصول والطلاب». اضغط اليوم لطيّ/فتح بطاقته.</div>'
+    + windowBlock + '<div id="absRoot"><div class="empty"><span class="spin"></span></div></div>';
+  if(canWindow){
+    const targetSchoolId = ()=> CURRENT.role==='admin' ? ($('#awSchool')?$('#awSchool').value:'') : CURRENT.schoolId;
+    const fillWindow = ()=>{
+      const sid=targetSchoolId(); const sc=SCHOOLS[sid]||{};
+      $('#awFrom').value = sc.attFrom||'07:40'; $('#awTo').value = sc.attTo||'10:00';
+    };
+    if(CURRENT.role==='admin' && $('#awSchool')) $('#awSchool').onchange=fillWindow;
+    fillWindow();
+    $('#awSave').onclick=async()=>{
+      const sid=targetSchoolId();
+      if(!sid){ alertBox('awAlert','err','اختر المدرسة'); return; }
+      SCHOOLS[sid]=Object.assign({}, SCHOOLS[sid], { attFrom:$('#awFrom').value, attTo:$('#awTo').value });
+      try{ await schoolsDoc().set({list:SCHOOLS}); alertBox('awAlert','ok','تم حفظ النافذة'); toast('تم الحفظ'); }
+      catch(e){ alertBox('awAlert','err',e.message); }
+    };
+  }
   try{
     let q=attCol(); if(CURRENT.schoolId) q=q.where('schoolId','==',CURRENT.schoolId);
     const snap=await q.get();
@@ -1170,6 +1208,19 @@ async function loadUsersList(){
   try{
     const snap = await usersCol().get();
     let users = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>!u.migratedTo);
+    // إزالة تكرار قاطعة بحسب رقم الهوية — بصرف النظر عن نجاح تعليم migratedTo من عدمه:
+    // إن وُجد أكثر من مستند بنفس رقم الهوية، يُبقى المرتبط ببريد (authUid) ويُستبعد الباقي.
+    if(users.length){
+      const byLogin = {};
+      users.forEach(u=>{
+        const key = u.loginId ? ('L:'+u.loginId) : ('D:'+u.id);   // بلا رقم هوية (أدمن مدرسة قديم) يُعامَل وحيداً
+        const cur = byLogin[key];
+        if(!cur) byLogin[key]=u;
+        else if(!cur.authUid && u.authUid) byLogin[key]=u;         // فضّل النسخة المرتبطة دائماً
+        else if(!!cur.authUid===!!u.authUid && (u.updatedAt||0)>(cur.updatedAt||0)) byLogin[key]=u; // نفس الحالة: الأحدث
+      });
+      users = Object.values(byLogin);
+    }
     if(isSchoolScoped) users = users.filter(u=>u.schoolId===CURRENT.schoolId && u.role!=='admin' && u.role!=='soloTeacher');
     else if(filter==='__solo__') users = users.filter(u=>u.role==='soloTeacher');
     else if(filter) users = users.filter(u=>u.schoolId===filter);
@@ -1203,6 +1254,7 @@ async function loadUsersList(){
         <div class="row-actions">
           ${isSolo?`<button class="icon-btn" onclick="editSoloSubscription('${u.id}')" title="إدارة الاشتراك">🗓</button>`:''}
           ${u.authUid?`<button class="icon-btn" onclick="unlinkUserAccount('${u.id}','${esc(u.username)}')" title="فك ربط البريد">🔓</button>`:''}
+          ${(!u.authUid && u.loginId && u.password)?`<button class="icon-btn" onclick="shareCredsWhatsApp('${u.id}')" title="مشاركة بيانات الدخول عبر واتساب">📲</button>`:''}
           <button class="icon-btn" onclick="openUserModal('${u.id}')" title="تعديل">✏️</button>
           ${(u.role==='admin' || (u.role==='schoolAdmin' && CURRENT.role!=='admin'))?'':`<button class="icon-btn del" onclick="deleteUser('${u.id}','${esc(u.username)}')" title="حذف">🗑</button>`}
         </div></div></div>`;
@@ -1451,18 +1503,22 @@ function renderUpPermTree(){
     ${g.leaves.map(l=>{
       const p=upEditPerms[l.key]||{access:false,edit:false,del:false};
       const ro = isPrivileged?'disabled':'';
+      const only = l.only;
+      const chk=(f,label)=> (!only||only.includes(f)) ? `<label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="${f}" data-only="${only?'1':''}" ${p[f]?'checked':''}> ${label}</label>` : '';
       return `<div class="perm-leaf ${l.sub?'sub':''}">
         <span class="pl-name">${l.sub?'↳ ':''}${esc(l.label)}</span>
-        <label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="access" ${p.access?'checked':''}> وصول</label>
-        <label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="edit" ${p.edit?'checked':''}> تعديل</label>
-        <label class="chk"><input type="checkbox" ${ro} data-k="${l.key}" data-f="del" ${p.del?'checked':''}> حذف</label>
+        ${chk('access','وصول')}${chk('edit','تعديل')}${chk('del','حذف')}
       </div>`;
     }).join('')}
   </div>`).join('');
   root.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-    cb.onchange=()=>{ const k=cb.dataset.k,f=cb.dataset.f;
-      upEditPerms[k]=upEditPerms[k]||{access:false,edit:false,del:false}; upEditPerms[k][f]=cb.checked;
-      if(f!=='access'&&cb.checked){ upEditPerms[k].access=true; renderUpPermTree(); }
+    cb.onchange=()=>{ const k=cb.dataset.k,f=cb.dataset.f, only=cb.dataset.only==='1';
+      upEditPerms[k]=upEditPerms[k]||{access:false,edit:false,del:false};
+      if(only){ upEditPerms[k].access=cb.checked; upEditPerms[k][f]=cb.checked; upEditPerms[k].del=false; }
+      else{
+        upEditPerms[k][f]=cb.checked;
+        if(f!=='access'&&cb.checked){ upEditPerms[k].access=true; renderUpPermTree(); }
+      }
     };
   });
 }
@@ -1479,6 +1535,15 @@ async function saveUserPerms(){
     alertBox('upAlert','ok','تم حفظ الدور والصلاحيات.');
     toast('تم الحفظ');
   }catch(e){ alertBox('upAlert','err',e.message); }
+}
+/* مشاركة بيانات الدخول الأولية لمستخدم بانتظار التفعيل عبر واتساب (بند ١٢) */
+async function shareCredsWhatsApp(id){
+  const s = await usersCol().doc(id).get();
+  if(!s.exists) return;
+  const u = s.data();
+  if(u.authUid || !u.loginId || !u.password){ toast('لا توجد بيانات دخول أولية لمشاركتها لهذا الحساب.'); return; }
+  const msg = `مرحباً ${u.username||''}،\nبيانات دخولك الأولية لنظام الفصول الدراسية:\nرقم الهوية: ${u.loginId}\nكلمة المرور الأولية: ${u.password}\nافتح الموقع ← النسخة المدرسية ← أدخل بريدك وكلمة مرور، ثم أكمل التفعيل بهذه البيانات.`;
+  window.open('https://wa.me/?text='+encodeURIComponent(msg), '_blank');
 }
 async function deleteUser(id,name){
   confirmModal('حذف مستخدم', `سيُحذف المستخدم «${name}» نهائياً. متابعة؟`, async()=>{
@@ -1578,18 +1643,21 @@ function renderTplTree(){
     <div class="perm-head">${esc(g.label)}</div>
     ${g.leaves.map(l=>{
       const p=tplPerms[l.key]||{access:false,edit:false,del:false};
+      const locked = l.key==='index.users.perms';
+      const only = l.only;
+      const chk=(f,label)=> (!only||only.includes(f)) ? `<label class="chk"><input type="checkbox" ${locked?'disabled':''} data-k="${l.key}" data-f="${f}" data-only="${only?'1':''}" ${p[f]?'checked':''}> ${label}</label>` : '';
       return `<div class="perm-leaf ${l.sub?'sub':''}">
         <span class="pl-name">${l.sub?'↳ ':''}${esc(l.label)}</span>
-        <label class="chk"><input type="checkbox" data-k="${l.key}" data-f="access" ${p.access?'checked':''}> وصول</label>
-        <label class="chk"><input type="checkbox" data-k="${l.key}" data-f="edit" ${p.edit?'checked':''}> تعديل</label>
-        <label class="chk"><input type="checkbox" data-k="${l.key}" data-f="del" ${p.del?'checked':''}> حذف</label>
+        ${chk('access','وصول')}${chk('edit','تعديل')}${chk('del','حذف')}
+        ${locked?'<span class="sub-note" style="margin-right:8px">لا تُمنح من قالب — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط</span>':''}
       </div>`;
     }).join('')}
   </div>`).join('');
   root.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
     cb.onchange=()=>{
-      const k=cb.dataset.k, f=cb.dataset.f;
+      const k=cb.dataset.k, f=cb.dataset.f, only=cb.dataset.only==='1';
       tplPerms[k]=tplPerms[k]||{access:false,edit:false,del:false};
+      if(only){ tplPerms[k].access=cb.checked; tplPerms[k][f]=cb.checked; tplPerms[k].del=false; renderTplTree(); return; }
       tplPerms[k][f]=cb.checked;
       if(f==='access' && !cb.checked){ tplPerms[k].edit=false; tplPerms[k].del=false; renderTplTree(); }
       if((f==='edit'||f==='del') && cb.checked){ tplPerms[k].access=true; renderTplTree(); }
@@ -1635,15 +1703,6 @@ function openSchoolModal(id){
       </select>
       <div class="sub-note" style="margin-top:6px">تفعيل فترة يمنع غير الأدمن من دخول الأخرى؛ تبقى الفترة السابقة متاحة للأدمن للاطلاع.</div></div>
     <div class="field"><label>عدد الفصول الدراسية</label><input id="smCount" type="number" inputmode="numeric" value="${esc(s.classCount||'')}" placeholder="مثال: ١٢"></div>
-    ${can('index.attendanceWindow','edit') ? `
-    <div class="field"><label>نافذة اعتماد التغيب</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="smAttFrom" type="time" value="${esc(s.attFrom||'07:40')}" style="flex:1">
-        <span style="color:var(--muted)">إلى</span>
-        <input id="smAttTo" type="time" value="${esc(s.attTo||'10:00')}" style="flex:1">
-      </div>
-      <div class="sub-note" style="margin-top:6px">الغياب المُسجَّل من المعلمين خارج هذه النافذة لا يُرحَّل إلى صفحة غياب الطلاب.</div>
-    </div>` : ''}
     <div class="modal-row" style="margin-top:14px">
       <button class="btn secondary" onclick="closeModal()">إلغاء</button>
       <button class="btn" id="smSave">حفظ</button>

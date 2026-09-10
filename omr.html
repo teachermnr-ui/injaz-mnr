@@ -367,7 +367,7 @@
     </div>
 
     <!-- ===== طلاب الصف ===== -->
-    <div class="card seccard">
+    <div class="card seccard" id="studentsSecCard">
       <div class="secheader" onclick="toggleSec('secStudents',this)">
         <div class="secicon" style="background:#e7eefb">👥</div>
         <div class="sectext"><div class="sectitle">أسماء الطلاب <span class="sub" id="stCount">٠ طالب</span></div><div class="secdesc">بيانات الطلاب وتسجيل الانضباط والملاحظات</div></div>
@@ -1555,6 +1555,7 @@ function onSubjectSelectChange(){
   btn.style.display='block';
 }
 async function saveSubjectAssignment(){
+  if(!clsHasPerm('omr.classes.subjects','edit')){ alert('إسناد المواد صلاحية مقصورة على المفوَّض بها.'); return; }
   const subject = document.getElementById('subjSelect').value;
   if(!subject) return;
   const checked = [...document.querySelectorAll('.subjClsChk:checked')].map(x=>x.value);
@@ -2067,11 +2068,13 @@ async function openClassInfoModal(){
   });
 }
 function openAddClassesModal(){
+  const canAdd = CLS_CAN_ADD_MANAGE, canSubj = clsHasPerm('omr.classes.subjects','edit');
   omrModal(`
     <div style="text-align:center;font-weight:800;font-size:17px;margin-bottom:16px;">إضافة الفصول والمواد</div>
     <div id="addClassesModalBody">
-      ${_modalRow('➕','إضافة الفصول والطلاب',"showAddClassesChoice()")}
-      ${_modalRow('📚','إسناد المواد',"mountIntoModal('secSubjects')")}
+      ${canAdd?_modalRow('➕','إضافة الفصول والطلاب',"showAddClassesChoice()"):''}
+      ${canSubj?_modalRow('📚','إسناد المواد',"mountIntoModal('secSubjects')"):''}
+      ${(!canAdd&&!canSubj)?'<div class="empty">ليست لديك صلاحية في هذا القسم.</div>':''}
     </div>
   `);
 }
@@ -4489,7 +4492,7 @@ const firebaseConfig = {
 let db = null, cloudReady = false, rosterLoaded = false;
 
 /* ===== ربط النظام: حارس الدخول + عزل البيانات حسب المدرسة/الفترة/المستخدم ===== */
-let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_SEC_PERM = {classes:{access:true,edit:true,del:true},design:{access:true,edit:true,del:true},grade:{access:true,edit:true,del:true},results:{access:true,edit:true,del:true},worklog:{access:true,edit:true,del:true}}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '', CLS_ACTIVATED_SEATS = {};
+let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_ALL_PERMS = {}, CLS_SEC_PERM = {classes:{access:true,edit:true,del:true},design:{access:true,edit:true,del:true},grade:{access:true,edit:true,del:true},results:{access:true,edit:true,del:true},worklog:{access:true,edit:true,del:true}}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '', CLS_ACTIVATED_SEATS = {};
 (function clsAuthGuard(){
   try{ CLS_SESSION = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){ CLS_SESSION = null; }
   if(CLS_SESSION && CLS_SESSION.role==='admin' && !CLS_SESSION.schoolId){
@@ -4780,6 +4783,7 @@ async function clsLoadPerms(){
       CLS_CAN_ADD_MANAGE=true; clsApplyAddManage(); clsApplySectionPerms(); return;
     }
     const perm=u.permissions||{};
+    CLS_ALL_PERMS = perm;
     const dflt={access:false,edit:false,del:false};
     CLS_SEC_PERM={
       classes: perm['omr.classes'] || dflt,
@@ -4811,6 +4815,22 @@ function clsApplySectionPerms(){
     const firstAllowed = Object.keys(map).find(id=>CLS_SEC_PERM[map[id]] && CLS_SEC_PERM[map[id]].access);
     if(firstAllowed) showTab(firstAllowed);
   }
+  // بند ١٣: بطاقتا "بيانات الفصول" و"أسماء الطلاب" تُخفيان دون صلاحية access الخاصة بكل منهما
+  const infoCard = document.getElementById('classInfoSecCard');
+  if(infoCard) infoCard.style.display = clsHasPerm('omr.classes.info','access') ? '' : 'none';
+  const studentsCard = document.getElementById('studentsSecCard');
+  if(studentsCard) studentsCard.style.display = clsHasPerm('omr.classes.names','access') ? '' : 'none';
+  // بطاقة "إضافة الفصول والمواد" ككل تحتاج إحدى الصلاحيتين الفرعيتين (إضافة أو إسناد) على الأقل
+  const addCard = document.getElementById('addClassesSecCard');
+  if(addCard) addCard.style.display = (CLS_CAN_ADD_MANAGE || clsHasPerm('omr.classes.subjects','edit')) ? '' : 'none';
+  const wsTab = document.getElementById('tab-worksheets');
+  if(wsTab) wsTab.style.display = clsHasPerm('worksheets.enabled','edit') ? '' : 'none';
+}
+/* فحص صلاحية فرعية محدَّدة بمعزل عن CLS_SEC_PERM المُجمَّعة (بند ١٣) */
+function clsHasPerm(key, field){
+  if(CLS_USER_ROLE==='admin' || CLS_USER_ROLE==='soloTeacher') return true;
+  const p = (CLS_ALL_PERMS && CLS_ALL_PERMS[key]) || null;
+  return !!(p && p[field]);
 }
 /* فحص تعديل/حذف خاص بقسم بعينه (لا علم عام مُجمَّع) */
 function clsGuardEditSec(secKey, msg){

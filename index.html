@@ -343,11 +343,11 @@ const ROLES = {
 const PERM_TREE = [
   { key:'index', label:'الصفحة الرئيسية', leaves:[
     { key:'index.classes',  label:'انضباط الطلاب', only:['access'] },
-    { key:'index.sent',     label:'الملاحظات المرسلة' },
-    { key:'index.received', label:'الملاحظات الواردة' },
-    { key:'index.absence',  label:'تأخر وغياب الطلاب' },
+    { key:'index.sent',     label:'الملاحظات المرسلة', only:['access','edit'] },
+    { key:'index.received', label:'الملاحظات الواردة', only:['access','edit'] },
+    { key:'index.absence',  label:'تأخر وغياب الطلاب', only:['access','edit'] },
     { key:'index.attendanceWindow', label:'إعدادات نافذة التغيب', sub:true, only:['edit'] },
-    { key:'index.studentStatus', label:'حالات الطلاب' },
+    { key:'index.studentStatus', label:'حالات الطلاب', only:['access','edit'] },
     { key:'index.users',    label:'المستخدمون', only:['access'] },
     { key:'index.users.perms', label:'الصلاحيات الخاصة', sub:true, only:['edit'] },
   ]},

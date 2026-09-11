@@ -165,10 +165,188 @@
   .fucircs{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
   .fucirc{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#f3f8f7;font-size:19px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1}
   .fucirc.add{border-style:dashed;border-color:var(--teal);color:var(--teal-d);background:#fff;font-size:16px}
+
+  /* =========================================================
+     الاتجاه البصري الجديد — قائمة جانبية + أدوات عائمة
+     ========================================================= */
+  :root{
+    --teal:#ff7058; --teal-d:#d94b43; --teal-l:#fff0eb;
+    --ink:#242039; --muted:#7b7485; --line:#e7dfd5;
+    --paper:#f3f0e9; --white:#fffdf9;
+    --ok:#2c9a78; --bad:#d94b58; --warn:#d69b2e; --blank:#aaa2a5;
+    --shadow:0 18px 48px rgba(44,34,54,.09),0 2px 7px rgba(44,34,54,.04);
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:"Tajawal","Segoe UI",Tahoma,system-ui,sans-serif;
+    background:
+      radial-gradient(circle at 8% 10%,rgba(255,112,88,.12),transparent 24rem),
+      radial-gradient(circle at 85% 88%,rgba(69,55,130,.09),transparent 28rem),
+      var(--paper);
+    color:var(--ink);line-height:1.6;
+  }
+  body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;opacity:.3;
+    background-image:radial-gradient(#c8bdb1 1px,transparent 1px);background-size:22px 22px}
+
+  /* main navigation is no longer a top bar */
+  header.app{
+    position:fixed;right:0;top:0;bottom:0;width:282px;z-index:100;
+    display:flex;flex-direction:column;align-items:stretch;
+    padding:28px 17px 20px;background:#19172f;color:#fff;
+    border:0;border-radius:0;box-shadow:-18px 0 48px rgba(29,21,48,.16);
+  }
+  .app-brand{display:flex;align-items:center;gap:12px;padding:0 9px 30px}
+  .app-brand-mark{width:50px;height:50px;border-radius:17px;background:var(--teal);display:flex;
+    align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:800;
+    box-shadow:6px 6px 0 rgba(255,255,255,.11)}
+  .app-brand-copy{display:flex;flex-direction:column;line-height:1.2}
+  .app-brand-copy b{font-size:21px;letter-spacing:-.5px}
+  .app-brand-copy small{font-size:11px;color:#aaa5bd;margin-top:5px}
+  .app-menu-label{font-size:11px;color:#78728e;font-weight:800;letter-spacing:1.3px;padding:0 12px 10px}
+  nav.tabs{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin:0;flex:1;overflow:auto;scrollbar-width:none}
+  nav.tabs::-webkit-scrollbar{display:none}
+  nav.tabs button{
+    flex:0 0 auto;width:100%;min-height:49px;border:0;border-radius:13px;padding:13px 15px;
+    text-align:right;font-size:14px;font-weight:700;line-height:1.35;
+    background:transparent;color:#aaa5bd;cursor:pointer;transition:background .18s,color .18s,transform .18s;
+    white-space:normal;position:relative;box-shadow:none
+  }
+  nav.tabs button:hover{background:#292544;color:#fff;transform:translateX(-3px)}
+  nav.tabs button.active{background:var(--teal);color:#fff;font-weight:800;box-shadow:none}
+  nav.tabs button.active:before{content:"";position:absolute;right:7px;top:50%;width:4px;height:22px;
+    transform:translateY(-50%);border-radius:4px;background:#fff}
+  .app-foot{display:flex;align-items:center;gap:8px;color:#88819d;font-size:11px;padding:18px 11px 0;border-top:1px solid #302b4a}
+  .app-online{width:8px;height:8px;border-radius:50%;background:#62d5a7;box-shadow:0 0 0 4px rgba(98,213,167,.12)}
+
+  main{margin-right:282px;max-width:none;width:auto;padding:34px 42px 100px;min-height:100vh}
+  .panel.active{animation:panelIn .28s ease}
+  @keyframes panelIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .card{background:rgba(255,253,249,.92);border:1px solid var(--line);border-radius:22px;padding:22px;
+    margin-bottom:17px;box-shadow:var(--shadow)}
+  .card h2{margin:0 0 17px;font-size:19px;color:var(--ink);font-weight:800;letter-spacing:-.3px}
+  .card h2 .sub{font-weight:500;color:var(--muted);font-size:12px;margin-right:7px}
+  .collapseBtn{width:31px;height:31px;border:1px solid #e7c8bd;background:#fff0eb;color:var(--teal-d);
+    border-radius:10px;font-size:19px;font-weight:800;cursor:pointer;line-height:1}
+  .seccard{padding:0;overflow:hidden}
+  .secheader{padding:19px;gap:14px;transition:background .18s}
+  .secheader:hover{background:#fff6f0}
+  .secicon{width:55px;height:55px;border-radius:18px!important;background:#fff0eb!important;color:var(--teal-d);
+    box-shadow:inset 0 0 0 1px #f7d5cb}
+  .sectitle{font-size:17px;color:var(--ink)}
+  .secdesc{color:var(--muted);font-size:12.5px}
+  .secarrow{color:var(--teal-d);font-size:25px}
+  .seccontent{padding:0 19px 19px}
+  .subcard{background:#fffaf4;border:1px solid var(--line);border-radius:16px;padding:17px;margin-bottom:13px}
+  .subtitle{font-weight:800;color:var(--ink);margin-bottom:12px}
+  label.field{color:#625b6d;font-size:12.5px;font-weight:800}
+  label.field input,label.field select,textarea,
+  .secrow select,.secrow input{
+    border:1.5px solid var(--line);border-radius:13px;background:#fffdf9;color:var(--ink);
+    transition:border-color .18s,box-shadow .18s
+  }
+  label.field input,label.field select{padding:13px 14px}
+  label.field input:focus,label.field select:focus,textarea:focus,.secrow select:focus,.secrow input:focus{
+    outline:none;border-color:var(--teal);box-shadow:0 0 0 4px rgba(255,112,88,.13)
+  }
+  button.primary{
+    width:100%;border:0;background:var(--ink);color:#fff;font:inherit;font-weight:800;
+    padding:14px 17px;border-radius:13px;cursor:pointer;transition:transform .16s,background .16s,box-shadow .16s;
+    box-shadow:0 6px 0 #111022;font-size:14px
+  }
+  button.primary:hover{background:#3a315d;transform:translateY(-2px);box-shadow:0 8px 0 #111022}
+  button.primary:active{transform:translateY(3px);box-shadow:0 3px 0 #111022}
+  button.ghost{
+    border:1.5px solid var(--line);background:#fffaf4;color:var(--ink);font:inherit;font-weight:800;
+    padding:12px;border-radius:13px;cursor:pointer;width:100%;font-size:14px;transition:.16s;box-shadow:none
+  }
+  button.ghost:hover{background:#fff0eb;border-color:#f3cabe;color:var(--teal-d)}
+  .pill{background:#fff0eb;color:var(--teal-d);border-radius:9px;padding:4px 10px;font-size:11.5px}
+  .status{border-radius:13px;padding:12px 14px}
+  .status.info{background:#f0edfb;color:#5d4d91}
+  .status.warn{background:#fff6df;color:#8f681c}
+  .status.err{background:#fff0ef;color:var(--bad)}
+  .status.ok{background:#e9f7f1;color:#1e765d}
+  .stcard{border:1px solid var(--line);border-radius:16px;padding:13px 14px;background:#fffdf9;transition:.16s}
+  .stcard:hover{border-color:#efc5ba;box-shadow:0 8px 22px rgba(44,34,54,.07);transform:translateY(-2px)}
+  .stcard .nm{color:#51418b}
+  .attbtns button{border:1.5px solid var(--line);border-radius:12px;background:#fffaf4;transition:.16s}
+  .attbtns button:hover{transform:translateY(-2px);box-shadow:0 5px 12px rgba(44,34,54,.08)}
+  .keyq{border:1px solid var(--line);border-radius:14px;padding:9px;background:#fffaf4}
+  .choices button{border:1.5px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);transition:.15s}
+  .choices button:hover{border-color:#efb9aa;background:#fff0eb}
+  .choices button.sel{background:var(--teal);color:#fff;border-color:var(--teal)}
+  table{border-radius:14px;overflow:hidden}
+  th{background:#f0edfb;color:#5c527c}
+  th,td{padding:11px 9px;border-bottom:1px solid var(--line)}
+  .resultbox div{background:#fffaf4;border:1px solid var(--line);border-radius:15px;padding:13px 5px}
+  #sheetHost{background:#e9e5de;border-radius:17px;padding:18px}
+  .canvas-wrap{border-radius:17px;box-shadow:0 14px 30px rgba(18,16,32,.2)}
+  .corner-dot{background:rgba(255,112,88,.95)}
+
+  /* dialogs and editor overlays: centered glass panels instead of plain sheets */
+  #qEditorOverlay,#exportOverlay,#importReviewOverlay{
+    background:rgba(20,17,40,.72)!important;backdrop-filter:blur(8px);padding:24px!important
+  }
+  #qEditorOverlay>div,#exportOverlay>div,#importReviewOverlay>div{
+    max-width:820px!important;margin:6vh auto!important;background:#fffdf9!important;border:1px solid #fff!important;
+    border-radius:26px!important;padding:28px!important;box-shadow:0 30px 90px rgba(0,0,0,.3)!important
+  }
+  #qEditorOverlay h2,#exportOverlay h2,#importReviewOverlay h2{color:var(--ink)!important}
+  #qEditorOverlay .row[style*="sticky"]{background:#fffdf9!important;border-top:1px solid var(--line)}
+  .flcard{
+    right:304px;left:auto;top:50%;transform:translateY(-50%);padding:8px;
+    background:rgba(255,253,249,.82);border:1px solid #fff;box-shadow:0 18px 42px rgba(44,34,54,.18);
+    border-radius:19px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)
+  }
+  .fl-toggle{width:58px;height:38px;border-radius:12px;background:var(--ink);box-shadow:none;font-size:18px}
+  .fl-btns{gap:7px}
+  .flcard button.fl-nav{width:68px;min-height:60px;border:1px solid var(--line);background:#fffaf4;color:var(--ink);
+    border-radius:13px;padding:8px 4px;transition:.16s}
+  .flcard button.fl-nav:hover{transform:translateX(-3px);border-color:#f0b9ac}
+  .flcard button.fl-nav.active{background:var(--teal);color:#fff;border-color:var(--teal)}
+  .flcard button.fl-nav .fl-ic{font-size:19px}.flcard button.fl-nav .fl-tx{font-size:10px}
+  .flov{background:rgba(243,240,233,.98)}
+  .flov-head{padding:17px 22px;background:#fffdf9;border-bottom:1px solid var(--line);box-shadow:0 4px 18px rgba(44,34,54,.06)}
+  .flov-head .flx{border:1px solid var(--line);background:#fff0eb;color:var(--teal-d);border-radius:11px}
+  .flov-head select{border:1.5px solid var(--line);border-radius:12px;padding:11px;background:#fffaf4}
+  .flov-body{padding:20px 22px}
+  .flstu{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fffdf9;box-shadow:var(--shadow)}
+  .fucirc{border:1px solid var(--line);background:#fffaf4}.fucirc.add{border-color:var(--teal);color:var(--teal-d);background:#fff0eb}
+
+  @media(max-width:900px){
+    header.app{
+      top:auto;bottom:0;right:0;width:100%;height:auto;min-height:78px;padding:9px 10px calc(9px + env(safe-area-inset-bottom));
+      border-radius:22px 22px 0 0;box-shadow:0 -14px 38px rgba(29,21,48,.22)
+    }
+    .app-brand,.app-menu-label,.app-foot{display:none}
+    nav.tabs{flex-direction:row;gap:7px;overflow-x:auto;overflow-y:hidden;flex:0 0 auto;padding:0 1px}
+    nav.tabs button{flex:0 0 116px;width:116px;min-height:57px;padding:8px 6px;text-align:center;font-size:11px;border-radius:13px}
+    nav.tabs button.active:before{right:50%;top:auto;bottom:3px;width:24px;height:3px;transform:translateX(50%)}
+    main{margin:0;padding:24px 15px 112px}
+    .flcard{right:14px;left:14px;top:auto;bottom:91px;transform:none;flex-direction:row;align-items:center;justify-content:center}
+    .fl-btns{flex-direction:row;justify-content:center}.flcard button.fl-nav{width:64px;min-height:57px}
+    .fl-toggle{width:38px;height:38px}
+  }
+  @media(max-width:560px){
+    main{padding:16px 11px 110px}
+    .card{padding:16px;border-radius:18px}
+    .secheader{padding:16px}.seccontent{padding:0 16px 16px}
+    #qEditorOverlay,#exportOverlay,#importReviewOverlay{padding:10px!important}
+    #qEditorOverlay>div,#exportOverlay>div,#importReviewOverlay>div{padding:19px!important;border-radius:20px!important}
+  }
+  @media print{
+    header.app,.flcard{display:none!important}
+    main{margin:0;padding:0;max-width:none}
+  }
 </style>
 </head>
 <body>
 <header class="app">
+  <div class="app-brand">
+    <span class="app-brand-mark">ف</span>
+    <span class="app-brand-copy"><b>فصول</b><small>استوديو التصحيح</small></span>
+  </div>
+  <div class="app-menu-label">مساحة العمل</div>
   <nav class="tabs">
     <button id="tab-students" class="active" onclick="showTab('students')">👥 الطلاب والفصول</button>
     <button id="tab-design" onclick="showTab('design')">تصميم الاختبار</button>
@@ -178,6 +356,7 @@
     <button id="tab-notes" onclick="showTab('notes')">ملاحظات</button>
     <button id="tab-worksheets" onclick="window.location.href='worksheets.html'">🗂️ أنشطة رقمية</button>
   </nav>
+  <div class="app-foot"><span class="app-online"></span><span>متصل وآمن</span></div>
 </header>
 
 <main>

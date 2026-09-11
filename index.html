@@ -312,6 +312,36 @@ button,.tab,.studio-choice,.icon-btn,.tb-icon{touch-action:manipulation;-webkit-
 }
 @media(hover:none){.card:hover,.icon-btn:hover,.chip:hover,.studio-choice:hover{transform:none}.tab:hover{transform:none}}
 @media(prefers-reduced-motion:reduce){html[data-mode] *,html[data-mode] *:before,html[data-mode] *:after{transition:none!important;animation:none!important}}
+
+/* ===== Structural layouts: drawer, menu board, creative rail ===== */
+html.layout-drawer .nav-toggle{display:flex}
+html.layout-drawer .tabbar{position:fixed;right:0;top:0;bottom:0;width:260px;z-index:60;display:flex;flex-direction:column;gap:7px;padding:104px 14px 25px;background:var(--brand);border:0;box-shadow:-18px 0 40px rgba(0,0,0,.18);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+html.layout-drawer .tab{width:100%;padding:14px 16px;color:rgba(255,255,255,.72);text-align:right;border-radius:12px;font-weight:700;transform:none}
+html.layout-drawer .tab.active{background:var(--accent);color:#fff;box-shadow:none}
+html.layout-drawer .content{max-width:1100px;margin:0;padding:34px 30px 90px}
+html.layout-drawer.drawer-collapsed .tabbar{transform:translateX(100%)}html.layout-drawer.drawer-collapsed .content{max-width:1100px;margin:0}html.layout-drawer.drawer-collapsed .nav-toggle{background:var(--accent)}
+html.layout-drawer.drawer-open:after{content:"";position:fixed;inset:0;background:rgba(5,18,30,.48);z-index:55;opacity:1;pointer-events:auto}
+
+html.layout-menus .topbar{background:var(--surface);color:var(--ink);border-bottom:1px solid var(--line);box-shadow:none}
+html.layout-menus .tb-icon{background:var(--surface-2);color:var(--brand);border:1px solid var(--line)}
+html.layout-menus .tabbar{position:sticky;top:0;z-index:25;display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;padding:22px 24px;background:var(--bg);border:0;max-width:1120px;margin:auto}
+html.layout-menus .tab{min-height:84px;display:flex;align-items:flex-end;justify-content:flex-start;padding:15px;border:1px solid var(--line);background:var(--surface);border-radius:17px;color:var(--brand);font-weight:800;box-shadow:0 7px 18px rgba(18,35,50,.06);white-space:normal;text-align:right;transition:transform .22s,box-shadow .22s,border-color .22s}
+html.layout-menus .tab:before{content:"☷";position:absolute;top:12px;left:14px;color:var(--accent);font-size:21px}
+html.layout-menus .tab:hover{transform:translateY(-4px);border-color:var(--accent);box-shadow:0 13px 26px color-mix(in srgb,var(--accent) 16%,transparent)}html.layout-menus .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 13px 26px color-mix(in srgb,var(--accent) 24%,transparent)}html.layout-menus .tab.active:before{color:#fff}
+html.layout-menus .content{max-width:930px;padding:20px 24px 90px}
+
+html.layout-creative body{background:radial-gradient(circle at 92% 8%,color-mix(in srgb,var(--accent) 21%,transparent),transparent 24%),var(--bg)}
+html.layout-creative .topbar{max-width:1180px;margin:0 auto;padding:25px 30px;background:transparent;color:var(--brand);box-shadow:none}
+html.layout-creative .tb-icon{background:var(--surface);color:var(--brand);border:1px solid var(--line)}
+html.layout-creative .tabbar{position:fixed;left:24px;top:50%;transform:translateY(-50%);z-index:40;width:56px;display:flex;flex-direction:column;gap:10px;padding:8px;border:1px solid var(--line);border-radius:30px;background:var(--surface);box-shadow:0 14px 34px rgba(20,40,60,.14)}
+html.layout-creative .tab{position:relative;width:40px;height:40px;padding:0;border-radius:50%;font-size:0;display:flex;align-items:center;justify-content:center;color:var(--muted)}html.layout-creative .tab:before{content:"";width:10px;height:10px;border-radius:50%;background:currentColor}html.layout-creative .tab.active{background:var(--accent);color:#fff;box-shadow:none}html.layout-creative .tab-dot{position:absolute;top:-3px;right:-3px;font-size:10px;width:16px;height:16px;padding:0;margin:0}
+html.layout-creative .content{max-width:900px;margin:0 auto;padding:30px 88px 100px 24px}html.layout-creative .card{border:0;border-right:4px solid var(--accent);border-radius:4px 18px 18px 4px;background:var(--surface);box-shadow:10px 10px 0 color-mix(in srgb,var(--accent) 9%,transparent)}
+html.layout-creative .panel-head h2{font-size:30px;letter-spacing:-1px}
+@media(max-width:800px){
+  html.layout-drawer .topbar{padding-right:13px}html.layout-drawer .tabbar{top:0;bottom:0;width:min(82vw,290px);padding-top:88px}html.layout-drawer.drawer-collapsed .tabbar{transform:translateX(100%)}html.layout-drawer .content{padding:20px 13px 105px}
+  html.layout-menus .tabbar{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px 10px;max-height:230px;overflow-y:auto}html.layout-menus .tab{min-height:70px;padding:11px;font-size:12px;border-radius:13px}html.layout-menus .tab:before{top:8px;left:10px;font-size:17px}html.layout-menus .content{padding:18px 12px 105px}
+  html.layout-creative .topbar{margin:0;padding:14px 13px}html.layout-creative .tabbar{left:12px;right:12px;bottom:82px;top:auto;transform:none;width:auto;flex-direction:row;justify-content:center;border-radius:18px;padding:6px;overflow-x:auto}html.layout-creative .tab{flex:0 0 40px}html.layout-creative .content{padding:20px 12px 155px}.layout-creative .panel-head h2{font-size:23px}
+}
 </style>
 </head>
 <body>
@@ -426,6 +456,7 @@ button,.tab,.studio-choice,.icon-btn,.tb-icon{touch-action:manipulation;-webkit-
   <div class="topbar">
     <div class="tb-row1"><div class="tb-title" id="tbTitle">نظام الفصول</div><div id="tbDate" style="font-size:10.5px;opacity:.85;white-space:nowrap;text-align:left;"></div></div>
     <div class="tb-row2">
+      <button class="tb-icon nav-toggle hidden" id="navToggle" title="فتح أو طي القائمة" aria-label="فتح أو طي القائمة">☰</button>
       <span class="tb-badge" id="tbPeriod"></span>
       <span class="tb-spacer"></span>
       <button class="tb-icon tb-wide" id="tbOmr" title="إدارة الصف">إدارة الصف</button>
@@ -445,9 +476,9 @@ button,.tab,.studio-choice,.icon-btn,.tb-icon{touch-action:manipulation;-webkit-
     <button class="studio-choice" data-layout-choice="sidebar">جانبي</button>
     <button class="studio-choice" data-layout-choice="top">علوي</button>
     <button class="studio-choice" data-layout-choice="floating">عائم</button>
-    <button class="studio-choice" data-layout-choice="glass">زجاجي</button>
-    <button class="studio-choice" data-layout-choice="command">مركز القيادة</button>
-    <button class="studio-choice" data-layout-choice="editorial">تحريري</button>
+    <button class="studio-choice" data-layout-choice="drawer">قائمة قابلة للطي</button>
+    <button class="studio-choice" data-layout-choice="menus">لوحات القوائم</button>
+    <button class="studio-choice" data-layout-choice="creative">إبداعي</button>
     <button class="studio-choice" data-layout-choice="zen">هادئ</button>
   </div>
   <span class="studio-label">الألوان</span>
@@ -2271,11 +2302,13 @@ async function doCompose(){
 
 /* ---------- استوديو التصاميم والألوان ---------- */
 const LAYOUT_KEY='classroom_layout', PALETTE_KEY='classroom_palette', MODE_KEY='classroom_mode';
-const LAYOUTS=['default','sidebar','top','floating','glass','command','editorial','zen'], PALETTES=['ocean','orchid','citrus','graphite'];
+const LAYOUTS=['default','sidebar','top','floating','drawer','menus','creative','zen'], PALETTES=['ocean','orchid','citrus','graphite'];
 function applyLayout(layout){
   const value=LAYOUTS.includes(layout)?layout:'default';
   document.documentElement.classList.remove(...LAYOUTS.filter(x=>x!=='default').map(x=>'layout-'+x));
   if(value!=='default') document.documentElement.classList.add('layout-'+value);
+  document.documentElement.classList.remove('drawer-collapsed','drawer-open');
+  const nav=$('#navToggle'); if(nav) nav.classList.toggle('hidden',value!=='drawer');
   document.querySelectorAll('[data-layout-choice]').forEach(b=>b.classList.toggle('active',b.dataset.layoutChoice===value));
   try{localStorage.setItem(LAYOUT_KEY,value)}catch(e){}
 }
@@ -2297,6 +2330,11 @@ document.querySelectorAll('[data-palette-choice]').forEach(b=>b.addEventListener
 const layoutStudio=$('#layoutStudio'), studioToggle=$('#studioToggle'), studioClose=$('#studioClose');
 if(studioToggle) studioToggle.onclick=()=>layoutStudio.classList.toggle('open');
 if(studioClose) studioClose.onclick=()=>layoutStudio.classList.remove('open');
+const navToggle=$('#navToggle');
+if(navToggle) navToggle.onclick=()=>{
+  const root=document.documentElement, collapsed=root.classList.toggle('drawer-collapsed');
+  root.classList.toggle('drawer-open',!collapsed); navToggle.textContent=collapsed?'☰':'×';
+};
 if($('#studioMode')) $('#studioMode').onclick=()=>applyMode(document.documentElement.dataset.mode==='night'?'day':'night');
 try{applyLayout(localStorage.getItem(LAYOUT_KEY)||'default');applyPalette(localStorage.getItem(PALETTE_KEY)||'ocean');applyMode(localStorage.getItem(MODE_KEY)||'day')}catch(e){applyLayout('default');applyPalette('ocean');applyMode('day')}
 

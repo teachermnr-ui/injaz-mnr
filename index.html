@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>نظام الفصول الدراسية</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -174,174 +174,6 @@ input,select{font-family:inherit;font-size:15px}
 .m-row.danger{background:#FCECEA;border-color:#F2D4D0;color:var(--danger-d)}
 .m-row.danger .mi{background:#fff;border-color:#F2D4D0}
 .m-close{display:block;width:100%;text-align:center;color:var(--muted);background:transparent;padding:12px;font-weight:600;font-size:14px;margin-top:2px}
-
-/* ===== Layout & palette studio ===== */
-:root[data-palette="ocean"]{--bg:#f3f8fb;--surface:#fff;--surface-2:#eaf3f7;--brand:#12304a;--brand-2:#1c5875;--accent:#0d9aa6;--accent-d:#08747d;--ink:#142b3b;--muted:#6a7e8b;--line:#d6e5eb;--shadow:0 14px 38px rgba(18,48,74,.09);--r:18px;--r-sm:12px}
-:root[data-palette="orchid"]{--bg:#f7f4fb;--surface:#fff;--surface-2:#f1ecfa;--brand:#342653;--brand-2:#554080;--accent:#8b63d9;--accent-d:#6947b3;--ink:#2c2340;--muted:#80778f;--line:#e3daf1;--shadow:0 16px 42px rgba(72,48,111,.11);--r:22px;--r-sm:14px}
-:root[data-palette="citrus"]{--bg:#f7faf0;--surface:#fffef9;--surface-2:#eff6df;--brand:#284832;--brand-2:#3b6940;--accent:#d28b21;--accent-d:#a96b12;--ink:#26382a;--muted:#74816e;--line:#dce7cb;--shadow:0 14px 38px rgba(42,75,43,.1);--r:16px;--r-sm:11px}
-:root[data-palette="graphite"]{--bg:#eef1f4;--surface:#fff;--surface-2:#e5e9ee;--brand:#202833;--brand-2:#3b4654;--accent:#e35d4f;--accent-d:#b64238;--ink:#202833;--muted:#707b87;--line:#d4dbe2;--shadow:0 16px 40px rgba(32,40,51,.13);--r:15px;--r-sm:10px}
-html[data-palette] body{background:var(--bg);color:var(--ink)}
-html[data-palette] .topbar{background:linear-gradient(120deg,var(--brand),var(--brand-2));box-shadow:0 10px 28px color-mix(in srgb,var(--brand) 22%,transparent)}
-html[data-palette] .tab.active,.layout-floating .tab.active{background:var(--accent);box-shadow:0 7px 17px color-mix(in srgb,var(--accent) 25%,transparent)}
-html[data-palette] .btn{background:var(--accent);box-shadow:0 4px 0 color-mix(in srgb,var(--accent-d) 75%,#000)}
-html[data-palette] .btn:hover{background:var(--accent-d)}
-html[data-palette] .brand-mark{background:linear-gradient(145deg,var(--accent),var(--accent-d))}
-
-/* Layout 1: side navigation */
-html.layout-sidebar .tabbar{position:fixed;right:0;top:0;bottom:0;width:252px;z-index:40;display:flex;flex-direction:column;gap:8px;padding:28px 16px;background:var(--brand);border:0;overflow-y:auto;box-shadow:-12px 0 34px rgba(0,0,0,.13)}
-html.layout-sidebar .tabbar:before{content:"فصول";display:flex;align-items:center;justify-content:center;color:#fff;background:var(--accent);border-radius:15px;width:52px;height:52px;font-size:21px;font-weight:800;margin:0 0 22px auto}
-html.layout-sidebar .tab{width:100%;text-align:right;padding:13px 15px;color:rgba(255,255,255,.7);font-weight:700}
-html.layout-sidebar .tab:hover{background:rgba(255,255,255,.1);color:#fff;transform:translateX(-3px)}
-html.layout-sidebar .content{max-width:1180px;margin:0 252px 0 0;padding:34px 36px 90px}
-html.layout-sidebar .topbar{padding-right:276px}
-
-/* Layout 2: top navigation with reveal animation */
-html.layout-top .topbar{position:sticky;top:0;z-index:35;transition:transform .28s ease}
-html.layout-top .tabbar{position:sticky;top:0;z-index:34;justify-content:center;gap:10px;padding:12px 18px;border:0;background:color-mix(in srgb,var(--surface) 93%,transparent);box-shadow:0 8px 24px rgba(20,40,60,.08);backdrop-filter:blur(14px)}
-html.layout-top .tab{padding:10px 18px;border-radius:99px;font-weight:700}
-html.layout-top .tab.active{transform:translateY(-2px)}
-html.layout-top .content{max-width:1000px;padding:38px 24px 90px}
-
-/* Layout 3: floating navigation rail */
-html.layout-floating .topbar{margin:14px 18px 0;border-radius:20px;position:sticky;top:14px;z-index:35}
-html.layout-floating .tabbar{position:fixed;right:20px;top:50%;transform:translateY(-50%);z-index:40;width:68px;display:flex;flex-direction:column;gap:9px;padding:10px 8px;border:1px solid var(--line);border-radius:24px;background:color-mix(in srgb,var(--surface) 90%,transparent);box-shadow:0 18px 45px rgba(18,35,50,.18);backdrop-filter:blur(16px);overflow:visible}
-html.layout-floating .tab{width:52px;height:52px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:17px;font-size:0;color:var(--muted)}
-html.layout-floating .tab:after{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;opacity:.5}
-html.layout-floating .tab.active{color:#fff}
-html.layout-floating .tab.active:after{opacity:1;background:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.18)}
-html.layout-floating .tab-dot{position:absolute;top:2px;left:2px;margin:0;min-width:16px;height:16px;font-size:10px}
-html.layout-floating .content{max-width:940px;padding:38px 110px 90px 24px}
-
-/* Layout 4: glassmorphism dashboard */
-html.layout-glass body{background:radial-gradient(circle at 10% 10%,color-mix(in srgb,var(--accent) 18%,transparent),transparent 32%),var(--bg)}
-html.layout-glass .topbar{margin:18px 22px 0;border:1px solid color-mix(in srgb,var(--accent) 24%,var(--line));border-radius:24px;background:color-mix(in srgb,var(--brand) 88%,transparent);backdrop-filter:blur(18px);position:sticky;top:18px}
-html.layout-glass .tabbar{margin:14px 22px 0;border:1px solid var(--line);border-radius:20px;background:color-mix(in srgb,var(--surface) 70%,transparent);backdrop-filter:blur(16px);justify-content:center;box-shadow:0 12px 32px rgba(0,0,0,.06)}
-html.layout-glass .tab{border-radius:14px;padding:10px 18px}.layout-glass .tab.active{background:color-mix(in srgb,var(--accent) 80%,transparent);backdrop-filter:blur(8px)}
-html.layout-glass .card{border:1px solid color-mix(in srgb,var(--accent) 18%,var(--line));background:color-mix(in srgb,var(--surface) 78%,transparent);backdrop-filter:blur(13px);border-radius:24px}
-html.layout-glass .content{max-width:1080px;padding:34px 24px 90px}
-
-/* Layout 5: command center with compact navigation */
-html.layout-command .topbar{padding:18px 28px;border-bottom:4px solid var(--accent);position:sticky;top:0}
-html.layout-command .tabbar{position:sticky;top:86px;z-index:25;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;padding:14px;background:var(--brand);border:0}
-html.layout-command .tab{border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.74);padding:11px 12px;text-align:center;border-radius:9px;font-size:13px}
-html.layout-command .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:none}
-html.layout-command .content{max-width:1180px;padding:30px 28px 90px}.layout-command .card{border-radius:10px;border-top:3px solid var(--accent)}
-
-/* Layout 6: editorial split workspace */
-html.layout-editorial .topbar{background:var(--surface);color:var(--brand);border-bottom:5px solid var(--accent);padding:22px 30px}
-html.layout-editorial .tb-icon{background:var(--surface-2);color:var(--brand)}
-html.layout-editorial .tabbar{position:fixed;right:0;top:0;bottom:0;width:205px;padding:110px 14px 24px;background:var(--surface-2);border-left:1px solid var(--line);display:flex;flex-direction:column;gap:5px}
-html.layout-editorial .tab{padding:13px 16px;border-radius:0;border-right:3px solid transparent;text-align:right;font-weight:700}
-html.layout-editorial .tab.active{background:var(--surface);color:var(--accent-d);border-right-color:var(--accent);box-shadow:none}
-html.layout-editorial .content{max-width:1000px;margin:0 205px 0 0;padding:46px 42px 100px}.layout-editorial .panel-head{border-bottom:1px solid var(--line);padding-bottom:14px}.layout-editorial .card{border-radius:6px;box-shadow:0 5px 18px rgba(20,30,40,.06)}
-
-/* Layout 7: zen centered workspace */
-html.layout-zen .topbar{background:transparent;color:var(--brand);max-width:900px;margin:auto;padding:24px 22px 12px}
-html.layout-zen .tb-icon{background:var(--surface);color:var(--brand);border:1px solid var(--line)}
-html.layout-zen .tabbar{max-width:760px;margin:8px auto 0;border:1px solid var(--line);border-radius:99px;padding:6px;background:var(--surface);box-shadow:0 7px 22px rgba(0,0,0,.06);justify-content:center}
-html.layout-zen .tab{padding:9px 15px;border-radius:99px}.layout-zen .tab.active{box-shadow:none}.layout-zen .content{max-width:760px;padding:54px 20px 110px}.layout-zen .card{border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;padding:22px 4px;background:transparent}.layout-zen .panel-head h2{font-size:28px}
-
-/* Day / night mode shared by every layout and palette */
-html[data-mode="night"]{--bg:#0d1521;--surface:#162235;--surface-2:#1d2d43;--ink:#edf5ff;--muted:#aab8c8;--line:#304259;--shadow:0 18px 48px rgba(0,0,0,.28)}
-html[data-mode="night"] .auth-wrap{background:linear-gradient(135deg,#080d18,#14283d 60%,#173c47)}
-html[data-mode="night"] .auth-card,html[data-mode="night"] .card,html[data-mode="night"] .modal{color:var(--ink)}
-html[data-mode="night"] .field input,html[data-mode="night"] .field select,html[data-mode="night"] textarea{background:var(--surface-2);color:var(--ink)}
-html[data-mode="night"] .prov-btn{background:var(--surface);color:var(--ink)}
-html[data-mode="night"] .m-row .mi{background:var(--surface);color:var(--ink)}
-html[data-mode="night"] .studio-choice{background:var(--surface);color:var(--muted)}
-html[data-mode="night"] .layout-editorial .topbar,html[data-mode="night"] .layout-zen .topbar{color:var(--ink)}
-html[data-mode="night"] .layout-editorial .tab.active{background:var(--surface);color:var(--accent)}
-html[data-mode="night"] .layout-glass .card{background:color-mix(in srgb,var(--surface) 78%,transparent)}
-html[data-mode]{transition:background-color .35s,color .35s}html[data-mode] body,html[data-mode] .card,html[data-mode] .topbar,html[data-mode] .tabbar,html[data-mode] .modal,html[data-mode] .layout-studio{transition:background-color .35s,color .35s,border-color .35s,box-shadow .35s}
-
-/* layout studio control */
-.layout-studio{display:none;position:fixed;left:18px;bottom:18px;z-index:75;width:286px;padding:15px;border:1px solid var(--line);border-radius:18px;background:color-mix(in srgb,var(--surface) 94%,transparent);box-shadow:0 18px 48px rgba(16,35,50,.18);backdrop-filter:blur(16px)}
-#appView:not(.hidden) ~ .layout-studio{display:block}
-.studio-toggle{position:fixed;left:18px;bottom:18px;z-index:76;width:48px;height:48px;border-radius:15px;background:var(--brand);color:#fff;font-size:20px;box-shadow:0 8px 22px rgba(0,0,0,.2)}
-.layout-studio.open{display:block}.layout-studio.open + .studio-toggle{left:320px}
-.studio-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}.studio-head strong{font-size:14px}.studio-close{background:transparent;color:var(--muted);font-size:18px}
-.studio-label{display:block;color:var(--muted);font-size:11px;font-weight:800;margin:10px 0 7px}.studio-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.studio-choice{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:10px;padding:7px 3px;font:inherit;font-size:10px;font-weight:700;cursor:pointer;transition:.18s}.studio-choice:hover{transform:translateY(-2px);border-color:var(--accent)}.studio-choice.active{color:var(--accent-d);border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
-.studio-swatch{height:21px;border-radius:6px;margin-bottom:4px}.sw-ocean{background:linear-gradient(135deg,#12304a 45%,#0d9aa6 46%)}.sw-orchid{background:linear-gradient(135deg,#342653 45%,#8b63d9 46%)}.sw-citrus{background:linear-gradient(135deg,#284832 45%,#d28b21 46%)}.sw-graphite{background:linear-gradient(135deg,#202833 45%,#e35d4f 46%)}
-@media(max-width:800px){
-  html.layout-sidebar .tabbar{top:auto;bottom:0;right:0;width:100%;height:78px;flex-direction:row;padding:8px 10px calc(8px + env(safe-area-inset-bottom));overflow-x:auto;overflow-y:hidden;border-radius:0}
-  html.layout-sidebar .tabbar:before{display:none}html.layout-sidebar .tab{width:112px;min-width:112px;text-align:center;padding:9px 7px;font-size:11px}html.layout-sidebar .content{margin:0;padding:22px 15px 105px}html.layout-sidebar .topbar{padding-right:16px}
-  html.layout-top .tabbar{justify-content:flex-start;overflow-x:auto}.layout-floating .content{padding:25px 15px 105px}html.layout-floating .topbar{margin:8px 8px 0;top:8px}html.layout-floating .tabbar{right:12px;top:auto;bottom:88px;transform:none;width:auto;flex-direction:row;border-radius:18px;padding:6px;overflow-x:auto;max-width:calc(100vw - 24px)}html.layout-floating .tab{width:42px;height:42px;border-radius:13px;flex:0 0 42px}
-  html.layout-editorial .tabbar{top:auto;bottom:0;right:0;width:100%;height:78px;padding:8px 10px;flex-direction:row;overflow-x:auto;border-left:0;border-top:1px solid var(--line)}html.layout-editorial .tab{min-width:112px;text-align:center;border-right:0;border-bottom:3px solid transparent;padding:9px 7px;font-size:11px}html.layout-editorial .tab.active{border-bottom-color:var(--accent)}html.layout-editorial .content{margin:0;padding:22px 15px 105px}
-  html.layout-command .tabbar{top:0;grid-template-columns:repeat(2,minmax(120px,1fr));overflow-y:auto;max-height:150px}html.layout-command .content{padding:22px 15px 105px}
-  html.layout-glass .topbar{margin:8px 8px 0;top:8px}html.layout-glass .tabbar{margin:10px 8px 0;justify-content:flex-start;overflow-x:auto}html.layout-glass .content{padding:24px 15px 105px}
-  html.layout-zen .tabbar{border-radius:18px;margin:8px 10px 0;justify-content:flex-start;overflow-x:auto}html.layout-zen .content{padding:30px 15px 105px}
-  .layout-studio{left:12px;bottom:88px;width:calc(100vw - 24px)}.studio-toggle{left:12px;bottom:88px}.layout-studio.open + .studio-toggle{left:auto;right:12px}
-}
-
-/* ===== Mobile UX refinement ===== */
-html,body{overflow-x:hidden}
-button,.tab,.studio-choice,.icon-btn,.tb-icon{touch-action:manipulation;-webkit-user-select:none;user-select:none}
-@media(max-width:800px){
-  body{font-size:14px}
-  .auth-wrap{min-height:100svh;padding:18px 14px;padding-top:max(18px,env(safe-area-inset-top));padding-bottom:max(18px,env(safe-area-inset-bottom));align-items:center}
-  .auth-card,#roleChoiceCard{max-width:100%;padding:27px 18px 23px;border-radius:20px}
-  .brand-mark{width:58px;height:58px;font-size:23px;margin-bottom:13px}
-  .auth-card h1{font-size:20px}.auth-sub{font-size:12.5px;margin-bottom:19px}
-  .field{margin-bottom:12px}.field input,.field select{min-height:48px;padding:12px 13px}
-  .btn,.prov-btn{min-height:48px}.prov-btn{padding:12px 13px;margin-bottom:10px}
-  .topbar{padding:max(10px,env(safe-area-inset-top)) 13px 11px;gap:7px}
-  .tb-row1{align-items:center}.tb-row1 .tb-title{font-size:15px;line-height:1.25;max-width:57vw}.tb-row2{gap:6px;overflow-x:auto;scrollbar-width:none}.tb-row2::-webkit-scrollbar{display:none}
-  .tb-badge{font-size:11px;padding:4px 8px}.tb-icon{min-width:38px;min-height:38px}.tb-wide{padding:0 10px;font-size:11px}
-  .content{width:100%;padding:19px 12px calc(105px + env(safe-area-inset-bottom));}
-  .panel-head{gap:7px;margin-bottom:14px}.panel-head h2{font-size:20px;line-height:1.35}
-  .card{padding:14px 13px;margin-bottom:10px;border-radius:16px}.urow{gap:9px}.uavatar{width:38px;height:38px;border-radius:11px}.uinfo .uname{font-size:14.5px}.row-actions{gap:4px}.icon-btn{width:40px;height:40px}
-  .modal-back{align-items:flex-end;padding:0}.modal{width:100%;max-height:90svh;border-radius:20px 20px 0 0;padding:18px 14px calc(18px + env(safe-area-inset-bottom))}.modal h2{font-size:18px;margin-bottom:13px}.modal-row{gap:8px}.modal-row .btn{min-width:0}
-  .perm-leaf{padding:10px;gap:7px}.perm-leaf.sub{padding-right:18px}.perm-leaf .pl-name{min-width:100px}
-  .studio-toggle{width:48px;height:48px;border-radius:15px;bottom:calc(82px + env(safe-area-inset-bottom));box-shadow:0 7px 20px rgba(0,0,0,.22)}
-  .layout-studio{bottom:calc(82px + env(safe-area-inset-bottom));max-height:calc(100svh - 112px);overflow-y:auto;padding:13px;border-radius:16px}
-  .studio-choice{min-height:42px;padding:6px 2px}.studio-swatch{height:18px}.studio-label{margin-top:8px}
-  .toast{left:12px;right:12px;bottom:calc(92px + env(safe-area-inset-bottom));width:auto;text-align:center;transform:none}.toast.show{transform:translateY(-3px)}
-}
-@media(max-width:480px){
-  .auth-wrap{padding-left:10px;padding-right:10px}.auth-card,#roleChoiceCard{padding-left:15px;padding-right:15px}
-  .tb-row1 .tb-title{max-width:52vw}.tb-row2{margin-inline:-2px}
-  .modal-row{flex-direction:column-reverse}.modal-row .btn{width:100%}
-  .panel-head .btn.sm{font-size:12px;padding:8px 10px}.sub-note{font-size:12px}
-  .m-head{gap:10px}.m-av{width:48px;height:48px;font-size:20px}.m-row{padding:11px;gap:10px}.m-row .mi{width:38px;height:38px;font-size:17px}.m-row .ml{font-size:14px}
-}
-@media(max-width:360px){
-  .auth-card h1{font-size:18px}.auth-sub{font-size:11.5px}.btn,.prov-btn{font-size:14px}
-  .studio-grid{grid-template-columns:repeat(2,1fr)}.studio-choice{font-size:11px}
-  .tb-row1 .tb-title{max-width:48vw;font-size:14px}.content{padding-inline:9px}
-}
-@media(hover:none){.card:hover,.icon-btn:hover,.chip:hover,.studio-choice:hover{transform:none}.tab:hover{transform:none}}
-@media(prefers-reduced-motion:reduce){html[data-mode] *,html[data-mode] *:before,html[data-mode] *:after{transition:none!important;animation:none!important}}
-
-/* ===== Structural layouts: drawer, menu board, creative rail ===== */
-html.layout-drawer .nav-toggle{display:flex}
-html.layout-drawer .tabbar{position:fixed;right:0;top:0;bottom:0;width:260px;z-index:60;display:flex;flex-direction:column;gap:7px;padding:104px 14px 25px;background:var(--brand);border:0;box-shadow:-18px 0 40px rgba(0,0,0,.18);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
-html.layout-drawer .tab{width:100%;padding:14px 16px;color:rgba(255,255,255,.72);text-align:right;border-radius:12px;font-weight:700;transform:none}
-html.layout-drawer .tab.active{background:var(--accent);color:#fff;box-shadow:none}
-html.layout-drawer .content{max-width:1100px;margin:0;padding:34px 30px 90px}
-html.layout-drawer.drawer-collapsed .tabbar{transform:translateX(100%)}html.layout-drawer.drawer-collapsed .content{max-width:1100px;margin:0}html.layout-drawer.drawer-collapsed .nav-toggle{background:var(--accent)}
-html.layout-drawer.drawer-open:after{content:"";position:fixed;inset:0;background:rgba(5,18,30,.48);z-index:55;opacity:1;pointer-events:auto}
-
-html.layout-menus .topbar{background:var(--surface);color:var(--ink);border-bottom:1px solid var(--line);box-shadow:none}
-html.layout-menus .tb-icon{background:var(--surface-2);color:var(--brand);border:1px solid var(--line)}
-html.layout-menus .tabbar{position:sticky;top:0;z-index:25;display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;padding:22px 24px;background:var(--bg);border:0;max-width:1120px;margin:auto}
-html.layout-menus .tab{min-height:84px;display:flex;align-items:flex-end;justify-content:flex-start;padding:15px;border:1px solid var(--line);background:var(--surface);border-radius:17px;color:var(--brand);font-weight:800;box-shadow:0 7px 18px rgba(18,35,50,.06);white-space:normal;text-align:right;transition:transform .22s,box-shadow .22s,border-color .22s}
-html.layout-menus .tab:before{content:"☷";position:absolute;top:12px;left:14px;color:var(--accent);font-size:21px}
-html.layout-menus .tab:hover{transform:translateY(-4px);border-color:var(--accent);box-shadow:0 13px 26px color-mix(in srgb,var(--accent) 16%,transparent)}html.layout-menus .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 13px 26px color-mix(in srgb,var(--accent) 24%,transparent)}html.layout-menus .tab.active:before{color:#fff}
-html.layout-menus .content{max-width:930px;padding:20px 24px 90px}
-
-html.layout-creative body{background:radial-gradient(circle at 92% 8%,color-mix(in srgb,var(--accent) 21%,transparent),transparent 24%),var(--bg)}
-html.layout-creative .topbar{max-width:1180px;margin:0 auto;padding:25px 30px;background:transparent;color:var(--brand);box-shadow:none}
-html.layout-creative .tb-icon{background:var(--surface);color:var(--brand);border:1px solid var(--line)}
-html.layout-creative .tabbar{position:fixed;left:24px;top:50%;transform:translateY(-50%);z-index:40;width:56px;display:flex;flex-direction:column;gap:10px;padding:8px;border:1px solid var(--line);border-radius:30px;background:var(--surface);box-shadow:0 14px 34px rgba(20,40,60,.14)}
-html.layout-creative .tab{position:relative;width:40px;height:40px;padding:0;border-radius:50%;font-size:0;display:flex;align-items:center;justify-content:center;color:var(--muted)}html.layout-creative .tab:before{content:"";width:10px;height:10px;border-radius:50%;background:currentColor}html.layout-creative .tab.active{background:var(--accent);color:#fff;box-shadow:none}html.layout-creative .tab-dot{position:absolute;top:-3px;right:-3px;font-size:10px;width:16px;height:16px;padding:0;margin:0}
-html.layout-creative .content{max-width:900px;margin:0 auto;padding:30px 88px 100px 24px}html.layout-creative .card{border:0;border-right:4px solid var(--accent);border-radius:4px 18px 18px 4px;background:var(--surface);box-shadow:10px 10px 0 color-mix(in srgb,var(--accent) 9%,transparent)}
-html.layout-creative .panel-head h2{font-size:30px;letter-spacing:-1px}
-@media(max-width:800px){
-  html.layout-drawer .topbar{padding-right:13px}html.layout-drawer .tabbar{top:0;bottom:0;width:min(82vw,290px);padding-top:88px}html.layout-drawer.drawer-collapsed .tabbar{transform:translateX(100%)}html.layout-drawer .content{padding:20px 13px 105px}
-  html.layout-menus .tabbar{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px 10px;max-height:230px;overflow-y:auto}html.layout-menus .tab{min-height:70px;padding:11px;font-size:12px;border-radius:13px}html.layout-menus .tab:before{top:8px;left:10px;font-size:17px}html.layout-menus .content{padding:18px 12px 105px}
-  html.layout-creative .topbar{margin:0;padding:14px 13px}html.layout-creative .tabbar{left:12px;right:12px;bottom:82px;top:auto;transform:none;width:auto;flex-direction:row;justify-content:center;border-radius:18px;padding:6px;overflow-x:auto}html.layout-creative .tab{flex:0 0 40px}html.layout-creative .content{padding:20px 12px 155px}.layout-creative .panel-head h2{font-size:23px}
-}
 </style>
 </head>
 <body>
@@ -456,7 +288,6 @@ html.layout-creative .panel-head h2{font-size:30px;letter-spacing:-1px}
   <div class="topbar">
     <div class="tb-row1"><div class="tb-title" id="tbTitle">نظام الفصول</div><div id="tbDate" style="font-size:10.5px;opacity:.85;white-space:nowrap;text-align:left;"></div></div>
     <div class="tb-row2">
-      <button class="tb-icon nav-toggle hidden" id="navToggle" title="فتح أو طي القائمة" aria-label="فتح أو طي القائمة">☰</button>
       <span class="tb-badge" id="tbPeriod"></span>
       <span class="tb-spacer"></span>
       <button class="tb-icon tb-wide" id="tbOmr" title="إدارة الصف">إدارة الصف</button>
@@ -467,29 +298,6 @@ html.layout-creative .panel-head h2{font-size:30px;letter-spacing:-1px}
   <div class="tabbar" id="tabbar"></div>
   <div class="content" id="content"></div>
 </div>
-
-<section class="layout-studio" id="layoutStudio" aria-label="تخصيص شكل التطبيق">
-  <div class="studio-head"><strong>تخصيص شكل التطبيق</strong><span><button class="studio-mode" id="studioMode" aria-label="تبديل الوضع">☾</button> <button class="studio-close" id="studioClose" aria-label="إغلاق">×</button></span></div>
-  <span class="studio-label">التصميم</span>
-  <div class="studio-grid">
-    <button class="studio-choice" data-layout-choice="default">الأساسي</button>
-    <button class="studio-choice" data-layout-choice="sidebar">جانبي</button>
-    <button class="studio-choice" data-layout-choice="top">علوي</button>
-    <button class="studio-choice" data-layout-choice="floating">عائم</button>
-    <button class="studio-choice" data-layout-choice="drawer">قائمة قابلة للطي</button>
-    <button class="studio-choice" data-layout-choice="menus">لوحات القوائم</button>
-    <button class="studio-choice" data-layout-choice="creative">إبداعي</button>
-    <button class="studio-choice" data-layout-choice="zen">هادئ</button>
-  </div>
-  <span class="studio-label">الألوان</span>
-  <div class="studio-grid">
-    <button class="studio-choice" data-palette-choice="ocean"><span class="studio-swatch sw-ocean"></span>محيطي</button>
-    <button class="studio-choice" data-palette-choice="orchid"><span class="studio-swatch sw-orchid"></span>أوركيد</button>
-    <button class="studio-choice" data-palette-choice="citrus"><span class="studio-swatch sw-citrus"></span>حمضي</button>
-    <button class="studio-choice" data-palette-choice="graphite"><span class="studio-swatch sw-graphite"></span>فحمي</button>
-  </div>
-</section>
-<button class="studio-toggle" id="studioToggle" aria-label="فتح تخصيص الشكل" title="تخصيص الشكل">✦</button>
 
 <div id="modalRoot"></div>
 <div id="toast" class="toast"></div>
@@ -2299,44 +2107,6 @@ async function doCompose(){
   try{ await createNote(payload); closeModal(); toast('تم الإرسال'); renderSent($('#content')); }
   catch(e){ alertBox('cmpAlert','err',e.message); }
 }
-
-/* ---------- استوديو التصاميم والألوان ---------- */
-const LAYOUT_KEY='classroom_layout', PALETTE_KEY='classroom_palette', MODE_KEY='classroom_mode';
-const LAYOUTS=['default','sidebar','top','floating','drawer','menus','creative','zen'], PALETTES=['ocean','orchid','citrus','graphite'];
-function applyLayout(layout){
-  const value=LAYOUTS.includes(layout)?layout:'default';
-  document.documentElement.classList.remove(...LAYOUTS.filter(x=>x!=='default').map(x=>'layout-'+x));
-  if(value!=='default') document.documentElement.classList.add('layout-'+value);
-  document.documentElement.classList.remove('drawer-collapsed','drawer-open');
-  const nav=$('#navToggle'); if(nav) nav.classList.toggle('hidden',value!=='drawer');
-  document.querySelectorAll('[data-layout-choice]').forEach(b=>b.classList.toggle('active',b.dataset.layoutChoice===value));
-  try{localStorage.setItem(LAYOUT_KEY,value)}catch(e){}
-}
-function applyPalette(palette){
-  const value=PALETTES.includes(palette)?palette:'ocean';
-  document.documentElement.dataset.palette=value;
-  document.querySelectorAll('[data-palette-choice]').forEach(b=>b.classList.toggle('active',b.dataset.paletteChoice===value));
-  try{localStorage.setItem(PALETTE_KEY,value)}catch(e){}
-}
-function applyMode(mode){
-  const value=mode==='night'?'night':'day';
-  document.documentElement.dataset.mode=value;
-  const btn=$('#studioMode');
-  if(btn){btn.textContent=value==='night'?'☀':'☾';btn.title=value==='night'?'الوضع النهاري':'الوضع الليلي';}
-  try{localStorage.setItem(MODE_KEY,value)}catch(e){}
-}
-document.querySelectorAll('[data-layout-choice]').forEach(b=>b.addEventListener('click',()=>applyLayout(b.dataset.layoutChoice)));
-document.querySelectorAll('[data-palette-choice]').forEach(b=>b.addEventListener('click',()=>applyPalette(b.dataset.paletteChoice)));
-const layoutStudio=$('#layoutStudio'), studioToggle=$('#studioToggle'), studioClose=$('#studioClose');
-if(studioToggle) studioToggle.onclick=()=>layoutStudio.classList.toggle('open');
-if(studioClose) studioClose.onclick=()=>layoutStudio.classList.remove('open');
-const navToggle=$('#navToggle');
-if(navToggle) navToggle.onclick=()=>{
-  const root=document.documentElement, collapsed=root.classList.toggle('drawer-collapsed');
-  root.classList.toggle('drawer-open',!collapsed); navToggle.textContent=collapsed?'☰':'×';
-};
-if($('#studioMode')) $('#studioMode').onclick=()=>applyMode(document.documentElement.dataset.mode==='night'?'day':'night');
-try{applyLayout(localStorage.getItem(LAYOUT_KEY)||'default');applyPalette(localStorage.getItem(PALETTE_KEY)||'ocean');applyMode(localStorage.getItem(MODE_KEY)||'day')}catch(e){applyLayout('default');applyPalette('ocean');applyMode('day')}
 
 boot();
 </script>

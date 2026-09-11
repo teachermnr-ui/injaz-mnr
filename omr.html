@@ -252,6 +252,90 @@
   }
   @media(max-width:560px){main{padding:16px 11px 110px}.card{padding:16px;border-radius:18px}.secheader{padding:16px}.seccontent{padding:0 16px 16px}}
   @media print{header.app,.flcard{display:none!important}main{margin:0;padding:0;max-width:none}}
+
+  /* ===== نفس التصاميم الأربعة في صفحة التصحيح ===== */
+  /* 1 — القائمة الجانبية الثابتة */
+  html[data-layout="side"] header.app{position:fixed;right:0;top:0;bottom:0;width:282px}
+  html[data-layout="side"] main{margin-right:282px}
+
+  /* 2 — قائمة جانبية منبثقة */
+  html[data-layout="popup"] header.app{
+    position:sticky;right:auto;top:0;bottom:auto;width:100%;height:74px;padding:15px 24px;
+    flex-direction:row;align-items:center;background:var(--ink);box-shadow:0 10px 28px rgba(29,21,48,.12)
+  }
+  html[data-layout="popup"] header.app:before{width:42px;height:42px;margin:0 0 0 auto;border-radius:14px;font-size:18px}
+  html[data-layout="popup"] header.app:after{content:"التصحيح الآلي";border:0;padding:0;margin:0 0 0 13px;color:#aaa5bd;font-size:12px}
+  html[data-layout="popup"] nav.tabs{
+    position:fixed;right:24px;top:91px;bottom:auto;width:238px;max-height:calc(100vh - 125px);z-index:100;
+    padding:14px;background:color-mix(in srgb,var(--white) 93%,transparent);border:1px solid color-mix(in srgb,var(--teal) 22%,var(--line));
+    border-radius:24px;box-shadow:0 24px 65px color-mix(in srgb,var(--ink) 22%,transparent);backdrop-filter:blur(18px);flex-direction:column
+  }
+  html[data-layout="popup"] nav.tabs button{width:100%;flex:0 0 auto;min-height:46px;text-align:right;padding:12px 14px;color:var(--muted);border:1px solid transparent;background:transparent}
+  html[data-layout="popup"] nav.tabs button:hover{background:var(--teal-l);color:var(--teal-d);transform:translateX(-3px)}
+  html[data-layout="popup"] nav.tabs button.active{background:var(--teal);color:#fff}
+  html[data-layout="popup"] main{margin:0;max-width:1060px;padding:34px 28px 100px}
+
+  /* 3 — القوائم العلوية */
+  html[data-layout="top"] header.app{position:sticky;top:0;bottom:auto;width:100%;height:auto;padding:13px 22px;background:var(--ink);box-shadow:0 10px 28px rgba(29,21,48,.12)}
+  html[data-layout="top"] header.app:before,html[data-layout="top"] header.app:after{display:none}
+  html[data-layout="top"] nav.tabs{flex-direction:row;gap:7px;margin:0;overflow-x:auto}
+  html[data-layout="top"] nav.tabs button{flex:0 0 auto;width:auto;min-width:max-content;padding:11px 16px;color:#aaa5bd;background:transparent}
+  html[data-layout="top"] nav.tabs button:hover{background:rgba(255,255,255,.1);color:#fff;transform:none}
+  html[data-layout="top"] nav.tabs button.active{background:var(--teal);color:#fff}
+  html[data-layout="top"] main{margin:0 auto;max-width:1080px;padding:34px 28px 100px}
+
+  /* 4 — تصميم الموجة الزجاجية */
+  html[data-layout="wave"] header.app{
+    position:relative;right:auto;top:auto;bottom:auto;width:100%;height:300px;overflow:hidden;padding:24px;
+    background:linear-gradient(145deg,var(--ink) 4%,var(--teal) 88%);box-shadow:none
+  }
+  html[data-layout="wave"] header.app:before{
+    content:"فصول";position:absolute;z-index:2;top:23px;right:24px;width:52px;height:52px;margin:0;
+    border-radius:17px;background:var(--teal);color:#fff;font-size:23px;box-shadow:6px 6px 0 rgba(255,255,255,.10)
+  }
+  html[data-layout="wave"] header.app{
+    display:block
+  }
+  html[data-layout="wave"] header.app nav.tabs{
+    position:absolute;z-index:4;top:127px;right:24px;left:24px;bottom:auto;width:auto;
+    display:flex;flex-direction:row;justify-content:center;gap:9px;overflow:visible
+  }
+  html[data-layout="wave"] nav.tabs button{
+    width:auto;flex:0 0 auto;min-width:112px;padding:12px 17px;border:1px solid rgba(255,255,255,.28);
+    border-radius:30px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.88);backdrop-filter:blur(8px)
+  }
+  html[data-layout="wave"] nav.tabs button:hover{background:rgba(255,255,255,.16);color:#fff;transform:none}
+  html[data-layout="wave"] nav.tabs button.active{background:var(--white);color:var(--teal-d);border-color:transparent}
+  html[data-layout="wave"] header.app{isolation:isolate}
+  html[data-layout="wave"] header.app + main{position:relative;margin:0 auto;max-width:1060px;padding:25px 28px 110px}
+  html[data-layout="wave"] header.app::after{
+    content:"";position:absolute;z-index:1;left:-12%;right:-12%;height:165px;bottom:-105px;
+    background:var(--paper);border-radius:50% 50% 0 0/75% 75% 0 0;box-shadow:0 -18px 35px color-mix(in srgb,var(--teal) 17%,transparent)
+  }
+  html[data-layout="wave"] header.app::before{z-index:3}
+  html[data-layout="wave"] .card{border-radius:24px;background:color-mix(in srgb,var(--white) 92%,transparent);backdrop-filter:blur(12px);box-shadow:0 18px 45px color-mix(in srgb,var(--ink) 10%,transparent)}
+  html[data-layout="wave"] .card:nth-child(2n){background:linear-gradient(145deg,color-mix(in srgb,var(--teal) 84%,#fff),color-mix(in srgb,var(--teal-d) 75%,#fff));color:#fff}
+  html[data-layout="wave"] .card:nth-child(2n) h2,html[data-layout="wave"] .card:nth-child(2n) .sub{color:#fff}
+
+  @media(max-width:900px){
+    html[data-layout="side"] main{margin:0}
+    html[data-layout="popup"] header.app{position:sticky;top:0;bottom:auto;width:100%;height:68px;padding:10px 14px;border-radius:0}
+    html[data-layout="popup"] nav.tabs{
+      right:12px;top:80px;width:calc(100% - 24px);max-height:calc(100vh - 160px);padding:12px
+    }
+    html[data-layout="popup"] nav.tabs button{width:100%;min-width:0;text-align:right}
+    html[data-layout="popup"] main{padding:22px 15px 110px}
+    html[data-layout="top"] header.app{position:sticky;top:0;bottom:auto;width:100%;height:auto;padding:10px}
+    html[data-layout="top"] nav.tabs{flex-direction:row;overflow-x:auto}
+    html[data-layout="top"] nav.tabs button{flex:0 0 112px;min-width:112px;padding:9px 7px;text-align:center;font-size:11px}
+    html[data-layout="top"] main{padding:22px 15px 110px}
+    html[data-layout="wave"] header.app{height:285px;padding:18px 16px}
+    html[data-layout="wave"] header.app:before{top:18px;right:16px;width:46px;height:46px}
+    html[data-layout="wave"] header.app:after{top:25px;left:16px;font-size:12px}
+    html[data-layout="wave"] header.app nav.tabs{top:112px;right:12px;left:12px;justify-content:flex-start;overflow-x:auto;gap:6px}
+    html[data-layout="wave"] nav.tabs button{min-width:96px;padding:10px 12px;font-size:11px}
+    html[data-layout="wave"] header.app + main{padding:20px 13px 112px}
+  }
 </style>
 </head>
 <body>
@@ -5419,7 +5503,9 @@ async function loadStudentsFromCloud(manual){
 try{
   const savedTheme = localStorage.getItem('classroom_theme');
   document.documentElement.dataset.theme = ['aurora','sand','midnight','lavender'].includes(savedTheme) ? savedTheme : 'aurora';
-}catch(e){ document.documentElement.dataset.theme='aurora'; }
+  const savedLayout = localStorage.getItem('classroom_layout');
+  document.documentElement.dataset.layout = ['side','popup','top','wave'].includes(savedLayout) ? savedLayout : 'side';
+}catch(e){ document.documentElement.dataset.theme='aurora'; document.documentElement.dataset.layout='side'; }
 window.addEventListener('load', ()=>{
   renderSections();
   syncIdModeUI();

@@ -212,6 +212,48 @@ html.layout-floating .tab.active:after{opacity:1;background:#fff;box-shadow:0 0 
 html.layout-floating .tab-dot{position:absolute;top:2px;left:2px;margin:0;min-width:16px;height:16px;font-size:10px}
 html.layout-floating .content{max-width:940px;padding:38px 110px 90px 24px}
 
+/* Layout 4: glassmorphism dashboard */
+html.layout-glass body{background:radial-gradient(circle at 10% 10%,color-mix(in srgb,var(--accent) 18%,transparent),transparent 32%),var(--bg)}
+html.layout-glass .topbar{margin:18px 22px 0;border:1px solid color-mix(in srgb,var(--accent) 24%,var(--line));border-radius:24px;background:color-mix(in srgb,var(--brand) 88%,transparent);backdrop-filter:blur(18px);position:sticky;top:18px}
+html.layout-glass .tabbar{margin:14px 22px 0;border:1px solid var(--line);border-radius:20px;background:color-mix(in srgb,var(--surface) 70%,transparent);backdrop-filter:blur(16px);justify-content:center;box-shadow:0 12px 32px rgba(0,0,0,.06)}
+html.layout-glass .tab{border-radius:14px;padding:10px 18px}.layout-glass .tab.active{background:color-mix(in srgb,var(--accent) 80%,transparent);backdrop-filter:blur(8px)}
+html.layout-glass .card{border:1px solid color-mix(in srgb,var(--accent) 18%,var(--line));background:color-mix(in srgb,var(--surface) 78%,transparent);backdrop-filter:blur(13px);border-radius:24px}
+html.layout-glass .content{max-width:1080px;padding:34px 24px 90px}
+
+/* Layout 5: command center with compact navigation */
+html.layout-command .topbar{padding:18px 28px;border-bottom:4px solid var(--accent);position:sticky;top:0}
+html.layout-command .tabbar{position:sticky;top:86px;z-index:25;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;padding:14px;background:var(--brand);border:0}
+html.layout-command .tab{border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.74);padding:11px 12px;text-align:center;border-radius:9px;font-size:13px}
+html.layout-command .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:none}
+html.layout-command .content{max-width:1180px;padding:30px 28px 90px}.layout-command .card{border-radius:10px;border-top:3px solid var(--accent)}
+
+/* Layout 6: editorial split workspace */
+html.layout-editorial .topbar{background:var(--surface);color:var(--brand);border-bottom:5px solid var(--accent);padding:22px 30px}
+html.layout-editorial .tb-icon{background:var(--surface-2);color:var(--brand)}
+html.layout-editorial .tabbar{position:fixed;right:0;top:0;bottom:0;width:205px;padding:110px 14px 24px;background:var(--surface-2);border-left:1px solid var(--line);display:flex;flex-direction:column;gap:5px}
+html.layout-editorial .tab{padding:13px 16px;border-radius:0;border-right:3px solid transparent;text-align:right;font-weight:700}
+html.layout-editorial .tab.active{background:var(--surface);color:var(--accent-d);border-right-color:var(--accent);box-shadow:none}
+html.layout-editorial .content{max-width:1000px;margin:0 205px 0 0;padding:46px 42px 100px}.layout-editorial .panel-head{border-bottom:1px solid var(--line);padding-bottom:14px}.layout-editorial .card{border-radius:6px;box-shadow:0 5px 18px rgba(20,30,40,.06)}
+
+/* Layout 7: zen centered workspace */
+html.layout-zen .topbar{background:transparent;color:var(--brand);max-width:900px;margin:auto;padding:24px 22px 12px}
+html.layout-zen .tb-icon{background:var(--surface);color:var(--brand);border:1px solid var(--line)}
+html.layout-zen .tabbar{max-width:760px;margin:8px auto 0;border:1px solid var(--line);border-radius:99px;padding:6px;background:var(--surface);box-shadow:0 7px 22px rgba(0,0,0,.06);justify-content:center}
+html.layout-zen .tab{padding:9px 15px;border-radius:99px}.layout-zen .tab.active{box-shadow:none}.layout-zen .content{max-width:760px;padding:54px 20px 110px}.layout-zen .card{border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;padding:22px 4px;background:transparent}.layout-zen .panel-head h2{font-size:28px}
+
+/* Day / night mode shared by every layout and palette */
+html[data-mode="night"]{--bg:#0d1521;--surface:#162235;--surface-2:#1d2d43;--ink:#edf5ff;--muted:#aab8c8;--line:#304259;--shadow:0 18px 48px rgba(0,0,0,.28)}
+html[data-mode="night"] .auth-wrap{background:linear-gradient(135deg,#080d18,#14283d 60%,#173c47)}
+html[data-mode="night"] .auth-card,html[data-mode="night"] .card,html[data-mode="night"] .modal{color:var(--ink)}
+html[data-mode="night"] .field input,html[data-mode="night"] .field select,html[data-mode="night"] textarea{background:var(--surface-2);color:var(--ink)}
+html[data-mode="night"] .prov-btn{background:var(--surface);color:var(--ink)}
+html[data-mode="night"] .m-row .mi{background:var(--surface);color:var(--ink)}
+html[data-mode="night"] .studio-choice{background:var(--surface);color:var(--muted)}
+html[data-mode="night"] .layout-editorial .topbar,html[data-mode="night"] .layout-zen .topbar{color:var(--ink)}
+html[data-mode="night"] .layout-editorial .tab.active{background:var(--surface);color:var(--accent)}
+html[data-mode="night"] .layout-glass .card{background:color-mix(in srgb,var(--surface) 78%,transparent)}
+html[data-mode]{transition:background-color .35s,color .35s}html[data-mode] body,html[data-mode] .card,html[data-mode] .topbar,html[data-mode] .tabbar,html[data-mode] .modal,html[data-mode] .layout-studio{transition:background-color .35s,color .35s,border-color .35s,box-shadow .35s}
+
 /* layout studio control */
 .layout-studio{display:none;position:fixed;left:18px;bottom:18px;z-index:75;width:286px;padding:15px;border:1px solid var(--line);border-radius:18px;background:color-mix(in srgb,var(--surface) 94%,transparent);box-shadow:0 18px 48px rgba(16,35,50,.18);backdrop-filter:blur(16px)}
 #appView:not(.hidden) ~ .layout-studio{display:block}
@@ -225,6 +267,10 @@ html.layout-floating .content{max-width:940px;padding:38px 110px 90px 24px}
   html.layout-sidebar .tabbar{top:auto;bottom:0;right:0;width:100%;height:78px;flex-direction:row;padding:8px 10px calc(8px + env(safe-area-inset-bottom));overflow-x:auto;overflow-y:hidden;border-radius:0}
   html.layout-sidebar .tabbar:before{display:none}html.layout-sidebar .tab{width:112px;min-width:112px;text-align:center;padding:9px 7px;font-size:11px}html.layout-sidebar .content{margin:0;padding:22px 15px 105px}html.layout-sidebar .topbar{padding-right:16px}
   html.layout-top .tabbar{justify-content:flex-start;overflow-x:auto}.layout-floating .content{padding:25px 15px 105px}html.layout-floating .topbar{margin:8px 8px 0;top:8px}html.layout-floating .tabbar{right:12px;top:auto;bottom:88px;transform:none;width:auto;flex-direction:row;border-radius:18px;padding:6px;overflow-x:auto;max-width:calc(100vw - 24px)}html.layout-floating .tab{width:42px;height:42px;border-radius:13px;flex:0 0 42px}
+  html.layout-editorial .tabbar{top:auto;bottom:0;right:0;width:100%;height:78px;padding:8px 10px;flex-direction:row;overflow-x:auto;border-left:0;border-top:1px solid var(--line)}html.layout-editorial .tab{min-width:112px;text-align:center;border-right:0;border-bottom:3px solid transparent;padding:9px 7px;font-size:11px}html.layout-editorial .tab.active{border-bottom-color:var(--accent)}html.layout-editorial .content{margin:0;padding:22px 15px 105px}
+  html.layout-command .tabbar{top:0;grid-template-columns:repeat(2,minmax(120px,1fr));overflow-y:auto;max-height:150px}html.layout-command .content{padding:22px 15px 105px}
+  html.layout-glass .topbar{margin:8px 8px 0;top:8px}html.layout-glass .tabbar{margin:10px 8px 0;justify-content:flex-start;overflow-x:auto}html.layout-glass .content{padding:24px 15px 105px}
+  html.layout-zen .tabbar{border-radius:18px;margin:8px 10px 0;justify-content:flex-start;overflow-x:auto}html.layout-zen .content{padding:30px 15px 105px}
   .layout-studio{left:12px;bottom:88px;width:calc(100vw - 24px)}.studio-toggle{left:12px;bottom:88px}.layout-studio.open + .studio-toggle{left:auto;right:12px}
 }
 </style>
@@ -353,13 +399,17 @@ html.layout-floating .content{max-width:940px;padding:38px 110px 90px 24px}
 </div>
 
 <section class="layout-studio" id="layoutStudio" aria-label="تخصيص شكل التطبيق">
-  <div class="studio-head"><strong>تخصيص شكل التطبيق</strong><button class="studio-close" id="studioClose" aria-label="إغلاق">×</button></div>
+  <div class="studio-head"><strong>تخصيص شكل التطبيق</strong><span><button class="studio-mode" id="studioMode" aria-label="تبديل الوضع">☾</button> <button class="studio-close" id="studioClose" aria-label="إغلاق">×</button></span></div>
   <span class="studio-label">التصميم</span>
   <div class="studio-grid">
     <button class="studio-choice" data-layout-choice="default">الأساسي</button>
     <button class="studio-choice" data-layout-choice="sidebar">جانبي</button>
     <button class="studio-choice" data-layout-choice="top">علوي</button>
     <button class="studio-choice" data-layout-choice="floating">عائم</button>
+    <button class="studio-choice" data-layout-choice="glass">زجاجي</button>
+    <button class="studio-choice" data-layout-choice="command">مركز القيادة</button>
+    <button class="studio-choice" data-layout-choice="editorial">تحريري</button>
+    <button class="studio-choice" data-layout-choice="zen">هادئ</button>
   </div>
   <span class="studio-label">الألوان</span>
   <div class="studio-grid">
@@ -2181,8 +2231,8 @@ async function doCompose(){
 }
 
 /* ---------- استوديو التصاميم والألوان ---------- */
-const LAYOUT_KEY='classroom_layout', PALETTE_KEY='classroom_palette';
-const LAYOUTS=['default','sidebar','top','floating'], PALETTES=['ocean','orchid','citrus','graphite'];
+const LAYOUT_KEY='classroom_layout', PALETTE_KEY='classroom_palette', MODE_KEY='classroom_mode';
+const LAYOUTS=['default','sidebar','top','floating','glass','command','editorial','zen'], PALETTES=['ocean','orchid','citrus','graphite'];
 function applyLayout(layout){
   const value=LAYOUTS.includes(layout)?layout:'default';
   document.documentElement.classList.remove(...LAYOUTS.filter(x=>x!=='default').map(x=>'layout-'+x));
@@ -2196,12 +2246,20 @@ function applyPalette(palette){
   document.querySelectorAll('[data-palette-choice]').forEach(b=>b.classList.toggle('active',b.dataset.paletteChoice===value));
   try{localStorage.setItem(PALETTE_KEY,value)}catch(e){}
 }
+function applyMode(mode){
+  const value=mode==='night'?'night':'day';
+  document.documentElement.dataset.mode=value;
+  const btn=$('#studioMode');
+  if(btn){btn.textContent=value==='night'?'☀':'☾';btn.title=value==='night'?'الوضع النهاري':'الوضع الليلي';}
+  try{localStorage.setItem(MODE_KEY,value)}catch(e){}
+}
 document.querySelectorAll('[data-layout-choice]').forEach(b=>b.addEventListener('click',()=>applyLayout(b.dataset.layoutChoice)));
 document.querySelectorAll('[data-palette-choice]').forEach(b=>b.addEventListener('click',()=>applyPalette(b.dataset.paletteChoice)));
 const layoutStudio=$('#layoutStudio'), studioToggle=$('#studioToggle'), studioClose=$('#studioClose');
 if(studioToggle) studioToggle.onclick=()=>layoutStudio.classList.toggle('open');
 if(studioClose) studioClose.onclick=()=>layoutStudio.classList.remove('open');
-try{applyLayout(localStorage.getItem(LAYOUT_KEY)||'default');applyPalette(localStorage.getItem(PALETTE_KEY)||'ocean')}catch(e){applyLayout('default');applyPalette('ocean')}
+if($('#studioMode')) $('#studioMode').onclick=()=>applyMode(document.documentElement.dataset.mode==='night'?'day':'night');
+try{applyLayout(localStorage.getItem(LAYOUT_KEY)||'default');applyPalette(localStorage.getItem(PALETTE_KEY)||'ocean');applyMode(localStorage.getItem(MODE_KEY)||'day')}catch(e){applyLayout('default');applyPalette('ocean');applyMode('day')}
 
 boot();
 </script>

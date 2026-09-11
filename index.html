@@ -263,97 +263,6 @@ body{background:var(--bg);color:var(--ink);font-family:'Tajawal',"Segoe UI",Taho
   .theme-picker{left:12px;bottom:90px;width:220px}
 }
 @media(max-width:520px){.theme-picker{transform:scale(.9);transform-origin:bottom left}.auth-wrap{padding:16px}.auth-card{padding:29px 20px 24px}.card{padding:15px}}
-
-/* ===== أربعة تصاميم مستقلة، وكل تصميم يعمل مع الألوان الأربعة ===== */
-.layout-picker-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
-.layout-choice{border:1.5px solid var(--line);background:var(--surface);border-radius:11px;padding:7px 2px;color:var(--muted);
-  font:inherit;font-size:10px;font-weight:700;cursor:pointer;transition:.18s}
-.layout-choice span{display:block;font-size:17px;line-height:1;margin-bottom:3px;color:var(--accent)}
-.layout-choice:hover{transform:translateY(-2px);border-color:var(--accent)}
-.layout-choice.active{border-color:var(--accent);color:var(--accent-d);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
-.theme-picker-colors-title{border-top:1px solid var(--line);padding-top:9px}
-
-/* 1 — القائمة الجانبية الثابتة */
-html[data-layout="side"] .tabbar{position:fixed;right:0;top:0;bottom:0;width:255px}
-html[data-layout="side"] .content{margin-right:255px}
-
-/* 2 — قائمة جانبية منبثقة */
-html[data-layout="popup"] .tabbar{
-  position:fixed;right:24px;top:92px;bottom:auto;width:238px;max-height:calc(100vh - 125px);z-index:40;
-  padding:14px;background:color-mix(in srgb,var(--surface) 92%,transparent);border:1px solid color-mix(in srgb,var(--accent) 22%,var(--line));
-  border-radius:24px;box-shadow:0 24px 65px color-mix(in srgb,var(--brand) 22%,transparent);backdrop-filter:blur(18px)
-}
-html[data-layout="popup"] .tabbar:before{width:42px;height:42px;margin:0 0 11px auto;border-radius:14px}
-html[data-layout="popup"] .tab{color:var(--muted);border:1px solid transparent}
-html[data-layout="popup"] .tab:hover{background:color-mix(in srgb,var(--accent) 9%,var(--surface));color:var(--accent-d)}
-html[data-layout="popup"] .tab.active{background:var(--accent);color:#fff}
-html[data-layout="popup"] .content{margin-right:0;max-width:1040px;padding:34px 28px 100px}
-html[data-layout="popup"] .topbar{position:sticky;top:0;z-index:35}
-
-/* 3 — القوائم العلوية */
-html[data-layout="top"] .topbar{position:sticky;top:0;z-index:35}
-html[data-layout="top"] .tabbar{
-  position:sticky;top:76px;right:auto;bottom:auto;width:100%;height:auto;z-index:30;
-  flex-direction:row;padding:10px 18px;background:color-mix(in srgb,var(--surface) 96%,transparent);
-  border-bottom:1px solid var(--line);box-shadow:0 8px 25px color-mix(in srgb,var(--brand) 8%,transparent)
-}
-html[data-layout="top"] .tabbar:before{display:none}
-html[data-layout="top"] .tab{width:auto;min-width:max-content;text-align:center;color:var(--muted);padding:10px 17px}
-html[data-layout="top"] .tab.active{background:var(--accent);color:#fff}
-html[data-layout="top"] .content{margin:0 auto;max-width:1080px;padding:34px 28px 100px}
-
-/* 4 — تصميم الموجة الزجاجية المستوحى من الصورة */
-html[data-layout="wave"] #appView{position:relative;min-height:100vh;background:var(--bg)}
-html[data-layout="wave"] .topbar{
-  position:relative;min-height:310px;overflow:hidden;padding:24px 24px 125px;
-  background:linear-gradient(145deg,var(--brand) 4%,var(--accent) 88%);box-shadow:none;border-radius:0
-}
-html[data-layout="wave"] .topbar:before{
-  content:"";position:absolute;width:310px;height:310px;left:-120px;top:80px;border-radius:50%;
-  background:color-mix(in srgb,var(--accent) 45%,transparent);filter:blur(2px);opacity:.75
-}
-html[data-layout="wave"] .topbar:after{
-  content:"";position:absolute;z-index:0;left:-12%;right:-12%;height:170px;bottom:-105px;
-  background:var(--bg);border-radius:50% 50% 0 0/75% 75% 0 0;box-shadow:0 -18px 35px color-mix(in srgb,var(--accent) 17%,transparent)
-}
-html[data-layout="wave"] .tb-row1,html[data-layout="wave"] .tb-row2{position:relative;z-index:2}
-html[data-layout="wave"] .tb-row1 .tb-title{font-size:22px}
-html[data-layout="wave"] .tb-badge{background:rgba(255,255,255,.17);border:1px solid rgba(255,255,255,.22)}
-html[data-layout="wave"] .tb-icon{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.18)}
-html[data-layout="wave"] .tabbar{
-  position:absolute;top:130px;right:24px;left:24px;bottom:auto;width:auto;height:auto;z-index:5;
-  flex-direction:row;justify-content:center;gap:10px;padding:0;background:transparent;border:0;overflow:visible
-}
-html[data-layout="wave"] .tabbar:before{display:none}
-html[data-layout="wave"] .tab{width:auto;min-width:115px;text-align:center;padding:12px 19px;border:1px solid rgba(255,255,255,.28);
-  border-radius:30px;color:rgba(255,255,255,.88);font-size:14px;background:rgba(255,255,255,.05);backdrop-filter:blur(8px)}
-html[data-layout="wave"] .tab:hover{background:rgba(255,255,255,.16);color:#fff;transform:none}
-html[data-layout="wave"] .tab.active{background:var(--surface);color:var(--accent-d);box-shadow:0 8px 20px rgba(0,0,0,.09)}
-html[data-layout="wave"] .content{position:relative;z-index:2;margin:0 auto;max-width:1040px;padding:22px 28px 110px}
-html[data-layout="wave"] .panel-head{padding:0 8px;margin-bottom:18px}
-html[data-layout="wave"] .panel-head h2{font-size:29px;letter-spacing:-.7px}
-html[data-layout="wave"] .card{border-radius:25px;background:color-mix(in srgb,var(--surface) 91%,transparent);backdrop-filter:blur(12px);box-shadow:0 18px 45px color-mix(in srgb,var(--brand) 10%,transparent)}
-html[data-layout="wave"] .card:nth-child(2n){background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 84%,#fff),color-mix(in srgb,var(--accent-d) 75%,#fff));color:#fff}
-html[data-layout="wave"] .card:nth-child(2n) h2,html[data-layout="wave"] .card:nth-child(2n) .sub-note{color:#fff}
-html[data-layout="wave"] .theme-picker{border-radius:22px}
-
-@media(max-width:800px){
-  html[data-layout="side"] .content{margin-right:0}
-  html[data-layout="popup"] .tabbar{
-    right:12px;top:92px;bottom:auto;width:calc(100% - 24px);max-height:calc(100vh - 180px);
-    flex-direction:column;padding:13px
-  }
-  html[data-layout="popup"] .tab{width:100%;min-width:0;text-align:right}
-  html[data-layout="top"] .tabbar{position:sticky;top:73px;flex-direction:row;overflow-x:auto;padding:8px 10px}
-  html[data-layout="top"] .tab{width:112px;min-width:112px;padding:9px 7px;font-size:11px}
-  html[data-layout="top"] .content{padding:22px 15px 105px}
-  html[data-layout="wave"] .topbar{min-height:290px;padding:18px 16px 110px}
-  html[data-layout="wave"] .tb-row1 .tb-title{font-size:18px}
-  html[data-layout="wave"] .tabbar{top:118px;right:12px;left:12px;gap:6px;overflow-x:auto;justify-content:flex-start}
-  html[data-layout="wave"] .tab{min-width:100px;padding:10px 13px;font-size:12px}
-  html[data-layout="wave"] .content{padding:20px 13px 112px}
-  html[data-layout="wave"] .panel-head h2{font-size:25px}
-}
 </style>
 </head>
 <body>
@@ -478,14 +387,7 @@ html[data-layout="wave"] .theme-picker{border-radius:22px}
   <div class="tabbar" id="tabbar"></div>
   <div class="content" id="content"></div>
   <div class="theme-picker" id="themePicker">
-    <p class="theme-picker-title">اختر شكل الواجهة</p>
-    <div class="layout-picker-grid">
-      <button class="layout-choice" data-layout-choice="side" type="button"><span>▥</span>جانبي</button>
-      <button class="layout-choice" data-layout-choice="popup" type="button"><span>☷</span>منبثق</button>
-      <button class="layout-choice" data-layout-choice="top" type="button"><span>≡</span>علوي</button>
-      <button class="layout-choice" data-layout-choice="wave" type="button"><span>◒</span>موجي</button>
-    </div>
-    <p class="theme-picker-title theme-picker-colors-title">اختر الألوان</p>
+    <p class="theme-picker-title">جرّب هوية الواجهة</p>
     <div class="theme-picker-grid">
       <button class="theme-choice" data-theme-choice="aurora" type="button"><span class="theme-swatch aurora"></span>أورورا</button>
       <button class="theme-choice" data-theme-choice="sand" type="button"><span class="theme-swatch sand"></span>رملي</button>
@@ -2307,8 +2209,6 @@ async function doCompose(){
 /* مبدّل الهوية البصرية: يحفظ الاختيار لتظهر نفس الهوية في omr.html */
 const THEME_KEY = 'classroom_theme';
 const THEME_NAMES = ['aurora','sand','midnight','lavender'];
-const LAYOUT_KEY = 'classroom_layout';
-const LAYOUT_NAMES = ['side','popup','top','wave'];
 function applyTheme(theme){
   const selected = THEME_NAMES.includes(theme) ? theme : 'aurora';
   document.documentElement.dataset.theme = selected;
@@ -2317,24 +2217,10 @@ function applyTheme(theme){
     btn.classList.toggle('active', btn.dataset.themeChoice===selected);
   });
 }
-function applyLayout(layout){
-  const selected = LAYOUT_NAMES.includes(layout) ? layout : 'side';
-  document.documentElement.dataset.layout = selected;
-  try{ localStorage.setItem(LAYOUT_KEY, selected); }catch(e){}
-  document.querySelectorAll('[data-layout-choice]').forEach(btn=>{
-    btn.classList.toggle('active', btn.dataset.layoutChoice===selected);
-  });
-}
 document.querySelectorAll('[data-theme-choice]').forEach(btn=>{
   btn.addEventListener('click',()=>applyTheme(btn.dataset.themeChoice));
 });
-document.querySelectorAll('[data-layout-choice]').forEach(btn=>{
-  btn.addEventListener('click',()=>applyLayout(btn.dataset.layoutChoice));
-});
-try{
-  applyTheme(localStorage.getItem(THEME_KEY)||'aurora');
-  applyLayout(localStorage.getItem(LAYOUT_KEY)||'side');
-}catch(e){ applyTheme('aurora'); applyLayout('side'); }
+try{ applyTheme(localStorage.getItem(THEME_KEY)||'aurora'); }catch(e){ applyTheme('aurora'); }
 
 boot();
 </script>

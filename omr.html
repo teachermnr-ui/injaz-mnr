@@ -166,9 +166,241 @@
   .fucirc{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#f3f8f7;font-size:19px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1}
   .fucirc.add{border-style:dashed;border-color:var(--teal);color:var(--teal-d);background:#fff;font-size:16px}
 </style>
+<style>
+/* ============================================================
+   أربعة تصاميم — الأساسي (بلا تغيير) + ثلاثة بدائل
+   تُطبَّق عبر صنف على body، وتغطي متغيرات الجذر + أبرز الألوان
+   الحرفية المكرَّرة في هذا الملف (عبر محدِّدات السمة الجزئية).
+   الألوان الدلالية (نجاح/خطر/تحذير) تبقى ثابتة عمدًا في الجميع.
+   ============================================================ */
+
+/* ---- محوّل التصاميم العائم ---- */
+
+/* ============================================================
+   ١) الفجر — أزرق ليلي هادئ + ذهبي نادر، وحي الاصطفاف الصباحي
+   ============================================================ */
+body.theme-dawn{
+  --teal:#1B3A5C; --teal-d:#14293F; --teal-l:#F3ECDE;
+  --ink:#22303C; --muted:#7A6F5E; --line:#E8DCC4; --paper:#FAF6EF; --white:#FFFFFF;
+}
+body.theme-dawn header.app{background:linear-gradient(135deg,#F6DFC5 0%,#1B3A5C 55%,#14293F 100%)}
+body.theme-dawn .card{border:1px solid #E8DCC4;box-shadow:none;border-radius:10px}
+body.theme-dawn .secicon{border-radius:10px}
+body.theme-dawn nav.tabs button.active{color:#1B3A5C}
+body.theme-dawn button[style*="#0b7a63"],
+body.theme-dawn button[style*="0b7a63"],
+body.theme-dawn .primary{background:#1B3A5C !important}
+body.theme-dawn button.primary:not([style]){background:#1B3A5C}
+
+/* ============================================================
+   ٢) الياسمين — أخضر عميق + خردلي، بطاقات مقوَّسة الأعلى
+   ============================================================ */
+body.theme-jasmine{
+  --teal:#3F6659; --teal-d:#325145; --teal-l:#EFF3E9;
+  --ink:#23312B; --muted:#6E7C71; --line:#E1E9DA; --paper:#F7F9F4; --white:#FFFFFF;
+}
+body.theme-jasmine header.app{background:linear-gradient(180deg,#3F6659,#325145);border-top:3px solid #C99A3B}
+body.theme-jasmine .card{border-radius:22px 22px 8px 8px;box-shadow:0 10px 22px rgba(63,102,89,.08)}
+body.theme-jasmine .secicon{border-radius:16px}
+body.theme-jasmine nav.tabs button{border-radius:999px}
+body.theme-jasmine nav.tabs button.active{color:#3F6659}
+body.theme-jasmine button[style*="#0b7a63"],
+body.theme-jasmine button[style*="0b7a63"],
+body.theme-jasmine .primary{background:#3F6659 !important;border-radius:14px}
+body.theme-jasmine .collapseBtn{border-radius:999px}
+
+/* ============================================================
+   ٣) المسطرة — ورق مسطَّر + حبر أحمر داكن، وحي دفتر الرصد الورقي
+   ============================================================ */
+body.theme-ledger{
+  --teal:#8B3A3A; --teal-d:#6E2C2C; --teal-l:#F5F2EA;
+  --ink:#1F2937; --muted:#6B7280; --line:#DCDCD2; --paper:#FBFBF7; --white:#FFFFFF;
+}
+body.theme-ledger{background-image:repeating-linear-gradient(#FBFBF7 0 31px, rgba(70,110,160,.14) 31px 32px)}
+body.theme-ledger main{border-inline-end:2px solid rgba(139,58,58,.4);padding-inline-end:20px}
+body.theme-ledger header.app{background:#fff;color:#1F2937;border-bottom:3px solid #8B3A3A}
+body.theme-ledger header.app *{color:#1F2937 !important}
+body.theme-ledger nav.tabs button{background:#F1E9E9;color:#6E2C2C;border-radius:4px}
+body.theme-ledger nav.tabs button.active{background:#8B3A3A;color:#fff}
+body.theme-ledger .card{border-radius:4px;box-shadow:none;border:1px solid #DCDCD2}
+body.theme-ledger .card h2{color:#8B3A3A}
+body.theme-ledger .secicon{border-radius:4px}
+body.theme-ledger button[style*="#0b7a63"],
+body.theme-ledger button[style*="0b7a63"],
+body.theme-ledger .primary{background:#8B3A3A !important;border-radius:4px}
+</style>
+
+<script>
+(function(){
+  function apply(t){
+    document.body.classList.remove('theme-dawn','theme-jasmine','theme-ledger','theme-night','theme-glass','nav-open');
+    if(t) document.body.classList.add(t);
+    document.body.classList.toggle('alt-theme', !!t);   // شريط سفلي ثابت لكل تصميم بديل، لا للأساسي
+  }
+  function waitForDb(tries){
+    if(window.db){
+      db.collection('settings').doc('appearance').onSnapshot(function(s){
+        apply(s.exists ? (s.data().theme||'') : '');
+      }, function(){});
+      return;
+    }
+    if(tries>40) return;   // ~12 ثانية كحد أقصى ثم نتوقف بهدوء
+    setTimeout(function(){ waitForDb(tries+1); }, 300);
+  }
+  document.addEventListener('DOMContentLoaded', function(){ waitForDb(0); });
+})();
+</script>
+
+<style>
+/* ================================
+   ٤) الليل — تبويبات علوية داكنة
+================================ */
+body.theme-night {
+  --teal: #8c7cf5; --teal-d: #6553d2; --teal-l: #252443;
+  --ink: #f1efff; --muted: #a9a6c7; --line: #37345d;
+  --paper: #121326; --white: #1c1a38; --shadow: 0 20px 55px rgba(0,0,0,.26);
+  background: radial-gradient(circle at 50% -10%, #35305e 0, transparent 32rem), var(--paper);
+  color: var(--ink);
+}
+body.theme-night header.app{position:sticky;top:0;z-index:30;padding:18px 24px;
+  background:rgba(18,19,38,.88);border-bottom:1px solid #37345d;backdrop-filter:blur(15px)}
+body.theme-night nav.tabs{display:flex;gap:8px;margin:0;overflow-x:auto}
+body.theme-night nav.tabs button{flex:0 0 auto;min-width:max-content;padding:11px 17px;
+  border-radius:999px;background:#211f40;color:#aaa6cc;font-size:13px;transition:.2s ease}
+body.theme-night nav.tabs button:hover{background:#302d54;color:#fff;transform:translateY(-2px)}
+body.theme-night nav.tabs button.active{background:var(--teal);color:#fff;box-shadow:0 8px 18px rgba(140,124,245,.25)}
+body.theme-night main{max-width:1080px;padding:36px 28px 90px}
+body.theme-night .card{background:rgba(28,26,56,.88);border-color:#37345d;border-radius:24px;
+  box-shadow:var(--shadow);color:var(--ink)}
+body.theme-night .subcard,body.theme-night .stcard,body.theme-night .keyq{background:#211f40;border-color:#37345d}
+body.theme-night .secicon{background:#29264d !important;border-radius:18px}
+body.theme-night input,body.theme-night select,body.theme-night textarea{
+  background:#211f40 !important;color:var(--ink) !important;border-color:#37345d !important}
+body.theme-night .flcard{background:rgba(28,26,56,.86);border-color:#514c7a}
+body.theme-night button[style*="#0b7a63"],
+body.theme-night button[style*="0b7a63"],
+body.theme-night .primary{background:#6553d2 !important;color:#fff !important;border-radius:14px}
+
+/* ================================
+   ٥) الزجاج — قائمة منبثقة بزر همبرغر
+================================ */
+body.theme-glass {
+  --teal: #229fbb; --teal-d: #146c89; --teal-l: #e4f7fb;
+  --ink: #163448; --muted: #718596; --line: #d6e7ee;
+  --paper: #f3f9fb; --white: #fff; --shadow: 0 20px 55px rgba(25,91,119,.13);
+  background: linear-gradient(135deg,#f5fbff,#eaf6fa 45%,#fdf8f1);
+  color: var(--ink);
+}
+body.theme-glass header.app{display:flex;align-items:center;position:sticky;top:0;z-index:50;
+  padding:13px 18px;background:linear-gradient(120deg,#176b91,#35b6bd);box-shadow:0 12px 35px rgba(26,112,143,.22)}
+body.theme-glass #navToggle{display:flex}
+body.theme-glass nav.tabs{position:fixed;right:18px;top:76px;width:250px;z-index:100;
+  display:flex;flex-direction:column;gap:7px;margin:0;padding:12px;
+  background:rgba(255,255,255,.91);border:1px solid rgba(255,255,255,.75);border-radius:22px;
+  box-shadow:0 24px 60px rgba(28,83,112,.22);backdrop-filter:blur(18px);
+  opacity:0;transform:translateY(-18px) scale(.97);transform-origin:top right;pointer-events:none;
+  transition:opacity .2s ease,transform .2s ease}
+body.theme-glass.nav-open nav.tabs{opacity:1;transform:none;pointer-events:auto}
+body.theme-glass nav.tabs button{flex:0 0 auto;width:100%;padding:12px 13px;text-align:right;
+  background:transparent;color:var(--ink);border-radius:14px;font-size:13px;transition:.2s ease}
+body.theme-glass nav.tabs button:hover{background:var(--teal-l);color:var(--teal-d);transform:translateX(-3px)}
+body.theme-glass nav.tabs button.active{background:var(--teal);color:#fff}
+body.theme-glass main{max-width:1080px;padding:34px 28px 90px}
+body.theme-glass .card{border-radius:30px;border-color:#d8edf3;background:rgba(255,255,255,.78);
+  box-shadow:var(--shadow);backdrop-filter:blur(12px)}
+body.theme-glass .secicon{background:#dff5fb !important;border-radius:22px;box-shadow:0 8px 18px rgba(34,159,187,.12)}
+body.theme-glass .flcard{left:10px}
+body.theme-glass button[style*="#0b7a63"],
+body.theme-glass button[style*="0b7a63"],
+body.theme-glass .primary{background:#146c89 !important;border-radius:14px}
+
+/* زر فتح قائمة الزجاج */
+#navToggle{display:none;align-items:center;justify-content:center;gap:7px;
+  padding:9px 13px;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.25);
+  border-radius:12px;font:inherit;font-weight:800;cursor:pointer}
+/* بند ٣: RTL flex-row يضع أول عنصر باتجاه اليمين افتراضيًا — margin-right:auto كانت تدفعه لليسار خطأً */
+body.theme-glass header.app{ justify-content:flex-start; }
+
+@media (max-width:767px){
+  body.theme-night header.app{padding:10px}
+  body.theme-night nav.tabs{overflow-x:auto}
+  body.theme-night nav.tabs button{flex:0 0 112px;min-width:112px;padding:9px 7px;font-size:11px;text-align:center}
+  body.theme-night main{padding:22px 14px 110px}
+  body.theme-glass header.app{padding:11px 13px}
+  body.theme-glass nav.tabs{right:10px;top:68px;width:calc(100% - 20px);max-height:calc(100vh - 150px);overflow:auto}
+  body.theme-glass main{padding:22px 14px 110px}
+  body{overflow-x:hidden}
+}
+</style>
+<script>
+(function(){
+  document.addEventListener('DOMContentLoaded', function(){
+    var toggle = document.getElementById('navToggle');
+    if(!toggle) return;
+    toggle.addEventListener('click', function(){
+      document.body.classList.toggle('nav-open');
+      toggle.setAttribute('aria-expanded', document.body.classList.contains('nav-open') ? 'true' : 'false');
+    });
+    document.querySelectorAll('nav.tabs button').forEach(function(button){
+      button.addEventListener('click', function(){
+        if(document.body.classList.contains('theme-glass')) document.body.classList.remove('nav-open');
+      });
+    });
+  });
+})();
+</script>
+
+<style>
+/* ================================
+   القائمة العائمة → شريط سفلي ثابت
+   يشمل كل التصاميم البديلة، ولا يمسّ الأساسي إطلاقًا
+================================ */
+body.alt-theme .flcard{
+  position:fixed; top:auto; bottom:0; left:0; right:0; transform:none;
+  flex-direction:row; justify-content:space-around; align-items:flex-end;
+  width:100%; max-width:100%; border-radius:20px 20px 0 0;
+  background:var(--white); backdrop-filter:none; -webkit-backdrop-filter:none;
+  border:1px solid var(--line); border-top:1px solid var(--line);
+  box-shadow:0 -6px 20px rgba(16,40,40,.14); padding:8px 6px 12px; gap:0; z-index:1100;
+}
+body.alt-theme .flcard .fl-btns{
+  display:flex !important; flex-direction:row; justify-content:space-around;
+  align-items:flex-end; width:100%; gap:0;
+}
+body.alt-theme #flTog{ display:none; }
+body.alt-theme .flcard button.fl-nav{
+  flex:1; width:auto; background:transparent; border:none; box-shadow:none; color:var(--muted);
+}
+body.alt-theme .flcard button.fl-nav.active{ background:transparent; color:var(--teal); }
+body.alt-theme #flb-attend{ order:1; }
+body.alt-theme #flb-follow{ order:2; }
+body.alt-theme #flb-add{ order:3; }
+body.alt-theme #flb-record{ order:4; }
+body.alt-theme #flb-worklog{ order:5; }
+body.alt-theme #flb-add{
+  display:flex !important; flex:0 0 auto; width:58px; height:58px; margin-top:-30px;
+  border-radius:50%; background:linear-gradient(135deg,#1fc3a6,var(--teal)); color:#fff;
+  font-size:28px; align-items:center; justify-content:center; line-height:1;
+  box-shadow:0 8px 18px rgba(15,118,110,.4); border:4px solid var(--white); cursor:pointer;
+}
+/* "إضافة الفصول والمواد" تُلغى من موقعها — بديلها زر + في الشريط السفلي */
+body.alt-theme #addClassesSecCard{ display:none !important; }
+@media (max-width:767px){
+  body.alt-theme .flcard button.fl-nav .fl-tx{ font-size:9px; }
+}
+</style>
+
+<style>
+/* بند ٢: الشريط السفلي يبقى ظاهرًا دومًا في كل تبويبات omr للتصاميم البديلة —
+   يتجاوز منطق إظهار/إخفاء showTab() الأصلي بلا أي تعديل عليه، ويختفي فقط
+   بمغادرة الصفحة كاملة إلى الرئيسية. */
+body.alt-theme .flcard{ display:flex !important; }
+</style>
+
 </head>
 <body>
 <header class="app">
+  <button id="navToggle" type="button" aria-label="فتح القوائم">☰ القوائم</button>
   <nav class="tabs">
     <button id="tab-students" class="active" onclick="showTab('students')">👥 الطلاب والفصول</button>
     <button id="tab-design" onclick="showTab('design')">تصميم الاختبار</button>
@@ -5345,6 +5577,7 @@ window.addEventListener('load', ()=>{
   <div class="fl-btns" id="flBtns">
     <button id="flb-attend" class="fl-nav active" onclick="switchStuView('attend')"><span class="fl-ic">🟢</span><span class="fl-tx">الحضور</span></button>
     <button id="flb-follow" class="fl-nav" onclick="switchStuView('follow')"><span class="fl-ic">📌</span><span class="fl-tx">المتابعة</span></button>
+    <button id="flb-add" style="display:none" onclick="openAddClassesModal()" aria-label="إضافة الفصول والمواد">+</button>
     <button id="flb-record" class="fl-nav" onclick="switchStuView('record')"><span class="fl-ic">📋</span><span class="fl-tx">سجل المتابعة</span></button>
     <button id="flb-worklog" class="fl-nav" onclick="gotoWorklog()"><span class="fl-ic">💼</span><span class="fl-tx">سجل الأعمال</span></button>
   </div>

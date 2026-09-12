@@ -175,6 +175,136 @@ input,select{font-family:inherit;font-size:15px}
 .m-row.danger .mi{background:#fff;border-color:#F2D4D0}
 .m-close{display:block;width:100%;text-align:center;color:var(--muted);background:transparent;padding:12px;font-weight:600;font-size:14px;margin-top:2px}
 </style>
+<style>
+/* ============================================================
+   ستة تصاميم للصفحة الرئيسية — بأسماء متغيرات هذا الملف
+   (--bg/--surface/--accent...) لا أسماء omr.html
+   ============================================================ */
+
+/* ---- زر همبرغر (تصميم الزجاج) — مخفي إلا في ذلك التصميم ---- */
+#navToggle{display:none;align-items:center;justify-content:center;gap:6px;
+  padding:8px 12px;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.25);
+  border-radius:10px;font:inherit;font-weight:800;cursor:pointer;font-size:13px}
+
+/* ============================================================
+   ١) الفجر
+   ============================================================ */
+body.theme-dawn{
+  --bg:#FAF6EF; --surface:#FFFFFF; --surface-2:#F3ECDE;
+  --brand:#1B3A5C; --brand-2:#14293F; --accent:#1B3A5C; --accent-d:#14293F;
+  --ink:#22303C; --muted:#7A6F5E; --line:#E8DCC4;
+  --r:10px; --r-sm:9px;
+}
+body.theme-dawn .topbar{background:linear-gradient(135deg,#F6DFC5 0%,#1B3A5C 55%,#14293F 100%)}
+body.theme-dawn .card{border:1px solid #E8DCC4;box-shadow:none;border-radius:10px}
+body.theme-dawn .tab.active{background:#1B3A5C}
+
+/* ============================================================
+   ٢) الياسمين
+   ============================================================ */
+body.theme-jasmine{
+  --bg:#F7F9F4; --surface:#FFFFFF; --surface-2:#EFF3E9;
+  --brand:#3F6659; --brand-2:#325145; --accent:#3F6659; --accent-d:#325145;
+  --ink:#23312B; --muted:#6E7C71; --line:#E1E9DA;
+  --r:22px; --r-sm:16px;
+}
+body.theme-jasmine .topbar{border-bottom:3px solid #C99A3B}
+body.theme-jasmine .card{border-radius:22px 22px 8px 8px;box-shadow:0 10px 22px rgba(63,102,89,.08)}
+body.theme-jasmine .tab{border-radius:999px}
+body.theme-jasmine .tab.active{background:#3F6659}
+body.theme-jasmine .btn{border-radius:14px}
+
+/* ============================================================
+   ٣) المسطرة
+   ============================================================ */
+body.theme-ledger{
+  --bg:#FBFBF7; --surface:#FFFFFF; --surface-2:#F5F2EA;
+  --brand:#8B3A3A; --brand-2:#6E2C2C; --accent:#8B3A3A; --accent-d:#6E2C2C;
+  --ink:#1F2937; --muted:#6B7280; --line:#DCDCD2;
+  --r:4px; --r-sm:4px;
+}
+body.theme-ledger{background-image:repeating-linear-gradient(#FBFBF7 0 31px, rgba(70,110,160,.14) 31px 32px)}
+body.theme-ledger .content{border-inline-end:2px solid rgba(139,58,58,.4);padding-inline-end:16px}
+body.theme-ledger .card{border-radius:4px;box-shadow:none;border:1px solid #DCDCD2}
+body.theme-ledger .tab{border-radius:2px}
+body.theme-ledger .tab.active{background:#8B3A3A}
+body.theme-ledger .btn{border-radius:4px}
+
+/* ============================================================
+   ٤) الليل
+   ============================================================ */
+body.theme-night{
+  --bg:#121326; --surface:#1c1a38; --surface-2:#211f40;
+  --brand:#8c7cf5; --brand-2:#6553d2; --accent:#8c7cf5; --accent-d:#6553d2;
+  --ink:#f1efff; --muted:#a9a6c7; --line:#37345d;
+  background:radial-gradient(circle at 50% -10%, #35305e 0, transparent 32rem), var(--bg);
+  color:var(--ink);
+}
+body.theme-night .topbar{background:rgba(18,19,38,.92);border-bottom:1px solid #37345d}
+body.theme-night .tabbar{background:var(--surface);border-color:#37345d}
+body.theme-night .tab{color:#aaa6cc}
+body.theme-night .tab.active{background:var(--accent);color:#fff}
+body.theme-night .card{background:rgba(28,26,56,.88);border-color:#37345d;border-radius:20px}
+body.theme-night input,body.theme-night select,body.theme-night textarea{
+  background:#211f40 !important;color:var(--ink) !important;border-color:#37345d !important}
+
+/* ============================================================
+   ٥) الزجاج — قائمة تبويبات منبثقة بزر همبرغر
+   ============================================================ */
+body.theme-glass{
+  --bg:#f3f9fb; --surface:#fff; --surface-2:#e4f7fb;
+  --brand:#229fbb; --brand-2:#146c89; --accent:#229fbb; --accent-d:#146c89;
+  --ink:#163448; --muted:#718596; --line:#d6e7ee;
+  background:linear-gradient(135deg,#f5fbff,#eaf6fa 45%,#fdf8f1);
+}
+body.theme-glass .topbar{background:linear-gradient(120deg,#176b91,#35b6bd);box-shadow:0 12px 35px rgba(26,112,143,.22)}
+body.theme-glass #navToggle{display:flex}
+body.theme-glass .tabbar{
+  position:fixed; right:18px; top:76px; width:230px; z-index:100; top:auto; bottom:auto;
+  display:flex; flex-direction:column; gap:6px; margin:0; padding:12px;
+  background:rgba(255,255,255,.92); border:1px solid rgba(255,255,255,.75); border-radius:20px;
+  box-shadow:0 24px 60px rgba(28,83,112,.22); backdrop-filter:blur(16px);
+  opacity:0; transform:translateY(-16px) scale(.97); transform-origin:top right; pointer-events:none;
+  transition:opacity .2s ease,transform .2s ease; overflow:visible;
+}
+body.theme-glass.nav-open .tabbar{ opacity:1; transform:none; pointer-events:auto; }
+body.theme-glass .tab{width:100%;text-align:right;border-radius:12px}
+body.theme-glass .tab.active{background:var(--accent);color:#fff}
+@media (max-width:767px){
+  body.theme-glass .tabbar{right:10px;width:calc(100% - 20px);max-height:calc(100vh - 150px);overflow:auto}
+}
+</style>
+
+<script>
+(function(){
+  function apply(t){
+    document.body.classList.remove('theme-dawn','theme-jasmine','theme-ledger','theme-night','theme-glass','nav-open');
+    if(t) document.body.classList.add(t);
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    try{
+      if(window.db){
+        db.collection('settings').doc('appearance').onSnapshot(function(s){
+          apply(s.exists ? (s.data().theme||'') : '');
+        }, function(){});
+      }
+    }catch(e){}
+    var toggle = document.getElementById('navToggle');
+    if(toggle){
+      toggle.addEventListener('click', function(){
+        document.body.classList.toggle('nav-open');
+      });
+      var tb = document.getElementById('tabbar');
+      if(tb) tb.addEventListener('click', function(e){
+        if(e.target.closest('.tab') && document.body.classList.contains('theme-glass')){
+          document.body.classList.remove('nav-open');
+        }
+      });
+    }
+  });
+})();
+</script>
+
 </head>
 <body>
 
@@ -290,6 +420,7 @@ input,select{font-family:inherit;font-size:15px}
     <div class="tb-row2">
       <span class="tb-badge" id="tbPeriod"></span>
       <span class="tb-spacer"></span>
+      <button id="navToggle" type="button" aria-label="فتح القوائم">☰ القوائم</button>
       <button class="tb-icon tb-wide" id="tbOmr" title="إدارة الصف">إدارة الصف</button>
       <button class="tb-icon" id="tbPw" title="تغيير كلمة المرور">🔑</button>
       <button class="tb-icon" id="tbOut" title="تسجيل الخروج"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.6 6.8a8 8 0 1 0 10.8 0"/></svg></button>
@@ -1615,6 +1746,23 @@ function renderSettings(c){
   c.innerHTML=`<div class="panel-head"><h2>إعدادات النظام</h2></div>
 
     <div class="card">
+      <div class="set-block"><h3>مظهر النظام</h3>
+        <p>يُطبَّق على كل المستخدمين في الصفحات الثلاث (الرئيسية، إدارة الصفوف، الأنشطة الرقمية) فور الحفظ.</p></div>
+      <div class="field"><label>التصميم النشط</label>
+        <select id="appearanceSelect">
+          <option value="">الأساسي</option>
+          <option value="theme-dawn">الفجر</option>
+          <option value="theme-jasmine">الياسمين</option>
+          <option value="theme-ledger">المسطرة</option>
+          <option value="theme-night">الليل</option>
+          <option value="theme-glass">الزجاج</option>
+        </select>
+      </div>
+      <button class="btn sm" id="appearanceSaveBtn">حفظ المظهر</button>
+      <div id="appearanceAlert"></div>
+    </div>
+
+    <div class="card">
       <div class="set-block"><h3>المدارس</h3><p>أنشئ المدارس وأدر فتراتها. كل مدرسة معزولة تماماً.</p></div>
       <button class="btn sm" id="addSchoolBtn">+ إضافة مدرسة</button>
       <div id="schoolsList" style="margin-top:12px"></div>
@@ -1640,6 +1788,17 @@ function renderSettings(c){
       </div>
       <button class="btn danger sm" id="wipeBtn">تنفيذ المسح</button>
     </div>`;
+  db.collection('settings').doc('appearance').get().then(s=>{
+    if(s.exists && $('#appearanceSelect')) $('#appearanceSelect').value = s.data().theme || '';
+  }).catch(()=>{});
+  $('#appearanceSaveBtn').onclick=async()=>{
+    const theme = $('#appearanceSelect').value;
+    try{
+      await db.collection('settings').doc('appearance').set({ theme, updatedAt: Date.now() });
+      alertBox('appearanceAlert','ok','تم حفظ المظهر — سيُطبَّق على الجميع فورًا.');
+      toast('تم الحفظ');
+    }catch(e){ alertBox('appearanceAlert','err',e.message); }
+  };
   $('#addSchoolBtn').onclick=()=>openSchoolModal(null);
   $('#roleTplBtn').onclick=openRoleTemplates;
   $('#wipeSchoolId').innerHTML = '<option value="">— اختر مدرسة —</option>'

@@ -238,12 +238,14 @@ body.theme-ledger .primary{background:#8B3A3A !important;border-radius:4px}
     document.body.classList.toggle('alt-theme', !!t);   // شريط سفلي ثابت لكل تصميم بديل، لا للأساسي
   }
   function waitForDb(tries){
-    if(window.db){
-      db.collection('settings').doc('appearance').onSnapshot(function(s){
-        apply(s.exists ? (s.data().theme||'') : '');
-      }, function(){});
-      return;
-    }
+    try{
+      if(typeof db !== 'undefined' && db){
+        db.collection('settings').doc('appearance').onSnapshot(function(s){
+          apply(s.exists ? (s.data().theme||'') : '');
+        }, function(){});
+        return;
+      }
+    }catch(e){}
     if(tries>40) return;   // ~12 ثانية كحد أقصى ثم نتوقف بهدوء
     setTimeout(function(){ waitForDb(tries+1); }, 300);
   }

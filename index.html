@@ -281,14 +281,20 @@ body.theme-glass .tab.active{background:var(--accent);color:#fff}
     document.body.classList.remove('theme-dawn','theme-jasmine','theme-ledger','theme-night','theme-glass','nav-open');
     if(t) document.body.classList.add(t);
   }
-  document.addEventListener('DOMContentLoaded', function(){
+  function waitForDb(tries){
     try{
-      if(window.db){
+      if(typeof db !== 'undefined' && db){
         db.collection('settings').doc('appearance').onSnapshot(function(s){
           apply(s.exists ? (s.data().theme||'') : '');
         }, function(){});
+        return;
       }
     }catch(e){}
+    if(tries>40) return;   // ~12 ثانية كحد أقصى ثم نتوقف بهدوء
+    setTimeout(function(){ waitForDb(tries+1); }, 300);
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    waitForDb(0);
     var toggle = document.getElementById('navToggle');
     if(toggle){
       toggle.addEventListener('click', function(){

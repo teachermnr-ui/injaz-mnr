@@ -165,93 +165,6 @@
   .fucircs{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
   .fucirc{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#f3f8f7;font-size:19px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1}
   .fucirc.add{border-style:dashed;border-color:var(--teal);color:var(--teal-d);background:#fff;font-size:16px}
-
-  /* ===== الهوية الموحدة ذات الأربعة أنماط ===== */
-  :root[data-theme="aurora"]{
-    --teal:#0ea5a0;--teal-d:#087d79;--teal-l:#e7f8f6;--ink:#172335;--muted:#667487;--line:#dce7e5;
-    --paper:#eef4f3;--white:#fff;--ok:#239a70;--bad:#d95757;--warn:#d59631;--shadow:0 20px 55px rgba(32,61,75,.10),0 3px 10px rgba(32,61,75,.05)
-  }
-  :root[data-theme="sand"]{
-    --teal:#e57a54;--teal-d:#bd5445;--teal-l:#fff0e9;--ink:#302431;--muted:#887b7d;--line:#eadccf;
-    --paper:#f5efe5;--white:#fffdf8;--ok:#388e6b;--bad:#c84750;--warn:#c78d2d;--shadow:0 18px 44px rgba(75,48,50,.10),0 2px 7px rgba(75,48,50,.04)
-  }
-  :root[data-theme="midnight"]{
-    --teal:#a7e35d;--teal-d:#79bd36;--teal-l:#263c2d;--ink:#edf4ff;--muted:#aab6c8;--line:#30405a;
-    --paper:#0e1423;--white:#182238;--ok:#6fe0b4;--bad:#ff7180;--warn:#f2c05a;--shadow:0 22px 60px rgba(0,0,0,.28),0 2px 8px rgba(0,0,0,.16)
-  }
-  :root[data-theme="lavender"]{
-    --teal:#7667e8;--teal-d:#5b4dcc;--teal-l:#efedff;--ink:#27243b;--muted:#77738d;--line:#e3e0f1;
-    --paper:#f2f1fb;--white:#fff;--ok:#319a7b;--bad:#d95973;--warn:#cd982e;--shadow:0 24px 60px rgba(66,59,125,.12),0 3px 10px rgba(66,59,125,.05)
-  }
-  html[data-theme="midnight"] body{background:var(--paper);color:var(--ink)}
-  html[data-theme="midnight"] .card,html[data-theme="midnight"] .subcard,html[data-theme="midnight"] .stcard,
-  html[data-theme="midnight"] .keyq,html[data-theme="midnight"] .flstu{background:var(--white);color:var(--ink)}
-  body{font-family:"Tajawal","Segoe UI",Tahoma,sans-serif;background:radial-gradient(circle at 10% 8%,color-mix(in srgb,var(--teal) 12%,transparent),transparent 25rem),var(--paper);color:var(--ink)}
-  header.app{
-    position:fixed;right:0;top:0;bottom:0;width:282px;z-index:100;display:flex;flex-direction:column;
-    padding:30px 17px 20px;background:var(--ink);color:#fff;border:0;border-radius:0;
-    box-shadow:-18px 0 48px rgba(29,21,48,.16)
-  }
-  header.app:before{content:"فصول";display:flex;align-items:center;justify-content:center;width:52px;height:52px;
-    margin:0 0 32px auto;border-radius:17px;background:var(--teal);color:#fff;font-size:23px;font-weight:800;box-shadow:6px 6px 0 rgba(255,255,255,.10)}
-  header.app:after{content:"استوديو التصحيح  •  متصل";color:#88839c;font-size:11px;border-top:1px solid rgba(255,255,255,.12);padding:18px 10px 0;margin-top:auto}
-  nav.tabs{display:flex;flex-direction:column;gap:7px;margin:0;overflow:auto;scrollbar-width:none}
-  nav.tabs::-webkit-scrollbar{display:none}
-  nav.tabs button{flex:0 0 auto;width:100%;min-height:49px;padding:13px 15px;border:0;border-radius:13px;text-align:right;
-    font-size:14px;font-weight:700;line-height:1.35;background:transparent;color:#aaa5bd;transition:.18s;position:relative}
-  nav.tabs button:hover{background:rgba(255,255,255,.09);color:#fff;transform:translateX(-3px)}
-  nav.tabs button.active{background:var(--teal);color:#fff;box-shadow:none}
-  nav.tabs button.active:before{content:"";position:absolute;right:7px;top:50%;width:4px;height:22px;background:#fff;border-radius:4px;transform:translateY(-50%)}
-  main{margin-right:282px;max-width:none;width:auto;padding:34px 42px 100px;min-height:100vh}
-  .panel.active{animation:panelEnter .28s ease}
-  @keyframes panelEnter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-  .card{background:color-mix(in srgb,var(--white) 94%,transparent);border:1px solid var(--line);border-radius:22px;padding:22px;margin-bottom:17px;box-shadow:var(--shadow)}
-  .card h2{color:var(--ink);font-size:19px;margin-bottom:17px;font-weight:800}
-  .card h2 .sub{color:var(--muted)}
-  .seccard{padding:0;border-radius:22px}.secheader{padding:19px;gap:14px;transition:.18s}.secheader:hover{background:color-mix(in srgb,var(--teal) 7%,var(--white))}
-  .secicon{width:55px;height:55px;border-radius:18px!important;background:var(--teal-l)!important;color:var(--teal-d);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--teal) 18%,var(--line))}
-  .sectitle{font-size:17px;color:var(--ink)}.secdesc{font-size:12.5px;color:var(--muted)}.secarrow{color:var(--teal-d);font-size:25px}
-  .seccontent{padding:0 19px 19px}.subcard{background:color-mix(in srgb,var(--white) 75%,var(--paper));border:1px solid var(--line);border-radius:16px;padding:17px}
-  label.field{color:var(--muted);font-weight:800;font-size:12.5px}
-  label.field input,label.field select,textarea,.secrow select,.secrow input{border:1.5px solid var(--line);border-radius:13px;background:var(--white);color:var(--ink);transition:.18s}
-  label.field input:focus,label.field select:focus,textarea:focus,.secrow select:focus,.secrow input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 4px color-mix(in srgb,var(--teal) 15%,transparent)}
-  button.primary{background:var(--ink);border-radius:13px;padding:14px 17px;font-weight:800;box-shadow:0 6px 0 color-mix(in srgb,var(--ink) 72%,#000);transition:.18s}
-  button.primary:hover{background:color-mix(in srgb,var(--ink) 82%,var(--teal));transform:translateY(-2px)}
-  button.primary:active{transform:translateY(3px);box-shadow:0 2px 0 color-mix(in srgb,var(--ink) 72%,#000)}
-  button.ghost{background:var(--white);color:var(--ink);border:1.5px solid var(--line);border-radius:13px;padding:12px;font-weight:800;transition:.16s}
-  button.ghost:hover{background:var(--teal-l);border-color:var(--teal);color:var(--teal-d)}
-  .pill{background:var(--teal-l);color:var(--teal-d);border-radius:9px;padding:4px 10px}
-  .stcard,.keyq,.flstu{background:var(--white);border:1px solid var(--line);border-radius:16px;transition:.16s}
-  .stcard:hover,.flstu:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(44,34,54,.07)}
-  .stcard .nm{color:var(--teal-d)}.attbtns button{border:1.5px solid var(--line);border-radius:12px;background:var(--white);transition:.16s}
-  .attbtns button:hover{transform:translateY(-2px);box-shadow:0 5px 12px rgba(44,34,54,.08)}
-  .keyq{padding:9px;background:var(--white)}.choices button{border:1.5px solid var(--line);border-radius:9px;background:var(--white);color:var(--ink);transition:.15s}
-  .choices button:hover{background:var(--teal-l);border-color:var(--teal)}.choices button.sel{background:var(--teal);border-color:var(--teal);color:#fff}
-  th{background:color-mix(in srgb,var(--teal) 9%,var(--white));color:var(--muted)}th,td{border-color:var(--line);padding:11px 9px}
-  .resultbox div{background:var(--white);border:1px solid var(--line);border-radius:15px;padding:13px 5px}
-  #sheetHost{background:color-mix(in srgb,var(--paper) 75%,#c8cfce);border-radius:17px;padding:18px}
-  .canvas-wrap{border-radius:17px;box-shadow:0 14px 30px rgba(18,16,32,.2)}.corner-dot{background:color-mix(in srgb,var(--teal) 90%,#000)}
-  .status.info{background:var(--teal-l);color:var(--teal-d)}.status.ok{background:#e9f7f1;color:var(--ok)}
-  .flcard{right:304px;left:auto;top:50%;transform:translateY(-50%);padding:8px;background:color-mix(in srgb,var(--white) 88%,transparent);
-    border:1px solid #fff;box-shadow:0 18px 42px rgba(44,34,54,.18);border-radius:19px;backdrop-filter:blur(14px)}
-  .fl-toggle{width:58px;height:38px;border-radius:12px;background:var(--ink);box-shadow:none}
-  .flcard button.fl-nav{width:68px;min-height:60px;border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:13px;transition:.16s}
-  .flcard button.fl-nav:hover{transform:translateX(-3px);border-color:var(--teal)}.flcard button.fl-nav.active{background:var(--teal);color:#fff;border-color:var(--teal)}
-  .flov{background:var(--paper)}.flov-head{padding:17px 22px;background:var(--white);border-bottom:1px solid var(--line);box-shadow:0 4px 18px rgba(44,34,54,.06)}
-  .flov-head .flx{background:var(--teal-l);border-color:var(--line);color:var(--teal-d);border-radius:11px}.flov-head select{background:var(--white);border:1.5px solid var(--line);border-radius:12px;padding:11px;color:var(--ink)}
-  .flov-body{padding:20px 22px}
-  @media(max-width:900px){
-    header.app{top:auto;bottom:0;right:0;width:100%;height:auto;min-height:78px;padding:9px 10px calc(9px + env(safe-area-inset-bottom));border-radius:22px 22px 0 0;box-shadow:0 -14px 38px rgba(29,21,48,.22)}
-    header.app:before,header.app:after{display:none}
-    nav.tabs{flex-direction:row;gap:7px;overflow-x:auto;overflow-y:hidden}
-    nav.tabs button{flex:0 0 116px;width:116px;min-height:57px;padding:8px 6px;text-align:center;font-size:11px;border-radius:13px}
-    nav.tabs button.active:before{right:50%;top:auto;bottom:3px;width:24px;height:3px;transform:translateX(50%)}
-    main{margin:0;padding:24px 15px 112px}
-    .flcard{right:14px;left:14px;top:auto;bottom:91px;transform:none;flex-direction:row;align-items:center;justify-content:center}
-    .fl-btns{flex-direction:row;justify-content:center}.flcard button.fl-nav{width:64px;min-height:57px}.fl-toggle{width:38px;height:38px}
-  }
-  @media(max-width:560px){main{padding:16px 11px 110px}.card{padding:16px;border-radius:18px}.secheader{padding:16px}.seccontent{padding:0 16px 16px}}
-  @media print{header.app,.flcard{display:none!important}main{margin:0;padding:0;max-width:none}}
 </style>
 </head>
 <body>
@@ -1578,9 +1491,8 @@ async function getSchoolCode(){
   }
   if(!CLS_SESSION || !CLS_SESSION.schoolId) return '';
   try{
-    const snap = await db.collection('schoolData').doc('schools').get();
-    const list = snap.exists ? (snap.data().list||{}) : {};
-    const sc = list[CLS_SESSION.schoolId];
+    const snap = await db.collection('schoolData').doc(CLS_SESSION.schoolId).get();
+    const sc = snap.exists ? snap.data() : null;
     SCHOOL_CODE_CACHE = (sc && sc.code) || '';
   }catch(e){ SCHOOL_CODE_CACHE = ''; }
   return SCHOOL_CODE_CACHE;
@@ -1692,7 +1604,7 @@ async function addClass(){
   refreshClassDropdowns(); renderClasses(); renderStudents();
 }
 async function delClass(code){
-  if(!clsGuardDelSec('classes')) return;
+  if(!canManageStudents()){ alert('حذف الفصول صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
   const studs = state.students.filter(s=>s.classCode===code);
   const cl = state.classes.find(c=>c.code===code);
   const msg = studs.length>0
@@ -1715,7 +1627,7 @@ async function delClass(code){
 function classNameByCode(code){ const c=(state.fullClasses.length?state.fullClasses:state.classes).find(x=>x.code===code); return c? c.name : ''; }
 // توليد رمز دخول رجعي لفصل قديم أُنشئ قبل إضافة هذه الميزة (يطلب المرحلة أولاً)
 async function assignClassStage(code){
-  if(!clsGuardEditSec('classes')) return;
+  if(!canManageStudents()){ alert('هذا الإجراء صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
   const stage = prompt('اختر المرحلة لهذا الصف بالضبط كما هي مكتوبة:\nابتدائية\nمتوسطة\nثانوية');
   if(!stage) return;
   if(!CLS_STAGE_LETTER[stage.trim()]){ alert('المرحلة غير صحيحة. اكتبها بالضبط: ابتدائية أو متوسطة أو ثانوية.'); return; }
@@ -2090,7 +2002,6 @@ async function confirmImport(){
 }
 async function delStudent(seat){
   if(!canManageStudents()){ alert('حذف الطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
-  if(!clsGuardDelSec('classes')) return;
   if(!confirm('حذف هذا الطالب؟ سيختفي من جميع الشاشات والسجلات والتقارير ويتوقف دخوله فوراً، مع الاحتفاظ ببياناته في قاعدة البيانات.')) return;
   try{
     await mutateSharedRoster((classes, students)=>{
@@ -2290,7 +2201,7 @@ async function sendOmrNotes(){
         recipients:[rid], recipientsInfo:info, scope:'student',
         studentSeat:String(s.seat), studentName:s.name,
         classCode:String(s.classCode||''), className:classNameByCode(s.classCode)||'',
-        text:txt, createdAt:Date.now(), replies:[], readBy:[] });
+        text:txt, createdAt:Date.now(), replies:[], readAt:{}, closed:false });
     }
     closeOmrModal();
     state.selectedStudents={}; renderStudents();
@@ -2432,8 +2343,8 @@ let CLS_ATT_WINDOW = { from:'07:40', to:'10:00' };
 async function loadAttWindow(){
   try{
     if(!cloudReady || !CLS_SESSION || !CLS_SESSION.schoolId) return;
-    const snap = await db.collection('schoolData').doc('schools').get();
-    const sc = (snap.exists?(snap.data().list||{}):{})[CLS_SESSION.schoolId];
+    const snap = await db.collection('schoolData').doc(CLS_SESSION.schoolId).get();
+    const sc = snap.exists ? snap.data() : null;
     if(sc){
       if(sc.attFrom) CLS_ATT_WINDOW.from = sc.attFrom;
       if(sc.attTo)   CLS_ATT_WINDOW.to   = sc.attTo;
@@ -3036,9 +2947,8 @@ async function autofillWlHeader(){
   if(!h.teacher && CLS_SESSION && CLS_SESSION.username){ h.teacher = CLS_SESSION.username; changed = true; }
   if((!h.school || !h.edu) && CLS_SESSION && CLS_SESSION.schoolId){
     try{
-      const snap = await db.collection('schoolData').doc('schools').get();
-      const list = snap.exists ? (snap.data().list||{}) : {};
-      const sc = list[CLS_SESSION.schoolId];
+      const snap = await db.collection('schoolData').doc(CLS_SESSION.schoolId).get();
+      const sc = snap.exists ? snap.data() : null;
       if(sc){
         if(!h.school && sc.name){ h.school = sc.name; changed = true; }
         if(!h.edu && sc.eduDept){ h.edu = sc.eduDept; changed = true; }
@@ -3372,7 +3282,7 @@ async function srSendNote(seat, classCode){
       fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
       recipients:info.map(r=>r.userId), recipientsInfo:info, scope:'student',
       studentSeat:String(seat), studentName:s?s.name:'', classCode:String(classCode), className:className,
-      text:text, createdAt:Date.now(), replies:[], readBy:[] });
+      text:text, createdAt:Date.now(), replies:[], readAt:{}, closed:false });
     if(ta) ta.value='';
     alert('تم إرسال الملاحظة.');
     srLoadNotes(seat);
@@ -4469,13 +4379,12 @@ async function omrSendNoteTo(rid,seat,classCode,className,studentName,text){
       fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
       recipients:[rid], recipientsInfo:info, scope:'student',
       studentSeat:String(seat), studentName:studentName, classCode:String(classCode), className:className,
-      text:text, createdAt:Date.now(), replies:[], readBy:[] });
+      text:text, createdAt:Date.now(), replies:[], readAt:{}, closed:false });
     alert('تم إرسال الملاحظة.'); renderOmrNotes();
   }catch(e){ alert('فشل الإرسال: '+(e.message||e)); }
 }
 function moveStudentOmr(seat){
   if(!canManageStudents()){ alert('نقل الطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
-  if(!clsGuardEditSec('classes')) return;
   const st=state.students.find(s=>s.seat===seat); if(!st) return;
   const opts=state.classes.filter(c=>String(c.code)!==String(st.classCode)).map(c=>'<option value="'+escapeHtml(c.code)+'">'+escapeHtml(c.name)+'</option>').join('');
   if(!opts){ alert('لا يوجد فصل آخر للنقل إليه.'); return; }
@@ -4742,8 +4651,8 @@ async function showAdminSchoolPicker(){
   document.body.appendChild(ov);
   let schools={};
   try{
-    const snap = await db.collection('schoolData').doc('schools').get();
-    schools = snap.exists ? (snap.data().list||{}) : {};
+    const snap = await db.collection('schoolData').where('_isSchool','==',true).get();
+    snap.docs.forEach(d=>{ const data=d.data(); delete data._isSchool; schools[d.id]=data; });
   }catch(e){}
   const listEl = document.getElementById('adminSchoolPickList');
   const ids = Object.keys(schools);
@@ -4853,7 +4762,6 @@ function canManageStudents(){
   return CLS_USER_ROLE==='admin' || CLS_USER_ROLE==='soloTeacher' || CLS_CAN_ADD_MANAGE;
 }
 function clsGuardAdd(){
-  if(!clsGuardEditSec('classes')) return false;
   const exempt = (CLS_USER_ROLE==='admin');
   if(!exempt && !CLS_CAN_ADD_MANAGE){ alert('إضافة الفصول والطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه. تواصل مع إدارة المدرسة.'); return false; }
   return true;
@@ -5322,8 +5230,8 @@ async function syncRosterIndex(){
     let ownerName = CLS_SESSION.username||'';
     if(!isSolo){
       try{
-        const snap = await db.collection('schoolData').doc('schools').get();
-        const sc = (snap.exists?(snap.data().list||{}):{})[CLS_SESSION.schoolId];
+        const snap = await db.collection('schoolData').doc(CLS_SESSION.schoolId).get();
+        const sc = snap.exists ? snap.data() : null;
         if(sc && sc.name) ownerName = sc.name;
       }catch(e){}
     }
@@ -5416,10 +5324,6 @@ async function loadStudentsFromCloud(manual){
 /* ============================================================
    التهيئة
    ============================================================ */
-try{
-  const savedTheme = localStorage.getItem('classroom_theme');
-  document.documentElement.dataset.theme = ['aurora','sand','midnight','lavender'].includes(savedTheme) ? savedTheme : 'aurora';
-}catch(e){ document.documentElement.dataset.theme='aurora'; }
 window.addEventListener('load', ()=>{
   renderSections();
   syncIdModeUI();

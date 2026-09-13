@@ -387,6 +387,12 @@ body.alt-theme #flb-add{
 }
 /* "إضافة الفصول والمواد" تُلغى من موقعها — بديلها زر + في الشريط السفلي */
 body.alt-theme #addClassesSecCard{ display:none !important; }
+/* بند ٥: تعويض ارتفاع الشريط السفلي الثابت (+ زر الإضافة الدائري المرتفع) بمساحة سفلية كافية
+   لكل التصاميم البديلة، حتى لا يُغطّى أي محتوى بنهاية الصفحة (مثل زر "حفظ") */
+body.alt-theme main{ padding-bottom:110px; }
+@media (max-width:767px){
+  body.alt-theme main{ padding-bottom:126px; }
+}
 @media (max-width:767px){
   body.alt-theme .flcard button.fl-nav .fl-tx{ font-size:9px; }
 }
@@ -4739,7 +4745,7 @@ let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_ALL_PERMS =
   CLS_NS = '_' + (CLS_SESSION.schoolId||'admin') + '_' + (CLS_SESSION.period||'first') + '_' + CLS_SESSION.userId;
   document.addEventListener('DOMContentLoaded', function(){
     var bar = document.createElement('div');
-    bar.style.cssText = 'background:#0b5a54;color:#fff;padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px';
+    bar.style.cssText = 'background:var(--teal-d);color:#fff;padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px';
     bar.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
         '<div style="font-weight:800;font-size:14.5px;line-height:1.35;word-break:break-word">'+ escapeHtml(CLS_SESSION.username||'') +'</div>'+
         '<div style="font-size:10.5px;opacity:.85;white-space:nowrap;text-align:left">'+ headerDateStr() +'</div>'+

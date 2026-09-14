@@ -868,7 +868,7 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
       const others = await discoverOtherPendingByLoginId(data.loginId, null);
       if(others.length){
         showPendingSchoolChooser(others, async ()=>{
-          $('#staffMultiAccountBox').classList.add('hidden');
+          closeModal();
           if(flat.role==='soloTeacher'){ window.location.href='omr.html'; return; }
           enterApp();
         });
@@ -1094,20 +1094,20 @@ function maskEmail(email){
 }
 /* عرض قائمة السجلات المعلَّقة الأخرى المكتشَفة — واحدًا تلو الآخر */
 function showPendingSchoolChooser(pendingList, onDone){
-  onDone = onDone || (async()=>{ $('#staffMultiAccountBox').classList.add('hidden'); await afterAuth(firebase.auth().currentUser); });
-  if(!pendingList || !pendingList.length){ onDone(); return; }
+  onDone = onDone || (async()=>{ closeModal(); await afterAuth(firebase.auth().currentUser); });
+  if(!pendingList || !pendingList.length){ closeModal(); onDone(); return; }
   const next = pendingList[0]; const rest = pendingList.slice(1);
-  $('#staffSignInBox').classList.add('hidden');
-  $('#staffActivateBox').classList.add('hidden');
-  $('#staffMultiAccountBox').classList.remove('hidden');
   const schoolName = (SCHOOLS[next.schoolId]&&SCHOOLS[next.schoolId].name)||next.schoolId;
-  $('#macOptions').innerHTML = `
-    <p style="font-weight:700">توجد مدرسة بها حسابك غير مفعَّل: ${esc(schoolName)}</p>
+  modal(`
+    <div class="alert err" style="font-weight:700;margin-bottom:10px">⚠️ يوجد حساب آخر غير مفعَّل باسمك</div>
+    <p style="font-weight:700;font-size:16px;margin:0 0 14px">مدرسة: ${esc(schoolName)}</p>
     <div class="field"><label>رقم الهوية</label><input id="pscSeat" value="${esc(next.loginId||'')}" inputmode="numeric"></div>
-    <div class="field"><label>كلمة المرور الأولية لهذه المدرسة</label><input id="pscTemp" type="password"></div>
+    <div class="field"><label>كلمة المرور</label><input id="pscTemp" type="password"></div>
     <div id="pscAlert"></div>
-    <button class="btn" id="pscActivateBtn">تفعيل هذه المدرسة أيضًا</button>
-    <button class="btn secondary" id="pscSkipBtn" style="margin-top:8px">تخطّي (لست موظفًا بهذه المدرسة)</button>`;
+    <div class="modal-row" style="margin-top:14px">
+      <button class="btn secondary" id="pscSkipBtn">تخطّي (لست موظفًا بهذه المدرسة)</button>
+      <button class="btn" id="pscActivateBtn">تفعيل</button>
+    </div>`);
   $('#pscActivateBtn').onclick = async ()=>{
     const seat=$('#pscSeat').value.trim(), temp=$('#pscTemp').value;
     if(!next.password || next.password!==temp){ alertBox('pscAlert','err','كلمة المرور الأولية غير صحيحة'); return; }

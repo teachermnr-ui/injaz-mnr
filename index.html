@@ -981,8 +981,15 @@ async function doStaffActivate(){
     const existing = await usersCol().doc(au.uid).get();
     const now = Date.now();
     if(data.role==='schoolAdmin'){
+      const isGoogleAuth = au.providerData && au.providerData.some(p=>p.providerId==='google.com');
+      if(!isGoogleAuth){
+        try{ await firebase.auth().signOut(); }catch(_){}
+        $('#staffActivateBox').classList.add('hidden');
+        $('#staffSignInBox').classList.remove('hidden');
+        throw new Error('تفعيل حساب مدير المدرسة يتطلب الدخول عبر "المتابعة بحساب Google" حصرًا — لا يمكن تفعيله بالبريد وكلمة المرور. اضغط "المتابعة بحساب Google" وأعد إدخال رقم الهوية وكلمة المرور الأولية.');
+      }
       if(!existing.exists){
-        await usersCol().doc(au.uid).set({ role:'schoolAdmin', authUid:au.uid, email:au.email||null, username:data.username, active:true, adminSchools:[data.schoolId], loginId: seat, createdAt:now, updatedAt:now });
+        await usersCol().doc(au.uid).set({ role:'schoolAdmin', authUid:au.uid, email:au.email||null, googleEmail:au.email||null, username:data.username, active:true, adminSchools:[data.schoolId], loginId: seat, createdAt:now, updatedAt:now });
       } else {
         throw new Error('لديك حساب مدير مفعَّل مسبقًا — إضافة مدرسة أخرى لحسابك تتم مباشرة من admin العام، لا عبر هذا التفعيل.');
       }
@@ -1533,6 +1540,9 @@ async function loadUsersList(){
       const sc = isSolo ? esc(u.email||'') : (u.schoolId&&SCHOOLS[u.schoolId]?SCHOOLS[u.schoolId].name:'بلا مدرسة');
       const isMe = u.id===CURRENT.id;
       let subLine = '';
+      if(u.role==='schoolAdmin' && u._kind==='ctx' && CURRENT.role==='admin'){
+        subLine += `<div class="umeta">بريد Google: <b style="direction:ltr;display:inline-block">${esc(u.googleEmail||u.email||'—')}</b></div>`;
+      }
       if(isSolo){
         const ends = u.subscriptionEnds||0;
         const daysLeft = Math.ceil((ends - Date.now())/(24*60*60*1000));
@@ -1575,6 +1585,7 @@ async function openSchoolAdminEditModal(id, schoolId){
   modal(`<h2>تعديل حساب مدير</h2>
     <div id="saEditAlert"></div>
     <div class="field"><label>اسم المستخدم</label><input id="saEditName" value="${esc(u.username||'')}"></div>
+    <div class="sub-note">بريد Google: <b style="direction:ltr;display:inline-block">${esc(u.googleEmail||u.email||'—')}</b></div>
     <div class="field"><label>حالة الحساب (كل مدارسه)</label>
       <div class="chip-toggle"><button type="button" class="chip ${u.active!==false?'active':''}" id="saEditActiveOn">غير موقوف</button>
       <button type="button" class="chip ${u.active===false?'active':''}" id="saEditActiveOff">موقوف</button></div></div>

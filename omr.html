@@ -407,6 +407,12 @@ body.alt-theme .flcard{ display:flex !important; }
 
 </head>
 <body>
+<div id="soloLinkBanner" style="display:none;background:#fff7e6;border-bottom:2px solid #e0a716;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px">
+  <span style="flex:1;min-width:200px">اربط رقم هويتك لتقدر تتنقّل لاحقًا بسهولة بين حسابك الفردي وأي مدرسة تشتغل فيها.</span>
+  <input id="soloLinkIdInput" placeholder="رقم الهوية" inputmode="numeric" style="padding:6px 8px;border:1px solid #e0a716;border-radius:6px;width:140px">
+  <button id="soloLinkIdBtn" style="padding:6px 12px;border:none;border-radius:6px;background:#e0a716;color:#fff;cursor:pointer">ربط</button>
+  <button id="soloLinkDismissBtn" style="padding:6px 10px;border:none;background:transparent;color:#8a6d1a;cursor:pointer">لاحقًا ×</button>
+</div>
 <header class="app">
   <button id="navToggle" type="button" aria-label="فتح القوائم">☰ القوائم</button>
   <nav class="tabs">
@@ -2174,6 +2180,7 @@ function openImportReview(){
           <span style="color:var(--muted);min-width:22px">${toArabic(i+1)}</span>
           <span style="font-weight:700;min-width:90px;direction:ltr">${s.seat?escapeHtml(s.seat):'<span style=\'color:#aaa;font-size:11px\'>تلقائي</span>'}</span>
           <input value="${escapeHtml(s.name)}" oninput="setImportName(${gi},${i},this.value)" style="flex:1;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px">
+          <button onclick="removeImportStudent(${gi},${i})" title="حذف هذا الطالب من الاستيراد" style="border:1px solid var(--bad);background:#fff;color:var(--bad);border-radius:6px;padding:4px 7px;font-size:12px;cursor:pointer">🗑</button>
         </div>`).join('')}
         </div>
       </details>
@@ -2186,6 +2193,10 @@ function openImportReview(){
 function setImportCode(gi, val){ pendingImport.groups[gi].code = normalizeDigits(val).trim(); }
 function setImportStage(gi, val){ pendingImport.groups[gi].stage = val; }
 function setImportName(gi, si, val){ pendingImport.groups[gi].students[si].name = val; }
+function removeImportStudent(gi, si){
+  pendingImport.groups[gi].students.splice(si,1);
+  openImportReview();
+}
 function showOcrDiag(){
   const err = window.__ocrErr || '';
   const txt = window.__lastOcrText || '';
@@ -2367,6 +2378,71 @@ function updateBulkBar(){
   if(sc) sc.textContent = `${toArabic(sel.length)} محدّد`;
   const nb=document.getElementById('bulkNoteBtns');
   if(nb) nb.style.display = (CLS_SESSION && CLS_SESSION.role==='soloTeacher') ? 'none' : '';
+}
+async function buildCtxSwitcher(){
+  const wrap = document.getElementById('ctxSwitchWrap');
+  if(!wrap || !CLS_SESSION || !CLS_SESSION.userId) return;
+  if(CLS_SESSION.role==='admin' || CLS_SESSION.role==='schoolAdmin') return;
+  try{
+    const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
+    if(!snap.exists) return;
+    const u = snap.data();
+    const ctxs = [];
+    if(u.solo && u.solo.active!==false) ctxs.push({key:'solo', label:'حساب مستقل'});
+    const schoolIds = Object.keys(u.schools||{}).filter(sid=>u.schools[sid].active!==false);
+    for(const sid of schoolIds){
+      let name = sid;
+      try{ const sSnap = await db.collection('schoolData').doc(sid).get(); if(sSnap.exists && sSnap.data().name) name = sSnap.data().name; }catch(e){}
+      ctxs.push({key:'school:'+sid, label:name, role:u.schools[sid].role});
+    }
+    if(ctxs.length<2) return;
+    const curKey = CLS_SESSION.schoolId ? ('school:'+CLS_SESSION.schoolId) : 'solo';
+    wrap.innerHTML = '<select id="ctxSwitchSel" style="padding:4px 8px;border-radius:8px;border:none;font-size:11.5px">' +
+      ctxs.map(c=>'<option value="'+c.key+'"'+(curKey===c.key?' selected':'')+'>'+escapeHtml(c.label)+'</option>').join('') + '</select>';
+    document.getElementById('ctxSwitchSel').onchange = function(){
+      const key = this.value; if(key===curKey) return;
+      let newSession;
+      if(key==='solo') newSession = { userId:CLS_SESSION.userId, username:u.username, role:'soloTeacher', schoolId:null, period:CLS_SESSION.period||'first', ctxKey:'solo' };
+      else { const sid = key.slice(7); const ctx = u.schools[sid]; newSession = { userId:CLS_SESSION.userId, username:u.username, role:ctx.role, schoolId:sid, period:CLS_SESSION.period||'first', ctxKey:key }; }
+      try{ localStorage.setItem('cls_session', JSON.stringify(newSession)); }catch(e){}
+      location.reload();
+    };
+  }catch(e){}
+}
+async function openMyAccountsPanel(){
+  if(!CLS_SESSION || !CLS_SESSION.userId) return;
+  omrModal('<h3>حساباتي</h3><div id="myAccountsBody" style="padding:8px 0"><span class="spin"></span></div>');
+  try{
+    const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
+    const u = snap.exists ? snap.data() : {};
+    const schoolIds = Object.keys(u.schools||{});
+    const host = document.getElementById('myAccountsBody');
+    if(!host) return;
+    if(!schoolIds.length){ host.innerHTML = '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; return; }
+    let rows = '';
+    for(const sid of schoolIds){
+      const ctx = u.schools[sid];
+      let name = sid;
+      try{ const sSnap = await db.collection('schoolData').doc(sid).get(); if(sSnap.exists && sSnap.data().name) name = sSnap.data().name; }catch(e){}
+      const isActive = ctx.active!==false;
+      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee">'+
+        '<div><b>'+escapeHtml(name)+'</b><div style="font-size:11.5px;color:#888">'+escapeHtml(ctx.role||'')+(isActive?'':' — معطَّل')+'</div></div>'+
+        (isActive ? '<button data-sid="'+sid+'" class="myAcctDisableBtn" style="border:1px solid var(--bad,#c0392b);background:#fff;color:var(--bad,#c0392b);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">تعطيل هذا السياق</button>'
+                  : '<span style="font-size:11.5px;color:#aaa">تفعيله بيد مدير هذه المدرسة فقط</span>') +
+        '</div>';
+    }
+    host.innerHTML = rows;
+    document.querySelectorAll('.myAcctDisableBtn').forEach(btn=>{
+      btn.onclick = async function(){
+        if(!confirm('تعطيل هذا السياق؟ لن تقدر تُعيد تفعيله بنفسك — يحتاج مدير تلك المدرسة.')) return;
+        const sid = this.getAttribute('data-sid');
+        try{
+          await db.collection('users').doc(CLS_SESSION.userId).update({ ['schools.'+sid+'.active']: false, updatedAt: Date.now() });
+          openMyAccountsPanel();
+        }catch(e){ alert('تعذّر التعطيل: '+e.message); }
+      };
+    });
+  }catch(e){ const host=document.getElementById('myAccountsBody'); if(host) host.innerHTML='<div class="alert err">'+escapeHtml(e.message)+'</div>'; }
 }
 function omrModal(html){
   closeOmrModal();
@@ -4753,8 +4829,16 @@ let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_ALL_PERMS =
       '<div style="display:flex;align-items:center;gap:8px">'+
         '<a href="index.html" style="background:rgba(255,255,255,.18);color:#fff;text-decoration:none;padding:5px 13px;border-radius:9px;font-weight:700;font-size:12.5px;white-space:nowrap">🏠 الرئيسية</a>'+
         '<span style="background:rgba(255,255,255,.14);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:500;white-space:nowrap">'+(CLS_SESSION.period==='second'?'الفترة الثانية':'الفترة الأولى')+'</span>'+
+        '<span id="ctxSwitchWrap" style="margin-inline-start:auto"></span>'+
+        '<button id="myAccountsBtn" style="background:rgba(255,255,255,.18);color:#fff;border:none;padding:5px 10px;border-radius:9px;font-size:11.5px;cursor:pointer;white-space:nowrap">⚙️ حساباتي</button>'+
       '</div>';
     document.body.insertBefore(bar, document.body.firstChild);
+    var maBtn = document.getElementById('myAccountsBtn');
+    if(maBtn){
+      if(CLS_SESSION.role==='admin' || CLS_SESSION.role==='schoolAdmin') maBtn.style.display='none';
+      else maBtn.onclick = openMyAccountsPanel;
+    }
+    buildCtxSwitcher();
     if(CLS_SESSION.role==='admin' && CLS_SESSION.schoolId) updateAdminSchoolBadge();
     clsApplySoloMode();
   });
@@ -5006,18 +5090,52 @@ function clsGuardAdd(){
   if(!exempt && !CLS_CAN_ADD_MANAGE){ alert('إضافة الفصول والطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه. تواصل مع إدارة المدرسة.'); return false; }
   return true;
 }
+function showSoloLinkBanner(){
+  if(sessionStorage.getItem('soloLinkDismissed')==='1') return;
+  const el = document.getElementById('soloLinkBanner');
+  if(el) el.style.display = 'flex';
+}
+document.addEventListener('DOMContentLoaded', function(){
+  const dismissBtn = document.getElementById('soloLinkDismissBtn');
+  const linkBtn = document.getElementById('soloLinkIdBtn');
+  if(dismissBtn) dismissBtn.onclick = function(){
+    sessionStorage.setItem('soloLinkDismissed','1');
+    document.getElementById('soloLinkBanner').style.display='none';
+  };
+  if(linkBtn) linkBtn.onclick = async function(){
+    const val = (document.getElementById('soloLinkIdInput').value||'').trim();
+    if(!/^[0-9]{5,}$/.test(val)){ alert('أدخل رقم هوية صحيح (أرقام فقط)'); return; }
+    linkBtn.disabled = true;
+    try{
+      await db.collection('users').doc(CLS_SESSION.userId).update({ loginId: val, isSolo:true, updatedAt: Date.now() });
+      document.getElementById('soloLinkBanner').style.display='none';
+      alert('تم ربط رقم الهوية بحسابك.');
+    }catch(e){ alert('تعذّر الربط: '+e.message); }
+    finally{ linkBtn.disabled = false; }
+  };
+});
 async function clsLoadPerms(){
   try{
     if(!CLS_SESSION || !CLS_SESSION.userId) return;
     const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
     if(!snap.exists) return;
     const u = snap.data();
+    // الدور الفعلي يُقرأ من السياق النشط بالمستند الموحَّد، لا من حقل top-level (u.role محجوز لـadmin/schoolAdmin فقط)
+    let ctxRole = '', ctxPerms = {};
+    if(u.role==='admin'){ ctxRole='admin'; }
+    else if(u.role==='schoolAdmin'){ ctxRole='schoolAdmin'; }
+    else if(!CLS_SESSION.schoolId && u.solo){ ctxRole='soloTeacher'; if(!u.loginId) showSoloLinkBanner(); }
+    else if(CLS_SESSION.schoolId && u.schools && u.schools[CLS_SESSION.schoolId]){
+      ctxRole = u.schools[CLS_SESSION.schoolId].role||'';
+      ctxPerms = u.schools[CLS_SESSION.schoolId].permissions||{};
+    }
+    CLS_USER_ROLE = ctxRole;
     const full={access:true,edit:true,del:true};
-    if(u.role==='admin'||u.role==='soloTeacher'){
+    if(ctxRole==='admin'||ctxRole==='soloTeacher'||ctxRole==='schoolAdmin'){
       CLS_SEC_PERM={classes:full,design:full,grade:full,results:full,worklog:full};
       CLS_CAN_ADD_MANAGE=true; clsApplyAddManage(); clsApplySectionPerms(); return;
     }
-    const perm=u.permissions||{};
+    const perm=ctxPerms;
     CLS_ALL_PERMS = perm;
     const dflt={access:false,edit:false,del:false};
     CLS_SEC_PERM={
@@ -5401,7 +5519,7 @@ function rosterDocRef(){
 // يحدد هل الفصل مرئي للمستخدم الحالي: الأدمن يشوف كل حاجة،
 // وغيره يشوف بس الفصول المُسندة له من الأدمن أو اللي هو نفسه أنشأها
 function isClassVisible(cls){
-  if(CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin') return true;
+  if(CLS_USER_ROLE==='admin'||CLS_USER_ROLE==='schoolAdmin'||CLS_USER_ROLE==='soloTeacher') return true;
   const code = normalizeDigits(String(cls.code||'')).trim();
   if(CLS_USER_ASSIGNED.map(x=>normalizeDigits(String(x)).trim()).includes(code)) return true;
   if(cls.createdBy && CLS_SESSION && cls.createdBy===CLS_SESSION.userId) return true;
@@ -5519,9 +5637,16 @@ async function loadStudentsFromCloud(manual){
       const uSnap = await db.collection('users').doc(CLS_SESSION.userId).get();
       if(uSnap.exists){
         const u = uSnap.data();
-        CLS_USER_ROLE = u.role||'';
-        CLS_USER_ASSIGNED = Array.isArray(u.assignedClasses) ? u.assignedClasses : [];
-        state.mySubjectAssignments = Array.isArray(u.subjectAssignments) ? u.subjectAssignments : [];
+        let ctx = null;
+        if(u.role==='admin'){ CLS_USER_ROLE='admin'; }
+        else if(u.role==='schoolAdmin'){ CLS_USER_ROLE='schoolAdmin'; }
+        else if(!CLS_SESSION.schoolId && u.solo){ CLS_USER_ROLE='soloTeacher'; }
+        else if(CLS_SESSION.schoolId && u.schools && u.schools[CLS_SESSION.schoolId]){
+          ctx = u.schools[CLS_SESSION.schoolId];
+          CLS_USER_ROLE = ctx.role||'';
+        }
+        CLS_USER_ASSIGNED = ctx && Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses : [];
+        state.mySubjectAssignments = ctx && Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments : [];
       }
     }
 
@@ -5583,7 +5708,7 @@ window.addEventListener('load', ()=>{
 <div id="flCard" class="flcard">
   <button class="fl-toggle" id="flTog" onclick="flToggle()">‹</button>
   <div class="fl-btns" id="flBtns">
-    <button id="flb-attend" class="fl-nav active" onclick="switchStuView('attend')"><span class="fl-ic">🟢</span><span class="fl-tx">الحضور</span></button>
+    <button id="flb-attend" class="fl-nav active" onclick="showTab('students'); switchStuView('attend')"><span class="fl-ic">🟢</span><span class="fl-tx">الحضور</span></button>
     <button id="flb-follow" class="fl-nav" onclick="switchStuView('follow')"><span class="fl-ic">📌</span><span class="fl-tx">المتابعة</span></button>
     <button id="flb-add" style="display:none" onclick="openAddClassesModal()" aria-label="إضافة الفصول والمواد">+</button>
     <button id="flb-record" class="fl-nav" onclick="switchStuView('record')"><span class="fl-ic">📋</span><span class="fl-tx">سجل المتابعة</span></button>

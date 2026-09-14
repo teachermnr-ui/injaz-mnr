@@ -355,7 +355,6 @@ body.theme-glass .tab.active{background:var(--accent);color:#fff}
         <div class="field"><label>كلمة المرور</label><input id="liPass" type="password" autocomplete="current-password" placeholder="كلمة المرور"></div>
         <button class="btn" id="liBtn">متابعة</button>
         <p style="font-size:12px;color:var(--muted);margin-top:8px;">إن كان دخولك الأول، سيُنشأ حسابك ثم تُطلب بيانات التفعيل.</p>
-        <button type="button" class="btn secondary" id="liLinkAdditionalBtn" style="margin-top:6px">اربط بريدًا/مدرسة إضافية بنفس حسابي (سجّل دخولك أولًا)</button>
       </div>
 
       <div class="field" style="margin-top:14px;text-align:right;"><label>الفترة</label>
@@ -769,24 +768,6 @@ async function cancelStudentActivation(){
    الدخول
    ======================================================================== */
 $('#liBtn').onclick = doLogin;
-$('#liLinkAdditionalBtn').onclick = staffLinkAdditional;
-async function staffLinkAdditional(){
-  const em=$('#liEmail').value.trim(), p=$('#liPass').value;
-  if(!em||!p){ alertBox('loginAlert','err','أدخل البريد وكلمة المرور الجديدة اللي تبي تربطها (مثلاً بريد المدرسة الجديد)'); return; }
-  const cur = firebase.auth().currentUser;
-  if(!cur){ alertBox('loginAlert','err','سجّل الدخول أولاً بأحد حساباتك الحالية من نفس الشاشة، ثم اضغط هذا الزر مجددًا وأدخل بيانات الحساب الجديد المراد ربطه.'); return; }
-  const btn=$('#liLinkAdditionalBtn'); btn.disabled=true;
-  try{
-    if(!Object.keys(SCHOOLS||{}).length){ try{ await ensureSeed(); await loadSchools(); await loadRoleTemplates(); }catch(e){} }
-    const cred = firebase.auth.EmailAuthProvider.credential(em, p);
-    await cur.linkWithCredential(cred);   // uid لا يتغيّر إطلاقًا — نفس الحساب الحقيقي بالضبط
-    showActivation(cur);
-  }catch(e){
-    if(e.code==='auth/email-already-in-use' || e.code==='auth/credential-already-in-use'){
-      alertBox('loginAlert','err','هذا البريد له حساب دخول منفصل بالفعل — لا يمكن ربطه تلقائيًا بحسابك الحالي (يحتاج دمجًا يدويًا من admin العام).');
-    } else { alertBox('loginAlert','err',authErrMsg(e)); }
-  }finally{ btn.disabled=false; }
-}
 $('#liPass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 $('#staffGoogleBtn').onclick = ()=>staffProviderLogin();
 $('#staffEmailToggle').onclick = ()=>{
@@ -882,6 +863,19 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
   CURRENT = { id:docId, ...data, ...flat };
   SESSION = { userId:docId, username:data.username, role:flat.role, schoolId:flat.schoolId, period, ctxKey };
   localStorage.setItem('cls_session', JSON.stringify(SESSION));
+  if(flat.role!=='admin' && flat.role!=='schoolAdmin' && data.loginId){
+    try{
+      const others = await discoverOtherPendingByLoginId(data.loginId, null);
+      if(others.length){
+        showPendingSchoolChooser(others, async ()=>{
+          $('#staffMultiAccountBox').classList.add('hidden');
+          if(flat.role==='soloTeacher'){ window.location.href='omr.html'; return; }
+          enterApp();
+        });
+        return;
+      }
+    }catch(e){}
+  }
   if(flat.role==='soloTeacher'){ window.location.href='omr.html'; return; }
   enterApp();
 }
@@ -960,6 +954,44 @@ async function staffProviderLogin(){
 }
 
 /* إكمال التفعيل: التحقق من الهوية وكلمة المرور الأولية ثم دمج سياق هذه المدرسة على المستند الموحَّد بمعرّف authUid */
+/* سيناريو ٣: عرض توجيه الدخول للحساب الأصلي المُفعَّل مسبقًا، ثم دمج البريد/الحساب الجديد عليه تلقائيًا */
+function showMergeRedirectBox(already, newCred){
+  $('#staffSignInBox').classList.add('hidden');
+  $('#staffActivateBox').classList.add('hidden');
+  $('#staffMultiAccountBox').classList.remove('hidden');
+  const shownEmail = maskEmail(already.googleEmail||already.email);
+  $('#macOptions').innerHTML = `
+    <p style="font-weight:700">رقم هويتك مرتبط بحساب مُفعَّل مسبقًا (${esc(shownEmail)})</p>
+    <p class="sub-note" style="margin:4px 0 12px">سجّل الدخول بهذا الحساب لإكمال ربط بريدك الحالي عليه تلقائيًا — بلا فقدان أي بيانات.</p>
+    ${already.googleEmail ? `<button class="btn" id="mrgGoogleBtn">المتابعة بحساب Google</button>` : `
+    <div class="field"><label>البريد</label><input id="mrgEmail" value="${esc(already.email||'')}"></div>
+    <div class="field"><label>كلمة المرور</label><input id="mrgPass" type="password"></div>
+    <button class="btn" id="mrgLoginBtn">تسجيل الدخول ودمج البريد الحالي</button>`}
+    <div id="mrgAlert"></div>`;
+  if(already.googleEmail){
+    $('#mrgGoogleBtn').onclick = async ()=>{
+      try{ const cred = await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); await finishMerge(cred.user, newCred); }
+      catch(e){ alertBox('mrgAlert','err',authErrMsg(e)); }
+    };
+  } else {
+    $('#mrgLoginBtn').onclick = async ()=>{
+      try{ const cred = await firebase.auth().signInWithEmailAndPassword($('#mrgEmail').value.trim(), $('#mrgPass').value); await finishMerge(cred.user, newCred); }
+      catch(e){ alertBox('mrgAlert','err',authErrMsg(e)); }
+    };
+  }
+}
+async function finishMerge(oldUser, newCred){
+  try{
+    if(newCred.google){ await oldUser.linkWithPopup(new firebase.auth.GoogleAuthProvider()); }
+    else { await oldUser.linkWithCredential(firebase.auth.EmailAuthProvider.credential(newCred.email, newCred.password)); }
+    toast('تم دمج الحسابين بنجاح');
+    showActivation(firebase.auth().currentUser);
+  }catch(e){
+    let msg = authErrMsg(e);
+    if(e.code==='auth/email-already-in-use' || e.code==='auth/credential-already-in-use') msg='هذا البريد له حساب دخول منفصل بالفعل — الدمج التلقائي غير ممكن هنا، راجع admin العام.';
+    alertBox('mrgAlert','err',msg);
+  }
+}
 async function doStaffActivate(){
   const seat=$('#acSeat').value.trim(), temp=$('#acTemp').value;
   if(!seat||!temp){ alertBox('loginAlert','err','أدخل رقم الهوية وكلمة المرور الأولية'); return; }
@@ -974,6 +1006,17 @@ async function doStaffActivate(){
     const d=docs[0], data=d.data();
     if(data.active===false) throw new Error('هذا الحساب معطّل. راجع المسؤول');
     if(!data.password || data.password!==temp) throw new Error('كلمة المرور الأولية غير صحيحة');
+
+    // سيناريو ٣: رقم الهوية هذا مرتبط بحساب مُفعَّل مسبقًا بحساب مصادقة مختلف (بريد آخر) —
+    // نوجّهه لتسجيل الدخول بالحساب الأصلي ثم نربط البريد الحالي عليه تلقائيًا، بدل إنشاء حساب مستقل ثانٍ
+    const already = await discoverActivatedElsewhereByLoginId(seat, au.uid);
+    if(already){
+      const isGoogleNew = au.providerData && au.providerData.some(p=>p.providerId==='google.com');
+      const newCred = isGoogleNew ? {google:true} : {email: ($('#liEmail')?$('#liEmail').value.trim():au.email)||au.email, password: $('#liPass')?$('#liPass').value:''};
+      try{ await firebase.auth().signOut(); }catch(_){}
+      showMergeRedirectBox(already, newCred);
+      return;
+    }
 
     if(!Object.keys(SCHOOLS||{}).length){ try{ await loadSchools(); }catch(e){} }
     const existing = await usersCol().doc(au.uid).get();
@@ -1010,6 +1053,9 @@ async function doStaffActivate(){
     try{ await usersCol().doc(d.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
 
     AUTH_JUST_CREATED = false;
+    // سيناريو ١: هل يوجد سجلات معلَّقة أخرى بنفس رقم الهوية بمدارس أخرى؟
+    const others = await discoverOtherPendingByLoginId(seat, d.id);
+    if(others.length){ showPendingSchoolChooser(others); return; }
     $('#staffActivateBox').classList.add('hidden');
     $('#staffSignInBox').classList.remove('hidden');
     await afterAuth(au);
@@ -1017,6 +1063,63 @@ async function doStaffActivate(){
   finally{ btn.textContent='تفعيل وربط الحساب'; btn.disabled=false; }
 }
 function isPendingDocClient(data){ return !data.authUid; }
+/* اكتشاف سجلات معلَّقة أخرى بنفس رقم الهوية (بمدارس مختلفة) — سيناريو ١ و٢ */
+async function discoverOtherPendingByLoginId(loginId, excludeDocId){
+  if(!loginId) return [];
+  const q = await usersCol().where('loginId','==',loginId).get().catch(()=>({docs:[]}));
+  return q.docs.filter(d=> d.id!==excludeDocId && !d.data().migratedTo && isPendingDocClient(d.data()) && d.data().active!==false)
+    .map(d=>({id:d.id, ...d.data()}));
+}
+/* اكتشاف حساب مُفعَّل مسبقًا (uid مختلف) بنفس رقم الهوية — سيناريو ٣ */
+async function discoverActivatedElsewhereByLoginId(loginId, excludeUid){
+  if(!loginId) return null;
+  const q = await usersCol().where('loginId','==',loginId).get().catch(()=>({docs:[]}));
+  const hit = q.docs.find(d=> d.id!==excludeUid && d.data().authUid && d.data().authUid!==excludeUid
+    && d.data().role!=='admin' && d.data().role!=='schoolAdmin');
+  return hit ? {id:hit.id, ...hit.data()} : null;
+}
+function maskEmail(email){
+  if(!email) return '—';
+  const [u,dom] = email.split('@'); if(!dom) return email;
+  const shown = u.slice(0, Math.min(2,u.length));
+  return shown + '*'.repeat(Math.max(1,u.length-shown.length)) + '@' + dom;
+}
+/* عرض قائمة السجلات المعلَّقة الأخرى المكتشَفة — واحدًا تلو الآخر */
+function showPendingSchoolChooser(pendingList, onDone){
+  onDone = onDone || (async()=>{ $('#staffMultiAccountBox').classList.add('hidden'); await afterAuth(firebase.auth().currentUser); });
+  if(!pendingList || !pendingList.length){ onDone(); return; }
+  const next = pendingList[0]; const rest = pendingList.slice(1);
+  $('#staffSignInBox').classList.add('hidden');
+  $('#staffActivateBox').classList.add('hidden');
+  $('#staffMultiAccountBox').classList.remove('hidden');
+  const schoolName = (SCHOOLS[next.schoolId]&&SCHOOLS[next.schoolId].name)||next.schoolId;
+  $('#macOptions').innerHTML = `
+    <p style="font-weight:700">توجد مدرسة بها حسابك غير مفعَّل: ${esc(schoolName)}</p>
+    <div class="field"><label>رقم الهوية</label><input id="pscSeat" value="${esc(next.loginId||'')}" inputmode="numeric"></div>
+    <div class="field"><label>كلمة المرور الأولية لهذه المدرسة</label><input id="pscTemp" type="password"></div>
+    <div id="pscAlert"></div>
+    <button class="btn" id="pscActivateBtn">تفعيل هذه المدرسة أيضًا</button>
+    <button class="btn secondary" id="pscSkipBtn" style="margin-top:8px">تخطّي (لست موظفًا بهذه المدرسة)</button>`;
+  $('#pscActivateBtn').onclick = async ()=>{
+    const seat=$('#pscSeat').value.trim(), temp=$('#pscTemp').value;
+    if(!next.password || next.password!==temp){ alertBox('pscAlert','err','كلمة المرور الأولية غير صحيحة'); return; }
+    try{
+      const au = firebase.auth().currentUser;
+      const ctxPayload = { role:next.role, permissions:next.permissions||permsForNewUser(next.role), assignedClasses:next.assignedClasses||[], active:true };
+      await usersCol().doc(au.uid).update({ ['schools.'+next.schoolId]: ctxPayload, updatedAt: Date.now() });
+      try{ await usersCol().doc(next.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
+      toast('تم تفعيل المدرسة الإضافية');
+      showPendingSchoolChooser(rest, onDone);
+    }catch(e){ alertBox('pscAlert','err',e.message); }
+  };
+  $('#pscSkipBtn').onclick = async ()=>{
+    try{
+      await usersCol().doc(next.id).update({ active:false, updatedAt: Date.now() });
+      toast('تم تعطيل هذا السجل');
+      showPendingSchoolChooser(rest, onDone);
+    }catch(e){ alertBox('pscAlert','err',e.message); }
+  };
+}
 
 /* ========================================================================
    النسخة الفردية: دخول المعلم المستقل بحساب Google
@@ -1740,6 +1843,24 @@ async function openUserModal(id){
     if(schEl){ schEl.value = CURRENT.schoolId; schEl.disabled = true; }
   }
 }
+/* تعارض رقم الهوية بمدرسة معيّنة فقط — نفس الرقم بمدرسة أخرى (معلَّق أو مُفعَّل) ليس تعارضًا:
+   هذا بالضبط الأسلوب اللي يسمح لاحقًا بدمج نفس الشخص تلقائيًا بمدرسة ثانية وقت التفعيل */
+async function loginIdConflictAtSchool(loginId, schoolId, excludeDocId){
+  const q = await usersCol().where('loginId','==',loginId).get();
+  for(const d of q.docs){
+    if(excludeDocId && d.id===excludeDocId) continue;
+    const data = d.data();
+    if(data.migratedTo) continue;
+    if(!data.authUid){
+      if(data.schoolId===schoolId) return true;
+    } else if(data.role==='schoolAdmin'){
+      if((data.adminSchools||[]).includes(schoolId)) return true;
+    } else if(data.schools && data.schools[schoolId]){
+      return true;
+    }
+  }
+  return false;
+}
 async function saveUser(active){
   const linked = !!(editUser && editUser.authUid);
   if(editUser && linked){
@@ -1777,8 +1898,8 @@ async function saveUser(active){
         if(!loginId){ alertBox('umAlert','err','أدخل رقم الهوية'); return; }
         if(!/^[0-9]+$/.test(loginId)){ alertBox('umAlert','err','رقم الهوية يجب أن يكون أرقاماً فقط'); return; }
         if(!displayName){ alertBox('umAlert','err','أدخل اسم المستخدم'); return; }
-        const q=await usersCol().where('loginId','==',loginId).get();
-        if(q.docs.length){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
+        const clash1 = await loginIdConflictAtSchool(loginId, school, editUser?editUser.id:null);
+        if(clash1){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً بهذه المدرسة تحديدًا'); return; }
         await usersCol().add({ loginId, username:displayName, role:$('#umRole').value, schoolId:school, assignedClasses:[],
           permissions:permsForNewUser($('#umRole').value), active:true, password:pass,
           mustChangePassword:false, createdAt:Date.now(), updatedAt:Date.now() });
@@ -1797,9 +1918,8 @@ async function saveUser(active){
   if(!displayName){ alertBox('umAlert','err','أدخل اسم المستخدم'); return; }
   if(!pass){ alertBox('umAlert','err','أدخل كلمة المرور الأولية'); return; }
   try{
-    const q=await usersCol().where('loginId','==',loginId).get();
-    const clash = q.docs.find(d=> !editUser || d.id!==editUser.id);
-    if(clash){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً لحساب آخر'); return; }
+    const clash = await loginIdConflictAtSchool(loginId, school, editUser?editUser.id:null);
+    if(clash){ alertBox('umAlert','err','رقم الهوية مستخدم مسبقاً بهذه المدرسة تحديدًا'); return; }
     if(editUser){
       // حساب بانتظار التفعيل — تعديل بياناته كاملة مسموح حتى يُفعَّل فعليًا (الفصول تُدار من الصلاحيات الخاصة)
       await usersCol().doc(editUser.id).update({
@@ -1885,8 +2005,8 @@ async function confirmUsersImport(){
   const results = [];
   for(const p of pendingUserImport){
     try{
-      const q = await usersCol().where('loginId','==',p.loginId).get();
-      if(q.docs.length){ results.push(esc(p.name)+' ('+esc(p.loginId)+'): رقم الهوية مستخدم مسبقاً — تخطّي'); continue; }
+      const clash = await loginIdConflictAtSchool(p.loginId, CURRENT.schoolId, null);
+      if(clash){ results.push(esc(p.name)+' ('+esc(p.loginId)+'): رقم الهوية مستخدم مسبقاً بهذه المدرسة — تخطّي'); continue; }
       const pass = genTempPassword();
       await usersCol().add({ loginId:p.loginId, username:p.name, role:p.role, schoolId:CURRENT.schoolId,
         assignedClasses:[], permissions:permsForNewUser(p.role), active:true, password:pass,

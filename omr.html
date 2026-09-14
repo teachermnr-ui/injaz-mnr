@@ -2418,20 +2418,40 @@ async function openMyAccountsPanel(){
     const schoolIds = Object.keys(u.schools||{});
     const host = document.getElementById('myAccountsBody');
     if(!host) return;
-    if(!schoolIds.length){ host.innerHTML = '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; return; }
+    const curKey = CLS_SESSION.schoolId ? ('school:'+CLS_SESSION.schoolId) : 'solo';
     let rows = '';
+    if(u.solo){
+      const isActive = u.solo.active!==false, isCur = curKey==='solo';
+      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee">'+
+        '<div><b>حساب مستقل (فردي)</b>'+(isCur?' <span style="font-size:11px;color:var(--teal,#0f766e)">— الحالي</span>':'')+(isActive?'':'<div style="font-size:11.5px;color:#888">معطَّل</div>')+'</div>'+
+        (isCur ? '' : (isActive ? '<button data-key="solo" class="myAcctGoBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : ''))+
+        '</div>';
+    }
+    if(!schoolIds.length && !u.solo){ host.innerHTML = '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; return; }
     for(const sid of schoolIds){
       const ctx = u.schools[sid];
       let name = sid;
       try{ const sSnap = await db.collection('schoolData').doc(sid).get(); if(sSnap.exists && sSnap.data().name) name = sSnap.data().name; }catch(e){}
-      const isActive = ctx.active!==false;
+      const isActive = ctx.active!==false, isCur = curKey===('school:'+sid);
       rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee">'+
-        '<div><b>'+escapeHtml(name)+'</b><div style="font-size:11.5px;color:#888">'+escapeHtml(ctx.role||'')+(isActive?'':' — معطَّل')+'</div></div>'+
-        (isActive ? '<button data-sid="'+sid+'" class="myAcctDisableBtn" style="border:1px solid var(--bad,#c0392b);background:#fff;color:var(--bad,#c0392b);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">تعطيل هذا السياق</button>'
-                  : '<span style="font-size:11.5px;color:#aaa">تفعيله بيد مدير هذه المدرسة فقط</span>') +
-        '</div>';
+        '<div><b>'+escapeHtml(name)+'</b>'+(isCur?' <span style="font-size:11px;color:var(--teal,#0f766e)">— الحالي</span>':'')+'<div style="font-size:11.5px;color:#888">'+escapeHtml(ctx.role||'')+(isActive?'':' — معطَّل')+'</div></div>'+
+        '<div style="display:flex;gap:6px">'+
+        (!isCur && isActive ? '<button data-key="school:'+sid+'" class="myAcctGoBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : '')+
+        (isActive ? '<button data-sid="'+sid+'" class="myAcctDisableBtn" style="border:1px solid var(--bad,#c0392b);background:#fff;color:var(--bad,#c0392b);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">تعطيل</button>'
+                  : '<span style="font-size:11px;color:#aaa">تفعيله بيد مدير المدرسة فقط</span>') +
+        '</div></div>';
     }
     host.innerHTML = rows;
+    document.querySelectorAll('.myAcctGoBtn').forEach(btn=>{
+      btn.onclick = function(){
+        const key = this.getAttribute('data-key');
+        let newSession;
+        if(key==='solo') newSession = { userId:CLS_SESSION.userId, username:u.username, role:'soloTeacher', schoolId:null, period:CLS_SESSION.period||'first', ctxKey:'solo' };
+        else { const sid = key.slice(7); const ctx = u.schools[sid]; newSession = { userId:CLS_SESSION.userId, username:u.username, role:ctx.role, schoolId:sid, period:CLS_SESSION.period||'first', ctxKey:key }; }
+        try{ localStorage.setItem('cls_session', JSON.stringify(newSession)); }catch(e){}
+        location.reload();
+      };
+    });
     document.querySelectorAll('.myAcctDisableBtn').forEach(btn=>{
       btn.onclick = async function(){
         if(!confirm('تعطيل هذا السياق؟ لن تقدر تُعيد تفعيله بنفسك — يحتاج مدير تلك المدرسة.')) return;
@@ -2443,6 +2463,46 @@ async function openMyAccountsPanel(){
       };
     });
   }catch(e){ const host=document.getElementById('myAccountsBody'); if(host) host.innerHTML='<div class="alert err">'+escapeHtml(e.message)+'</div>'; }
+}
+async function checkOtherPendingSchools(loginId){
+  try{
+    const q = await db.collection('users').where('loginId','==',loginId).get();
+    const others = q.docs.filter(d=>!d.data().migratedTo && !d.data().authUid && d.data().active!==false)
+      .map(d=>({id:d.id, ...d.data()}));
+    if(others.length) showOtherPendingChooser(others);
+  }catch(e){}
+}
+function showOtherPendingChooser(list){
+  if(!list.length) return;
+  const next = list[0]; const rest = list.slice(1);
+  omrModal('<h3>توجد مدرسة بها حسابك غير مفعَّل</h3>'+
+    '<div style="padding:8px 0">'+
+    '<p><b>'+escapeHtml(next.schoolId)+'</b> — الدور: '+escapeHtml(next.role||'')+'</p>'+
+    '<div class="field"><label>رقم الهوية</label><input id="opcSeat" value="'+escapeHtml(next.loginId||'')+'" style="width:100%;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;margin:4px 0 10px"></div>'+
+    '<div class="field"><label>كلمة المرور الأولية لهذه المدرسة</label><input id="opcTemp" type="password" style="width:100%;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;margin:4px 0 10px"></div>'+
+    '<div id="opcAlert"></div>'+
+    '<button id="opcActivateBtn" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--teal,#0f766e);color:#fff;margin-bottom:8px;cursor:pointer">تفعيل هذه المدرسة أيضًا</button>'+
+    '<button id="opcSkipBtn" style="width:100%;padding:10px;border:1px solid var(--line,#ddd);border-radius:8px;background:#fff;cursor:pointer">تخطّي (لست موظفًا بهذه المدرسة)</button>'+
+    '</div>');
+  document.getElementById('opcActivateBtn').onclick = async function(){
+    const temp = document.getElementById('opcTemp').value;
+    if(!next.password || next.password!==temp){ document.getElementById('opcAlert').innerHTML='<div class="alert err">كلمة المرور الأولية غير صحيحة</div>'; return; }
+    try{
+      const au = firebase.auth().currentUser;
+      const ctxPayload = { role:next.role, permissions:next.permissions||{}, assignedClasses:next.assignedClasses||[], active:true };
+      await db.collection('users').doc(au.uid).update({ ['schools.'+next.schoolId]: ctxPayload, updatedAt: Date.now() });
+      try{ await db.collection('users').doc(next.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
+      closeOmrModal();
+      showOtherPendingChooser(rest);
+    }catch(e){ document.getElementById('opcAlert').innerHTML='<div class="alert err">'+escapeHtml(e.message)+'</div>'; }
+  };
+  document.getElementById('opcSkipBtn').onclick = async function(){
+    try{
+      await db.collection('users').doc(next.id).update({ active:false, updatedAt: Date.now() });
+      closeOmrModal();
+      showOtherPendingChooser(rest);
+    }catch(e){ document.getElementById('opcAlert').innerHTML='<div class="alert err">'+escapeHtml(e.message)+'</div>'; }
+  };
 }
 function omrModal(html){
   closeOmrModal();
@@ -5130,6 +5190,9 @@ async function clsLoadPerms(){
       ctxPerms = u.schools[CLS_SESSION.schoolId].permissions||{};
     }
     CLS_USER_ROLE = ctxRole;
+    if(ctxRole && ctxRole!=='admin' && ctxRole!=='schoolAdmin' && u.loginId){
+      checkOtherPendingSchools(u.loginId);
+    }
     const full={access:true,edit:true,del:true};
     if(ctxRole==='admin'||ctxRole==='soloTeacher'||ctxRole==='schoolAdmin'){
       CLS_SEC_PERM={classes:full,design:full,grade:full,results:full,worklog:full};

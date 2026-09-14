@@ -1003,9 +1003,17 @@ async function doStaffActivate(){
     let docs = q.empty ? [] : q.docs.filter(d=>!d.data().migratedTo && isPendingDocClient(d.data()));
     if(!docs.length){ q = await usersCol().where('username','==',seat).get().catch(()=>({empty:true,docs:[]})); docs = q.empty ? [] : q.docs.filter(d=>!d.data().migratedTo && isPendingDocClient(d.data())); }
     if(!docs.length) throw new Error('رقم الهوية غير موجود، أو تم تفعيله مسبقاً. راجع الإدارة.');
-    const d=docs[0], data=d.data();
+    // لو فيه أكثر من سجل معلَّق بنفس رقم الهوية (بمدارس مختلفة)، نبحث عن السجل اللي كلمة مروره تطابق المُدخَلة
+    const activeDocs = docs.filter(x=>x.data().active!==false);
+    let d = activeDocs.find(x=>x.data().password===temp) || docs.find(x=>x.data().password===temp);
+    if(!d){
+      d = activeDocs[0] || docs[0];
+      const data0 = d.data();
+      if(data0.active===false) throw new Error('هذا الحساب معطّل. راجع المسؤول');
+      throw new Error('كلمة المرور الأولية غير صحيحة');
+    }
+    const data=d.data();
     if(data.active===false) throw new Error('هذا الحساب معطّل. راجع المسؤول');
-    if(!data.password || data.password!==temp) throw new Error('كلمة المرور الأولية غير صحيحة');
 
     // سيناريو ٣: رقم الهوية هذا مرتبط بحساب مُفعَّل مسبقًا بحساب مصادقة مختلف (بريد آخر) —
     // نوجّهه لتسجيل الدخول بالحساب الأصلي ثم نربط البريد الحالي عليه تلقائيًا، بدل إنشاء حساب مستقل ثانٍ

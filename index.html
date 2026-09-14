@@ -615,16 +615,14 @@ async function boot(){
       const snap = await usersCol().doc(saved.userId).get();
       if(snap.exists && snap.data().authUid === au.uid && snap.data().active!==false){
         const u = snap.data();
-        const schoolBlock = schoolLoginBlockReason(u, saved.period);
-        if(schoolBlock){
+        try{
+          await proceedWithUserDoc(au, snap.id, u, saved.ctxKey || (saved.schoolId?('school:'+saved.schoolId):'solo'), saved.period);
+        }catch(e){
           localStorage.removeItem('cls_session');
           show('loginView');
-          try{ await cleanSignOut(); }catch(e){}
-          alertBox('loginAlert','err',schoolBlock);
-          return;
+          alertBox('loginAlert','err', e.message);
         }
-        if(u.role==='soloTeacher'){ window.location.href='omr.html'; return; }
-        SESSION=saved; CURRENT={id:snap.id,...u}; enterApp(); return;
+        return;
       }
       localStorage.removeItem('cls_session');
     }

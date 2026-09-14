@@ -850,7 +850,9 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
     if(data.role==='schoolAdmin'){
       const block = schoolLoginBlockReason(sid, period);
       if(block){ await cleanSignOut(); throw new Error(block); }
-      flat = { role:'schoolAdmin', schoolId:sid, permissions:defaultPerms('schoolAdmin'), active:data.active };
+      const saPerms = defaultPerms('schoolAdmin');
+      if(data.canManageUserPerms) saPerms['index.users.perms'] = {access:true, edit:true, del:false};
+      flat = { role:'schoolAdmin', schoolId:sid, permissions:saPerms, active:data.active };
     } else {
       const ctx = (data.schools||{})[sid];
       if(!ctx || ctx.active===false){ await cleanSignOut(); throw new Error('هذا السياق معطّل. راجع المسؤول'); }
@@ -1702,6 +1704,8 @@ async function openSchoolAdminEditModal(id, schoolId){
     <div id="saEditAlert"></div>
     <div class="field"><label>اسم المستخدم</label><input id="saEditName" value="${esc(u.username||'')}"></div>
     <div class="sub-note">بريد Google: <b style="direction:ltr;display:inline-block">${esc(u.googleEmail||u.email||'—')}</b></div>
+    <div class="field"><label><input type="checkbox" id="saEditPermsAccess" ${u.canManageUserPerms?'checked':''}> منح صلاحية الوصول لتبويب «الصلاحيات الخاصة»</label>
+      <div class="sub-note" style="margin-top:2px">محجوبة عن مدير المدرسة افتراضيًا — فعّلها هنا فقط لمن تريد منحه إياها تحديدًا.</div></div>
     <div class="field"><label>حالة الحساب (كل مدارسه)</label>
       <div class="chip-toggle"><button type="button" class="chip ${u.active!==false?'active':''}" id="saEditActiveOn">غير موقوف</button>
       <button type="button" class="chip ${u.active===false?'active':''}" id="saEditActiveOff">موقوف</button></div></div>
@@ -1716,7 +1720,8 @@ async function openSchoolAdminEditModal(id, schoolId){
   $('#saEditActiveOff').onclick=()=>{activeVal=false;$('#saEditActiveOff').classList.add('active');$('#saEditActiveOn').classList.remove('active');};
   $('#saSaveBtn').onclick = async ()=>{
     try{
-      await usersCol().doc(id).update({ username:$('#saEditName').value.trim()||u.username, active:activeVal, updatedAt:Date.now() });
+      await usersCol().doc(id).update({ username:$('#saEditName').value.trim()||u.username, active:activeVal,
+        canManageUserPerms: $('#saEditPermsAccess').checked, updatedAt:Date.now() });
       toast('تم الحفظ'); closeModal(); loadUsersList();
     }catch(e){ alertBox('saEditAlert','err',e.message); }
   };

@@ -1504,8 +1504,15 @@ async function loadUsersList(){
       if(!u.authUid){
         // سجل معلَّق: بنية مسطَّحة كما هي دائمًا
         if(u.role==='admin') return; // لا يوجد سجل معلَّق لـadmin العام إطلاقًا
-        if(u.role==='schoolAdmin' && !isSchoolScoped && filter && filter!==u.schoolId) return;
-        if(u.role==='schoolAdmin' && isSchoolScoped) return; // مدير مدرسة لا يُنشئ مديرين آخرين
+        if(u.role==='schoolAdmin'){
+          if(!isSchoolScoped && filter && filter!==u.schoolId) return;
+          if(isSchoolScoped) return; // مدير مدرسة لا يُنشئ مديرين آخرين
+        } else {
+          // موظف عادي معلَّق: يظهر فقط لمدرسته هو تحديدًا — هذا هو الإصلاح الحرج لتسرّب البيانات بين المدارس
+          if(isSchoolScoped && u.schoolId!==CURRENT.schoolId) return;
+          if(!isSchoolScoped && filter && filter!=='__solo__' && filter!==u.schoolId) return;
+          if(!isSchoolScoped && filter==='__solo__') return; // لا سجلات معلَّقة لمعلم فردي إطلاقًا
+        }
         rows.push(Object.assign({}, u, {_kind:'pending'}));
         return;
       }

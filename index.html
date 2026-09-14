@@ -1498,7 +1498,9 @@ async function loadUsersList(){
     raw.forEach(u=>{
       if(!u.authUid){
         // سجل معلَّق: بنية مسطَّحة كما هي دائمًا
-        if(u.role==='admin'||u.role==='schoolAdmin') return; // تُدار من مكان آخر
+        if(u.role==='admin') return; // لا يوجد سجل معلَّق لـadmin العام إطلاقًا
+        if(u.role==='schoolAdmin' && !isSchoolScoped && filter && filter!==u.schoolId) return;
+        if(u.role==='schoolAdmin' && isSchoolScoped) return; // مدير مدرسة لا يُنشئ مديرين آخرين
         rows.push(Object.assign({}, u, {_kind:'pending'}));
         return;
       }

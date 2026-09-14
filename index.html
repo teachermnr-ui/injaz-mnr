@@ -675,7 +675,7 @@ async function doStudentGoogleLogin(){
   t.textContent='جارٍ الدخول…'; btn.disabled=true;
   try{
     if(!firebase.auth) throw new Error('خدمة المصادقة غير متاحة. تأكد من الاتصال بالإنترنت.');
-    const res = await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    const res = await firebase.auth().signInWithPopup(googleProvider());
     const gUser = res.user;
     if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
 
@@ -867,7 +867,7 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
   localStorage.setItem('cls_session', JSON.stringify(SESSION));
   if(flat.role!=='admin' && flat.role!=='schoolAdmin' && data.loginId){
     try{
-      const others = await discoverOtherPendingByLoginId(data.loginId, null);
+      const others = await discoverOtherPendingByLoginId(data.loginId, null, data.blockedSchools);
       if(others.length){
         showPendingSchoolChooser(others, async ()=>{
           closeModal();
@@ -948,7 +948,7 @@ async function staffProviderLogin(){
   const btn=$('#staffGoogleBtn'); btn.disabled=true;
   const t=btn.querySelector('.pv-txt'); const old=t.textContent; t.textContent='جارٍ الدخول…';
   try{
-    const res = await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    const res = await firebase.auth().signInWithPopup(googleProvider());
     AUTH_JUST_CREATED = !!(res.additionalUserInfo && res.additionalUserInfo.isNewUser);
     await afterAuth(res.user);
   }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
@@ -972,7 +972,7 @@ function showMergeRedirectBox(already, newCred){
     <div id="mrgAlert"></div>`;
   if(already.googleEmail){
     $('#mrgGoogleBtn').onclick = async ()=>{
-      try{ const cred = await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); await finishMerge(cred.user, newCred); }
+      try{ const cred = await firebase.auth().signInWithPopup(googleProvider()); await finishMerge(cred.user, newCred); }
       catch(e){ alertBox('mrgAlert','err',authErrMsg(e)); }
     };
   } else {
@@ -984,7 +984,7 @@ function showMergeRedirectBox(already, newCred){
 }
 async function finishMerge(oldUser, newCred){
   try{
-    if(newCred.google){ await oldUser.linkWithPopup(new firebase.auth.GoogleAuthProvider()); }
+    if(newCred.google){ await oldUser.linkWithPopup(googleProvider()); }
     else { await oldUser.linkWithCredential(firebase.auth.EmailAuthProvider.credential(newCred.email, newCred.password)); }
     toast('تم دمج الحسابين بنجاح');
     showActivation(firebase.auth().currentUser);
@@ -1064,7 +1064,9 @@ async function doStaffActivate(){
 
     AUTH_JUST_CREATED = false;
     // سيناريو ١: هل يوجد سجلات معلَّقة أخرى بنفس رقم الهوية بمدارس أخرى؟
-    const others = await discoverOtherPendingByLoginId(seat, d.id);
+    let myBlocked = [];
+    try{ const meSnap = await usersCol().doc(au.uid).get(); myBlocked = (meSnap.data()||{}).blockedSchools||[]; }catch(e){}
+    const others = await discoverOtherPendingByLoginId(seat, d.id, myBlocked);
     if(others.length){ showPendingSchoolChooser(others); return; }
     $('#staffActivateBox').classList.add('hidden');
     $('#staffSignInBox').classList.remove('hidden');
@@ -1072,12 +1074,19 @@ async function doStaffActivate(){
   }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
   finally{ btn.textContent='تفعيل وربط الحساب'; btn.disabled=false; }
 }
+function googleProvider(){
+  const p = new firebase.auth.GoogleAuthProvider();
+  p.setCustomParameters({ prompt: 'select_account' });
+  return p;
+}
 function isPendingDocClient(data){ return !data.authUid; }
 /* اكتشاف سجلات معلَّقة أخرى بنفس رقم الهوية (بمدارس مختلفة) — سيناريو ١ و٢ */
-async function discoverOtherPendingByLoginId(loginId, excludeDocId){
+async function discoverOtherPendingByLoginId(loginId, excludeDocId, blockedSchools){
   if(!loginId) return [];
+  const blocked = blockedSchools||[];
   const q = await usersCol().where('loginId','==',loginId).get().catch(()=>({docs:[]}));
-  return q.docs.filter(d=> d.id!==excludeDocId && !d.data().migratedTo && isPendingDocClient(d.data()) && d.data().active!==false)
+  return q.docs.filter(d=> d.id!==excludeDocId && !d.data().migratedTo && isPendingDocClient(d.data())
+      && d.data().active!==false && !blocked.includes(d.data().schoolId))
     .map(d=>({id:d.id, ...d.data()}));
 }
 /* اكتشاف حساب مُفعَّل مسبقًا (uid مختلف) بنفس رقم الهوية — سيناريو ٣ */
@@ -1100,14 +1109,16 @@ function showPendingSchoolChooser(pendingList, onDone){
   if(!pendingList || !pendingList.length){ closeModal(); onDone(); return; }
   const next = pendingList[0]; const rest = pendingList.slice(1);
   const schoolName = (SCHOOLS[next.schoolId]&&SCHOOLS[next.schoolId].name)||next.schoolId;
+  const showBlock = !!next.skippedOnce;   // الخيار الثالث "حظر" يظهر فقط بالظهور الثاني أو أعلى (بعد تخطٍّ سابق)
   modal(`
     <div class="alert err" style="font-weight:700;margin-bottom:10px">⚠️ يوجد حساب آخر غير مفعَّل باسمك</div>
     <p style="font-weight:700;font-size:16px;margin:0 0 14px">مدرسة: ${esc(schoolName)}</p>
     <div class="field"><label>رقم الهوية</label><input id="pscSeat" value="${esc(next.loginId||'')}" inputmode="numeric"></div>
     <div class="field"><label>كلمة المرور</label><input id="pscTemp" type="password"></div>
     <div id="pscAlert"></div>
-    <div class="modal-row" style="margin-top:14px">
-      <button class="btn secondary" id="pscSkipBtn">تخطّي (لست موظفًا بهذه المدرسة)</button>
+    <div class="modal-row" style="margin-top:14px;flex-wrap:wrap">
+      <button class="btn secondary" id="pscSkipBtn">تخطّي</button>
+      ${showBlock?'<button class="btn" style="background:var(--bad,#c0392b)" id="pscBlockBtn">حظر هذه المدرسة نهائيًا</button>':''}
       <button class="btn" id="pscActivateBtn">تفعيل</button>
     </div>`);
   $('#pscActivateBtn').onclick = async ()=>{
@@ -1124,11 +1135,23 @@ function showPendingSchoolChooser(pendingList, onDone){
   };
   $('#pscSkipBtn').onclick = async ()=>{
     try{
-      await usersCol().doc(next.id).update({ active:false, updatedAt: Date.now() });
+      await usersCol().doc(next.id).update({ active:false, skippedOnce:true, updatedAt: Date.now() });
       toast('تم تعطيل هذا السجل');
       showPendingSchoolChooser(rest, onDone);
     }catch(e){ alertBox('pscAlert','err',e.message); }
   };
+  if(showBlock){
+    $('#pscBlockBtn').onclick = async ()=>{
+      if(!confirm('حظر هذه المدرسة نهائيًا؟ لن تُعرض عليك مرة أخرى حتى لو أعاد مديرها تفعيلها — يمكنك رفع الحظر لاحقًا من «حساباتي».')) return;
+      try{
+        const au = firebase.auth().currentUser;
+        await usersCol().doc(au.uid).update({ blockedSchools: firebase.firestore.FieldValue.arrayUnion(next.schoolId), updatedAt: Date.now() });
+        await usersCol().doc(next.id).update({ active:false, updatedAt: Date.now() });
+        toast('تم الحظر');
+        showPendingSchoolChooser(rest, onDone);
+      }catch(e){ alertBox('pscAlert','err',e.message); }
+    };
+  }
 }
 
 /* ========================================================================
@@ -1151,7 +1174,7 @@ async function doSoloGoogleLogin(){
   t.textContent='جارٍ الدخول…'; btn.disabled=true;
   try{
     if(!firebase.auth) throw new Error('خدمة المصادقة غير متاحة. تأكد من الاتصال بالإنترنت.');
-    const provider = new firebase.auth.GoogleAuthProvider();
+    const provider = googleProvider();
     const res = await firebase.auth().signInWithPopup(provider);
     const gUser = res.user;
     if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
@@ -1686,11 +1709,13 @@ async function loadUsersList(){
           ${u._kind==='pending'?`<button class="icon-btn" onclick="openUserModal('${u.id}')" title="تعديل">✏️</button>`:''}
           ${(u._kind==='ctx' && CURRENT.role==='admin' && u.role==='schoolAdmin')?`<button class="icon-btn" onclick="openSchoolAdminEditModal('${u.id}','${esc(u.schoolId)}')" title="تعديل">✏️</button>`:''}
           ${(u._kind==='ctx' && CURRENT.role==='admin' && u.role!=='schoolAdmin' && !isSolo)?`<button class="icon-btn" onclick="jumpToPermsEditor('${u.id}','${esc(u.schoolId)}')" title="تعديل الصلاحيات">✏️</button>`:''}
+          ${(u._kind==='ctx' && u.role!=='schoolAdmin' && u.active===false)
+            ? `<button class="icon-btn" onclick="reactivateStaffCtx('${u.id}','${esc(u.schoolId||'')}','${esc(u.username)}')" title="إعادة تفعيل سياق هذه المدرسة">▶</button>` : ''}
           ${canFullyDelete
             ? `<button class="icon-btn del" onclick="deleteUser('${u.id}','${esc(u.username)}')" title="حذف">🗑</button>`
             : (CURRENT.role==='admin'
                 ? `<button class="icon-btn del" onclick="hardDeleteUnifiedUser('${u.id}','${esc(u.username)}')" title="حذف الحساب بالكامل (كل مدارسه)">🗑</button>`
-                : (u.role!=='schoolAdmin' ? `<button class="icon-btn del" onclick="deactivateStaffCtx('${u.id}','${esc(u.schoolId||'')}','${esc(u.username)}')" title="تعطيل سياق هذه المدرسة">⏸</button>` : ''))}
+                : (u.role!=='schoolAdmin' && u.active!==false ? `<button class="icon-btn del" onclick="deactivateStaffCtx('${u.id}','${esc(u.schoolId||'')}','${esc(u.username)}')" title="تعطيل سياق هذه المدرسة">⏸</button>` : ''))}
         </div></div></div>`;
     }).join('');
   }catch(e){ wrap.innerHTML=`<div class="alert err">${esc(e.message)}</div>`; }
@@ -1710,11 +1735,26 @@ async function openSchoolAdminEditModal(id, schoolId){
       <div class="chip-toggle"><button type="button" class="chip ${u.active!==false?'active':''}" id="saEditActiveOn">غير موقوف</button>
       <button type="button" class="chip ${u.active===false?'active':''}" id="saEditActiveOff">موقوف</button></div></div>
     <div class="sub-note">مدارسه الحالية: ${(u.adminSchools||[]).map(sid=>esc((SCHOOLS[sid]&&SCHOOLS[sid].name)||sid)).join('، ')||'—'}</div>
+    <div class="field"><label>إضافة مدرسة أخرى لإشرافه</label>
+      <select id="saAddSchoolSel"><option value="">— اختر مدرسة —</option>
+        ${Object.entries(SCHOOLS).filter(([sid])=>!(u.adminSchools||[]).includes(sid)).map(([sid,s])=>`<option value="${esc(sid)}">${esc(s.name)}</option>`).join('')}
+      </select>
+      <button class="btn sm" id="saAddSchoolBtn" style="margin-top:6px">إضافة</button>
+    </div>
     <div class="modal-row" style="margin-top:14px">
       <button class="btn secondary" onclick="closeModal()">إلغاء</button>
       <button class="btn" style="background:var(--bad,#c0392b)" id="saRemoveSchoolBtn">إزالته من هذه المدرسة</button>
       <button class="btn" id="saSaveBtn">حفظ</button>
     </div>`);
+  $('#saAddSchoolBtn').onclick = async ()=>{
+    const sid = $('#saAddSchoolSel').value;
+    if(!sid){ alertBox('saEditAlert','err','اختر مدرسة أولًا'); return; }
+    try{
+      const list = (u.adminSchools||[]).concat([sid]);
+      await usersCol().doc(id).update({ adminSchools:list, updatedAt:Date.now() });
+      toast('تمت الإضافة'); closeModal(); loadUsersList();
+    }catch(e){ alertBox('saEditAlert','err',e.message); }
+  };
   let activeVal = u.active!==false;
   $('#saEditActiveOn').onclick=()=>{activeVal=true;$('#saEditActiveOn').classList.add('active');$('#saEditActiveOff').classList.remove('active');};
   $('#saEditActiveOff').onclick=()=>{activeVal=false;$('#saEditActiveOff').classList.add('active');$('#saEditActiveOn').classList.remove('active');};
@@ -1750,6 +1790,14 @@ async function deactivateStaffCtx(id, schoolId, name){
     try{
       await usersCol().doc(id).update({ ['schools.'+schoolId+'.active']: false, updatedAt: Date.now(), _editCtx: schoolId });
       toast('تم التعطيل'); loadUsersList();
+    }catch(e){ toast('خطأ: '+e.message); }
+  }, true);
+}
+async function reactivateStaffCtx(id, schoolId, name){
+  confirmModal('إعادة تفعيل', `سيُعاد تفعيل سياق «${name}» بهذه المدرسة، ويرجع كما كان قبل التعطيل بالضبط (نفس الدور والصلاحيات والفصول). متابعة؟`, async()=>{
+    try{
+      await usersCol().doc(id).update({ ['schools.'+schoolId+'.active']: true, updatedAt: Date.now(), _editCtx: schoolId });
+      toast('تمت إعادة التفعيل'); loadUsersList();
     }catch(e){ toast('خطأ: '+e.message); }
   }, true);
 }
@@ -2098,14 +2146,13 @@ async function loadUserPermsEditor(id, schoolId){
     return;
   }
   const ctx = (u.schools||{})[schoolId] || {role:'', permissions:{}, assignedClasses:[]};
-  const roleLockedByViewer = CURRENT.role==='schoolAdmin';
   upEditPerms = JSON.parse(JSON.stringify(ctx.permissions || {}));
   const roleOpts = Object.entries(ROLES).filter(([k])=>k!=='admin'&&k!=='schoolAdmin'&&k!=='soloTeacher')
     .map(([k,v])=>`<option value="${k}" ${ctx.role===k?'selected':''}>${esc(v)}</option>`).join('');
   host.innerHTML = `<div class="card">
-      <div class="umeta" style="margin-bottom:10px">البريد: <b>${esc(u.email||'—')}</b> — المدرسة: <b>${esc((SCHOOLS[schoolId]&&SCHOOLS[schoolId].name)||schoolId)}</b></div>
-      <div class="field"><label>الدور</label><select id="upRole" ${roleLockedByViewer?'disabled':''}>${roleOpts}</select></div>
-      ${roleLockedByViewer?'<div class="sub-note">لتعديل الدور يجب تغييره من «حسابات المستخدمين».</div>':''}
+      <div class="umeta" style="margin-bottom:4px">البريد: <b>${esc(u.email||'—')}</b> — المدرسة: <b>${esc((SCHOOLS[schoolId]&&SCHOOLS[schoolId].name)||schoolId)}</b></div>
+      <div class="umeta" style="margin-bottom:10px">رقم الهوية: <b style="direction:ltr;display:inline-block">${esc(u.loginId||'—')}</b></div>
+      <div class="field"><label>الدور</label><select id="upRole">${roleOpts}</select></div>
       <div class="divider"></div>
       <label style="font-weight:700;font-size:14px">الفصول المسندة</label>
       <div id="upClassesHost" style="margin-top:8px"><div class="sub-note" style="margin:0">جارٍ تحميل الفصول…</div></div>

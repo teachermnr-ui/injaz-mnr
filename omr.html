@@ -2427,7 +2427,7 @@ async function openMyAccountsPanel(){
         (isCur ? '' : (isActive ? '<button data-key="solo" class="myAcctGoBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : ''))+
         '</div>';
     }
-    if(!schoolIds.length && !u.solo){ host.innerHTML = '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; return; }
+    if(!schoolIds.length && !u.solo && !(u.blockedSchools||[]).length){ host.innerHTML = '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; return; }
     for(const sid of schoolIds){
       const ctx = u.schools[sid];
       let name = sid;
@@ -2441,7 +2441,24 @@ async function openMyAccountsPanel(){
                   : '<span style="font-size:11px;color:#aaa">تفعيله بيد مدير المدرسة فقط</span>') +
         '</div></div>';
     }
+    for(const sid of (u.blockedSchools||[])){
+      let name = sid;
+      try{ const sSnap = await db.collection('schoolData').doc(sid).get(); if(sSnap.exists && sSnap.data().name) name = sSnap.data().name; }catch(e){}
+      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee">'+
+        '<div><b>'+escapeHtml(name)+'</b><div style="font-size:11.5px;color:var(--bad,#c0392b)">محظورة</div></div>'+
+        '<button data-sid="'+sid+'" class="myAcctUnblockBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">رفع الحظر</button>'+
+        '</div>';
+    }
     host.innerHTML = rows;
+    document.querySelectorAll('.myAcctUnblockBtn').forEach(btn=>{
+      btn.onclick = async function(){
+        const sid = this.getAttribute('data-sid');
+        try{
+          await db.collection('users').doc(CLS_SESSION.userId).update({ blockedSchools: firebase.firestore.FieldValue.arrayRemove(sid), updatedAt: Date.now() });
+          openMyAccountsPanel();
+        }catch(e){ alert('تعذّر رفع الحظر: '+e.message); }
+      };
+    });
     document.querySelectorAll('.myAcctGoBtn').forEach(btn=>{
       btn.onclick = function(){
         const key = this.getAttribute('data-key');
@@ -2466,8 +2483,10 @@ async function openMyAccountsPanel(){
 }
 async function checkOtherPendingSchools(loginId){
   try{
+    const meSnap = await db.collection('users').doc(CLS_SESSION.userId).get();
+    const blocked = (meSnap.data()||{}).blockedSchools||[];
     const q = await db.collection('users').where('loginId','==',loginId).get();
-    const others = q.docs.filter(d=>!d.data().migratedTo && !d.data().authUid && d.data().active!==false)
+    const others = q.docs.filter(d=>!d.data().migratedTo && !d.data().authUid && d.data().active!==false && !blocked.includes(d.data().schoolId))
       .map(d=>({id:d.id, ...d.data()}));
     if(others.length) showOtherPendingChooser(others);
   }catch(e){}
@@ -2475,6 +2494,7 @@ async function checkOtherPendingSchools(loginId){
 function showOtherPendingChooser(list){
   if(!list.length) return;
   const next = list[0]; const rest = list.slice(1);
+  const showBlock = !!next.skippedOnce;
   omrModal('<h3>توجد مدرسة بها حسابك غير مفعَّل</h3>'+
     '<div style="padding:8px 0">'+
     '<p><b>'+escapeHtml(next.schoolId)+'</b> — الدور: '+escapeHtml(next.role||'')+'</p>'+
@@ -2482,7 +2502,8 @@ function showOtherPendingChooser(list){
     '<div class="field"><label>كلمة المرور الأولية لهذه المدرسة</label><input id="opcTemp" type="password" style="width:100%;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;margin:4px 0 10px"></div>'+
     '<div id="opcAlert"></div>'+
     '<button id="opcActivateBtn" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--teal,#0f766e);color:#fff;margin-bottom:8px;cursor:pointer">تفعيل هذه المدرسة أيضًا</button>'+
-    '<button id="opcSkipBtn" style="width:100%;padding:10px;border:1px solid var(--line,#ddd);border-radius:8px;background:#fff;cursor:pointer">تخطّي (لست موظفًا بهذه المدرسة)</button>'+
+    '<button id="opcSkipBtn" style="width:100%;padding:10px;border:1px solid var(--line,#ddd);border-radius:8px;background:#fff;margin-bottom:8px;cursor:pointer">تخطّي</button>'+
+    (showBlock ? '<button id="opcBlockBtn" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--bad,#c0392b);color:#fff;cursor:pointer">حظر هذه المدرسة نهائيًا</button>' : '')+
     '</div>');
   document.getElementById('opcActivateBtn').onclick = async function(){
     const temp = document.getElementById('opcTemp').value;
@@ -2498,11 +2519,23 @@ function showOtherPendingChooser(list){
   };
   document.getElementById('opcSkipBtn').onclick = async function(){
     try{
-      await db.collection('users').doc(next.id).update({ active:false, updatedAt: Date.now() });
+      await db.collection('users').doc(next.id).update({ active:false, skippedOnce:true, updatedAt: Date.now() });
       closeOmrModal();
       showOtherPendingChooser(rest);
     }catch(e){ document.getElementById('opcAlert').innerHTML='<div class="alert err">'+escapeHtml(e.message)+'</div>'; }
   };
+  if(showBlock){
+    document.getElementById('opcBlockBtn').onclick = async function(){
+      if(!confirm('حظر هذه المدرسة نهائيًا؟ لن تُعرض عليك مرة أخرى حتى لو أعاد مديرها تفعيلها.')) return;
+      try{
+        const au = firebase.auth().currentUser;
+        await db.collection('users').doc(au.uid).update({ blockedSchools: firebase.firestore.FieldValue.arrayUnion(next.schoolId), updatedAt: Date.now() });
+        await db.collection('users').doc(next.id).update({ active:false, updatedAt: Date.now() });
+        closeOmrModal();
+        showOtherPendingChooser(rest);
+      }catch(e){ document.getElementById('opcAlert').innerHTML='<div class="alert err">'+escapeHtml(e.message)+'</div>'; }
+    };
+  }
 }
 function omrModal(html){
   closeOmrModal();

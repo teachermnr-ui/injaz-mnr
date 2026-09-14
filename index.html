@@ -1556,6 +1556,8 @@ async function loadUsersList(){
           ${isSolo?`<button class="icon-btn" onclick="editSoloSubscription('${u.id}')" title="إدارة الاشتراك">🗓</button>`:''}
           ${(u._kind==='pending' && u.loginId && u.password)?`<button class="icon-btn" onclick="shareCredsWhatsApp('${u.id}')" title="مشاركة بيانات الدخول عبر واتساب">📲</button>`:''}
           ${u._kind==='pending'?`<button class="icon-btn" onclick="openUserModal('${u.id}')" title="تعديل">✏️</button>`:''}
+          ${(u._kind==='ctx' && CURRENT.role==='admin' && u.role==='schoolAdmin')?`<button class="icon-btn" onclick="openSchoolAdminEditModal('${u.id}','${esc(u.schoolId)}')" title="تعديل">✏️</button>`:''}
+          ${(u._kind==='ctx' && CURRENT.role==='admin' && u.role!=='schoolAdmin' && !isSolo)?`<button class="icon-btn" onclick="jumpToPermsEditor('${u.id}','${esc(u.schoolId)}')" title="تعديل الصلاحيات">✏️</button>`:''}
           ${canFullyDelete
             ? `<button class="icon-btn del" onclick="deleteUser('${u.id}','${esc(u.username)}')" title="حذف">🗑</button>`
             : (CURRENT.role==='admin'
@@ -1564,6 +1566,51 @@ async function loadUsersList(){
         </div></div></div>`;
     }).join('');
   }catch(e){ wrap.innerHTML=`<div class="alert err">${esc(e.message)}</div>`; }
+}
+/* تعديل حساب مدير مدرسة مُفعَّل (admin العام حصرًا): إعادة تسمية، إيقاف/تفعيل الحساب كله، أو إزالة مدرسة واحدة من إشرافه */
+async function openSchoolAdminEditModal(id, schoolId){
+  const s = await usersCol().doc(id).get();
+  if(!s.exists){ toast('الحساب غير موجود'); return; }
+  const u = s.data();
+  modal(`<h2>تعديل حساب مدير</h2>
+    <div id="saEditAlert"></div>
+    <div class="field"><label>اسم المستخدم</label><input id="saEditName" value="${esc(u.username||'')}"></div>
+    <div class="field"><label>حالة الحساب (كل مدارسه)</label>
+      <div class="chip-toggle"><button type="button" class="chip ${u.active!==false?'active':''}" id="saEditActiveOn">غير موقوف</button>
+      <button type="button" class="chip ${u.active===false?'active':''}" id="saEditActiveOff">موقوف</button></div></div>
+    <div class="sub-note">مدارسه الحالية: ${(u.adminSchools||[]).map(sid=>esc((SCHOOLS[sid]&&SCHOOLS[sid].name)||sid)).join('، ')||'—'}</div>
+    <div class="modal-row" style="margin-top:14px">
+      <button class="btn secondary" onclick="closeModal()">إلغاء</button>
+      <button class="btn" style="background:var(--bad,#c0392b)" id="saRemoveSchoolBtn">إزالته من هذه المدرسة</button>
+      <button class="btn" id="saSaveBtn">حفظ</button>
+    </div>`);
+  let activeVal = u.active!==false;
+  $('#saEditActiveOn').onclick=()=>{activeVal=true;$('#saEditActiveOn').classList.add('active');$('#saEditActiveOff').classList.remove('active');};
+  $('#saEditActiveOff').onclick=()=>{activeVal=false;$('#saEditActiveOff').classList.add('active');$('#saEditActiveOn').classList.remove('active');};
+  $('#saSaveBtn').onclick = async ()=>{
+    try{
+      await usersCol().doc(id).update({ username:$('#saEditName').value.trim()||u.username, active:activeVal, updatedAt:Date.now() });
+      toast('تم الحفظ'); closeModal(); loadUsersList();
+    }catch(e){ alertBox('saEditAlert','err',e.message); }
+  };
+  $('#saRemoveSchoolBtn').onclick = ()=>{
+    confirmModal('إزالة من هذه المدرسة', 'سيفقد هذا المدير إشرافه على هذه المدرسة تحديدًا فقط (تبقى مدارسه الأخرى كما هي). متابعة؟', async()=>{
+      try{
+        const list = (u.adminSchools||[]).filter(x=>x!==schoolId);
+        await usersCol().doc(id).update({ adminSchools:list, updatedAt:Date.now() });
+        toast('تمت الإزالة'); closeModal(); loadUsersList();
+      }catch(e){ alertBox('saEditAlert','err',e.message); }
+    }, true);
+  };
+}
+/* اختصار: يفتح تبويب الصلاحيات الخاصة مباشرة بمستخدم/مدرسة محدَّدين (admin العام) */
+function jumpToPermsEditor(id, schoolId){
+  activeTab='userPerms'; renderTabs(); renderPanel();
+  setTimeout(()=>{
+    const schoolSel=$('#upSchoolSelect');
+    if(schoolSel){ schoolSel.value=schoolId; schoolSel.dispatchEvent(new Event('change')); }
+    setTimeout(()=>{ const userSel=$('#upUserSelect'); if(userSel){ userSel.value=id; userSel.dispatchEvent(new Event('change')); } }, 300);
+  }, 200);
 }
 /* تعطيل سياق مدرسة لموظف مُفعَّل (بدل الحذف الكامل الذي صار حصرًا لـadmin العام تحت النموذج الموحَّد) */
 async function deactivateStaffCtx(id, schoolId, name){

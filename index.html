@@ -871,7 +871,7 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
     if(data.role==='schoolAdmin'){
       const block = schoolLoginBlockReason(sid, period);
       if(block){ await cleanSignOut(); throw new Error(block); }
-      flat = { role:'schoolAdmin', schoolId:sid, permissions:permsForNewUser('schoolAdmin'), active:data.active };
+      flat = { role:'schoolAdmin', schoolId:sid, permissions:defaultPerms('schoolAdmin'), active:data.active };
     } else {
       const ctx = (data.schools||{})[sid];
       if(!ctx || ctx.active===false){ await cleanSignOut(); throw new Error('هذا السياق معطّل. راجع المسؤول'); }

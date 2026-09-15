@@ -2427,7 +2427,7 @@ async function openMyAccountsPanel(){
         (isCur ? '' : (isActive ? '<button data-key="solo" class="myAcctGoBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : ''))+
         '</div>';
     }
-    if(!schoolIds.length && !u.solo && !(u.blockedSchools||[]).length){ host.innerHTML = '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; return; }
+    if(!schoolIds.length && !u.solo && !(u.blockedSchools||[]).length){ rows += '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; }
     for(const sid of schoolIds){
       const ctx = u.schools[sid];
       let name = sid;
@@ -2449,7 +2449,28 @@ async function openMyAccountsPanel(){
         '<button data-sid="'+sid+'" class="myAcctUnblockBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">رفع الحظر</button>'+
         '</div>';
     }
+    // طرق الدخول المرتبطة بنفس الحساب — إزالة ذاتية (يبقى طريق واحد على الأقل دائمًا)
+    const au = firebase.auth().currentUser;
+    const providers = au ? au.providerData : [];
+    rows += '<h4 style="margin:16px 0 8px">طرق الدخول المرتبطة</h4>';
+    providers.forEach(p=>{
+      const label = p.providerId==='google.com' ? 'Google' : (p.providerId==='password' ? 'بريد وكلمة مرور' : p.providerId);
+      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee">'+
+        '<div>'+escapeHtml(label)+'<div style="font-size:11px;color:#888;direction:ltr">'+escapeHtml(p.email||'')+'</div></div>'+
+        (providers.length>1 ? '<button data-pid="'+p.providerId+'" class="myAcctUnlinkBtn" style="border:1px solid var(--bad,#c0392b);background:#fff;color:var(--bad,#c0392b);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">إزالة</button>'
+                             : '<span style="font-size:11px;color:#aaa">الوحيدة المتبقية</span>')+
+        '</div>';
+    });
     host.innerHTML = rows;
+    document.querySelectorAll('.myAcctUnlinkBtn').forEach(btn=>{
+      btn.onclick = async function(){
+        if(!confirm('إزالة طريقة الدخول هذه؟ لن تقدر تدخل بها بعد الآن.')) return;
+        try{
+          await firebase.auth().currentUser.unlink(this.getAttribute('data-pid'));
+          openMyAccountsPanel();
+        }catch(e){ alert('تعذّرت الإزالة: '+e.message); }
+      };
+    });
     document.querySelectorAll('.myAcctUnblockBtn').forEach(btn=>{
       btn.onclick = async function(){
         const sid = this.getAttribute('data-sid');
@@ -5208,23 +5229,32 @@ document.addEventListener('DOMContentLoaded', function(){
     try{
       await db.collection('users').doc(CLS_SESSION.userId).update({ loginId: val, isSolo:true, updatedAt: Date.now() });
       document.getElementById('soloLinkBanner').style.display='none';
-      // فحص تعارض: هل نفس الرقم مرتبط بحساب آخر مُفعَّل مسبقًا (بريد مختلف)؟ لا يمكن دمجهما تلقائيًا من هنا
-      // (الحسابان مصادَق عليهما بشكل مستقل فعلاً، والحذف مقصور على admin) — نكتفي بتنبيهه ليتواصل مع admin.
-      try{
-        const q = await db.collection('users').where('loginId','==',val).get();
-        const other = q.docs.find(d=> d.id!==CLS_SESSION.userId && d.data().authUid && d.data().role!=='admin' && d.data().role!=='schoolAdmin');
-        if(other){
-          const em = other.data().email||other.data().googleEmail||'';
-          const masked = em ? (em.split('@')[0].slice(0,2)+'***@'+(em.split('@')[1]||'')) : 'غير معروف';
-          alert('تم ربط رقم الهوية بحسابك، لكن نفس الرقم مرتبط أيضًا بحساب آخر مُفعَّل مسبقًا ('+masked+'). لا يمكن دمج الحسابين تلقائيًا من هنا — راجع admin العام لدمجهما.');
-        } else {
-          alert('تم ربط رقم الهوية بحسابك.');
-        }
-      }catch(e){ alert('تم ربط رقم الهوية بحسابك.'); }
+      // فحص تعارض: هل نفس الرقم مرتبط بحساب مدرسة مُفعَّل مسبقًا؟ (دمج فردي↔مدرسة فقط، اتجاه واحد —
+      // لا يُعرض دمج مع حساب فردي آخر إطلاقًا، بما إنه غير مرغوب)
+      const q = await db.collection('users').where('loginId','==',val).get();
+      const other = q.docs.find(d=> d.id!==CLS_SESSION.userId && d.data().authUid
+        && d.data().role!=='admin' && d.data().role!=='schoolAdmin'
+        && d.data().schools && Object.keys(d.data().schools).length>0);
+      if(other){ showSoloMergeDialog(other.id, other.data()); }
+      else { alert('تم ربط رقم الهوية بحسابك.'); }
     }catch(e){ alert('تعذّر الربط: '+e.message); }
     finally{ linkBtn.disabled = false; }
   };
 });
+/* دمج فردي بحساب مدرسة — بند مهم اكتُشف عند المراجعة النهائية قبل التجربة:
+   لا يمكن تنفيذ linkWithPopup مباشرة هنا لأن حساب Google الفردي هو أصلاً حساب مصادقة
+   منفصل وقائم بالفعل (نفس القيد الذي ناقشناه بالتفصيل لكل الحالات المشابهة) — Firebase يرفض
+   ربط اعتماد ينتمي لحساب آخر موجود فعليًا. المسار الفعلي الوحيد يبقى: admin يفكّ ربط الحساب
+   الفردي (🔓) أولًا، ثم صاحبه يُكمل التفعيل من جديد فيُكتشف التعارض تلقائيًا (سيناريو ٣ بـindex.html)
+   ويُدمَج حينها بأمان. هنا نكتفي بالاكتشاف والتنبيه الواضح، بدون محاولة ربط ستفشل عمليًا. */
+function showSoloMergeDialog(otherId, other){
+  const em = other.email||other.googleEmail||'';
+  const masked = em ? (em.slice(0,2)+'***@'+(em.split('@')[1]||'')) : 'غير معروف';
+  omrModal('<h3>يوجد حساب مدرسة بنفس رقم هويتك</h3>'+
+    '<p>البريد: <b style="direction:ltr;display:inline-block">'+escapeHtml(masked)+'</b></p>'+
+    '<p class="sub-note">لا يمكن دمج الحسابين تلقائيًا من هنا — راجع admin العام ليفكّ ربط حسابك الفردي، وبعدها أعد التفعيل برقم هويتك فيتم الدمج تلقائيًا.</p>'+
+    '<div class="modal-row"><button class="btn" onclick="closeOmrModal()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--teal,#0f766e);color:#fff;cursor:pointer">فهمت</button></div>');
+}
 async function clsLoadPerms(){
   try{
     if(!CLS_SESSION || !CLS_SESSION.userId) return;

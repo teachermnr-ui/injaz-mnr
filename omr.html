@@ -4924,8 +4924,14 @@ let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_ALL_PERMS =
         '<span style="background:rgba(255,255,255,.14);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:500;white-space:nowrap">'+(CLS_SESSION.period==='second'?'الفترة الثانية':'الفترة الأولى')+'</span>'+
         '<span id="ctxSwitchWrap" style="margin-inline-start:auto"></span>'+
         '<button id="myAccountsBtn" style="background:rgba(255,255,255,.18);color:#fff;border:none;padding:5px 10px;border-radius:9px;font-size:11.5px;cursor:pointer;white-space:nowrap">⚙️ حساباتي</button>'+
+        '<button id="omrLogoutBtn" title="تسجيل الخروج" style="background:rgba(255,255,255,.18);color:#fff;border:none;padding:5px 9px;border-radius:9px;font-size:13px;cursor:pointer">⏻</button>'+
       '</div>';
     document.body.insertBefore(bar, document.body.firstChild);
+    var loBtn = document.getElementById('omrLogoutBtn');
+    if(loBtn) loBtn.onclick = function(){
+      try{ localStorage.removeItem('cls_session'); }catch(e){}
+      firebase.auth().signOut().finally(function(){ location.href='index.html'; });
+    };
     var maBtn = document.getElementById('myAccountsBtn');
     if(maBtn){
       if(CLS_SESSION.role==='admin' || CLS_SESSION.role==='schoolAdmin') maBtn.style.display='none';
@@ -5202,7 +5208,19 @@ document.addEventListener('DOMContentLoaded', function(){
     try{
       await db.collection('users').doc(CLS_SESSION.userId).update({ loginId: val, isSolo:true, updatedAt: Date.now() });
       document.getElementById('soloLinkBanner').style.display='none';
-      alert('تم ربط رقم الهوية بحسابك.');
+      // فحص تعارض: هل نفس الرقم مرتبط بحساب آخر مُفعَّل مسبقًا (بريد مختلف)؟ لا يمكن دمجهما تلقائيًا من هنا
+      // (الحسابان مصادَق عليهما بشكل مستقل فعلاً، والحذف مقصور على admin) — نكتفي بتنبيهه ليتواصل مع admin.
+      try{
+        const q = await db.collection('users').where('loginId','==',val).get();
+        const other = q.docs.find(d=> d.id!==CLS_SESSION.userId && d.data().authUid && d.data().role!=='admin' && d.data().role!=='schoolAdmin');
+        if(other){
+          const em = other.data().email||other.data().googleEmail||'';
+          const masked = em ? (em.split('@')[0].slice(0,2)+'***@'+(em.split('@')[1]||'')) : 'غير معروف';
+          alert('تم ربط رقم الهوية بحسابك، لكن نفس الرقم مرتبط أيضًا بحساب آخر مُفعَّل مسبقًا ('+masked+'). لا يمكن دمج الحسابين تلقائيًا من هنا — راجع admin العام لدمجهما.');
+        } else {
+          alert('تم ربط رقم الهوية بحسابك.');
+        }
+      }catch(e){ alert('تم ربط رقم الهوية بحسابك.'); }
     }catch(e){ alert('تعذّر الربط: '+e.message); }
     finally{ linkBtn.disabled = false; }
   };

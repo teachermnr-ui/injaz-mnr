@@ -1312,6 +1312,7 @@ function enterApp(){
   tabs.forEach(t=>{
     const b=document.createElement('button'); b.className='tab'; b.textContent=t.label;
     if(t.key==='received'){ const bd=document.createElement('span'); bd.id='rcvBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
+    if(t.key==='users' && CURRENT.role==='admin'){ const bd=document.createElement('span'); bd.id='mergeReqBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
     b.onclick=()=>{ activeTab=t.key; renderTabs(); renderPanel(); };
     bar.appendChild(b);
   });
@@ -1320,6 +1321,14 @@ function enterApp(){
   watchActive();
   buildIndexCtxSwitcher();
   if(typeof refreshUnread==='function') refreshUnread();
+  if(CURRENT.role==='admin' && typeof refreshMergeRequests==='function') refreshMergeRequests();
+}
+async function refreshMergeRequests(){
+  try{
+    const snap = await usersCol().where('mergeRequestAt','>',0).get();
+    const n = snap.docs.length;
+    const bd=$('#mergeReqBadge'); if(bd){ bd.textContent=n; bd.style.display=n>0?'inline-flex':'none'; }
+  }catch(e){}
 }
 /* بند ١٤ لـindex.html: مبدّل سريع بين مدارس مدير عنده أكثر من مدرسة، بلا تسجيل خروج */
 function buildIndexCtxSwitcher(){
@@ -1749,6 +1758,7 @@ async function loadUsersList(){
         <div class="uinfo">
           <div class="uname">${esc(u.username)} ${isMe?'<span class="pill role">أنت</span>':''}</div>
           <div class="umeta"><span class="pill role">${esc(ROLES[u.role]||u.role)}</span> · ${esc(sc)}</div>
+          ${u.mergeRequestAt?`<div class="umeta" style="color:var(--bad,#c0392b);font-weight:700">🔔 طلب دمج معلَّق — يريد الدمج مع: ${esc(u.mergeRequestTarget||'')}</div>`:''}
           ${subLine}
         </div>
         <span class="pill ${u.active===false?'off':'on'}">${u.active===false?'موقوف':'غير موقوف'}</span>
@@ -1863,6 +1873,8 @@ async function unlinkUserAccount(id, name){
         authUid: firebase.firestore.FieldValue.delete(),
         email: firebase.firestore.FieldValue.delete(),
         googleEmail: firebase.firestore.FieldValue.delete(),
+        mergeRequestAt: firebase.firestore.FieldValue.delete(),
+        mergeRequestTarget: firebase.firestore.FieldValue.delete(),
         password: pass, updatedAt: Date.now()
       });
       closeModal();
@@ -1870,6 +1882,7 @@ async function unlinkUserAccount(id, name){
         <p style="font-size:20px;font-weight:700;direction:ltr">${esc(pass)}</p>
         <div class="modal-row"><button class="btn" onclick="closeModal()">تم</button></div>`);
       loadUsersList();
+      if(typeof refreshMergeRequests==='function') refreshMergeRequests();
     }catch(e){ toast('خطأ: '+e.message); }
   }, true);
 }

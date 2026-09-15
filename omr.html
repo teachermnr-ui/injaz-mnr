@@ -5250,9 +5250,11 @@ document.addEventListener('DOMContentLoaded', function(){
 function showSoloMergeDialog(otherId, other){
   const em = other.email||other.googleEmail||'';
   const masked = em ? (em.slice(0,2)+'***@'+(em.split('@')[1]||'')) : 'غير معروف';
+  // تسجيل طلب دمج تلقائي على مستندي أنا (الحساب الفردي) — يظهره admin العام بلا حاجة للتواصل اليدوي
+  db.collection('users').doc(CLS_SESSION.userId).update({ mergeRequestAt: Date.now(), mergeRequestTarget: masked, updatedAt: Date.now() }).catch(function(){});
   omrModal('<h3>يوجد حساب مدرسة بنفس رقم هويتك</h3>'+
     '<p>البريد: <b style="direction:ltr;display:inline-block">'+escapeHtml(masked)+'</b></p>'+
-    '<p class="sub-note">لا يمكن دمج الحسابين تلقائيًا من هنا — راجع admin العام ليفكّ ربط حسابك الفردي، وبعدها أعد التفعيل برقم هويتك فيتم الدمج تلقائيًا.</p>'+
+    '<p class="sub-note">لا يمكن دمج الحسابين تلقائيًا من هنا. تم إرسال طلب دمج تلقائيًا لـadmin العام — راجعه ليفكّ ربط حسابك الفردي، وبعدها أعد التفعيل برقم هويتك فيتم الدمج تلقائيًا.</p>'+
     '<div class="modal-row"><button class="btn" onclick="closeOmrModal()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--teal,#0f766e);color:#fff;cursor:pointer">فهمت</button></div>');
 }
 async function clsLoadPerms(){

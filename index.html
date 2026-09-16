@@ -389,6 +389,13 @@ body.theme-glass .tab.active{background:var(--accent);color:#fff}
     <p class="auth-sub">سجّل الدخول بحسابك، وستحصل على فترة تجريبية ٣٠ يوماً عند أول اشتراك</p>
     <div id="soloLoginAlert"></div>
     <button class="prov-btn" id="soloGoogleBtn"><span class="pv-ico"><svg viewBox="0 0 48 48" width="22" height="22"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9.1h12.4c-.5 2.9-2.1 5.3-4.6 6.9l7.1 5.5c4.2-3.8 6.6-9.5 6.6-16.2z"/><path fill="#FBBC05" d="M10.4 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.8-6.1C1 16.3 0 20 0 24s1 7.7 2.6 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.9l-7.1-5.5c-2 1.3-4.6 2.1-8.8 2.1-6.4 0-11.7-3.7-13.6-9.1l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg></span><span class="pv-txt">المتابعة بحساب Google</span></button>
+    <button type="button" class="prov-btn" id="soloShowEmailBtn" style="margin-top:8px"><span class="pv-ico">✉️</span><span class="pv-txt">المتابعة بالبريد الإلكتروني</span></button>
+    <div id="soloEmailForm" class="hidden" style="margin-top:6px;text-align:right;">
+      <div class="field"><label>البريد الإلكتروني</label><input id="soliEmail" type="email" autocomplete="username" placeholder="name@example.com"></div>
+      <div class="field"><label>كلمة المرور</label><input id="soliPass" type="password" autocomplete="current-password" placeholder="كلمة المرور"></div>
+      <button class="btn" id="soliBtn">متابعة</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:8px;">دخولك الأول ينشئ حسابك ويرسل رابط تحقق لبريدك — يجب تأكيده قبل استخدام الحساب.</p>
+    </div>
     <button class="btn" id="backFromSoloBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
   </div>
 
@@ -941,9 +948,39 @@ async function doLogin(){
         }
       } else throw err;
     }
+    // تحقّق إجباري من البريد — يمنع أي بريد وهمي من إكمال أي تدفّق (موظف أو فردي)
+    if(AUTH_JUST_CREATED){
+      try{ await cred.user.sendEmailVerification(); }catch(e){}
+      try{ await firebase.auth().signOut(); }catch(e){}
+      alertBox('loginAlert','ok','تم إنشاء حسابك. أرسلنا رابط تحقق لبريدك — افتحه واضغطه، ثم سجّل الدخول من جديد بنفس البريد وكلمة المرور لإكمال حسابك.');
+      return;
+    }
+    await cred.user.reload();
+    if(!cred.user.emailVerified){
+      showUnverifiedEmailBox(cred.user);
+      return;
+    }
     await afterAuth(cred.user);
   }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
   finally{ btn.textContent='متابعة'; btn.disabled=false; }
+}
+/* يظهر لحساب بريد/كلمة مرور لم يؤكِّد بريده بعد — يمنع المتابعة نهائيًا، مع خيار إعادة الإرسال */
+function showUnverifiedEmailBox(user){
+  alertBox('loginAlert','err','يجب تأكيد بريدك أولًا — راجع صندوق الوارد (وربما الرسائل غير المرغوبة) واضغط رابط التحقق، ثم سجّل الدخول من جديد.');
+  const el = $('#loginAlert');
+  if(el){
+    const b = document.createElement('button');
+    b.type='button'; b.className='btn secondary'; b.style.marginTop='8px';
+    b.textContent='إعادة إرسال رابط التحقق';
+    b.onclick = async ()=>{
+      b.disabled=true; const old=b.textContent; b.textContent='جارٍ الإرسال…';
+      try{ await user.sendEmailVerification(); alertBox('loginAlert','ok','أُعيد إرسال رابط التحقق — راجع بريدك.'); }
+      catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
+      finally{ b.disabled=false; b.textContent=old; }
+    };
+    el.appendChild(b);
+  }
+  try{ firebase.auth().signOut(); }catch(e){}
 }
 async function staffProviderLogin(){
   const btn=$('#staffGoogleBtn'); btn.disabled=true;
@@ -1024,9 +1061,7 @@ async function doStaffActivate(){
     if(already){
       const isGoogleNew = au.providerData && au.providerData.some(p=>p.providerId==='google.com');
       const newCred = isGoogleNew ? {google:true} : {email: ($('#liEmail')?$('#liEmail').value.trim():au.email)||au.email, password: $('#liPass')?$('#liPass').value:''};
-      // حرج: لازم نحذف حساب المصادقة الجديد (لا نكتفي بتسجيل الخروج منه) — وإلا يبقى بريده/حسابه
-      // "مُستخدَمًا" فعليًا فيفشل الربط لاحقًا بخطأ email-already-in-use/credential-already-in-use
-      try{ await au.delete(); }catch(delErr){ try{ await firebase.auth().signOut(); }catch(_){} }
+      try{ await firebase.auth().signOut(); }catch(_){}
       showMergeRedirectBox(already, newCred);
       return;
     }
@@ -1036,16 +1071,11 @@ async function doStaffActivate(){
     const now = Date.now();
     if(data.schools || data.solo){
       // إعادة ربط حساب كامل سبق فك ربطه (يحمل مدارس/سياق فردي متعدد أصلاً على نفس السجل)
-      if(existing.exists && existing.id!==d.id) throw new Error('حسابك الحالي مرتبط بحساب آخر بالفعل — لا يمكن إعادة ربط حساب كامل عليه. راجع admin العام.');
-      if(existing.exists && existing.id===d.id){
-        // نفس البريد القديم بالضبط (نفس uid) — استرجاع بسيط بلا نقل مستند، فقط إعادة ضبط authUid
-        await usersCol().doc(au.uid).update({ authUid:au.uid, email:au.email||null, password: firebase.firestore.FieldValue.delete(), updatedAt:now });
-      } else {
-        const payload = Object.assign({}, data, { authUid:au.uid, email:au.email||null, updatedAt:now });
-        delete payload.password;
-        await usersCol().doc(au.uid).set(payload);
-        try{ await usersCol().doc(d.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
-      }
+      if(existing.exists) throw new Error('حسابك الحالي مرتبط بحساب آخر بالفعل — لا يمكن إعادة ربط حساب كامل عليه. راجع admin العام.');
+      const payload = Object.assign({}, data, { authUid:au.uid, email:au.email||null, updatedAt:now });
+      delete payload.password;
+      await usersCol().doc(au.uid).set(payload);
+      try{ await usersCol().doc(d.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
       AUTH_JUST_CREATED = false;
       $('#staffActivateBox').classList.add('hidden');
       $('#staffSignInBox').classList.remove('hidden');
@@ -1190,6 +1220,37 @@ async function nextSoloTeacherCode(){
   });
   return 'T' + (max + 1);
 }
+/* منطق حسم سياق الفردي (إنشاء ملف جديد أو إضافة solo لملف موجود) — مشترك بين Google والبريد */
+async function resolveSoloLogin(authUser){
+  if(!Object.keys(SCHOOLS||{}).length){ try{ await ensureSeed(); await loadSchools(); await loadRoleTemplates(); }catch(e){} }
+  const q = await usersCol().where('authUid','==',authUser.uid).limit(1).get();
+  if(q.empty){
+    const now = Date.now();
+    const teacherCode = await nextSoloTeacherCode();
+    const data = {
+      username: authUser.displayName || authUser.email.split('@')[0],
+      email: authUser.email, authUid: authUser.uid, teacherCode, isSolo: true,
+      loginId: null,
+      solo: { active:true, subscribedAt:now, subscriptionEnds: now + SOLO_TRIAL_DAYS*24*60*60*1000 },
+      createdAt: now, updatedAt: now
+    };
+    await usersCol().doc(authUser.uid).set(data);
+    await proceedWithUserDoc(authUser, authUser.uid, data, 'solo', 'first');
+  } else {
+    const d=q.docs[0], data=d.data();
+    if(!data.solo && data.role!=='admin' && data.role!=='schoolAdmin'){
+      const now = Date.now();
+      const teacherCode = data.teacherCode || await nextSoloTeacherCode();
+      const soloCtx = { active:true, subscribedAt:now, subscriptionEnds: now + SOLO_TRIAL_DAYS*24*60*60*1000 };
+      await usersCol().doc(d.id).update({ solo:soloCtx, teacherCode, isSolo:true, updatedAt:now });
+      data.solo = soloCtx;
+    }
+    const ctxs = availableContexts(data);
+    if(ctxs.length===0) throw new Error('حسابك معطّل بكل سياقاته. تواصل مع إدارة النظام.');
+    if(ctxs.length>1){ showAccountChooser(authUser, d.id, data, ctxs, 'first'); return; }
+    await proceedWithUserDoc(authUser, d.id, data, ctxs[0].key, 'first');
+  }
+}
 async function doSoloGoogleLogin(){
   const btn = $('#soloGoogleBtn'); const t=btn.querySelector('.pv-txt'); const old=t.textContent;
   t.textContent='جارٍ الدخول…'; btn.disabled=true;
@@ -1199,37 +1260,7 @@ async function doSoloGoogleLogin(){
     const res = await firebase.auth().signInWithPopup(provider);
     const gUser = res.user;
     if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
-    if(!Object.keys(SCHOOLS||{}).length){ try{ await ensureSeed(); await loadSchools(); await loadRoleTemplates(); }catch(e){} }
-
-    const q = await usersCol().where('authUid','==',gUser.uid).limit(1).get();
-    if(q.empty){
-      // أول دخول: إنشاء اشتراك تجريبي 30 يوماً — مستند موحَّد بسياق solo فقط، بلا رقم هوية بعد
-      const now = Date.now();
-      const teacherCode = await nextSoloTeacherCode();
-      const data = {
-        username: gUser.displayName || gUser.email.split('@')[0],
-        email: gUser.email, authUid: gUser.uid, teacherCode, isSolo: true,
-        loginId: null,
-        solo: { active:true, subscribedAt:now, subscriptionEnds: now + SOLO_TRIAL_DAYS*24*60*60*1000 },
-        createdAt: now, updatedAt: now
-      };
-      await usersCol().doc(gUser.uid).set(data);
-      await proceedWithUserDoc(gUser, gUser.uid, data, 'solo', 'first');
-    } else {
-      const d=q.docs[0], data=d.data();
-      if(!data.solo && data.role!=='admin' && data.role!=='schoolAdmin'){
-        // الشخص عنده حساب موحَّد بمدرسة/مدارس بالفعل لكن بلا سياق فردي — يُضاف الآن، لا يُتجاهَل
-        const now = Date.now();
-        const teacherCode = data.teacherCode || await nextSoloTeacherCode();
-        const soloCtx = { active:true, subscribedAt:now, subscriptionEnds: now + SOLO_TRIAL_DAYS*24*60*60*1000 };
-        await usersCol().doc(d.id).update({ solo:soloCtx, teacherCode, isSolo:true, updatedAt:now });
-        data.solo = soloCtx;
-      }
-      const ctxs = availableContexts(data);
-      if(ctxs.length===0) throw new Error('حسابك معطّل بكل سياقاته. تواصل مع إدارة النظام.');
-      if(ctxs.length>1){ showAccountChooser(gUser, d.id, data, ctxs, 'first'); return; }
-      await proceedWithUserDoc(gUser, d.id, data, ctxs[0].key, 'first');
-    }
+    await resolveSoloLogin(gUser);
   }catch(e){
     let msg = e.message||'';
     if(e.code==='auth/operation-not-allowed') msg='دخول Google غير مُفعّل بعد في إعدادات Firebase. فعّله من Authentication ← Sign-in method.';
@@ -1239,6 +1270,59 @@ async function doSoloGoogleLogin(){
   }finally{ t.textContent=old; btn.disabled=false; }
 }
 $('#soloGoogleBtn').onclick = doSoloGoogleLogin;
+$('#soloShowEmailBtn').onclick = ()=>{ $('#soloEmailForm').classList.toggle('hidden'); };
+/* المتابعة بالبريد للنسخة الفردية — بلا رقم هوية ولا كلمة مرور أولية، فقط تحقق إجباري من البريد عبر الرابط */
+async function doSoloEmailLogin(){
+  const em=$('#soliEmail').value.trim(), p=$('#soliPass').value;
+  if(!em||!p){ alertBox('soloLoginAlert','err','أدخل البريد وكلمة المرور'); return; }
+  if(p.length<6){ alertBox('soloLoginAlert','err','كلمة المرور يجب ألا تقل عن ٦ أحرف'); return; }
+  const btn=$('#soliBtn'); btn.textContent='جارٍ المتابعة…'; btn.disabled=true;
+  try{
+    let cred, justCreated=false;
+    try{
+      cred = await firebase.auth().signInWithEmailAndPassword(em,p);
+    }catch(err){
+      if(err.code==='auth/user-not-found' || err.code==='auth/invalid-credential'){
+        try{
+          cred = await firebase.auth().createUserWithEmailAndPassword(em,p);
+          justCreated = true;
+        }catch(err2){
+          if(err2.code==='auth/email-already-in-use') throw new Error('هذا البريد مسجَّل مسبقاً — إن كنت فعّلت حسابك عبر Google، اضغط «المتابعة بحساب Google» بدل كلمة المرور.');
+          throw err2;
+        }
+      } else throw err;
+    }
+    if(justCreated){
+      try{ await cred.user.sendEmailVerification(); }catch(e){}
+      try{ await firebase.auth().signOut(); }catch(e){}
+      alertBox('soloLoginAlert','ok','تم إنشاء حسابك. أرسلنا رابط تحقق لبريدك — افتحه واضغطه، ثم سجّل الدخول من جديد بنفس البريد وكلمة المرور لتفعيل اشتراكك التجريبي.');
+      return;
+    }
+    await cred.user.reload();
+    if(!cred.user.emailVerified){
+      alertBox('soloLoginAlert','err','يجب تأكيد بريدك أولًا — راجع صندوق الوارد واضغط رابط التحقق، ثم سجّل الدخول من جديد.');
+      const el = $('#soloLoginAlert');
+      if(el){
+        const u = cred.user;
+        const b=document.createElement('button');
+        b.type='button'; b.className='btn secondary'; b.style.marginTop='8px';
+        b.textContent='إعادة إرسال رابط التحقق';
+        b.onclick = async ()=>{
+          b.disabled=true; const oldT=b.textContent; b.textContent='جارٍ الإرسال…';
+          try{ await u.sendEmailVerification(); alertBox('soloLoginAlert','ok','أُعيد إرسال رابط التحقق — راجع بريدك.'); }
+          catch(e){ alertBox('soloLoginAlert','err',authErrMsg(e)); }
+          finally{ b.disabled=false; b.textContent=oldT; }
+        };
+        el.appendChild(b);
+      }
+      try{ await firebase.auth().signOut(); }catch(e){}
+      return;
+    }
+    await resolveSoloLogin(cred.user);
+  }catch(e){ alertBox('soloLoginAlert','err',authErrMsg(e)); }
+  finally{ btn.textContent='متابعة'; btn.disabled=false; }
+}
+$('#soliBtn').onclick = doSoloEmailLogin;
 
 /* قوالب الصلاحيات الافتراضية لكل دور — يضبطها أدمن النظام، وتُنسخ للمستخدم وقت إنشائه فقط */
 let ROLE_TEMPLATES = {};
@@ -1312,7 +1396,6 @@ function enterApp(){
   tabs.forEach(t=>{
     const b=document.createElement('button'); b.className='tab'; b.textContent=t.label;
     if(t.key==='received'){ const bd=document.createElement('span'); bd.id='rcvBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
-    if(t.key==='users' && CURRENT.role==='admin'){ const bd=document.createElement('span'); bd.id='mergeReqBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
     b.onclick=()=>{ activeTab=t.key; renderTabs(); renderPanel(); };
     bar.appendChild(b);
   });
@@ -1321,14 +1404,6 @@ function enterApp(){
   watchActive();
   buildIndexCtxSwitcher();
   if(typeof refreshUnread==='function') refreshUnread();
-  if(CURRENT.role==='admin' && typeof refreshMergeRequests==='function') refreshMergeRequests();
-}
-async function refreshMergeRequests(){
-  try{
-    const snap = await usersCol().where('mergeRequestAt','>',0).get();
-    const n = snap.docs.length;
-    const bd=$('#mergeReqBadge'); if(bd){ bd.textContent=n; bd.style.display=n>0?'inline-flex':'none'; }
-  }catch(e){}
 }
 /* بند ١٤ لـindex.html: مبدّل سريع بين مدارس مدير عنده أكثر من مدرسة، بلا تسجيل خروج */
 function buildIndexCtxSwitcher(){
@@ -1758,7 +1833,6 @@ async function loadUsersList(){
         <div class="uinfo">
           <div class="uname">${esc(u.username)} ${isMe?'<span class="pill role">أنت</span>':''}</div>
           <div class="umeta"><span class="pill role">${esc(ROLES[u.role]||u.role)}</span> · ${esc(sc)}</div>
-          ${u.mergeRequestAt?`<div class="umeta" style="color:var(--bad,#c0392b);font-weight:700">🔔 طلب دمج معلَّق — يريد الدمج مع: ${esc(u.mergeRequestTarget||'')}</div>`:''}
           ${subLine}
         </div>
         <span class="pill ${u.active===false?'off':'on'}">${u.active===false?'موقوف':'غير موقوف'}</span>
@@ -1873,8 +1947,6 @@ async function unlinkUserAccount(id, name){
         authUid: firebase.firestore.FieldValue.delete(),
         email: firebase.firestore.FieldValue.delete(),
         googleEmail: firebase.firestore.FieldValue.delete(),
-        mergeRequestAt: firebase.firestore.FieldValue.delete(),
-        mergeRequestTarget: firebase.firestore.FieldValue.delete(),
         password: pass, updatedAt: Date.now()
       });
       closeModal();
@@ -1882,7 +1954,6 @@ async function unlinkUserAccount(id, name){
         <p style="font-size:20px;font-weight:700;direction:ltr">${esc(pass)}</p>
         <div class="modal-row"><button class="btn" onclick="closeModal()">تم</button></div>`);
       loadUsersList();
-      if(typeof refreshMergeRequests==='function') refreshMergeRequests();
     }catch(e){ toast('خطأ: '+e.message); }
   }, true);
 }

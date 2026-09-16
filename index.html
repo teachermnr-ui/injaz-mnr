@@ -494,8 +494,8 @@ const ROLES = {
 const PERM_TREE = [
   { key:'index', label:'الصفحة الرئيسية', leaves:[
     { key:'index.classes',  label:'انضباط الطلاب', only:['access'] },
-    { key:'index.sent',     label:'الملاحظات المرسلة', only:['access','edit'] },
-    { key:'index.received', label:'الملاحظات الواردة', only:['access','edit'] },
+    { key:'index.sent',     label:'التحويلات المرسلة', only:['access','edit'] },
+    { key:'index.received', label:'التحويلات الواردة', only:['access','edit'] },
     { key:'index.absence',  label:'تأخر وغياب الطلاب', only:['access','edit'] },
     { key:'index.attendanceWindow', label:'إعدادات نافذة التغيب', sub:true, only:['edit'] },
     { key:'index.studentStatus', label:'حالات الطلاب', only:['access','edit'] },
@@ -552,8 +552,8 @@ function defaultPerms(role){
 /* مفاتيح تبويبات index التي يتحكم بها العرض */
 const INDEX_TABS = [
   { key:'classes',  perm:'index.classes',  label:'انضباط الطلاب' },
-  { key:'sent',     perm:'index.sent',     label:'الملاحظات المرسلة' },
-  { key:'received', perm:'index.received', label:'الملاحظات الواردة' },
+  { key:'sent',     perm:'index.sent',     label:'التحويلات المرسلة' },
+  { key:'received', perm:'index.received', label:'التحويلات الواردة' },
   { key:'absence',  perm:'index.absence',  label:'تأخر وغياب الطلاب' },
   { key:'studentStatus', perm:'index.studentStatus', label:'حالات الطلاب' },
   { key:'users',    perm:'index.users',    label:'المستخدمون' },
@@ -1735,7 +1735,7 @@ function renderPanel(){
   if(activeTab==='received')   return renderReceived(c);
   if(activeTab==='absence')    return renderAbsence(c);
   if(activeTab==='studentStatus') return renderStudentStatus(c);
-  const labels={classes:'الفصول والطلاب',sent:'الملاحظات المرسلة',received:'الملاحظات الواردة',absence:'غياب الطلاب'};
+  const labels={classes:'الفصول والطلاب',sent:'التحويلات المرسلة',received:'التحويلات الواردة',absence:'غياب الطلاب'};
   c.innerHTML=`<div class="panel-head"><h2>${esc(labels[activeTab]||'')}</h2></div>
     <div class="empty"><span class="e-emoji">🚧</span>هذا التبويب قيد التطوير في المرحلة القادمة.</div>`;
 }
@@ -2809,6 +2809,11 @@ function normalizeDigits(s){ return String(s||'').replace(/[٠-٩]/g,d=>'0123456
 /* ========================================================================
    نظام الملاحظات — المرسلة / الواردة + التوجيه التلقائي
    ======================================================================== */
+const REFERRAL_REASONS = {
+  'أكاديمي': ['موهبة تحتاج إلى رعاية','تدني التحصيل','عدم أداء الواجبات','صعوبات تعلم','عدم إحضار الكتب أو الأدوات'],
+  'سلوكي': ['مخالفة سلوكية','تكرار المخالفات','مشكلة مع طالب','مشكلة مع معلم','عدم انضباط','مشكلة داخل الفصل','عدم الالتزام بتعليمات المعلم','تخريب الممتلكات'],
+  'مواظبة وحضور': ['كثرة الغياب','التأخر عن الحصة','الخروج المتكرر','الانقطاع عن الدراسة']
+};
 const notesCol = ()=>db.collection('notes');
 const _normN = x=>String(x||'').replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]).trim();
 
@@ -2840,6 +2845,7 @@ async function createNote(n){
     recipients:info.map(r=>r.userId), recipientsInfo:info,
     scope:n.scope, studentSeat:n.studentSeat||'', studentName:n.studentName||'',
     classCode:n.classCode||'', className:n.className||'', text:n.text,
+    referralReason:n.referralReason||'',
     createdAt:Date.now(), replies:[], readAt:{}, closed:false });
 }
 function noteLastActivity(n){
@@ -2857,26 +2863,63 @@ function noteCard(n, mineSent, counts){
   const cnt = (counts && n.studentSeat && counts[n.studentSeat]) ? counts[n.studentSeat] : 0;
   const stu = (n.studentName||n.studentSeat)
     ? '<div class="umeta">بخصوص: '+esc(n.studentName||'')+(n.className?(' · '+esc(n.className)):'')+'</div>'+
-      (cnt?'<div class="umeta" style="color:var(--accent);font-weight:700">📊 عدد الملاحظات عن هذا الطالب: '+cnt+'</div>':'')
+      (n.referralReason?'<div class="umeta">سبب الإحالة: <b>'+esc(n.referralReason)+'</b></div>':'')+
+      (cnt?'<div class="umeta" style="color:var(--accent);font-weight:700">📊 عدد التحويلات عن هذا الطالب: '+cnt+'</div>':'')
     : '';
   const reps=(n.replies||[]).slice().sort((a,b)=>(a.at||0)-(b.at||0)).map(r=>'<div style="border-top:1px solid var(--line);padding:6px 0;font-size:13px"><b>'+esc(r.fromName)+':</b> '+esc(r.text)+'</div>').join('');
   const repliedByOther=(n.replies||[]).some(r=>r.fromUserId!==CURRENT.id);
   const isClosed = !!n.closed;
-  const canReply = !isClosed && (mineSent ? repliedByOther : true);
+  // المحوِّل: لا يملك حق الرد ولا الإغلاق بعد التحويل — نسخته أصبحت للاطلاع فقط، بعلامة "محوّلة"
+  const isForwarderView = !mineSent && n.forwarded && n.forwarded.byUserId===CURRENT.id;
+  const canForward = !mineSent && !isClosed && !n.forwarded && CURRENT.role!=='teacher';
+  const canReply = !isClosed && !isForwarderView && (mineSent ? repliedByOther : true);
   const replyBtn = canReply
     ? '<button class="btn ghost" style="margin-top:6px" onclick="replyNote(\''+n.id+'\')">↩︎ رد</button>'
     : (mineSent && !isClosed ? '<div class="umeta" style="margin-top:6px">⏳ بانتظار رد المستلم قبل أن تتمكّن من الرد</div>':'');
   const readBtn = unread ? '<button class="btn ghost" style="margin-top:6px" onclick="markNoteRead(\''+n.id+'\')">✓ تحديد كمقروء</button>' : '';
-  const closeBtn = !isClosed
+  const closeBtn = isForwarderView ? '' : (!isClosed
     ? '<button class="btn ghost" style="margin-top:6px" onclick="toggleNoteClosed(\''+n.id+'\',true)">✕ إغلاق</button>'
-    : '<button class="btn ghost" style="margin-top:6px" onclick="toggleNoteClosed(\''+n.id+'\',false)">↺ إعادة فتح</button>';
-  return '<div class="card"'+(unread&&!isClosed?' style="border-color:var(--accent);background:#EFFAF8"':(isClosed?' style="opacity:0.65"':''))+'><div class="uinfo">'+
-    (isClosed?'<span class="pill" style="background:var(--muted);color:#fff;margin-bottom:6px;display:inline-block">🔒 مغلقة</span> ':(unread?'<span class="pill" style="background:var(--accent);color:#fff;margin-bottom:6px;display:inline-block">🔔 جديدة</span> ':''))+
+    : '<button class="btn ghost" style="margin-top:6px" onclick="toggleNoteClosed(\''+n.id+'\',false)">↺ إعادة فتح</button>');
+  const forwardBtn = canForward ? '<button class="btn ghost" style="margin-top:6px" onclick="openForwardNote(\''+n.id+'\')">🔀 تحويل</button>' : '';
+  const forwardedBadge = n.forwarded
+    ? (isForwarderView
+        ? '<span class="pill" style="background:var(--muted);color:#fff;margin-bottom:6px;display:inline-block">🔀 محوّلة إلى '+esc(n.forwarded.toName)+'</span> '
+        : (mineSent ? '<div class="umeta" style="color:var(--accent);font-weight:700">🔀 تم تحويل هذا التحويل إلى '+esc(n.forwarded.toName)+' (بواسطة '+esc(n.forwarded.byName)+')</div>' : ''))
+    : '';
+  return '<div class="card"'+(unread&&!isClosed?' style="border-color:var(--accent);background:#EFFAF8"':(isClosed||isForwarderView?' style="opacity:0.65"':''))+'><div class="uinfo">'+
+    (isForwarderView?'':(isClosed?'<span class="pill" style="background:var(--muted);color:#fff;margin-bottom:6px;display:inline-block">🔒 مغلقة</span> ':(unread?'<span class="pill" style="background:var(--accent);color:#fff;margin-bottom:6px;display:inline-block">🔔 جديدة</span> ':'')))+
+    forwardedBadge+
     '<div class="uname" style="font-size:14px">'+who+'</div>'+stu+
     '<div style="margin:8px 0;font-size:14.5px;white-space:pre-wrap">'+esc(n.text)+'</div>'+
     '<div class="umeta">'+new Date(n.createdAt).toLocaleString('ar')+'</div>'+
     (reps?'<div style="margin-top:8px">'+reps+'</div>':'')+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+replyBtn+readBtn+closeBtn+'</div></div></div>';
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+replyBtn+readBtn+closeBtn+forwardBtn+'</div></div></div>';
+}
+/* تحويل ملاحظة واردة لمستخدم آخر (مرة واحدة فقط) — أي دور عدا معلم */
+async function openForwardNote(id){
+  let users=[];
+  try{
+    const us=await usersCol().where('schoolId','==',CURRENT.schoolId).get();
+    users=us.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.active!==false && u.id!==CURRENT.id && !u.migratedTo);
+  }catch(e){}
+  const opts = users.map(u=>'<option value="'+esc(u.id)+'">'+esc(u.username)+' ('+esc(ROLES[u.role]||u.role)+')</option>').join('');
+  modal('<h2>تحويل إلى مستخدم آخر</h2><div id="fwdAlert"></div>'+
+    '<div class="field"><label>المستخدم</label><select id="fwdUser"><option value="">— اختر —</option>'+opts+'</select></div>'+
+    '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="fwdSend">تحويل</button></div>');
+  $('#fwdSend').onclick = async ()=>{
+    const uid=$('#fwdUser').value;
+    if(!uid){ alertBox('fwdAlert','err','اختر مستخدمًا'); return; }
+    try{
+      const us=await usersCol().doc(uid).get();
+      if(!us.exists) throw new Error('المستخدم غير موجود');
+      const u=us.data();
+      await notesCol().doc(id).update({
+        recipients: firebase.firestore.FieldValue.arrayUnion(uid),
+        forwarded: { toUserId:uid, toName:u.username, byUserId:CURRENT.id, byName:CURRENT.username, at:Date.now() }
+      });
+      closeModal(); toast('تم التحويل'); renderReceived($('#content'));
+    }catch(e){ alertBox('fwdAlert','err',e.message); }
+  };
 }
 async function toggleNoteClosed(id, closed){
   try{ await notesCol().doc(id).update({ closed }); }catch(e){ toast('خطأ: '+e.message); return; }
@@ -2900,7 +2943,7 @@ async function replyNote(id){
 }
 async function renderSent(c){
   const canCompose = (CURRENT.role==='agent'||CURRENT.role==='counselor');
-  c.innerHTML='<div class="panel-head"><h2>الملاحظات المرسلة</h2>'+(canCompose?'<button class="btn sm" id="composeBtn">+ ملاحظة جديدة</button>':'')+'</div><div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
+  c.innerHTML='<div class="panel-head"><h2>التحويلات المرسلة</h2>'+(canCompose?'<button class="btn sm" id="composeBtn">+ تحويل جديد</button>':'')+'</div><div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
   if($('#composeBtn')) $('#composeBtn').onclick=openCompose;
   try{
     const snap=await notesCol().where('fromUserId','==',CURRENT.id).get();
@@ -2908,11 +2951,11 @@ async function renderSent(c){
     const open=arr.filter(n=>!n.closed), closed=arr.filter(n=>n.closed);
     $('#notesList').innerHTML = arr.length
       ? open.map(n=>noteCard(n,true)).join('') + (closed.length?'<h3 style="margin:16px 4px 8px;font-size:14px;color:var(--muted)">مغلقة ('+closed.length+')</h3>'+closed.map(n=>noteCard(n,true)).join(''):'')
-      : '<div class="empty"><span class="e-emoji">📤</span>لا ملاحظات مرسلة.</div>';
+      : '<div class="empty"><span class="e-emoji">📤</span>لا تحويلات مرسلة.</div>';
   }catch(e){ $('#notesList').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
 async function renderReceived(c){
-  c.innerHTML='<div class="panel-head"><h2>🔔 الملاحظات الواردة</h2></div><div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
+  c.innerHTML='<div class="panel-head"><h2>🔔 التحويلات الواردة</h2></div><div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
   try{
     const snap=await notesCol().where('recipients','array-contains',CURRENT.id).get();
     let arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period).sort((a,b)=>noteLastActivity(b)-noteLastActivity(a));
@@ -2922,7 +2965,7 @@ async function renderReceived(c){
     const open=arr.filter(n=>!n.closed), closed=arr.filter(n=>n.closed);
     $('#notesList').innerHTML = arr.length
       ? open.map(n=>noteCard(n,false,counts)).join('') + (closed.length?'<h3 style="margin:16px 4px 8px;font-size:14px;color:var(--muted)">مغلقة ('+closed.length+')</h3>'+closed.map(n=>noteCard(n,false,counts)).join(''):'')
-      : '<div class="empty"><span class="e-emoji">📥</span>لا ملاحظات واردة.</div>';
+      : '<div class="empty"><span class="e-emoji">📥</span>لا تحويلات واردة.</div>';
   }catch(e){ $('#notesList').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
 async function refreshUnread(){
@@ -2943,13 +2986,16 @@ async function openCompose(){
     composeUsers=us.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.active!==false && u.id!==CURRENT.id && !u.migratedTo);
   }catch(e){}
   const classOpts=composeRoster.classes.map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name)+'</option>').join('');
-  modal('<h2>ملاحظة جديدة</h2><div id="cmpAlert"></div>'+
+  modal('<h2>تحويل طالب</h2><div id="cmpAlert"></div>'+
     '<div class="field"><label>نوع الملاحظة</label><select id="cmpKind">'+
       '<option value="toTeacher">عن طالب ← إلى معلّمه</option>'+
       '<option value="toPeers">عن طالب ← إلى موجّه طلابي أو وكيل</option></select></div>'+
     '<div class="field"><label>الفصل</label><select id="cmpClass"><option value="">— اختر —</option>'+classOpts+'</select></div>'+
     '<div class="field"><label>الطالب</label><select id="cmpStudent"><option value="">— اختر الفصل أولاً —</option></select></div>'+
     '<div id="cmpCount" class="sub-note" style="margin:0 0 10px"></div>'+
+    '<div class="field"><label>سبب الإحالة</label><select id="cmpReason"><option value="">— اختر —</option>'+
+      Object.entries(REFERRAL_REASONS).map(([grp,items])=>'<optgroup label="'+esc(grp)+'">'+items.map(it=>'<option value="'+esc(it)+'">'+esc(it)+'</option>').join('')+'</optgroup>').join('')+
+      '<option value="أخرى">أخرى</option></select></div>'+
     '<div class="field"><label>إلى</label><select id="cmpRecip"><option value="">— اختر —</option></select></div>'+
     '<div class="field"><label>نص الملاحظة</label><textarea id="cmpText" rows="4" style="width:100%;padding:12px;border:1.5px solid var(--line);border-radius:11px;background:var(--surface-2);font-family:inherit"></textarea></div>'+
     '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="cmpSend">إرسال</button></div>');
@@ -2979,7 +3025,7 @@ async function doCompose(){
   const cl=composeRoster.classes.find(c=>String(c.code)===String(code))||{};
   const st=composeRoster.students.find(s=>String(s.seat)===String(seat)&&String(s.classCode)===String(code))||{};
   const payload={kind, scope:'student', fromRole:CURRENT.role, schoolId:CURRENT.schoolId, text,
-    classCode:code, className:cl.name||'', studentSeat:seat, studentName:st.name||''};
+    classCode:code, className:cl.name||'', studentSeat:seat, studentName:st.name||'', referralReason:$('#cmpReason').value||''};
   const rid=$('#cmpRecip').value;
   if(kind==='toPeers' && !rid){ alertBox('cmpAlert','err','اختر المستقبِل (موجّه أو وكيل)'); return; }
   if(rid) payload.recipientId=rid;

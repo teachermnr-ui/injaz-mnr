@@ -458,6 +458,7 @@ body.theme-glass .tab.active{background:var(--accent);color:#fff}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 /* =========================================================================
@@ -475,8 +476,12 @@ const firebaseConfig = {
   appId: "1:640060389242:web:37e42c456d7b4e015e88c3"
 };
 
-let db = null;
-try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); }
+let db = null, fnUnlinkUserAccount = null;
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  fnUnlinkUserAccount = firebase.functions().httpsCallable('unlinkUserAccount');
+}
 catch(e){ console.error('Firebase init', e); }
 
 /* ---------- الأدوار ---------- */
@@ -1941,20 +1946,15 @@ async function reactivateStaffCtx(id, schoolId, name){
    ويصدر كلمة مرور أولية جديدة لإعادة الربط ببريد جديد لاحقًا عبر doStaffActivate */
 async function unlinkUserAccount(id, name){
   const pass = genTempPassword();
-  confirmModal('فك ربط البريد', `سيتوقف بريد «${name}» الحالي عن الدخول فورًا. تبقى كل مدارسه/بياناته كما هي، ويحتاج إعادة التفعيل ببريد جديد باستخدام كلمة مرور أولية جديدة. متابعة؟`, async()=>{
+  confirmModal('فك ربط البريد', `سيتوقف بريد «${name}» الحالي عن الدخول فورًا (تعطيل حقيقي، لا مجرد فك ربط بالبيانات). تبقى كل مدارسه/بياناته كما هي، ويحتاج إعادة التفعيل برقم هويته وكلمة المرور الجديدة — وستصله تلقائيًا على بريده إن كان الإرسال مُفعَّلاً. متابعة؟`, async()=>{
     try{
-      await usersCol().doc(id).update({
-        authUid: firebase.firestore.FieldValue.delete(),
-        email: firebase.firestore.FieldValue.delete(),
-        googleEmail: firebase.firestore.FieldValue.delete(),
-        password: pass, updatedAt: Date.now()
-      });
+      await fnUnlinkUserAccount({ targetDocId: id, newPassword: pass });
       closeModal();
-      modal(`<h3>تم فك الربط</h3><p>كلمة المرور الأولية الجديدة لإعادة التفعيل:</p>
+      modal(`<h3>تم فك الربط</h3><p>عُطِّل حسابه القديم فعليًا، وكلمة المرور الأولية الجديدة لإعادة التفعيل:</p>
         <p style="font-size:20px;font-weight:700;direction:ltr">${esc(pass)}</p>
         <div class="modal-row"><button class="btn" onclick="closeModal()">تم</button></div>`);
       loadUsersList();
-    }catch(e){ toast('خطأ: '+e.message); }
+    }catch(e){ toast('خطأ: '+(e.message||e)); }
   }, true);
 }
 async function hardDeleteUnifiedUser(id, name){

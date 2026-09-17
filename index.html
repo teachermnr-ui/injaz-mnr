@@ -996,7 +996,7 @@ async function doLogin(){
     }
     // تحقّق إجباري من البريد — يمنع أي بريد وهمي من إكمال أي تدفّق (موظف أو فردي)
     if(AUTH_JUST_CREATED){
-      try{ await cred.user.sendEmailVerification(); }catch(e){}
+      try{ await cred.user.sendEmailVerification(EMAIL_VERIFY_SETTINGS); }catch(e){}
       try{ await firebase.auth().signOut(); }catch(e){}
       alertBox('loginAlert','ok','تم إنشاء حسابك. أرسلنا رابط تحقق لبريدك — افتحه واضغطه، ثم سجّل الدخول من جديد بنفس البريد وكلمة المرور لإكمال حسابك.');
       return;
@@ -1020,7 +1020,7 @@ function showUnverifiedEmailBox(user){
     b.textContent='إعادة إرسال رابط التحقق';
     b.onclick = async ()=>{
       b.disabled=true; const old=b.textContent; b.textContent='جارٍ الإرسال…';
-      try{ await user.sendEmailVerification(); alertBox('loginAlert','ok','أُعيد إرسال رابط التحقق — راجع بريدك.'); }
+      try{ await user.sendEmailVerification(EMAIL_VERIFY_SETTINGS); alertBox('loginAlert','ok','أُعيد إرسال رابط التحقق — راجع بريدك.'); }
       catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
       finally{ b.disabled=false; b.textContent=old; }
     };
@@ -1176,6 +1176,7 @@ function googleProvider(){
   p.setCustomParameters({ prompt: 'select_account' });
   return p;
 }
+const EMAIL_VERIFY_SETTINGS = { url: 'https://injaz.awraqai.com/index.html', handleCodeInApp: false };
 function isPendingDocClient(data){ return !data.authUid; }
 /* اكتشاف سجلات معلَّقة أخرى بنفس رقم الهوية (بمدارس مختلفة) — سيناريو ١ و٢ */
 async function discoverOtherPendingByLoginId(loginId, excludeDocId, blockedSchools){
@@ -1339,7 +1340,7 @@ async function doSoloEmailLogin(){
       } else throw err;
     }
     if(justCreated){
-      try{ await cred.user.sendEmailVerification(); }catch(e){}
+      try{ await cred.user.sendEmailVerification(EMAIL_VERIFY_SETTINGS); }catch(e){}
       try{ await firebase.auth().signOut(); }catch(e){}
       alertBox('soloLoginAlert','ok','تم إنشاء حسابك. أرسلنا رابط تحقق لبريدك — افتحه واضغطه، ثم سجّل الدخول من جديد بنفس البريد وكلمة المرور لتفعيل اشتراكك التجريبي.');
       return;
@@ -1355,7 +1356,7 @@ async function doSoloEmailLogin(){
         b.textContent='إعادة إرسال رابط التحقق';
         b.onclick = async ()=>{
           b.disabled=true; const oldT=b.textContent; b.textContent='جارٍ الإرسال…';
-          try{ await u.sendEmailVerification(); alertBox('soloLoginAlert','ok','أُعيد إرسال رابط التحقق — راجع بريدك.'); }
+          try{ await u.sendEmailVerification(EMAIL_VERIFY_SETTINGS); alertBox('soloLoginAlert','ok','أُعيد إرسال رابط التحقق — راجع بريدك.'); }
           catch(e){ alertBox('soloLoginAlert','err',authErrMsg(e)); }
           finally{ b.disabled=false; b.textContent=oldT; }
         };
@@ -1794,6 +1795,7 @@ async function renderUsers(c){
     ${isSchoolScoped?'<button class="btn sm secondary" id="importUsersBtn">📥 استيراد من Excel</button><input id="usersXlsx" type="file" accept=".xlsx,.xls,.csv" style="display:none">':''}
     </div>
     <div class="sub-note">${isSchoolScoped?'إدارة حسابات مدرستك وصلاحياتها.':'إدارة حسابات جميع المدارس وصلاحياتها.'}</div>
+    <div class="card" style="padding:12px"><div class="field" style="margin:0"><label>بحث برقم الهوية</label><input id="uIdSearch" placeholder="اكتب رقم الهوية…" inputmode="numeric"></div></div>
     <div id="uFilter" class="card" style="padding:12px${isSchoolScoped?';display:none':''}"></div>
     <div id="usersList"><div class="empty"><span class="spin"></span></div></div>`;
   $('#addUserBtn').onclick=()=>openUserModal(null);
@@ -1807,6 +1809,7 @@ async function renderUsers(c){
     .concat(Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`)).join('');
   $('#uFilter').innerHTML=`<div class="field" style="margin:0"><label>عرض حسب المدرسة</label><select id="uSchoolFilter">${opts}</select></div>`;
   $('#uSchoolFilter').onchange=loadUsersList;
+  $('#uIdSearch').oninput=loadUsersList;
   loadUsersList();
 }
 async function loadUsersList(){
@@ -1814,7 +1817,9 @@ async function loadUsersList(){
   const wrap=$('#usersList'); const filter = isSchoolScoped ? CURRENT.schoolId : ($('#uSchoolFilter')?$('#uSchoolFilter').value:'');
   try{
     const snap = await usersCol().get();
-    const raw = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>!u.migratedTo);
+    const idSearch = ($('#uIdSearch')?$('#uIdSearch').value:'').trim();
+    let raw = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>!u.migratedTo);
+    if(idSearch) raw = raw.filter(u=>u.loginId && String(u.loginId).includes(idSearch));
     let rows = [];
     raw.forEach(u=>{
       if(!u.authUid){
@@ -1856,7 +1861,7 @@ async function loadUsersList(){
     const rank=r=>r.role==='schoolAdmin'?-1:0;
     rows.sort((a,b)=>rank(a)-rank(b));
     if(!rows.length){ wrap.innerHTML=`<div class="empty"><span class="e-emoji">👥</span>لا يوجد مستخدمون بعد.</div>`; return; }
-    wrap.innerHTML = rows.map(u=>{
+    function ctxRowHtml(u, nested){
       const isSolo = u.role==='soloTeacher';
       const sc = isSolo ? esc(u.email||'') : (u.schoolId&&SCHOOLS[u.schoolId]?SCHOOLS[u.schoolId].name:'بلا مدرسة');
       const isMe = u.id===CURRENT.id;
@@ -1873,14 +1878,17 @@ async function loadUsersList(){
           `</div>`+
           (u.teacherCode?`<div class="umeta">رمز المعلم: <b>${esc(u.teacherCode)}</b></div>`:'');
       }
-      const canFullyDelete = u._kind==='pending';   // نشط ومرتبط: تعطيل سياق فقط، لا حذف كامل (إلا admin العام)
-      return `<div class="card"><div class="urow">
-        <div class="uavatar">${esc((u.username||'?')[0])}</div>
+      const canFullyDelete = u._kind==='pending';
+      const headerHtml = nested
+        ? `<div class="umeta"><span class="pill role">${esc(ROLES[u.role]||u.role)}</span> · ${esc(sc)}</div>${subLine}`
+        : `<div class="uavatar">${esc((u.username||'?')[0])}</div>
         <div class="uinfo">
           <div class="uname">${esc(u.username)} ${isMe?'<span class="pill role">أنت</span>':''}</div>
           <div class="umeta"><span class="pill role">${esc(ROLES[u.role]||u.role)}</span> · ${esc(sc)}</div>
           ${subLine}
-        </div>
+        </div>`;
+      return `<div class="card"${nested?' style="margin:6px 0 0"':''}><div class="urow">
+        ${headerHtml}
         <span class="pill ${u.active===false?'off':'on'}">${u.active===false?'موقوف':'غير موقوف'}</span>
         <span class="pill ${u._kind==='pending'?'off':'on'}">${u._kind==='pending'?'بانتظار التفعيل':'مُفعَّل ومرتبط'}</span>
         <div class="row-actions">
@@ -1888,7 +1896,7 @@ async function loadUsersList(){
           ${(u._kind==='pending' && u.loginId && u.password)?`<button class="icon-btn" onclick="shareCredsWhatsApp('${u.id}')" title="مشاركة بيانات الدخول عبر واتساب">📲</button>`:''}
           ${u._kind==='pending'?`<button class="icon-btn" onclick="openUserModal('${u.id}')" title="تعديل">✏️</button>`:''}
           ${(u._kind==='ctx' && CURRENT.role==='admin' && u.role==='schoolAdmin')?`<button class="icon-btn" onclick="openSchoolAdminEditModal('${u.id}','${esc(u.schoolId)}')" title="تعديل">✏️</button>`:''}
-          ${(u._kind==='ctx' && CURRENT.role==='admin' && u.role!=='schoolAdmin' && !isSolo)?`<button class="icon-btn" onclick="jumpToPermsEditor('${u.id}','${esc(u.schoolId)}')" title="تعديل الصلاحيات">✏️</button>`:''}
+          ${(u._kind==='ctx' && can('index.users.perms','edit') && u.role!=='schoolAdmin' && !isSolo)?`<button class="icon-btn" onclick="jumpToPermsEditor('${u.id}','${esc(u.schoolId)}')" title="تعديل الصلاحيات">✏️</button>`:''}
           ${(u._kind==='ctx' && u.role!=='schoolAdmin' && u.active===false)
             ? `<button class="icon-btn" onclick="reactivateStaffCtx('${u.id}','${esc(u.schoolId||'')}','${esc(u.username)}')" title="إعادة تفعيل سياق هذه المدرسة">▶</button>` : ''}
           ${(u._kind==='ctx' && CURRENT.role==='admin' && u.role!=='schoolAdmin')?`<button class="icon-btn" onclick="unlinkUserAccount('${u.id}','${esc(u.username)}')" title="فك ربط البريد بالكامل">🔓</button>`:''}
@@ -1898,6 +1906,32 @@ async function loadUsersList(){
                 ? `<button class="icon-btn del" onclick="hardDeleteUnifiedUser('${u.id}','${esc(u.username)}')" title="حذف الحساب بالكامل (كل مدارسه)">🗑</button>`
                 : (u.role!=='schoolAdmin' && u.active!==false ? `<button class="icon-btn del" onclick="deactivateStaffCtx('${u.id}','${esc(u.schoolId||'')}','${esc(u.username)}')" title="تعطيل سياق هذه المدرسة">⏸</button>` : ''))}
         </div></div></div>`;
+    }
+    // تجميع الصفوف: أي مستخدم له أكثر من سياق (ctx) يُدمج بصف واحد قابل للطي/الفتح
+    const seen = new Set(); const items = [];
+    rows.forEach(u=>{
+      if(u._kind!=='ctx'){ items.push({single:u}); return; }
+      if(seen.has(u.id)) return;
+      seen.add(u.id);
+      const grp = rows.filter(x=>x._kind==='ctx' && x.id===u.id);
+      items.push(grp.length>1 ? {group:grp} : {single:grp[0]});
+    });
+    wrap.innerHTML = items.map(it=>{
+      if(it.single) return ctxRowHtml(it.single, false);
+      const first = it.group[0];
+      const isMe = first.id===CURRENT.id;
+      const schoolsTxt = it.group.map(g=>g.schoolId&&SCHOOLS[g.schoolId]?SCHOOLS[g.schoolId].name:'بلا مدرسة').join('، ');
+      const gid = 'ug_'+first.id;
+      return `<div class="card">
+        <div class="urow" style="cursor:pointer" onclick="document.getElementById('${gid}').style.display=document.getElementById('${gid}').style.display==='none'?'block':'none';this.querySelector('.acc-chevron').textContent=document.getElementById('${gid}').style.display==='none'?'▸':'▾'">
+          <div class="uavatar">${esc((first.username||'?')[0])}</div>
+          <div class="uinfo">
+            <div class="uname">${esc(first.username)} ${isMe?'<span class="pill role">أنت</span>':''} <span class="acc-chevron">▸</span></div>
+            <div class="umeta"><span class="pill role">${esc(ROLES[first.role]||first.role)}</span> · ${it.group.length} مدارس: ${esc(schoolsTxt)}</div>
+          </div>
+        </div>
+        <div id="${gid}" style="display:none;padding:0 8px 8px">${it.group.map(g=>ctxRowHtml(g,true)).join('')}</div>
+      </div>`;
     }).join('');
   }catch(e){ wrap.innerHTML=`<div class="alert err">${esc(e.message)}</div>`; }
 }
@@ -2287,6 +2321,7 @@ async function renderUserPerms(c){
   const isSchoolScoped = CURRENT.role==='schoolAdmin';
   c.innerHTML = `<div class="panel-head"><h2>الصلاحيات الخاصة</h2></div>
     <div class="sub-note">اختر مستخدماً مُفعَّلاً لتعديل دوره وصلاحياته بمدرسة معيّنة. الاختيار مقصور على الحسابات المرتبطة ببريد فعلياً.</div>
+    ${!isSchoolScoped ? `<div class="alert" style="margin:8px 0">ℹ️ هذا التبويب يظهر أيضًا لمديري المدارس الذين مُنحوا صلاحية الوصول إليه.</div>` : ''}
     ${!isSchoolScoped ? `<div class="field" style="margin:12px 0"><label>المدرسة</label>
       <select id="upSchoolSelect"><option value="">— اختر المدرسة —</option></select>
     </div>` : ''}
@@ -2643,6 +2678,37 @@ async function wipeQuery(colName, field, op, val){
   }
   return n;
 }
+/* تنظيف/حذف كل مستخدم مرتبط بهذي المدرسة تحديدًا — يطابق النموذج الموحَّد الحالي:
+   - سجل معلَّق (بلا authUid): schoolId مباشر top-level → حذف كامل (سياق وحيد أصلاً)
+   - مدير مدرسة: يُزال sid من adminSchools، أو يُحذف الحساب كاملاً لو صارت فارغة
+   - موظف/فردي موحَّد: يُحذف مفتاح schools[sid]، أو يُحذف المستند كاملاً لو ما تبقّى له مدرسة ولا سياق فردي */
+async function wipeSchoolUsers(schoolId){
+  const snap = await db.collection('users').get();
+  const ops = [];
+  snap.docs.forEach(d=>{
+    const u = d.data();
+    if(!u.authUid && u.schoolId===schoolId){ ops.push({ref:d.ref, del:true}); return; }
+    if(u.role==='schoolAdmin' && Array.isArray(u.adminSchools) && u.adminSchools.includes(schoolId)){
+      const remaining = u.adminSchools.filter(x=>x!==schoolId);
+      if(remaining.length) ops.push({ref:d.ref, updates:{adminSchools:remaining}});
+      else ops.push({ref:d.ref, del:true});
+      return;
+    }
+    if(u.schools && u.schools[schoolId]){
+      const otherSchools = Object.keys(u.schools).filter(k=>k!==schoolId);
+      if(otherSchools.length || u.solo) ops.push({ref:d.ref, updates:{['schools.'+schoolId]: firebase.firestore.FieldValue.delete()}});
+      else ops.push({ref:d.ref, del:true});
+    }
+  });
+  for(let i=0;i<ops.length;i+=400){
+    const batch = db.batch();
+    ops.slice(i,i+400).forEach(op=>{
+      if(op.del) batch.delete(op.ref);
+      else batch.update(op.ref, {...op.updates, updatedAt:Date.now()});
+    });
+    await batch.commit();
+  }
+}
 function wipeData(){
   const schoolId = $('#wipeSchoolId') ? $('#wipeSchoolId').value : '';
   if(!schoolId){ toast('اختر المدرسة أولاً'); return; }
@@ -2651,10 +2717,10 @@ function wipeData(){
   confirmModal(title, msg, async(val)=>{
     if(val!=='تصفير'){ toast('لم تتم الكتابة بشكل صحيح'); return; }
     try{
-      await wipeQuery('users','schoolId','==',schoolId);
+      await wipeSchoolUsers(schoolId);
       try{ await rosterDoc(schoolId).delete(); }catch(e){}
       try{ await db.collection('rosterIndex').doc(schoolId).delete(); }catch(e){}
-      for(const col of ['worksheets','submissions','notes','exams','results','attendance']){
+      for(const col of ['worksheets','submissions','notes','exams','results','attendance','questionBank']){
         try{ await wipeQuery(col,'schoolId','==',schoolId); }catch(e){}
       }
       delete SCHOOLS[schoolId]; await schoolDocById(schoolId).delete();

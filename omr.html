@@ -421,7 +421,7 @@ body.alt-theme .flcard{ display:flex !important; }
     <button id="tab-grade" onclick="showTab('grade')">📷 التصحيح</button>
     <button id="tab-results" onclick="showTab('results')">📊 النتائج</button>
     <button id="tab-cloud" onclick="showTab('cloud')">💼 سجل الأعمال</button>
-    <button id="tab-notes" onclick="showTab('notes')">ملاحظات</button>
+    <button id="tab-notes" onclick="showTab('notes')">تحويلات الطلاب</button>
     <button id="tab-worksheets" onclick="window.location.href='worksheets.html'">🗂️ أنشطة رقمية</button>
   </nav>
 </header>
@@ -633,7 +633,7 @@ body.alt-theme .flcard{ display:flex !important; }
             </span>
           </div>
         </div>
-        <p class="hint" style="margin:10px 0 0;line-height:1.9">📌 <b>عرض سجل الطالب:</b> اضغط رقم الهوية.<br>📌 <b>تسجيل الحضور والغياب والتأخّر:</b> استخدم الأزرار الظاهرة تحت اسم الطالب مباشرة.<br>📌 <b>نقل الطالب أو حذفه:</b> من الزرّين بجانب بطاقته. <b>إرسال ملاحظة عن طالب:</b> من تبويب «الملاحظات».</p>
+        <p class="hint" style="margin:10px 0 0;line-height:1.9">📌 <b>عرض سجل الطالب:</b> اضغط رقم الهوية.<br>📌 <b>تسجيل الحضور والغياب والتأخّر:</b> استخدم الأزرار الظاهرة تحت اسم الطالب مباشرة.<br>📌 <b>نقل الطالب أو حذفه:</b> من الزرّين بجانب بطاقته. <b>إرسال ملاحظة عن طالب:</b> من تبويب «تحويلات الطلاب».</p>
         <button class="primary" style="position:sticky;bottom:8px;margin-top:12px;width:100%;background:#0b7a63;box-shadow:0 4px 14px rgba(11,122,99,.35);z-index:20" onclick="commitAttendance()">💾 حفظ</button>
       </div>
     </div>
@@ -4750,6 +4750,11 @@ function toArabic(n){return String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]
    نظام الملاحظات — جانب المعلم
    ============================================================ */
 const OROLES={admin:'أدمن',manager:'مدير',agent:'وكيل',counselor:'موجه طلابي',assistant:'مساعد إداري',teacher:'معلم'};
+const REFERRAL_REASONS = {
+  'أكاديمي': ['موهبة تحتاج إلى رعاية','تدني التحصيل','عدم أداء الواجبات','صعوبات تعلم','عدم إحضار الكتب أو الأدوات'],
+  'سلوكي': ['مخالفة سلوكية','تكرار المخالفات','مشكلة مع طالب','مشكلة مع معلم','عدم انضباط','مشكلة داخل الفصل','عدم الالتزام بتعليمات المعلم','تخريب الممتلكات'],
+  'مواظبة وحضور': ['كثرة الغياب','التأخر عن الحصة','الخروج المتكرر','الانقطاع عن الدراسة']
+};
 async function omrResolveClassAdmins(classCode){
   const norm=x=>normalizeDigits(String(x||'')).trim();
   const snap=await db.collection('users').where('schoolId','==',CLS_SESSION.schoolId).get();
@@ -4767,21 +4772,23 @@ async function omrReplyNote(id){
 }
 function omrNoteCard(n,mineSent){
   const who=mineSent?('إلى: '+(n.recipientsInfo||[]).map(r=>escapeHtml(r.name)).join('، ')):('من: '+escapeHtml(n.fromName)+' ('+(OROLES[n.fromRole]||n.fromRole)+')');
-  const stu=(n.studentName?('<div class="sub">بخصوص: '+escapeHtml(n.studentName)+(n.className?(' · '+escapeHtml(n.className)):'')+'</div>'):'');
+  const stu=(n.studentName?('<div class="sub">بخصوص: '+escapeHtml(n.studentName)+(n.className?(' · '+escapeHtml(n.className)):'')+'</div>'):'')+
+    (n.referralReason?('<div class="sub">سبب الإحالة: <b>'+escapeHtml(n.referralReason)+'</b></div>'):'');
   const reps=(n.replies||[]).map(r=>'<div style="border-top:1px solid var(--line);padding:5px 0;font-size:13px"><b>'+escapeHtml(r.fromName)+':</b> '+escapeHtml(r.text)+'</div>').join('');
   return '<div class="subcard"><div style="font-weight:700">'+who+'</div>'+stu+'<div style="margin:6px 0;white-space:pre-wrap">'+escapeHtml(n.text)+'</div>'+(reps||'')+'<button class="ghost" style="margin-top:4px" onclick="omrReplyNote(\''+n.id+'\')">↩︎ رد</button></div>';
 }
 function omrComposeSend(){
   const code=document.getElementById('onClass').value, seat=document.getElementById('onStudent').value, text=(document.getElementById('onText').value||'').trim();
   const rid=(document.getElementById('onRecip')||{}).value;
+  const reason=(document.getElementById('onReason')||{}).value||'';
   if(!code||!seat){ alert('اختر الفصل والطالب.'); return; }
   if(!rid){ alert('اختر المستلِم من القائمة.'); return; }
   if(!text){ alert('اكتب نص الملاحظة.'); return; }
   const cl=state.classes.find(c=>String(c.code)===String(code))||{};
   const st=state.students.find(s=>String(s.seat)===String(seat)&&String(s.classCode)===String(code))||{};
-  omrSendNoteTo(rid,seat,code,cl.name||'',st.name||'',text);
+  omrSendNoteTo(rid,seat,code,cl.name||'',st.name||'',text,reason);
 }
-async function omrSendNoteTo(rid,seat,classCode,className,studentName,text){
+async function omrSendNoteTo(rid,seat,classCode,className,studentName,text,referralReason){
   try{
     const us=await db.collection('users').doc(rid).get(); const u=us.data();
     const info=[{userId:rid,name:u.username,role:u.role}];
@@ -4789,7 +4796,7 @@ async function omrSendNoteTo(rid,seat,classCode,className,studentName,text){
       fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
       recipients:[rid], recipientsInfo:info, scope:'student',
       studentSeat:String(seat), studentName:studentName, classCode:String(classCode), className:className,
-      text:text, createdAt:Date.now(), replies:[], readAt:{}, closed:false });
+      text:text, referralReason:referralReason||'', createdAt:Date.now(), replies:[], readAt:{}, closed:false });
     alert('تم إرسال الملاحظة.'); renderOmrNotes();
   }catch(e){ alert('فشل الإرسال: '+(e.message||e)); }
 }
@@ -4826,6 +4833,9 @@ async function renderOmrNotes(){
     '<label class="field" style="margin-top:6px">الفصل<select id="onClass"><option value="">— اختر —</option>'+classOpts+'</select></label>'+
     '<label class="field" style="margin-top:8px">الطالب<select id="onStudent"><option value="">— اختر الفصل أولاً —</option></select></label>'+
     '<div id="onCount" class="sub" style="margin-top:6px"></div>'+
+    '<label class="field" style="margin-top:8px">سبب الإحالة<select id="onReason"><option value="">— اختر —</option>'+
+      Object.entries(REFERRAL_REASONS).map(([grp,items])=>'<optgroup label="'+escapeHtml(grp)+'">'+items.map(it=>'<option value="'+escapeHtml(it)+'">'+escapeHtml(it)+'</option>').join('')+'</optgroup>').join('')+
+      '<option value="أخرى">أخرى</option></select></label>'+
     '<label class="field" style="margin-top:8px">المستلِم<select id="onRecip"><option value="">— اختر الطالب أولاً —</option></select></label>'+
     '<label class="field" style="margin-top:8px">نص الملاحظة<textarea id="onText" rows="3" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fcfdfd"></textarea></label>'+
     '<button class="primary" style="margin-top:8px" onclick="omrComposeSend()">📨 إرسال</button></div>'+

@@ -476,11 +476,13 @@ const firebaseConfig = {
   appId: "1:640060389242:web:37e42c456d7b4e015e88c3"
 };
 
-let db = null, fnUnlinkUserAccount = null;
+let db = null, fnUnlinkUserAccount = null, fnCheckPendingMerge = null, fnConfirmMergeLink = null;
 try {
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
   fnUnlinkUserAccount = firebase.functions().httpsCallable('unlinkUserAccount');
+  fnCheckPendingMerge = firebase.functions().httpsCallable('checkPendingMerge');
+  fnConfirmMergeLink = firebase.functions().httpsCallable('confirmMergeLink');
 }
 catch(e){ console.error('Firebase init', e); }
 
@@ -878,21 +880,60 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
   CURRENT = { id:docId, ...data, ...flat };
   SESSION = { userId:docId, username:data.username, role:flat.role, schoolId:flat.schoolId, period, ctxKey };
   localStorage.setItem('cls_session', JSON.stringify(SESSION));
+  function finishLogin(){
+    if(flat.role==='soloTeacher'){ window.location.href='omr.html'; return; }
+    enterApp();
+  }
+  async function checkMergeThenFinish(){
+    if(flat.role!=='admin' && flat.role!=='schoolAdmin' && fnCheckPendingMerge){
+      try{
+        const r = await fnCheckPendingMerge();
+        if(r && r.data && r.data.pending){
+          showMergeCodeBox(finishLogin);
+          return;
+        }
+      }catch(e){}
+    }
+    finishLogin();
+  }
   if(flat.role!=='admin' && flat.role!=='schoolAdmin' && data.loginId){
     try{
       const others = await discoverOtherPendingByLoginId(data.loginId, null, data.blockedSchools);
       if(others.length){
         showPendingSchoolChooser(others, async ()=>{
           closeModal();
-          if(flat.role==='soloTeacher'){ window.location.href='omr.html'; return; }
-          enterApp();
+          await checkMergeThenFinish();
         });
         return;
       }
     }catch(e){}
   }
-  if(flat.role==='soloTeacher'){ window.location.href='omr.html'; return; }
-  enterApp();
+  await checkMergeThenFinish();
+}
+function showMergeCodeBox(onDone){
+  modal(`
+    <h3>يوجد طلب ربط حساب فردي بنفس هويتك</h3>
+    <p class="sub-note" style="margin:4px 0 12px">أدخل كود الربط الذي وصلك بالبريد لإتمام دمج حسابك الفردي بهذا الحساب.</p>
+    <div class="field"><label>كود الربط</label><input id="mcCode" inputmode="numeric" maxlength="6"></div>
+    <div id="mcAlert"></div>
+    <div class="modal-row">
+      <button class="btn secondary" id="mcLaterBtn">لاحقًا</button>
+      <button class="btn" id="mcConfirmBtn">تأكيد الدمج</button>
+    </div>`);
+  $('#mcLaterBtn').onclick = ()=>{ closeModal(); onDone(); };
+  $('#mcConfirmBtn').onclick = async ()=>{
+    const code = ($('#mcCode').value||'').trim();
+    if(!code){ alertBox('mcAlert','err','أدخل الكود'); return; }
+    const btn = $('#mcConfirmBtn'); btn.disabled = true;
+    try{
+      await fnConfirmMergeLink({code});
+      closeModal();
+      toast('تم الدمج بنجاح — يُفضَّل تحديث الصفحة لمشاهدة جميع حساباتك.');
+      onDone();
+    }catch(e){
+      alertBox('mcAlert','err', e.message||'حدث خطأ');
+    }finally{ btn.disabled = false; }
+  };
 }
 function showAccountChooser(authUser, docId, data, ctxs, period){
   $('#staffSignInBox').classList.add('hidden');

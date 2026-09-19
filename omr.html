@@ -2420,6 +2420,9 @@ async function openMyAccountsPanel(){
     const host = document.getElementById('myAccountsBody');
     if(!host) return;
     const curKey = CLS_SESSION.schoolId ? ('school:'+CLS_SESSION.schoolId) : 'solo';
+    // زر "تعطيل" لا يظهر إطلاقًا لو ما عنده إلا سياق واحد (وإلا أقفل على نفسه الدخول بلا بديل)
+    const activeCtxCount = schoolIds.filter(k=>u.schools[k].active!==false).length + ((u.solo && u.solo.active!==false)?1:0);
+    const canDisableCtx = activeCtxCount > 1;
     let rows = '<div style="padding:8px 0 14px;border-bottom:1px solid #eee">البريد: <b style="direction:ltr;display:inline-block">'+escapeHtml(u.email||u.googleEmail||'—')+'</b></div>';
     if(u.solo){
       const isActive = u.solo.active!==false, isCur = curKey==='solo';
@@ -2438,8 +2441,8 @@ async function openMyAccountsPanel(){
         '<div><b>'+escapeHtml(name)+'</b>'+(isCur?' <span style="font-size:11px;color:var(--teal,#0f766e)">— الحالي</span>':'')+'<div style="font-size:11.5px;color:#888">'+escapeHtml(ctx.role||'')+(isActive?'':' — معطَّل')+'</div></div>'+
         '<div style="display:flex;gap:6px">'+
         (!isCur && isActive ? '<button data-key="school:'+sid+'" class="myAcctGoBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : '')+
-        (isActive ? '<button data-sid="'+sid+'" class="myAcctDisableBtn" style="border:1px solid var(--bad,#c0392b);background:#fff;color:var(--bad,#c0392b);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">تعطيل</button>'
-                  : '<span style="font-size:11px;color:#aaa">تفعيله بيد مدير المدرسة فقط</span>') +
+        ((isActive && canDisableCtx) ? '<button data-sid="'+sid+'" class="myAcctDisableBtn" style="border:1px solid var(--bad,#c0392b);background:#fff;color:var(--bad,#c0392b);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">تعطيل</button>'
+          : (isActive ? '' : '<span style="font-size:11px;color:#aaa">تفعيله بيد مدير المدرسة فقط</span>')) +
         '</div></div>';
     }
     for(const sid of (u.blockedSchools||[])){
@@ -2605,7 +2608,11 @@ async function sendOmrNotes(){
   if(!rid){ alert('اختر المستلِم.'); return; }
   if(!txt){ alert('اكتب نص الملاحظة.'); return; }
   let info;
-  try{ const us=await db.collection('users').doc(rid).get(); const u=us.data(); info=[{userId:rid,name:u.username,role:u.role}]; }
+  try{
+    const us=await db.collection('users').doc(rid).get(); const u=us.data();
+    const ctx=(u.schools&&u.schools[CLS_SESSION.schoolId])||{};
+    info=[{userId:rid,name:u.username||'',role:ctx.role||u.role||''}];
+  }
   catch(e){ alert('تعذّر تحديد المستلِم.'); return; }
   try{
     for(const s of _omrNoteCtx.studs){
@@ -2739,8 +2746,9 @@ function closeAttMenu(){
   const note = noteEl ? (noteEl.value||'').trim() : '';
   if(seat && note){
     const s = findStudent(seat);
+    const sid = CLS_SESSION.schoolId || ('solo_'+CLS_SESSION.userId);
     db.collection('studentNotes').add({
-      schoolId: CLS_SESSION.schoolId, period: CLS_SESSION.period,
+      schoolId: sid, period: CLS_SESSION.period||'',
       classCode: s?String(s.classCode):'', studentSeat: String(seat), studentName: s?s.name:'',
       fromUserId: CLS_SESSION.userId, fromName: CLS_SESSION.username, fromRole: CLS_SESSION.role,
       text: note, createdAt: Date.now()
@@ -3666,12 +3674,14 @@ async function srLoadNotes(seat){
   const host=document.getElementById('srNotesList'); if(!host) return;
   try{
     const me = CLS_SESSION.userId;
+    const sid = CLS_SESSION.schoolId || ('solo_'+me);
+    const per = CLS_SESSION.period||'';
     const [privSnap, transSnap] = await Promise.all([
       db.collection('studentNotes').where('studentSeat','==',String(seat)).where('fromUserId','==',me).get(),
       db.collection('notes').where('studentSeat','==',String(seat)).get()
     ]);
     const priv = privSnap.docs.map(d=>({id:d.id, kind:'private', ...d.data()}))
-      .filter(n=>n.schoolId===CLS_SESSION.schoolId && n.period===CLS_SESSION.period);
+      .filter(n=>n.schoolId===sid && (n.period||'')===per);
     const trans = transSnap.docs.map(d=>({id:d.id, kind:'transfer', ...d.data()}))
       .filter(n=>n.schoolId===CLS_SESSION.schoolId && n.period===CLS_SESSION.period
         && (n.fromUserId===me || (n.recipients||[]).includes(me)));
@@ -4802,7 +4812,8 @@ function omrComposeSend(){
 async function omrSendNoteTo(rid,seat,classCode,className,studentName,text,referralReason){
   try{
     const us=await db.collection('users').doc(rid).get(); const u=us.data();
-    const info=[{userId:rid,name:u.username,role:u.role}];
+    const ctx=(u.schools&&u.schools[CLS_SESSION.schoolId])||{};
+    const info=[{userId:rid,name:u.username||'',role:ctx.role||u.role||''}];
     await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
       fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
       recipients:[rid], recipientsInfo:info, scope:'student',

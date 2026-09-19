@@ -869,21 +869,23 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
       await cleanSignOut();
       throw new Error('انتهى اشتراكك بتاريخ '+new Date(data.solo.subscriptionEnds).toLocaleDateString('ar')+'. تواصل مع إدارة النظام.');
     }
-    flat = { role:'soloTeacher', schoolId:null, permissions:permsForNewUser('soloTeacher'), active:true };
+    flat = { role:'soloTeacher', schoolId:null, permissions:permsForNewUser('soloTeacher'), active:true, assignedClasses:[] };
   } else if(ctxKey.indexOf('school:')===0){
     const sid = ctxKey.slice(7);
     if(data.role==='schoolAdmin'){
       const block = schoolLoginBlockReason(sid, period);
       if(block){ await cleanSignOut(); throw new Error(block); }
       const saPerms = defaultPerms('schoolAdmin');
-      if(data.canManageUserPerms) saPerms['index.users.perms'] = {access:true, edit:true, del:false};
-      flat = { role:'schoolAdmin', schoolId:sid, permissions:saPerms, active:data.active };
+      const _ps = Array.isArray(data.canManageUserPermsSchools) ? data.canManageUserPermsSchools
+        : (data.canManageUserPerms ? (data.adminSchools||[]) : []);
+      if(_ps.includes(sid)) saPerms['index.users.perms'] = {access:true, edit:true, del:false};
+      flat = { role:'schoolAdmin', schoolId:sid, permissions:saPerms, active:data.active, assignedClasses:['__all__'] };
     } else {
       const ctx = (data.schools||{})[sid];
       if(!ctx || ctx.active===false){ await cleanSignOut(); throw new Error('هذا السياق معطّل. راجع المسؤول'); }
       const block = schoolLoginBlockReason(sid, period);
       if(block){ await cleanSignOut(); throw new Error(block); }
-      flat = { role:ctx.role, schoolId:sid, permissions:ctx.permissions, active:true };
+      flat = { role:ctx.role, schoolId:sid, permissions:ctx.permissions, active:true, assignedClasses:ctx.assignedClasses||[] };
     }
   } else { throw new Error('سياق دخول غير معروف'); }
   AUTH_JUST_CREATED = false;
@@ -1521,6 +1523,9 @@ async function openMyAccountsPanel(){
     const host = $('#myAccountsBody');
     if(!host) return;
     const curKey = CURRENT.schoolId ? ('school:'+CURRENT.schoolId) : (CURRENT.role==='soloTeacher'?'solo':'');
+    // زر "تعطيل" لا يظهر إطلاقًا لو ما عنده إلا سياق واحد (وإلا أقفل على نفسه الدخول بلا بديل)
+    const activeCtxCount = schoolIds.filter(k=>u.schools[k].active!==false).length + ((u.solo && u.solo.active!==false)?1:0);
+    const canDisableCtx = activeCtxCount > 1;
     let rows = '<div style="padding:8px 0 14px;border-bottom:1px solid #eee">البريد: <b style="direction:ltr;display:inline-block">'+esc(u.email||u.googleEmail||'—')+'</b></div>';
     if(u.solo){
       const isActive = u.solo.active!==false, isCur = curKey==='solo';
@@ -1538,8 +1543,8 @@ async function openMyAccountsPanel(){
         '<div><b>'+esc(name)+'</b>'+(isCur?' <span style="font-size:11px;color:var(--accent)">— الحالي</span>':'')+'<div style="font-size:11.5px;color:#888">'+esc(ROLES[ctx.role]||ctx.role||'')+(isActive?'':' — معطَّل')+'</div></div>'+
         '<div style="display:flex;gap:6px">'+
         (!isCur && isActive ? '<button data-key="school:'+sid+'" class="myAcctGoBtn" style="border:1px solid var(--accent);background:#fff;color:var(--accent);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : '')+
-        (isActive ? '<button data-sid="'+sid+'" class="myAcctDisableBtn" style="border:1px solid var(--danger);background:#fff;color:var(--danger);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">تعطيل</button>'
-                  : '<span style="font-size:11px;color:#aaa">تفعيله بيد مدير المدرسة فقط</span>') +
+        ((isActive && canDisableCtx) ? '<button data-sid="'+sid+'" class="myAcctDisableBtn" style="border:1px solid var(--danger);background:#fff;color:var(--danger);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">تعطيل</button>'
+          : (isActive ? '' : '<span style="font-size:11px;color:#aaa">تفعيله بيد مدير المدرسة فقط</span>')) +
         '</div></div>';
     }
     for(const sid of (u.blockedSchools||[])){
@@ -1647,7 +1652,8 @@ async function renderNotPreparedClasses(){
     const allCodes = Object.keys(classesMeta);
     teachers.forEach(t=>{ if(t.assignedClasses.includes('__all__')) t.assignedClasses=allCodes.slice(); });
     const today = todayStrIndex();
-    const notPrepared = [];
+    // فصل يُعدّ "غير محضَّر" فقط لو لم يحضّره أي معلم من معلميه — التجميع حسب الفصل لا حسب المعلم
+    const clsState = {}; // code -> {name, anyPrepared}
     for(const t of teachers){
       const ns = '_'+CURRENT.schoolId+'_'+SESSION.period+'_'+t.id;
       let prepared = new Set();
@@ -1664,16 +1670,18 @@ async function renderNotPreparedClasses(){
         }
       }catch(e){}
       (t.assignedClasses||[]).forEach(code=>{
-        if(!prepared.has(String(code))){
-          notPrepared.push({ teacher:t.username, className: classesMeta[code]||code, code });
-        }
+        const key = String(code);
+        if(!clsState[key]) clsState[key] = { name: classesMeta[code]||code, anyPrepared:false };
+        if(prepared.has(key)) clsState[key].anyPrepared = true;
       });
     }
+    const notPrepared = Object.keys(clsState).filter(k=>!clsState[k].anyPrepared)
+      .map(k=>({ code:k, className: clsState[k].name }));
     if(!notPrepared.length){ host.innerHTML = '<div class="card"><div class="sub-note" style="margin:0;color:var(--ok,#1a7a4f)">✔ جميع الفصول حُضِّرت اليوم.</div></div>'; return; }
     host.innerHTML = `<div class="card" style="margin-bottom:14px;border-color:#F3D6D4">
       <div class="set-block"><h3 style="color:var(--danger-d,#c0392b)">فصول لم يتم تحضيرها اليوم</h3>
         <p>لا يوجد أي تسجيل حضور لهذه الفصول بعد انتهاء نافذة التغيب (${esc(sc.attFrom||'07:40')}–${esc(attTo)}).</p></div>
-      ${notPrepared.map(n=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line)"><span style="font-weight:700">${esc(n.className)}</span><span class="umeta">المعلم: ${esc(n.teacher)}</span></div>`).join('')}
+      ${notPrepared.map(n=>`<div style="padding:10px 4px;border-bottom:1px solid var(--line);font-weight:700">${esc(n.className)}</div>`).join('')}
     </div>`;
   }catch(e){ host.innerHTML = '<div class="alert err">'+esc(e.message)+'</div>'; }
 }
@@ -2041,12 +2049,20 @@ async function openSchoolAdminEditModal(id, schoolId){
   const s = await usersCol().doc(id).get();
   if(!s.exists){ toast('الحساب غير موجود'); return; }
   const u = s.data();
+  const _adminSchools = u.adminSchools||[];
+  // توافق رجعي: القيمة القديمة (boolean) كانت تشمل كل مدارسه — تُترجَم لقائمة كاملة أول مرة
+  const _permSchools = Array.isArray(u.canManageUserPermsSchools) ? u.canManageUserPermsSchools
+    : (u.canManageUserPerms ? _adminSchools.slice() : []);
   modal(`<h2>تعديل حساب مدير</h2>
     <div id="saEditAlert"></div>
     <div class="field"><label>اسم المستخدم</label><input id="saEditName" value="${esc(u.username||'')}"></div>
     <div class="sub-note">بريد Google: <b style="direction:ltr;display:inline-block">${esc(u.googleEmail||u.email||'—')}</b></div>
-    <div class="field"><label><input type="checkbox" id="saEditPermsAccess" ${u.canManageUserPerms?'checked':''}> منح صلاحية الوصول لتبويب «الصلاحيات الخاصة»</label>
-      <div class="sub-note" style="margin-top:2px">محجوبة عن مدير المدرسة افتراضيًا — فعّلها هنا فقط لمن تريد منحه إياها تحديدًا.</div></div>
+    <div class="field"><label>صلاحية الوصول لتبويب «الصلاحيات الخاصة»</label>
+      <div class="sub-note" style="margin:2px 0 6px">محجوبة افتراضيًا — فعّلها لكل مدرسة على حدة. المدرسة المفعَّلة تصير صلاحياتها الخاصة بإدارته حصريًا (عرض فقط لأدمن النظام).</div>
+      ${_adminSchools.length
+        ? _adminSchools.map(sid=>`<label style="display:block;padding:5px 0"><input type="checkbox" class="saPermSchoolCb" value="${esc(sid)}" ${_permSchools.includes(sid)?'checked':''}> ${esc((SCHOOLS[sid]&&SCHOOLS[sid].name)||sid)}</label>`).join('')
+        : '<div class="sub-note" style="margin:0">لا مدارس تحت إشرافه بعد.</div>'}
+    </div>
     <div class="field"><label>حالة الحساب (كل مدارسه)</label>
       <div class="chip-toggle"><button type="button" class="chip ${u.active!==false?'active':''}" id="saEditActiveOn">غير موقوف</button>
       <button type="button" class="chip ${u.active===false?'active':''}" id="saEditActiveOff">موقوف</button></div></div>
@@ -2076,8 +2092,10 @@ async function openSchoolAdminEditModal(id, schoolId){
   $('#saEditActiveOff').onclick=()=>{activeVal=false;$('#saEditActiveOff').classList.add('active');$('#saEditActiveOn').classList.remove('active');};
   $('#saSaveBtn').onclick = async ()=>{
     try{
+      const permSchools = [...document.querySelectorAll('.saPermSchoolCb:checked')].map(x=>x.value);
       await usersCol().doc(id).update({ username:$('#saEditName').value.trim()||u.username, active:activeVal,
-        canManageUserPerms: $('#saEditPermsAccess').checked, updatedAt:Date.now() });
+        canManageUserPermsSchools: permSchools,
+        canManageUserPerms: permSchools.length>0, updatedAt:Date.now() });
       toast('تم الحفظ'); closeModal(); loadUsersList();
     }catch(e){ alertBox('saEditAlert','err',e.message); }
   };
@@ -2451,7 +2469,11 @@ async function renderUserPerms(c){
     let exclusiveSchools = new Set();
     try{
       const saSnap = await usersCol().where('role','==','schoolAdmin').where('canManageUserPerms','==',true).get();
-      saSnap.docs.forEach(d=>{ (d.data().adminSchools||[]).forEach(sid=>exclusiveSchools.add(sid)); });
+      saSnap.docs.forEach(d=>{
+        const dd = d.data();
+        const list = Array.isArray(dd.canManageUserPermsSchools) ? dd.canManageUserPermsSchools : (dd.adminSchools||[]);
+        list.forEach(sid=>exclusiveSchools.add(sid));
+      });
     }catch(e){}
     schoolSel.onchange = ()=>{
       const val = schoolSel.value;
@@ -3077,7 +3099,9 @@ async function createNote(n){
   if(n.recipientId){
     const us=await usersCol().doc(n.recipientId).get();
     if(!us.exists) throw new Error('المستقبِل غير موجود.');
-    const u=us.data(); info=[{userId:n.recipientId,name:u.username,role:u.role}];
+    const u=us.data();
+    const ctx=(u.schools&&u.schools[CURRENT.schoolId])||{};
+    info=[{userId:n.recipientId,name:u.username||'',role:ctx.role||u.role||''}];
   } else { info=await resolveRecipients(n); }
   if(!info.length) throw new Error('لا يوجد مستقبِل مؤهّل لهذه الملاحظة.');
   await notesCol().add({ schoolId:CURRENT.schoolId, period:SESSION.period,
@@ -3231,7 +3255,11 @@ async function openCompose(){
       .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; })
       .filter(u=>u.active!==false);
   }catch(e){}
-  const classOpts=composeRoster.classes.map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name)+'</option>').join('');
+  const _myCls = (CURRENT.assignedClasses||[]);
+  const _seeAllCls = CURRENT.role==='admin' || CURRENT.role==='schoolAdmin' || _myCls.includes('__all__');
+  const _visibleClasses = _seeAllCls ? composeRoster.classes
+    : composeRoster.classes.filter(c=>_myCls.map(_normN).includes(_normN(c.code)));
+  const classOpts=_visibleClasses.map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name)+'</option>').join('');
   modal('<h2>تحويل طالب</h2><div id="cmpAlert"></div>'+
     '<div class="field"><label>نوع الملاحظة</label><select id="cmpKind">'+
       '<option value="toTeacher">عن طالب ← إلى معلّمه</option>'+
@@ -3251,8 +3279,11 @@ async function openCompose(){
       const teachers=composeUsers.filter(u=>u.role==='teacher' && ((u.assignedClasses||[]).includes('__all__') || (u.assignedClasses||[]).map(_normN).includes(_normN(code))));
       sel.innerHTML='<option value="">جميع معلمي الطالب</option>'+teachers.map(u=>'<option value="'+esc(u.id)+'">'+esc(u.username)+'</option>').join('');
     } else {
-      const peers=composeUsers.filter(u=>u.role==='agent'||u.role==='counselor');
-      sel.innerHTML='<option value="">— اختر —</option>'+peers.map(u=>'<option value="'+esc(u.id)+'">'+esc(u.username)+' ('+(ROLES[u.role]||u.role)+')</option>').join('');
+      const peers=composeUsers.filter(u=>(u.role==='agent'||u.role==='counselor'||u.role==='assistant')
+        && ((u.assignedClasses||[]).includes('__all__') || (u.assignedClasses||[]).map(_normN).includes(_normN(code))));
+      sel.innerHTML = peers.length
+        ? '<option value="">— اختر —</option>'+peers.map(u=>'<option value="'+esc(u.id)+'">'+esc(u.username)+' ('+(ROLES[u.role]||u.role)+')</option>').join('')
+        : '<option value="">— لا يوجد موجّه أو وكيل مُسنَد لهذا الفصل —</option>';
     }
   };
   $('#cmpKind').onchange=fillRecip;

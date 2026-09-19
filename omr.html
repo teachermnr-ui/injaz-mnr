@@ -2684,7 +2684,7 @@ function renderStudents(){
 
     let noteBlock = '';
     if(noteOpen){
-      noteBlock = `<input id="attNote" placeholder="ملاحظة (اختياري)" value="${escapeHtml(att&&att.note||'')}" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:9px;font:inherit;text-align:right;margin-top:8px">
+      noteBlock = `<input id="attNote" placeholder="أضِف ملاحظة جديدة عن الطالب (اختياري)" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:9px;font:inherit;text-align:right;margin-top:8px">
         <div style="display:flex;gap:6px;margin-top:8px">
           <button class="ghost" style="flex:1;padding:8px" onclick="closeAttMenu()">حفظ الملاحظة وإغلاق</button>
         </div>`;
@@ -2733,21 +2733,18 @@ function openAttMenu(seat){
   window.scrollTo(0, y);   // حافظ على موضع التمرير
 }
 function closeAttMenu(){
-  // الزر يقول «حفظ الملاحظة وإغلاق» — نحفظها فعلياً مع تاريخها قبل الإغلاق
+  // الزر يقول «حفظ الملاحظة وإغلاق» — يضيف ملاحظة جديدة دائمة لسجل الطالب (تراكمية، لا تستبدل السابقة)
   const seat = state.attMenuSeat;
   const noteEl = document.getElementById('attNote');
-  if(seat && noteEl){
-    const note = (noteEl.value||'').trim();
-    const cur = state.attendance[seat];
-    const prevNote = cur ? (cur.note||'') : '';
-    if(note !== prevNote){
-      if(note){
-        state.attendance[seat] = Object.assign({ status:(cur&&cur.status)||'present' }, cur||{}, { note, noteAt: Date.now() });
-      } else if(cur){
-        delete cur.note; delete cur.noteAt;
-      }
-      saveStudentsToCloud();
-    }
+  const note = noteEl ? (noteEl.value||'').trim() : '';
+  if(seat && note){
+    const s = findStudent(seat);
+    db.collection('studentNotes').add({
+      schoolId: CLS_SESSION.schoolId, period: CLS_SESSION.period,
+      classCode: s?String(s.classCode):'', studentSeat: String(seat), studentName: s?s.name:'',
+      fromUserId: CLS_SESSION.userId, fromName: CLS_SESSION.username, fromRole: CLS_SESSION.role,
+      text: note, createdAt: Date.now()
+    }).catch(e=>{ alert('تعذّر حفظ الملاحظة: '+(e.message||e)); });
   }
   state.attMenuSeat = null; const y=window.scrollY; renderStudents(); window.scrollTo(0,y);
 }
@@ -3654,12 +3651,10 @@ function openStudentRecord(seat){
       workBox(boostNm, boostTotal(seat), '#fff7e6')+
     '</div></div>';
 
-  // ملاحظات الطالب
+  // الملاحظات والتحويلات
   const notesCard = '<div style="background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
-    '<div style="text-align:right;font-weight:800;color:var(--ink);margin-bottom:10px">📝 ملاحظات الطالب</div>'+
-    '<div id="srNotesList" style="text-align:right"><div class="hint">جارِ التحميل…</div></div>'+
-    '<textarea id="srNoteText" placeholder="اكتب ملاحظاتك هنا…" style="width:100%;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;min-height:70px;resize:vertical"></textarea>'+
-    '<button class="primary" style="width:100%;margin-top:8px;background:#0b7a63" onclick="srSendNote(\''+escapeHtml(String(seat))+'\',\''+escapeHtml(String(s.classCode))+'\')">📨 إرسال الملاحظة</button></div>';
+    '<div style="text-align:right;font-weight:800;color:var(--ink);margin-bottom:10px">📝 الملاحظات والتحويلات</div>'+
+    '<div id="srNotesList" style="text-align:right"><div class="hint">جارِ التحميل…</div></div></div>';
 
   const body = document.getElementById('stRecordBody');
   body.innerHTML = idCard + followCard + behCard + workCard + notesCard;
@@ -3670,36 +3665,47 @@ function openStudentRecord(seat){
 async function srLoadNotes(seat){
   const host=document.getElementById('srNotesList'); if(!host) return;
   try{
-    const snap=await db.collection('notes').where('studentSeat','==',String(seat)).get();
-    const list=snap.docs.map(d=>d.data()).filter(n=>n.schoolId===CLS_SESSION.schoolId && n.period===CLS_SESSION.period)
-      .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-    if(!list.length){ host.innerHTML='<div class="hint">لا توجد ملاحظات عن هذا الطالب.</div>'; return; }
-    host.innerHTML=list.map(n=>'<div style="background:#f7faf9;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px">'+
-      '<div style="font-size:13px;color:var(--ink)">'+escapeHtml(n.text||'')+'</div>'+
-      '<div style="font-size:11px;color:var(--muted);margin-top:4px">من: '+escapeHtml(n.fromName||'—')+'</div></div>').join('');
-  }catch(e){ host.innerHTML='<div class="hint">تعذّر تحميل الملاحظات.</div>'; }
+    const me = CLS_SESSION.userId;
+    const [privSnap, transSnap] = await Promise.all([
+      db.collection('studentNotes').where('studentSeat','==',String(seat)).where('fromUserId','==',me).get(),
+      db.collection('notes').where('studentSeat','==',String(seat)).get()
+    ]);
+    const priv = privSnap.docs.map(d=>({id:d.id, kind:'private', ...d.data()}))
+      .filter(n=>n.schoolId===CLS_SESSION.schoolId && n.period===CLS_SESSION.period);
+    const trans = transSnap.docs.map(d=>({id:d.id, kind:'transfer', ...d.data()}))
+      .filter(n=>n.schoolId===CLS_SESSION.schoolId && n.period===CLS_SESSION.period
+        && (n.fromUserId===me || (n.recipients||[]).includes(me)));
+    const list = priv.concat(trans).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    if(!list.length){ host.innerHTML='<div class="hint">لا توجد ملاحظات أو تحويلات عن هذا الطالب بعد.</div>'; return; }
+    host.innerHTML = list.map(n=>{
+      const dateStr = n.createdAt ? new Date(n.createdAt).toLocaleDateString('ar',{day:'numeric',month:'long'}) : '';
+      if(n.kind==='private'){
+        return '<div style="background:#f7faf9;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px">'+
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
+          '<div style="font-size:13px;color:var(--ink);flex:1">'+escapeHtml(n.text||'')+'</div>'+
+          '<button onclick="srDeleteNote(\''+n.id+'\',\''+String(seat)+'\')" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:14px;flex:0 0 auto">🗑</button></div>'+
+          '<div style="font-size:11px;color:var(--muted);margin-top:4px">📝 ملاحظة خاصة · '+dateStr+'</div></div>';
+      }
+      const dir = n.fromUserId===me ? 'مُرسَلة منك' : 'واردة إليك';
+      const hasReplies = Array.isArray(n.replies) && n.replies.length>0;
+      const reasonLine = n.referralReason ? ('<div style="font-size:11.5px;color:var(--muted);margin-top:2px">سبب الإحالة: '+escapeHtml(n.referralReason)+'</div>') : '';
+      const repliesHtml = hasReplies ? ('<div id="srReplies_'+n.id+'" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">'+
+        n.replies.map(r=>'<div style="font-size:12.5px;color:var(--ink);margin-bottom:5px"><b>'+escapeHtml(r.fromName||'')+':</b> '+escapeHtml(r.text||'')+'</div>').join('')+'</div>') : '';
+      return '<div style="background:#eef6f5;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px'+(hasReplies?';cursor:pointer':'')+'"'+(hasReplies?' onclick="srToggleReplies(\''+n.id+'\')"':'')+'>'+
+        '<div style="font-size:13px;color:var(--ink)">'+escapeHtml(n.text||'')+'</div>'+reasonLine+
+        '<div style="font-size:11px;color:var(--muted);margin-top:4px">🔀 تحويل '+dir+' · '+escapeHtml(n.fromName||'')+' · '+dateStr+(hasReplies?' · اضغط لعرض الردود':'')+'</div>'+
+        repliesHtml+'</div>';
+    }).join('');
+  }catch(e){ host.innerHTML='<div class="hint">تعذّر تحميل السجل.</div>'; }
 }
-async function srSendNote(seat, classCode){
-  if(!clsGuardEditSec('worklog')) return;
-  const ta=document.getElementById('srNoteText'); const text=(ta&&ta.value||'').trim();
-  if(!text){ alert('اكتب نص الملاحظة أولاً.'); return; }
-  const s=findStudent(seat); const className=classNameByCode(classCode)||classCode;
-  try{
-    const admins=await omrResolveClassAdmins(classCode);
-    const info = admins && admins.length ? admins : [];
-    if(!info.length){
-      alert('لا يوجد وكيل/موجه/مساعد إداري مُسنَد لهذا الفصل حالياً — ما فيش مستقبل تتبعتله الملاحظة. اكتب الملاحظة كتذكير شخصي بدلاً من ذلك، أو راجع الأدمن ليُسنِد مستلماً للفصل.');
-      return;
-    }
-    await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
-      fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
-      recipients:info.map(r=>r.userId), recipientsInfo:info, scope:'student',
-      studentSeat:String(seat), studentName:s?s.name:'', classCode:String(classCode), className:className,
-      text:text, createdAt:Date.now(), replies:[], readAt:{}, closed:false });
-    if(ta) ta.value='';
-    alert('تم إرسال الملاحظة.');
-    srLoadNotes(seat);
-  }catch(e){ alert('فشل الإرسال: '+(e.message||e)); }
+function srToggleReplies(id){
+  const el=document.getElementById('srReplies_'+id); if(!el) return;
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+async function srDeleteNote(id, seat){
+  if(!confirm('حذف هذي الملاحظة نهائيًا؟')) return;
+  try{ await db.collection('studentNotes').doc(id).delete(); srLoadNotes(seat); }
+  catch(e){ alert('تعذّر الحذف: '+(e.message||e)); }
 }
 function closeStudentRecord(){ document.getElementById('stRecordOverlay').style.display='none'; }
 

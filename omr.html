@@ -2420,7 +2420,7 @@ async function openMyAccountsPanel(){
     const host = document.getElementById('myAccountsBody');
     if(!host) return;
     const curKey = CLS_SESSION.schoolId ? ('school:'+CLS_SESSION.schoolId) : 'solo';
-    let rows = '';
+    let rows = '<div style="padding:8px 0 14px;border-bottom:1px solid #eee">البريد: <b style="direction:ltr;display:inline-block">'+escapeHtml(u.email||u.googleEmail||'—')+'</b></div>';
     if(u.solo){
       const isActive = u.solo.active!==false, isCur = curKey==='solo';
       rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee">'+
@@ -2428,7 +2428,7 @@ async function openMyAccountsPanel(){
         (isCur ? '' : (isActive ? '<button data-key="solo" class="myAcctGoBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : ''))+
         '</div>';
     }
-    if(!schoolIds.length && !u.solo && !(u.blockedSchools||[]).length){ host.innerHTML = '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; return; }
+    if(!schoolIds.length && !u.solo && !(u.blockedSchools||[]).length){ host.innerHTML = rows + '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; return; }
     for(const sid of schoolIds){
       const ctx = u.schools[sid];
       let name = sid;
@@ -2563,12 +2563,15 @@ async function bulkNote(kind){
   omrModal('<div style="text-align:center;color:#888;padding:26px">جارٍ التحميل…</div>');
   let cands=[];
   try{
-    const snap=await db.collection('users').where('schoolId','==',CLS_SESSION.schoolId).get();
-    cands=snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.active!==false && roles.includes(u.role));
+    const snap=await db.collection('users').get();
+    cands=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId])
+      .map(u=>{ const ctx=u.schools[CLS_SESSION.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; })
+      .filter(u=>u.active!==false && roles.includes(u.role));
   }catch(e){}
   const normN=x=>String(x||'').replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]).trim();
   const codes=[...new Set(studs.map(s=>normN(s.classCode)))];
-  const hasClass=u=>(u.assignedClasses||[]).map(normN).some(c=>codes.includes(c));
+  const hasClass=u=>{ const ac=(u.assignedClasses||[]); if(ac.includes('__all__')) return true; return ac.map(normN).some(c=>codes.includes(c)); };
   const preferred=cands.filter(hasClass);
   const recips = preferred.length?preferred:cands;
   const counts={};
@@ -4757,9 +4760,11 @@ const REFERRAL_REASONS = {
 };
 async function omrResolveClassAdmins(classCode){
   const norm=x=>normalizeDigits(String(x||'')).trim();
-  const snap=await db.collection('users').where('schoolId','==',CLS_SESSION.schoolId).get();
+  const snap=await db.collection('users').get();
   return snap.docs.map(d=>({id:d.id,...d.data()}))
-    .filter(u=>u.active!==false && (u.role==='agent'||u.role==='counselor'||u.role==='assistant') && (u.assignedClasses||[]).map(norm).includes(norm(classCode)))
+    .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId])
+    .map(u=>{ const ctx=u.schools[CLS_SESSION.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; })
+    .filter(u=>u.active!==false && (u.role==='agent'||u.role==='counselor'||u.role==='assistant') && (u.assignedClasses.includes('__all__') || u.assignedClasses.map(norm).includes(norm(classCode))))
     .map(u=>({userId:u.id,name:u.username,role:u.role}));
 }
 async function omrReplyNote(id){
@@ -5803,6 +5808,7 @@ async function loadStudentsFromCloud(manual){
     let rData = {};
     try{ rData = rSnap.exists ? JSON.parse(rSnap.data().value||'{}') : {}; }catch(e){ rData = {}; }
     state.fullClasses = Array.isArray(rData.classes) ? rData.classes : [];
+    if(CLS_USER_ASSIGNED.includes('__all__')) CLS_USER_ASSIGNED = state.fullClasses.map(c=>String(c.code));
     state.fullStudents = Array.isArray(rData.students) ? rData.students : [];
     state.customSubjects = Array.isArray(rData.customSubjects) ? rData.customSubjects : [];
     recomputeVisibleRoster();

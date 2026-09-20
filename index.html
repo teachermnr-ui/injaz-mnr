@@ -507,6 +507,7 @@ const PERM_TREE = [
     { key:'index.absence',  label:'تأخر وغياب الطلاب', only:['access','edit'] },
     { key:'index.attendanceWindow', label:'إعدادات نافذة التغيب', sub:true, only:['edit'] },
     { key:'index.studentStatus', label:'حالات الطلاب', only:['access','edit'] },
+    { key:'index.studentRecord', label:'سجل الطالب التفصيلي', sub:true, only:['access'] },
     { key:'index.users',    label:'المستخدمون', only:['access'] },
     { key:'index.users.perms', label:'الصلاحيات الخاصة', sub:true, only:['edit'] },
   ]},
@@ -529,6 +530,7 @@ const ALL_PERM_KEYS = PERM_TREE.flatMap(g=>g.leaves.map(l=>l.key));
 /* خريطة كل بند فرعي (sub:true) إلى بنده الأب — لتفعيل الأب تلقائيًا عند تفعيل الفرعي */
 const PERM_PARENT_OF = {
   'index.attendanceWindow': 'index.absence',
+  'index.studentRecord': 'index.studentStatus',
   'index.users.perms': 'index.users',
   'omr.classes.addManage': 'omr.classes',
   'omr.classes.subjects': 'omr.classes',
@@ -1591,7 +1593,7 @@ async function openMyAccountsPanel(){
    ======================================================================== */
 /* ======================== غياب الطلاب + حالة الطالب ======================== */
 const attCol = ()=>db.collection('attendance');
-let RABS={}, SS_DATA={classes:[],students:[]}, SS_SEL=null, SS_RECORDS_TAB=null, ABS_CACHE=null, ABS_OPEN={};
+let RABS={}, RNOTES={}, SS_DATA={classes:[],students:[]}, SS_SEL=null, SS_RECORDS_TAB=null, ABS_CACHE=null, ABS_OPEN={};
 function attDateKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function attDocIdFor(sid,period,seat,dk){ return 'att_'+sid+'_'+period+'_'+seat+'_'+dk; }
 async function markStudentAbsent(seat,name,classCode,className,status,entryTime){
@@ -1609,6 +1611,14 @@ async function loadAbsenceCounts(){
   try{ const sid=RSchoolId; if(!sid) return;
     const snap=await attCol().where('schoolId','==',sid).get();
     snap.docs.map(d=>d.data()).filter(a=>a.period===SESSION.period && a.status==='absent').forEach(a=>{ RABS[a.seat]=(RABS[a.seat]||0)+1; });
+  }catch(e){}
+}
+async function loadNoteCounts(){
+  RNOTES={};
+  try{ const sid=RSchoolId||CURRENT.schoolId; if(!sid) return;
+    const snap=await notesCol().where('schoolId','==',sid).get();
+    snap.docs.map(d=>d.data()).filter(n=>n.period===SESSION.period && n.studentSeat)
+      .forEach(n=>{ RNOTES[n.studentSeat]=(RNOTES[n.studentSeat]||0)+1; });
   }catch(e){}
 }
 function markAbsentFromClasses(seat,code,status){
@@ -1654,6 +1664,10 @@ async function renderNotPreparedClasses(){
     const today = todayStrIndex();
     // فصل يُعدّ "غير محضَّر" فقط لو لم يحضّره أي معلم من معلميه — التجميع حسب الفصل لا حسب المعلم
     const clsState = {}; // code -> {name, anyPrepared}
+    // كل فصول الروستر تدخل الحسبة — حتى ما ليس له معلم مُسنَد (فصل بلا معلم = غير محضَّر حتمًا)
+    Object.keys(classesMeta).forEach(code=>{
+      clsState[String(code)] = { name: classesMeta[code]||code, anyPrepared:false };
+    });
     for(const t of teachers){
       const ns = '_'+CURRENT.schoolId+'_'+SESSION.period+'_'+t.id;
       let prepared = new Set();
@@ -1669,7 +1683,8 @@ async function renderNotPreparedClasses(){
           });
         }
       }catch(e){}
-      (t.assignedClasses||[]).forEach(code=>{
+      const _tCls = (t.assignedClasses||[]).includes('__all__') ? Object.keys(classesMeta) : (t.assignedClasses||[]);
+      _tCls.forEach(code=>{
         const key = String(code);
         if(!clsState[key]) clsState[key] = { name: classesMeta[code]||code, anyPrepared:false };
         if(prepared.has(key)) clsState[key].anyPrepared = true;
@@ -1723,7 +1738,8 @@ async function renderAbsence(c){
       const sid=targetSchoolId();
       if(!sid){ alertBox('awAlert','err','اختر المدرسة'); return; }
       SCHOOLS[sid]=Object.assign({}, SCHOOLS[sid], { attFrom:$('#awFrom').value, attTo:$('#awTo').value });
-      try{ await schoolDocById(sid).set(SCHOOLS[sid], {merge:true}); alertBox('awAlert','ok','تم حفظ النافذة'); toast('تم الحفظ'); }
+      // كتابة الحقلين المعنيين فقط — لا مستند المدرسة كاملًا
+      try{ await schoolDocById(sid).set({ attFrom:$('#awFrom').value, attTo:$('#awTo').value, updatedAt:Date.now() }, {merge:true}); alertBox('awAlert','ok','تم حفظ النافذة'); toast('تم الحفظ'); }
       catch(e){ alertBox('awAlert','err',e.message); }
     };
   }
@@ -1734,6 +1750,14 @@ async function renderAbsence(c){
     ABS_CACHE={arr,canEdit}; paintAbsence();
   }catch(e){ $('#absRoot').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
+function hijriMonthLabel(dt){
+  try{
+    const d = new Date(dt+'T00:00:00');
+    const h = d.toLocaleDateString('ar-SA-u-ca-islamic',{year:'numeric',month:'long'});
+    const g = d.toLocaleDateString('ar',{year:'numeric',month:'long'});
+    return g + ' — ' + h;
+  }catch(e){ return dt.slice(0,7); }
+}
 function paintAbsence(){
   if(!ABS_CACHE){ return; }
   const {arr,canEdit}=ABS_CACHE;
@@ -1743,44 +1767,79 @@ function paintAbsence(){
   const root=$('#absRoot'); if(!root) return;
   if(!dates.length){ root.innerHTML='<div class="empty"><span class="e-emoji">✅</span>لا غيابات حالياً.</div>'; return; }
   const norm=x=>_normN(x);
-  root.innerHTML=dates.map(dt=>{
-    const open = ABS_OPEN[dt]!==false;
-    const list=byDate[dt].slice().sort((a,b)=>norm(a.classCode).localeCompare(norm(b.classCode),undefined,{numeric:true}));
+  // تجميع الأيام تحت شهورها — الشهر المكتمل (أي غير الشهر الجاري) يبدأ مطويًا
+  const nowKey = new Date().toISOString().slice(0,7);
+  const byMonth={}; dates.forEach(dt=>{ const mk=String(dt).slice(0,7); (byMonth[mk]=byMonth[mk]||[]).push(dt); });
+  const months=Object.keys(byMonth).sort((a,b)=>String(b).localeCompare(String(a)));
+  function dayCardHtml(dt){
+    const open = ABS_OPEN[dt]===true;
+    const list=byDate[dt].slice();
     let title=dt; try{ title=new Date(dt+'T00:00:00').toLocaleDateString('ar',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }catch(e){}
-    return '<div class="card" style="padding:0;overflow:hidden">'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:13px 14px;cursor:pointer" onclick="toggleAbsDay(\''+dt+'\')">'+
-        '<div class="uname" style="flex:1;text-align:right;font-size:15px">📅 '+esc(title)+' <span class="umeta">('+list.length+')</span></div>'+
+    return '<div class="card" style="padding:0;overflow:hidden;margin:8px 0">'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer" onclick="toggleAbsDay(\''+dt+'\')">'+
+        '<div class="uname" style="flex:1;text-align:right;font-size:14.5px">📅 '+esc(title)+' <span class="umeta">('+list.length+')</span></div>'+
         '<span style="color:var(--muted);font-size:18px">'+(open?'▴':'▾')+'</span>'+
         '<button class="btn ghost sm" onclick="event.stopPropagation();printAbsDay(\''+dt+'\')" title="طباعة PDF">🖨️ PDF</button>'+
       '</div>'+
       (open?(function(){
         const absList  = list.filter(a=>a.status!=='late');
-        // التأخير لا يظهر هنا إلا إذا سُجِّل من الصفحة الرئيسية نفسها
         const lateList = list.filter(a=>a.status==='late' && a.source==='index');
-        const sec=(t,arr)=> arr.length
-          ? '<div class="umeta" style="font-weight:800;margin:6px 2px 6px;color:var(--brand)">'+t+' ('+arr.length+')</div>'
-            + arr.map(a=>absRow(a,days[a.seat+'|'+(a.markedBy||'')]||0,canEdit)).join('')
+        // الفرز حسب الصف مع فاصل بصري بين كل صف وآخر
+        const byClass=arr2=>{
+          const g={}; arr2.forEach(a=>{ const k=String(a.className||a.classCode||'—'); (g[k]=g[k]||[]).push(a); });
+          return Object.keys(g).sort((a,b)=>norm(a).localeCompare(norm(b),undefined,{numeric:true}))
+            .map(k=>'<div style="margin:10px 0 4px;padding:5px 10px;background:var(--surface-2);border-radius:8px;font-weight:800;font-size:12.5px;color:var(--brand)">'+esc(k)+' ('+g[k].length+')</div>'+
+              g[k].map(a=>absRow(a,days[a.seat+'|'+(a.markedBy||'')]||0,canEdit)).join('')).join('');
+        };
+        const sec=(t,arr2)=> arr2.length
+          ? '<div class="umeta" style="font-weight:800;margin:8px 2px 2px;color:var(--brand)">'+t+' ('+arr2.length+')</div>'+byClass(arr2)
           : '';
         const body = sec('الغياب',absList) + sec('التأخر',lateList);
         return '<div style="padding:0 12px 12px">'+(body||'<div class="umeta" style="padding:6px 2px">لا توجد سجلات.</div>')+'</div>';
       })():'')+
     '</div>';
+  }
+  root.innerHTML=months.map(mk=>{
+    const isCurrent = mk===nowKey;
+    const mOpen = ABS_OPEN['m:'+mk]!==undefined ? ABS_OPEN['m:'+mk] : isCurrent;
+    const total = byMonth[mk].reduce((a,dt)=>a+byDate[dt].length,0);
+    return '<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;border-color:var(--accent)">'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:13px 14px;cursor:pointer;background:var(--surface-2)" onclick="toggleAbsMonth(\''+mk+'\')">'+
+        '<div class="uname" style="flex:1;text-align:right;font-size:15px">🗓️ '+esc(hijriMonthLabel(byMonth[mk][0]))+' <span class="umeta">('+byMonth[mk].length+' يوم · '+total+' سجل)</span></div>'+
+        '<span style="color:var(--muted);font-size:18px">'+(mOpen?'▴':'▾')+'</span>'+
+      '</div>'+
+      (mOpen?'<div style="padding:4px 10px 10px">'+byMonth[mk].map(dayCardHtml).join('')+'</div>':'')+
+    '</div>';
   }).join('');
 }
-function toggleAbsDay(dt){ const open=ABS_OPEN[dt]!==false; ABS_OPEN[dt]=!open; paintAbsence(); }
+function toggleAbsMonth(mk){
+  const nowKey = new Date().toISOString().slice(0,7);
+  const cur = ABS_OPEN['m:'+mk]!==undefined ? ABS_OPEN['m:'+mk] : (mk===nowKey);
+  ABS_OPEN['m:'+mk] = !cur; paintAbsence();
+}
+function toggleAbsDay(dt){ ABS_OPEN[dt] = ABS_OPEN[dt]!==true; paintAbsence(); }
 function printAbsDay(dt){
   if(!ABS_CACHE) return;
   const norm=x=>_normN(x);
-  const list=ABS_CACHE.arr.filter(a=>a.date===dt).sort((a,b)=>norm(a.classCode).localeCompare(norm(b.classCode),undefined,{numeric:true}));
+  const list=ABS_CACHE.arr.filter(a=>a.date===dt);
   const days={}; ABS_CACHE.arr.forEach(a=>{ if(a.status==='absent'){ const k=a.seat+'|'+(a.markedBy||''); days[k]=(days[k]||0)+1; } });
   let title=dt; try{ title=new Date(dt+'T00:00:00').toLocaleDateString('ar',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }catch(e){}
-  const rows=list.map((a,i)=>{ const st=a.status==='excused'?('مستأذن'+(a.excuseTime?(' '+a.excuseTime):'')):a.status==='late'?('متأخر'+(a.entryTime?(' '+a.entryTime):'')):'غائب';
-    return '<tr><td>'+(i+1)+'</td><td>'+esc(a.seat)+'</td><td>'+esc(a.name)+'</td><td>'+esc(a.className||a.classCode||'')+'</td><td>'+st+'</td><td>'+(days[a.seat+'|'+(a.markedBy||'')]||0)+'</td></tr>'; }).join('');
+  // جدول منفصل لكل صف
+  const g={}; list.forEach(a=>{ const k=String(a.className||a.classCode||'—'); (g[k]=g[k]||[]).push(a); });
+  const classKeys=Object.keys(g).sort((a,b)=>norm(a).localeCompare(norm(b),undefined,{numeric:true}));
+  const tables = classKeys.map(k=>{
+    const rows=g[k].map((a,i)=>{ const st=a.status==='excused'?('مستأذن'+(a.excuseTime?(' '+a.excuseTime):'')):a.status==='late'?('متأخر'+(a.entryTime?(' '+a.entryTime):'')):'غائب';
+      return '<tr><td>'+(i+1)+'</td><td>'+esc(a.seat)+'</td><td>'+esc(a.name)+'</td><td>'+st+'</td><td>'+(days[a.seat+'|'+(a.markedBy||'')]||0)+'</td></tr>'; }).join('');
+    return '<div class="cls-block"><h3>'+esc(k)+' — عدد السجلات: '+g[k].length+'</h3>'+
+      '<table><thead><tr><th>#</th><th>الهوية</th><th>الاسم</th><th>الحالة</th><th>أيام الغياب</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }).join('');
   const w=window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
   w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>غياب '+esc(title)+'</title>'+
-    '<style>body{font-family:Tahoma,Arial;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #999;padding:8px;text-align:center;font-size:13px}th{background:#eee}</style></head><body>'+
+    '<style>body{font-family:Tahoma,Arial;padding:20px}h2{text-align:center}h3{margin:18px 0 6px;font-size:15px;background:#eef4f3;padding:7px 10px;border-radius:6px}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #999;padding:8px;text-align:center;font-size:13px}th{background:#eee}'+
+    '.cls-block{page-break-inside:avoid}</style></head><body>'+
     '<h2>سجل غياب الطلاب — '+esc(title)+'</h2>'+
-    '<table><thead><tr><th>#</th><th>الهوية</th><th>الاسم</th><th>الصف</th><th>الحالة</th><th>أيام الغياب</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    (tables||'<p style="text-align:center">لا توجد سجلات.</p>')+
     '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
   w.document.close();
 }
@@ -2922,6 +2981,7 @@ async function loadRoster(){
   const hasC=RClasses.length>0;
   RUI={ ed:{teacherAdd:!hasC, noor:!hasC, manual:!hasC, paste:!hasC}, openStage:null, openClass:null };
   await loadAbsenceCounts();
+  await loadNoteCounts();
   paintClasses();
 }
 async function saveRoster(){
@@ -2997,17 +3057,73 @@ function groupStages(){
 function studentRowR(s,canDel,canEdit){
   const canAbs = can('index.absence','edit');
   const days = (RABS && RABS[s.seat]) || 0;
-  const meta = '<div style="font-size:11.5px;margin-top:2px;color:#2E73CC;font-weight:600">الحالة الاجتماعية: '+esc(s.social||'—')+' · الصحة: '+esc(s.health||'—')+' · عدد الغياب: '+days+'</div>';
+  const notesN = (RNOTES && RNOTES[s.seat]) || 0;
+  const meta = '<div style="font-size:11.5px;margin-top:2px;color:#2E73CC;font-weight:600">الحالة الاجتماعية: '+esc(s.social||'—')+' · الصحة: '+esc(s.health||'—')+' · عدد الغياب: '+days+' · عدد التحويلات: '+notesN+'</div>';
+  const openRec = 'openStudentRecordIndex(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')';
   return '<div style="padding:7px 4px;border-top:1px solid var(--line)">'+
     '<div style="display:flex;gap:6px;align-items:center">'+
-      '<span style="font-family:monospace;color:var(--muted);font-size:12.5px;min-width:90px">'+esc(s.seat||'—')+'</span>'+
-      '<span style="flex:1;font-size:14px">'+esc(s.name)+'</span>'+
+      '<span onclick="'+openRec+'" style="font-family:monospace;color:var(--accent);font-size:12.5px;min-width:90px;cursor:pointer;text-decoration:underline" title="عرض سجل الطالب">'+esc(s.seat||'—')+'</span>'+
+      '<span onclick="'+openRec+'" style="flex:1;font-size:14px;cursor:pointer" title="عرض سجل الطالب">'+esc(s.name)+'</span>'+
       (canAbs?'<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:var(--bad);border-color:var(--bad)" onclick="markAbsentFromClasses(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\',\'absent\')" title="تسجيل غياب اليوم">غائب</button>'+
        '<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:#c07a00;border-color:#c07a00" onclick="markAbsentFromClasses(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\',\'late\')" title="تسجيل تأخّر اليوم">متأخر</button>':'')+
       (canEdit?'<button class="icon-btn" onclick="moveStudent(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')" title="نقل">↔️</button>':'')+
       (canDel?'<button class="icon-btn del" onclick="delStudent(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')" title="حذف">✕</button>':'')+
     '</div>'+meta+
   '</div>';
+}
+async function openStudentRecordIndex(seat, classCode){
+  if(!can('index.studentRecord','access')){
+    modal('<h2>سجل الطالب</h2><div class="alert err" style="margin:10px 0">لست مخولاً لمشاهدة تفاصيل سجل الطالب.</div>'+
+      '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إغلاق</button></div>');
+    return;
+  }
+  const st = RStudents.find(x=>String(x.seat)===String(seat)) || {};
+  const cl = RClasses.find(c=>String(c.code)===String(classCode)) || {};
+  modal('<h2>سجل الطالب</h2>'+
+    '<div class="sub-note" style="margin-bottom:10px"><b>'+esc(st.name||'')+'</b> — '+esc(cl.name||classCode||'')+' · '+esc(seat)+'</div>'+
+    '<div id="srIdxBody"><div class="empty"><span class="spin"></span></div></div>'+
+    '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إغلاق</button></div>');
+  const host = $('#srIdxBody'); if(!host) return;
+  try{
+    const sid = RSchoolId || CURRENT.schoolId;
+    const [attSnap, noteSnap] = await Promise.all([
+      attCol().where('schoolId','==',sid).get(),
+      notesCol().where('schoolId','==',sid).get()
+    ]);
+    const atts = attSnap.docs.map(d=>d.data())
+      .filter(a=>a.period===SESSION.period && String(a.seat)===String(seat))
+      .sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const notes = noteSnap.docs.map(d=>d.data())
+      .filter(n=>n.period===SESSION.period && String(n.studentSeat)===String(seat))
+      .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    const dayName = ts => ts ? new Date(ts).toLocaleDateString('ar-SA',{weekday:'long'}) : '—';
+    const STATUS_AR = {absent:'غائب', late:'متأخّر', excused:'مستأذن', runaway:'هارب', present:'حاضر'};
+    const absHtml = atts.length
+      ? '<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+        '<tr style="background:var(--surface-2)"><th style="padding:6px;text-align:right">اليوم</th><th style="padding:6px;text-align:right">التاريخ</th><th style="padding:6px;text-align:right">الحالة</th></tr>'+
+        atts.map(a=>'<tr style="border-top:1px solid var(--line)"><td style="padding:6px">'+esc(dayName(a.ts))+'</td><td style="padding:6px;font-family:monospace">'+esc(a.date||'')+'</td><td style="padding:6px">'+esc(STATUS_AR[a.status]||a.status||'')+(a.entryTime?(' — '+esc(a.entryTime)):'')+'</td></tr>').join('')+
+        '</table>'
+      : '<div class="sub-note" style="margin:0">لا سجلات غياب أو تأخّر.</div>';
+    const notesHtml = notes.length
+      ? notes.map(n=>{
+          const to = (n.recipientsInfo||[]).map(r=>esc(r.name||'')+(r.role?(' ('+esc(ROLES[r.role]||r.role)+')'):'')).join('، ') || '—';
+          const dateStr = n.createdAt ? new Date(n.createdAt).toLocaleDateString('ar',{day:'numeric',month:'long'}) : '';
+          const replies = Array.isArray(n.replies)&&n.replies.length
+            ? '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)">'+
+              n.replies.map(r=>'<div style="font-size:12px;margin-bottom:4px"><b>'+esc(r.fromName||'')+':</b> '+esc(r.text||'')+'</div>').join('')+'</div>'
+            : '';
+          return '<div style="background:#eef6f5;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px">'+
+            '<div style="font-size:12px;color:var(--muted)">من: <b>'+esc(n.fromName||'')+'</b> ← إلى: <b>'+to+'</b></div>'+
+            (n.referralReason?('<div style="font-size:12px;color:var(--muted);margin-top:2px">سبب الإحالة: <b>'+esc(n.referralReason)+'</b></div>'):'')+
+            '<div style="font-size:13px;margin-top:5px">'+esc(n.text||'')+'</div>'+
+            '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+esc(dateStr)+(n.closed?' · مُغلَقة':'')+'</div>'+
+            replies+'</div>';
+        }).join('')
+      : '<div class="sub-note" style="margin:0">لا تحويلات عن هذا الطالب.</div>';
+    host.innerHTML =
+      '<div style="font-weight:800;margin:4px 0 8px">📅 الغياب والتأخّر (الإجمالي: '+atts.filter(a=>a.status==='absent').length+')</div>'+absHtml+
+      '<div style="font-weight:800;margin:16px 0 8px">🔀 التحويلات (العدد: '+notes.length+')</div>'+notesHtml;
+  }catch(e){ host.innerHTML='<div class="alert err">تعذّر تحميل السجل: '+esc(e.message)+'</div>'; }
 }
 function renderStagesHtml(canDel,canEdit){
   const stages=groupStages();
@@ -3153,8 +3269,8 @@ function noteCard(n, mineSent, counts){
   return '<div class="card"'+(unread&&!isClosed?' style="border-color:var(--accent);background:#EFFAF8"':(isClosed||isForwarderView?' style="opacity:0.65"':''))+'><div class="uinfo">'+
     (isForwarderView?'':(isClosed?'<span class="pill" style="background:var(--muted);color:#fff;margin-bottom:6px;display:inline-block">🔒 مغلقة</span> ':(unread?'<span class="pill" style="background:var(--accent);color:#fff;margin-bottom:6px;display:inline-block">🔔 جديدة</span> ':'')))+
     forwardedBadge+
-    '<div class="uname" style="font-size:14px">'+who+'</div>'+stu+
-    '<div style="margin:8px 0;font-size:14.5px;white-space:pre-wrap">'+esc(n.text)+'</div>'+
+    '<div class="uname" style="font-size:14px;color:var(--muted);font-weight:600">'+who+'</div>'+stu+
+    '<div style="margin:10px 0;padding:10px 12px;background:#fff;border-right:3px solid var(--accent);border-radius:8px;font-size:15px;color:var(--ink);font-weight:600;line-height:1.75;white-space:pre-wrap">'+esc(n.text)+'</div>'+
     '<div class="umeta">'+new Date(n.createdAt).toLocaleString('ar')+'</div>'+
     (reps?'<div style="margin-top:8px">'+reps+'</div>':'')+
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+replyBtn+readBtn+closeBtn+forwardBtn+'</div></div></div>';

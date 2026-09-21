@@ -595,6 +595,9 @@ body.alt-theme .flcard{ display:flex !important; }
 
         <div id="secSubjects">
         <div class="subcard">
+          <label class="field" id="subjUserWrap" style="display:none">المستخدم
+            <select id="subjUserSel" onchange="onSubjUserChange()"><option value="">— اختر مستخدمًا —</option></select>
+          </label>
           <label class="field">المادة
             <select id="subjSelect" onchange="onSubjectSelectChange()"><option value="">— اختر مادة —</option></select>
           </label>
@@ -1787,17 +1790,56 @@ async function addCustomSubject(){
   document.getElementById('subjSelect').value = trimmed;
   onSubjectSelectChange();
 }
+/* وضع الإسناد لمستخدم آخر: لغير دور المعلم (وكيل/موجه/مساعد/مدير/أدمن) — يختار المستخدم ثم المادة ثم الفصول */
+let SUBJ_TARGET = null;   // { id, name, classes:[...], assignments:[...] }
+function subjDelegateMode(){ return !(CLS_USER_ROLE==='teacher' || CLS_USER_ROLE==='soloTeacher'); }
+async function initSubjectDelegate(){
+  const wrap = document.getElementById('subjUserWrap'), sel = document.getElementById('subjUserSel');
+  if(!wrap || !sel) return;
+  SUBJ_TARGET = null;
+  if(!subjDelegateMode() || !CLS_SESSION.schoolId){ wrap.style.display='none'; return; }
+  wrap.style.display='';
+  sel.innerHTML = '<option value="">⏳ …</option>';
+  try{
+    const us = await db.collection('users').get();
+    const list = us.docs.map(d=>({id:d.id, ...d.data()}))
+      .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId] && u.schools[CLS_SESSION.schoolId].active!==false)
+      .sort((a,b)=>(a.username||'').localeCompare(b.username||'','ar'));
+    SUBJ_USERS = list;
+    sel.innerHTML = '<option value="">— اختر مستخدمًا —</option>' + list.map(u=>{
+      const role = u.schools[CLS_SESSION.schoolId].role;
+      return '<option value="'+u.id+'">'+escapeHtml(u.username||'')+' — '+escapeHtml(OROLES[role]||role||'')+'</option>';
+    }).join('');
+  }catch(e){ sel.innerHTML = '<option value="">تعذّر تحميل المستخدمين</option>'; }
+  document.getElementById('subjSelect').value=''; onSubjectSelectChange(); renderAssignedSubjectsList();
+}
+let SUBJ_USERS = [];
+function onSubjUserChange(){
+  const id = document.getElementById('subjUserSel').value;
+  const u = SUBJ_USERS.find(x=>x.id===id);
+  if(!u){ SUBJ_TARGET=null; onSubjectSelectChange(); renderAssignedSubjectsList(); return; }
+  const ctx = u.schools[CLS_SESSION.schoolId]||{};
+  const assigned = (ctx.assignedClasses||[]).map(String);
+  const all = state.fullClasses.length ? state.fullClasses : state.classes;
+  const classes = assigned.includes('__all__') ? all : all.filter(c=>assigned.includes(String(c.code)));
+  SUBJ_TARGET = { id:u.id, name:u.username||'', classes, assignments: Array.isArray(ctx.subjectAssignments)?ctx.subjectAssignments:[] };
+  onSubjectSelectChange(); renderAssignedSubjectsList();
+}
 function onSubjectSelectChange(){
   const subject = document.getElementById('subjSelect').value;
   const host = document.getElementById('subjClassesHost');
   const btn = document.getElementById('subjSaveBtn');
+  const delegate = subjDelegateMode() && !!CLS_SESSION.schoolId;
+  if(delegate && !SUBJ_TARGET){ host.innerHTML='<div class="empty">اختر المستخدم أولًا.</div>'; btn.style.display='none'; return; }
   if(!subject){ host.innerHTML=''; btn.style.display='none'; return; }
-  if(!state.classes.length){ host.innerHTML='<div class="empty">لا توجد فصول مُسندة لك بعد.</div>'; btn.style.display='none'; return; }
-  const myAssignments = (state.mySubjectAssignments||[]).filter(a=>a.subject===subject).map(a=>a.classCode);
-  host.innerHTML = '<div class="sub" style="margin-bottom:8px">اختر الفصول التي تُدرّس فيها «'+escapeHtml(subject)+'»:</div>' +
-    state.classes.map(c=>`
+  const srcClasses = delegate ? SUBJ_TARGET.classes : state.classes;
+  const srcAssign = delegate ? SUBJ_TARGET.assignments : (state.mySubjectAssignments||[]);
+  if(!srcClasses.length){ host.innerHTML='<div class="empty">'+(delegate?'هذا المستخدم ليس له فصول مُسندة.':'لا توجد فصول مُسندة لك بعد.')+'</div>'; btn.style.display='none'; return; }
+  const myAssignments = srcAssign.filter(a=>a.subject===subject).map(a=>String(a.classCode));
+  host.innerHTML = '<div class="sub" style="margin-bottom:8px">'+(delegate?('اختر فصول «'+escapeHtml(SUBJ_TARGET.name)+'» في مادة «'+escapeHtml(subject)+'»:'):('اختر الفصول التي تُدرّس فيها «'+escapeHtml(subject)+'»:'))+'</div>' +
+    srcClasses.map(c=>`
       <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:14px">
-        <input type="checkbox" class="subjClsChk" value="${escapeHtml(c.code)}" ${myAssignments.includes(c.code)?'checked':''}>
+        <input type="checkbox" class="subjClsChk" value="${escapeHtml(c.code)}" ${myAssignments.includes(String(c.code))?'checked':''}>
         ${escapeHtml(c.name)} ${escapeHtml(c.code)}
       </label>`).join('');
   btn.style.display='block';
@@ -1810,6 +1852,20 @@ async function saveSubjectAssignment(){
   const statusEl = document.getElementById('subjSaveStatus');
   statusEl.textContent = 'جاري الحفظ...'; statusEl.style.color='var(--muted)';
   try{
+    if(subjDelegateMode() && CLS_SESSION.schoolId){
+      // الإسناد لمستخدم آخر — يُكتب بسياق مدرسته مباشرة
+      if(!SUBJ_TARGET){ statusEl.textContent='اختر المستخدم أولًا.'; statusEl.style.color='var(--bad)'; return; }
+      const others = SUBJ_TARGET.assignments.filter(a=>a.subject!==subject);
+      const newA = [...others, ...checked.map(code=>({classCode:code, subject}))];
+      await db.collection('users').doc(SUBJ_TARGET.id).update({
+        ['schools.'+CLS_SESSION.schoolId+'.subjectAssignments']: newA, _editCtx: CLS_SESSION.schoolId, updatedAt: Date.now() });
+      SUBJ_TARGET.assignments = newA;
+      const u = SUBJ_USERS.find(x=>x.id===SUBJ_TARGET.id); if(u) u.schools[CLS_SESSION.schoolId].subjectAssignments = newA;
+      if(SUBJ_TARGET.id===CLS_SESSION.userId) state.mySubjectAssignments = newA;
+      statusEl.textContent = '✅ أُسندت المادة لـ'+SUBJ_TARGET.name+'.'; statusEl.style.color='var(--ok)';
+      renderAssignedSubjectsList();
+      return;
+    }
     // نستبدل إسنادات المادة دي بالكامل بآخر اختيار (تسمح للمعلم يكرر الحفظ لمواد مختلفة)
     const others = (state.mySubjectAssignments||[]).filter(a=>a.subject!==subject);
     const fresh = checked.map(code=>({classCode:code, subject}));
@@ -1824,14 +1880,16 @@ async function saveSubjectAssignment(){
 }
 function renderAssignedSubjectsList(){
   const host = document.getElementById('subjAssignedList'); if(!host) return;
-  const list = state.mySubjectAssignments||[];
+  const delegate = subjDelegateMode() && !!CLS_SESSION.schoolId;
+  if(delegate && !SUBJ_TARGET){ host.innerHTML = '<div class="empty">اختر المستخدم لعرض مواده المُسندة.</div>'; return; }
+  const list = delegate ? SUBJ_TARGET.assignments : (state.mySubjectAssignments||[]);
   if(!list.length){ host.innerHTML = '<div class="empty">لا توجد مواد مُسندة بعد.</div>'; return; }
   const bySubject = {};
   list.forEach(a=>{ (bySubject[a.subject]=bySubject[a.subject]||[]).push(a.classCode); });
   host.innerHTML = Object.entries(bySubject).map(([subj,codes])=>`
     <div style="padding:8px 0;border-bottom:1px solid var(--line)">
       <div style="font-weight:700;font-size:14px">${escapeHtml(subj)}</div>
-      <div style="font-size:12px;color:var(--muted)">${codes.map(c=>{ const cl=state.classes.find(x=>x.code===c); return cl?escapeHtml(cl.name)+' '+escapeHtml(c):escapeHtml(c); }).join('، ')}</div>
+      <div style="font-size:12px;color:var(--muted)">${codes.map(c=>{ const cl=(state.fullClasses.length?state.fullClasses:state.classes).find(x=>String(x.code)===String(c)); return cl?escapeHtml(cl.name)+' '+escapeHtml(c):escapeHtml(c); }).join('، ')}</div>
     </div>`).join('');
 }
 async function addClass(){
@@ -2291,6 +2349,7 @@ function _modalRow(icon,label,onclick){
    • العرض (بلا تعديل/حذف) لكل من يملك الوصول لـ«الفصول والطلاب» — فصوله الظاهرة له.
    • صلاحية «بيانات الفصول» (تعديل): زرّا تعديل (اسم الصف ورمز دخول الطلاب) وحذف.
    • الحذف من المفوَّض يُسجَّل معلَّقًا ولا يُنفَّذ حتى يوافق مدير المدرسة؛ المدير/الأدمن/الفردي يحذفون ويوافقون مباشرة. */
+const CI_BTN = 'padding:2px 5px;margin:0 1px;font-size:12px;line-height:1.2;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;width:auto;min-width:0';
 function ciIsApprover(){ return CLS_USER_ROLE==='admin' || CLS_USER_ROLE==='schoolAdmin' || CLS_USER_ROLE==='soloTeacher'; }
 function ciCanEdit(){ return ciIsApprover() || clsHasPerm('omr.classes.info','edit'); }
 async function openClassInfoModal(){
@@ -2307,14 +2366,14 @@ async function openClassInfoModal(){
     const pd = c.pendingDelete;
     let actions = '';
     if(pd){
-      actions = '<div style="font-size:11.5px;color:#b7791f;font-weight:700;margin-bottom:4px">⏳ حذف معلَّق'+(pd.byName?(' — طلبه '+escapeHtml(pd.byName)):'')+'</div>'+
+      actions = '<div style="font-size:10.5px;color:#b7791f;font-weight:700;margin-bottom:2px" title="'+escapeHtml(pd.byName||'')+'">⏳ معلَّق</div>'+
         (approver
-          ? '<button class="ghost" style="padding:5px 8px;font-size:12px;color:var(--bad)" onclick="ciApproveDelete(\''+code+'\')">موافقة</button> '+
-            '<button class="ghost" style="padding:5px 8px;font-size:12px" onclick="ciRejectDelete(\''+code+'\')">رفض</button>'
-          : '<span style="font-size:11.5px;color:var(--muted)">بانتظار موافقة المدير</span>');
+          ? '<button style="'+CI_BTN+';color:var(--bad)" title="موافقة على الحذف" onclick="ciApproveDelete(\''+code+'\')">✔</button>'+
+            '<button style="'+CI_BTN+'" title="رفض الحذف" onclick="ciRejectDelete(\''+code+'\')">✖</button>'
+          : '');
     } else if(canEdit){
-      actions = '<button class="ghost" style="padding:5px 8px;font-size:12px" onclick="ciEditClass(\''+code+'\')">تعديل</button> '+
-        '<button class="ghost" style="padding:5px 8px;font-size:12px;color:var(--bad)" onclick="ciRequestDelete(\''+code+'\')">حذف</button>';
+      actions = '<button style="'+CI_BTN+'" title="تعديل" onclick="ciEditClass(\''+code+'\')">✏️</button>'+
+        '<button style="'+CI_BTN+';color:var(--bad)" title="حذف" onclick="ciRequestDelete(\''+code+'\')">🗑</button>';
     }
     return '<tr'+(pd?' style="background:#fff8e6"':'')+'>'+
       '<td style="text-align:right;font-weight:600">'+escapeHtml(c.name)+'</td>'+
@@ -2342,23 +2401,70 @@ async function openClassInfoModal(){
 }
 async function ciEditClass(code){
   if(!ciCanEdit()){ alert('ليست لديك صلاحية تعديل بيانات الفصول.'); return; }
-  const cl = (state.fullClasses.length?state.fullClasses:state.classes).find(c=>String(c.code)===String(code)); if(!cl) return;
-  const name = prompt('اسم الصف:', cl.name||''); if(name===null) return;
-  const newName = name.trim(); if(!newName){ alert('اسم الصف لا يكون فارغًا.'); return; }
-  let newLogin = cl.loginCode||'';
-  if(cl.loginCode){
-    const lc = prompt('رمز دخول الطلاب لهذا الصف (بدون رمز المدرسة):', cl.loginCode); if(lc===null) return;
-    newLogin = normalizeDigits(lc).trim();
-    if(!newLogin){ alert('الرمز لا يكون فارغًا.'); return; }
+  const all = state.fullClasses.length ? state.fullClasses : state.classes;
+  const cl = all.find(c=>String(c.code)===String(code)); if(!cl) return;
+  const nm = prompt('اسم الصف:', cl.name||''); if(nm===null) return;
+  const newName = nm.trim(); if(!newName){ alert('اسم الصف لا يكون فارغًا.'); return; }
+  const cd = prompt('رمز الصف:', cl.code||''); if(cd===null) return;
+  const newCode = normalizeDigits(cd).trim(); if(!newCode){ alert('رمز الصف لا يكون فارغًا.'); return; }
+  if(newName!==cl.name && all.some(c=>String(c.code)!==String(code) && c.name===newName)){ alert('اسم الصف مستخدم لصف آخر.'); return; }
+  const codeChanged = newCode!==String(cl.code);
+  if(codeChanged && all.some(c=>String(c.code)===newCode)){ alert('رمز الصف مستخدم لصف آخر.'); return; }
+  // تغيير الرمز يمس إسنادات المستخدمين — المدير/الأدمن يحدّثها تلقائيًا؛ المفوَّض يُمنع لو الصف مسنَد لأحد
+  let refUsers = [];
+  if(codeChanged && CLS_SESSION.schoolId){
+    try{
+      const us = await db.collection('users').get();
+      refUsers = us.docs.map(d=>({id:d.id, ...d.data()})).filter(u=>{
+        const ctx = (u.schools||{})[CLS_SESSION.schoolId]; if(!ctx) return false;
+        return (ctx.assignedClasses||[]).map(String).includes(String(code))
+          || (ctx.subjectAssignments||[]).some(a=>String(a.classCode)===String(code));
+      });
+    }catch(e){}
+    if(refUsers.length && !ciIsApprover()){
+      alert('هذا الصف مسنَد لمستخدمين ('+refUsers.map(u=>u.username).join('، ')+'). تغيير رمزه يتم من مدير المدرسة. يمكنك تعديل الاسم فقط.');
+      return;
+    }
   }
+  if(codeChanged && !confirm('تغيير رمز الصف من «'+cl.code+'» إلى «'+newCode+'». سيُحدَّث الطلاب والإسنادات. متابعة؟')) return;
   try{
-    await mutateSharedRoster((classes)=>{
-      if(newLogin!==(cl.loginCode||'') && classes.some(c=>String(c.code)!==String(code) && String(c.loginCode||'')===newLogin))
-        throw new Error('هذا الرمز مستخدم لصف آخر.');
+    await mutateSharedRoster((classes, students)=>{
       const c = classes.find(x=>String(x.code)===String(code)); if(!c) throw new Error('الصف غير موجود.');
-      c.name = newName; if(cl.loginCode) c.loginCode = newLogin;
+      c.name = newName;
+      if(codeChanged){
+        c.code = newCode;
+        students.forEach(st=>{ if(String(st.classCode)===String(code)) st.classCode = newCode; });
+      }
     });
+    if(codeChanged){
+      const mapCodes = arr => (arr||[]).map(x=>String(x)===String(code)?newCode:x);
+      const mapSubj = arr => (arr||[]).map(a=>String(a.classCode)===String(code)?Object.assign({},a,{classCode:newCode}):a);
+      // تحديث إسنادات المستخدمين الآخرين (المدير/الأدمن فقط)
+      for(const u of refUsers){
+        if(u.id===CLS_SESSION.userId) continue;
+        const ctx = u.schools[CLS_SESSION.schoolId];
+        try{
+          await db.collection('users').doc(u.id).update({
+            ['schools.'+CLS_SESSION.schoolId+'.assignedClasses']: mapCodes(ctx.assignedClasses),
+            ['schools.'+CLS_SESSION.schoolId+'.subjectAssignments']: mapSubj(ctx.subjectAssignments),
+            _editCtx: CLS_SESSION.schoolId, updatedAt: Date.now() });
+        }catch(e){ console.warn('cascade', u.id, e); }
+      }
+      // المستخدم الحالي: إسناداته وسجل أعماله المحلي
+      CLS_USER_ASSIGNED = mapCodes(CLS_USER_ASSIGNED);
+      const mine = (state.mySubjectAssignments||[]);
+      if(mine.some(a=>String(a.classCode)===String(code))){
+        state.mySubjectAssignments = mapSubj(mine);
+        const _path = CLS_SESSION.schoolId ? ('schools.'+CLS_SESSION.schoolId+'.subjectAssignments') : 'solo.subjectAssignments';
+        try{ await db.collection('users').doc(CLS_SESSION.userId).update({ [_path]: state.mySubjectAssignments, updatedAt: Date.now() }); }catch(e){}
+      }
+      Object.keys(state.workLog).forEach(k=>{
+        if(k===String(code) || k.indexOf(code+'::')===0){ state.workLog[newCode + k.slice(String(code).length)] = state.workLog[k]; delete state.workLog[k]; }
+      });
+      saveWorkLogToCloud();
+    }
   }catch(e){ alert('تعذّر التعديل: '+e.message); return; }
+  recomputeVisibleRoster();
   refreshClassDropdowns(); renderClasses(); renderStudents(); openClassInfoModal();
 }
 async function ciRequestDelete(code){
@@ -2442,6 +2548,7 @@ function mountIntoModal(sectionId){
   if(sectionId==='secSubjects'){
     const addBtn = document.getElementById('subjAddCustomBtn');
     if(addBtn) addBtn.style.display = (exempt || CLS_CAN_ADD_MANAGE) ? '' : 'none';
+    setTimeout(initSubjectDelegate, 0);
   }
   const el = document.getElementById(sectionId);
   const body = document.getElementById('addClassesModalBody');

@@ -565,10 +565,13 @@ body.alt-theme .flcard{ display:flex !important; }
         return;
       }
       // بند ١٣: صلاحية "الأنشطة الرقمية" تتحكم بالوصول لهذه الصفحة كاملة
-      if (CLS_SESSION.role !== 'admin' && CLS_SESSION.role !== 'soloTeacher') {
+      // الأدمن والمدير والمعلم الفردي: وصول كامل. غيرهم: الصلاحيات داخل سياق المدرسة (schools[sid].permissions) بالنموذج الموحَّد
+      if (CLS_SESSION.role !== 'admin' && CLS_SESSION.role !== 'schoolAdmin' && CLS_SESSION.role !== 'soloTeacher') {
         try {
           const uSnap = await getDoc(doc(db, "users", CLS_SESSION.userId));
-          const perm = (uSnap.exists() && uSnap.data().permissions) || {};
+          const u = uSnap.exists() ? uSnap.data() : {};
+          const ctx = (u.schools && CLS_SESSION.schoolId && u.schools[CLS_SESSION.schoolId]) || {};
+          const perm = ctx.permissions || u.permissions || {};
           const allowed = !!(perm['worksheets.enabled'] && perm['worksheets.enabled'].edit);
           if (!allowed) {
             document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:inherit">'
@@ -580,6 +583,22 @@ body.alt-theme .flcard{ display:flex !important; }
       }
     });
     const currentTeacher = { uid: CLS_SESSION.userId, name: CLS_SESSION.username, schoolId: CLS_SESSION.schoolId };
+    // روستر المدرسة، أو روستر المعلم الفردي (بلا مدرسة)
+    function rosterDocId() { return currentTeacher.schoolId ? ("roster_" + currentTeacher.schoolId) : ("roster_solo_" + currentTeacher.uid); }
+    /* سياق المستخدم بالنموذج الموحَّد: الدور من الجلسة، والفصول والمواد من schools[sid] (أو solo للفردي) — لا حقول top-level */
+    async function loadMyCtx() {
+      const snap = await getDoc(doc(db, "users", currentTeacher.uid));
+      const u = snap.exists() ? snap.data() : {};
+      const role = CLS_SESSION.role || "";
+      const ctx = currentTeacher.schoolId ? ((u.schools || {})[currentTeacher.schoolId] || {}) : (u.solo || {});
+      return {
+        u, role, ctx,
+        isAdmin: role === "admin" || role === "schoolAdmin",
+        isSolo: role === "soloTeacher",
+        assigned: Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses.map(String) : [],
+        subjectAssignments: Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments : []
+      };
+    }
 
     function headerDateStr() {
       try {
@@ -626,7 +645,7 @@ body.alt-theme .flcard{ display:flex !important; }
     async function loadSubjectOptions() {
       let custom = [];
       try {
-        const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+        const rosterSnap = await getDoc(doc(db, "schoolData", rosterDocId()));
         custom = JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").customSubjects || [];
       } catch (e) { custom = []; }
       const all = [...WS_FIXED_SUBJECTS, ...custom.filter((s) => !WS_FIXED_SUBJECTS.includes(s))];
@@ -1456,21 +1475,21 @@ body.alt-theme .flcard{ display:flex !important; }
         const wSnap = await getDoc(doc(db, "worksheets", worksheetId));
         const wSubject = wSnap.exists() ? (wSnap.data().subject || "") : "";
 
-        const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+        const rosterSnap = await getDoc(doc(db, "schoolData", rosterDocId()));
         const rosterData = rosterSnap.exists() ? rosterSnap.data() : {};
         let classes = [];
         try { classes = JSON.parse(rosterData.value || "{}").classes || []; } catch (e) { classes = []; }
 
-        const userSnap = await getDoc(doc(db, "users", currentTeacher.uid));
-        const userData = userSnap.exists() ? userSnap.data() : {};
-        const isAdmin = userData.role === "admin" || userData.role === "schoolAdmin";
+        const me = await loadMyCtx();
 
-        if (!isAdmin) {
-          const assigned = Array.isArray(userData.assignedClasses) ? userData.assignedClasses : [];
-          classes = classes.filter((c) => assigned.includes(String(c.code)) || c.createdBy === currentTeacher.uid);
+        if (!me.isAdmin) {
+          // الفردي يرى كل فصوله؛ الموظف يرى المسنَدة له (أو كلها لو «كل الفصول») أو ما أنشأه
+          if (!me.isSolo && !me.assigned.includes("__all__")) {
+            classes = classes.filter((c) => me.assigned.includes(String(c.code)) || c.createdBy === currentTeacher.uid);
+          }
           // فلترة إضافية: بس الفصول اللي المعلم أسند لها نفس مادة هذه الورقة تحديدًا
           if (wSubject) {
-            const subjAssign = Array.isArray(userData.subjectAssignments) ? userData.subjectAssignments : [];
+            const subjAssign = me.subjectAssignments;
             const subjectClassCodes = subjAssign.filter((a) => a.subject === wSubject).map((a) => String(a.classCode));
             classes = classes.filter((c) => subjectClassCodes.includes(String(c.code)));
           }
@@ -1959,7 +1978,7 @@ body.alt-theme .flcard{ display:flex !important; }
         return;
       }
 
-      const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+      const rosterSnap = await getDoc(doc(db, "schoolData", rosterDocId()));
       let rosterStudents = [];
       try { rosterStudents = (JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").students || []).filter(x=>!x.deleted); } catch (e) { rosterStudents = []; }
       const students = rosterStudents.filter((s) => classCodes.includes(String(s.classCode)));
@@ -2022,7 +2041,7 @@ body.alt-theme .flcard{ display:flex !important; }
         if (!classCodes.length) throw new Error("النشاط غير مسند لأي فصل.");
 
         // طلاب الفصول المستهدفة
-        const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+        const rosterSnap = await getDoc(doc(db, "schoolData", rosterDocId()));
         let rosterStudents = [];
         try { rosterStudents = (JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").students || []).filter(x=>!x.deleted); } catch (e) {}
         const students = rosterStudents.filter((x) => classCodes.includes(String(x.classCode)));
@@ -2268,26 +2287,29 @@ body.alt-theme .flcard{ display:flex !important; }
       const listEl = document.getElementById("pinsList");
       listEl.innerHTML = "جاري التحميل...";
       try {
-        const rosterSnap = await getDoc(doc(db, "schoolData", "roster_" + currentTeacher.schoolId));
+        const rosterSnap = await getDoc(doc(db, "schoolData", rosterDocId()));
         let classes = [];
         try { classes = JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").classes || []; } catch (e) { classes = []; }
 
-        const userSnap = await getDoc(doc(db, "users", currentTeacher.uid));
-        const userData = userSnap.exists() ? userSnap.data() : {};
-        if (userData.role !== "admin" && userData.role !== "schoolAdmin" &&
-            Array.isArray(userData.assignedClasses) && userData.assignedClasses.length) {
-          classes = classes.filter((c) => userData.assignedClasses.includes(String(c.code)));
+        const me = await loadMyCtx();
+        if (!me.isAdmin && !me.isSolo && !me.assigned.includes("__all__")) {
+          classes = classes.filter((c) => me.assigned.includes(String(c.code)) || c.createdBy === currentTeacher.uid);
         }
         if (!classes.length) { listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">لا توجد فصول متاحة لك.</p>`; return; }
 
         // بادئة الرمز: رمز المدرسة (S1...) أو رمز المعلم الفردي (T1...)
         let ownerCode = "";
         try {
-          if (userData.role === "soloTeacher") ownerCode = userData.teacherCode || "";
+          if (me.isSolo) ownerCode = me.ctx.teacherCode || me.u.teacherCode || "";
           else {
-            const schoolsSnap = await getDoc(doc(db, "schoolData", "schools"));
-            const list = schoolsSnap.exists() ? (schoolsSnap.data().list || {}) : {};
-            ownerCode = (list[currentTeacher.schoolId] && list[currentTeacher.schoolId].code) || "";
+            // النموذج الحالي: كل مدرسة مستند مستقل schoolData/{sid} فيه code؛ مع توافق مع القائمة القديمة
+            const sSnap = await getDoc(doc(db, "schoolData", currentTeacher.schoolId));
+            ownerCode = (sSnap.exists() && sSnap.data().code) || "";
+            if (!ownerCode) {
+              const schoolsSnap = await getDoc(doc(db, "schoolData", "schools"));
+              const list = schoolsSnap.exists() ? (schoolsSnap.data().list || {}) : {};
+              ownerCode = (list[currentTeacher.schoolId] && list[currentTeacher.schoolId].code) || "";
+            }
           }
         } catch (e3) { ownerCode = ""; }
 

@@ -1613,12 +1613,17 @@ async function loadAbsenceCounts(){
     snap.docs.map(d=>d.data()).filter(a=>a.period===SESSION.period && a.status==='absent').forEach(a=>{ RABS[a.seat]=(RABS[a.seat]||0)+1; });
   }catch(e){}
 }
+// طلاب التحويل: تحويل فردي (studentSeat) أو جماعي (studentSeats — رسالة واحدة عن عدة طلاب، تُحتسب لكل طالب)
+function noteSeats(n){
+  if(Array.isArray(n.studentSeats) && n.studentSeats.length) return n.studentSeats.map(String);
+  return n.studentSeat ? [String(n.studentSeat)] : [];
+}
 async function loadNoteCounts(){
   RNOTES={};
   try{ const sid=RSchoolId||CURRENT.schoolId; if(!sid) return;
     const snap=await notesCol().where('schoolId','==',sid).get();
-    snap.docs.map(d=>d.data()).filter(n=>n.period===SESSION.period && n.studentSeat)
-      .forEach(n=>{ RNOTES[n.studentSeat]=(RNOTES[n.studentSeat]||0)+1; });
+    snap.docs.map(d=>d.data()).filter(n=>n.period===SESSION.period)
+      .forEach(n=>{ noteSeats(n).forEach(seat=>{ RNOTES[seat]=(RNOTES[seat]||0)+1; }); });
   }catch(e){}
 }
 function markAbsentFromClasses(seat,code,status){
@@ -1794,6 +1799,9 @@ async function renderAbsence(c){
     $('#awSave').onclick=async()=>{
       const sid=targetSchoolId();
       if(!sid){ alertBox('awAlert','err','اختر المدرسة'); return; }
+      const _f=$('#awFrom').value, _t=$('#awTo').value;
+      if(!_f || !_t){ alertBox('awAlert','err','حدّد وقت البداية والنهاية.'); return; }
+      if(_f >= _t){ alertBox('awAlert','err','وقت البداية يجب أن يكون قبل وقت النهاية.'); return; }
       SCHOOLS[sid]=Object.assign({}, SCHOOLS[sid], { attFrom:$('#awFrom').value, attTo:$('#awTo').value });
       // كتابة الحقلين المعنيين فقط — لا مستند المدرسة كاملًا
       try{ await schoolDocById(sid).set({ attFrom:$('#awFrom').value, attTo:$('#awTo').value, updatedAt:Date.now() }, {merge:true}); alertBox('awAlert','ok','تم حفظ النافذة'); toast('تم الحفظ'); }
@@ -3153,7 +3161,7 @@ async function openStudentRecordIndex(seat, classCode){
       .filter(a=>a.period===SESSION.period && String(a.seat)===String(seat))
       .sort((a,b)=>(b.ts||0)-(a.ts||0));
     const notes = noteSnap.docs.map(d=>d.data())
-      .filter(n=>n.period===SESSION.period && String(n.studentSeat)===String(seat))
+      .filter(n=>n.period===SESSION.period && noteSeats(n).includes(String(seat)))
       .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
     const dayName = ts => ts ? new Date(ts).toLocaleDateString('ar-SA',{weekday:'long'}) : '—';
     const STATUS_AR = {absent:'غائب', late:'متأخّر', excused:'مستأذن', runaway:'هارب', present:'حاضر'};
@@ -3268,8 +3276,16 @@ async function resolveRecipients(opts){
 }
 
 async function studentNoteCount(seat){
-  try{ const snap=await notesCol().where('studentSeat','==',String(seat)).get();
-    return snap.docs.map(d=>d.data()).filter(n=>n.schoolId===CURRENT.schoolId && n.period===SESSION.period).length;
+  // فلتر schoolId إلزامي داخل الاستعلام (قابلية الإثبات بالقواعد)؛ يُجمع الفردي والجماعي بلا تكرار
+  if(!CURRENT.schoolId) return 0;
+  try{
+    const [a,b] = await Promise.all([
+      notesCol().where('schoolId','==',CURRENT.schoolId).where('studentSeat','==',String(seat)).get(),
+      notesCol().where('schoolId','==',CURRENT.schoolId).where('studentSeats','array-contains',String(seat)).get()
+    ]);
+    const ids=new Set();
+    a.docs.concat(b.docs).forEach(d=>{ if(d.data().period===SESSION.period) ids.add(d.id); });
+    return ids.size;
   }catch(e){ return 0; }
 }
 async function createNote(n){
@@ -3417,7 +3433,7 @@ async function renderReceived(c){
   try{
     const snap=await notesCol().where('recipients','array-contains',CURRENT.id).get();
     let arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period).sort((a,b)=>noteLastActivity(b)-noteLastActivity(a));
-    const seats=[...new Set(arr.map(n=>n.studentSeat).filter(Boolean))];
+    const seats=[...new Set(arr.flatMap(noteSeats))];
     const counts={};
     await Promise.all(seats.map(async seat=>{ counts[seat]=await studentNoteCount(seat); }));
     const open=arr.filter(n=>!n.closed), closed=arr.filter(n=>n.closed);

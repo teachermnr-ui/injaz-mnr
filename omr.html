@@ -598,7 +598,7 @@ body.alt-theme .flcard{ display:flex !important; }
           <label class="field">المادة
             <select id="subjSelect" onchange="onSubjectSelectChange()"><option value="">— اختر مادة —</option></select>
           </label>
-          <button class="ghost" style="margin-top:8px" onclick="addCustomSubject()">➕ إضافة مادة غير موجودة</button>
+          <button class="ghost" id="subjAddCustomBtn" style="margin-top:8px" onclick="addCustomSubject()">➕ إضافة مادة غير موجودة</button>
           <div id="subjClassesHost" style="margin-top:14px"></div>
           <button class="primary" style="margin-top:10px;display:none" id="subjSaveBtn" onclick="saveSubjectAssignment()">💾 حفظ إسناد المادة</button>
           <div id="subjSaveStatus" style="margin-top:8px;font-size:13px"></div>
@@ -1774,6 +1774,8 @@ function renderSubjectSelect(){
   sel.value = cur;
 }
 async function addCustomSubject(){
+  // إضافة مادة جديدة تُكتب بروستر المدرسة — تتطلب صلاحية إضافة الفصول والطلاب؛ الإسناد نفسه لا يتطلبها
+  if(CLS_USER_ROLE!=='admin' && !CLS_CAN_ADD_MANAGE){ alert('إضافة مادة جديدة للقائمة تتطلب صلاحية إضافة الفصول والطلاب. اختر من المواد الموجودة.'); return; }
   const name = prompt('اسم المادة الجديدة:');
   if(!name || !name.trim()) return;
   const trimmed = name.trim();
@@ -2340,11 +2342,20 @@ function showAddClassesChoice(){
   `;
 }
 function mountIntoModal(sectionId){
-  const restricted = ['secClassAdd','secStudentAdd','secExcelImport','secPasteImport','secSubjects'];
+  const restricted = ['secClassAdd','secStudentAdd','secExcelImport','secPasteImport'];
   const exempt = (CLS_USER_ROLE==='admin');
   if(restricted.includes(sectionId) && !exempt && !CLS_CAN_ADD_MANAGE){
     alert('إضافة الفصول والطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.');
     return;
+  }
+  // إسناد المواد صلاحية مستقلة — لا تشترط صلاحية إضافة الفصول والطلاب
+  if(sectionId==='secSubjects' && !exempt && !clsHasPerm('omr.classes.subjects','edit')){
+    alert('إسناد المواد صلاحية مقصورة على المفوَّض بها.');
+    return;
+  }
+  if(sectionId==='secSubjects'){
+    const addBtn = document.getElementById('subjAddCustomBtn');
+    if(addBtn) addBtn.style.display = (exempt || CLS_CAN_ADD_MANAGE) ? '' : 'none';
   }
   const el = document.getElementById(sectionId);
   const body = document.getElementById('addClassesModalBody');
@@ -2553,12 +2564,22 @@ function omrModal(html){
   box.innerHTML=html; ov.appendChild(box); document.body.appendChild(ov);
 }
 function closeOmrModal(){ const o=document.getElementById('omrModalOv'); if(o) o.remove(); }
+// طلاب التحويل: تحويل فردي (studentSeat) أو جماعي (studentSeats — رسالة واحدة عن عدة طلاب، تُحتسب لكل طالب)
+function noteSeats(n){
+  if(Array.isArray(n.studentSeats) && n.studentSeats.length) return n.studentSeats.map(String);
+  return n.studentSeat ? [String(n.studentSeat)] : [];
+}
 async function omrStudentNoteCount(seat){
   // فلتر schoolId داخل الاستعلام نفسه إلزامي — بدونه يرفض Firestore الاستعلام كليًا (القاعدة غير قابلة للإثبات)
   if(!CLS_SESSION || !CLS_SESSION.schoolId) return 0;
   try{
-    const snap=await db.collection('notes').where('schoolId','==',CLS_SESSION.schoolId).where('studentSeat','==',String(seat)).get();
-    return snap.docs.map(d=>d.data()).filter(n=>n.period===CLS_SESSION.period).length;
+    const [a,b]=await Promise.all([
+      db.collection('notes').where('schoolId','==',CLS_SESSION.schoolId).where('studentSeat','==',String(seat)).get(),
+      db.collection('notes').where('schoolId','==',CLS_SESSION.schoolId).where('studentSeats','array-contains',String(seat)).get()
+    ]);
+    const ids=new Set();
+    a.docs.concat(b.docs).forEach(d=>{ if(d.data().period===CLS_SESSION.period) ids.add(d.id); });
+    return ids.size;
   }catch(e){ return 0; }
 }
 async function bulkNote(kind){
@@ -2619,14 +2640,20 @@ async function sendOmrNotes(){
   }
   catch(e){ alert('تعذّر تحديد المستلِم.'); return; }
   try{
-    for(const s of _omrNoteCtx.studs){
-      await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
-        fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
-        recipients:[rid], recipientsInfo:info, scope:'student',
-        studentSeat:String(s.seat), studentName:s.name,
-        classCode:String(s.classCode||''), className:classNameByCode(s.classCode)||'',
-        text:txt, createdAt:Date.now(), replies:[], readAt:{}, closed:false });
-    }
+    // رسالة واحدة تضم كل الطلاب المحددين — وتُحتسب تحويلًا لكل طالب منهم (studentSeats)
+    const studs=_omrNoteCtx.studs;
+    const classCodes=[...new Set(studs.map(s=>String(s.classCode||'')))];
+    const classNames=[...new Set(studs.map(s=>classNameByCode(s.classCode)||String(s.classCode||'')))];
+    await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
+      fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
+      recipients:[rid], recipientsInfo:info, scope:'student',
+      studentSeat: studs.length===1 ? String(studs[0].seat) : '',
+      studentSeats: studs.map(s=>String(s.seat)),
+      students: studs.map(s=>({ seat:String(s.seat), name:s.name||'', classCode:String(s.classCode||'') })),
+      studentName: studs.map(s=>s.name).join('، '),
+      classCode: classCodes.length===1 ? classCodes[0] : '',
+      className: classNames.join('، '),
+      text:txt, createdAt:Date.now(), replies:[], readAt:{}, closed:false });
     closeOmrModal();
     state.selectedStudents={}; renderStudents();
     alert('تم إرسال الملاحظة بنجاح.');
@@ -2817,6 +2844,7 @@ async function omrPushAbsent(seat, stu, central){
 //   سجلّي أنا وداخل النافذة ⇒ يُحذف من المركزي؛ سجلّي خارج النافذة ⇒ لا أثر؛ سجل غيري ⇒ تنبيه فقط
 async function omrCentralOnPresent(seat, stu, status, central){
   if(!CLS_SESSION || !CLS_SESSION.schoolId) return;
+  if(!omrAttInWindow()) return;   // خارج نافذة التغيب: لا حذف من المركزي ولا تنبيه — يتأثر سجل المعلم الخاص فقط
   try{
     const map = central || await omrCentralToday();
     const c = map[String(seat)];
@@ -3751,8 +3779,12 @@ async function srLoadNotes(seat){
     }catch(e){ console.warn('studentNotes', e); }
     if(CLS_SESSION.schoolId){ // الحساب الفردي بلا مدرسة — لا تحويلات له
       try{
-        const transSnap = await db.collection('notes').where('schoolId','==',CLS_SESSION.schoolId).where('studentSeat','==',String(seat)).get();
-        trans = transSnap.docs.map(d=>({id:d.id, kind:'transfer', ...d.data()}))
+        const [t1,t2] = await Promise.all([
+          db.collection('notes').where('schoolId','==',CLS_SESSION.schoolId).where('studentSeat','==',String(seat)).get(),
+          db.collection('notes').where('schoolId','==',CLS_SESSION.schoolId).where('studentSeats','array-contains',String(seat)).get()
+        ]);
+        const _seen=new Set(); const _docs=t1.docs.concat(t2.docs).filter(d=>{ if(_seen.has(d.id)) return false; _seen.add(d.id); return true; });
+        trans = _docs.map(d=>({id:d.id, kind:'transfer', ...d.data()}))
           .filter(n=>n.period===CLS_SESSION.period && (n.fromUserId===me || (n.recipients||[]).includes(me)));
       }catch(e){ console.warn('notes', e); }
     }

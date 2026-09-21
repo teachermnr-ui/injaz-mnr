@@ -1812,7 +1812,9 @@ async function saveSubjectAssignment(){
     const others = (state.mySubjectAssignments||[]).filter(a=>a.subject!==subject);
     const fresh = checked.map(code=>({classCode:code, subject}));
     const newAssignments = [...others, ...fresh];
-    await db.collection('users').doc(CLS_SESSION.userId).update({ subjectAssignments: newAssignments });
+    // يُحفظ داخل سياق المدرسة (أو الحساب الفردي) — نفس المكان الذي يُقرأ منه عند التحميل
+    const _path = CLS_SESSION.schoolId ? ('schools.'+CLS_SESSION.schoolId+'.subjectAssignments') : 'solo.subjectAssignments';
+    await db.collection('users').doc(CLS_SESSION.userId).update({ [_path]: newAssignments, updatedAt: Date.now() });
     state.mySubjectAssignments = newAssignments;
     statusEl.textContent = '✅ تم الحفظ.'; statusEl.style.color='var(--ok)';
     renderAssignedSubjectsList();
@@ -2748,12 +2750,13 @@ function closeAttMenu(){
   const note = noteEl ? (noteEl.value||'').trim() : '';
   if(seat && note){
     const s = findStudent(seat);
+    if(s && !clsSubjectGate(s.classCode)) return;
     const sid = CLS_SESSION.schoolId || ('solo_'+CLS_SESSION.userId);
     db.collection('studentNotes').add({
       schoolId: sid, period: CLS_SESSION.period||'',
       classCode: s?String(s.classCode):'', studentSeat: String(seat), studentName: s?s.name:'',
       fromUserId: CLS_SESSION.userId, fromName: CLS_SESSION.username, fromRole: CLS_SESSION.role,
-      text: note, createdAt: Date.now()
+      text: note, subject: CLS_ACTIVE_SUBJECT||'', createdAt: Date.now()
     }).catch(e=>{ alert('تعذّر حفظ الملاحظة: '+(e.message||e)); });
   }
   state.attMenuSeat = null; const y=window.scrollY; renderStudents(); window.scrollTo(0,y);
@@ -2779,24 +2782,60 @@ function omrAttInWindow(){
   return cur>=from && cur<to;
 }
 function omrAttDateKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function omrAttDocId(seat,dk){ return 'att_'+CLS_SESSION.schoolId+'_'+CLS_SESSION.period+'_'+CLS_SESSION.userId+'_'+seat+'_'+dk; }
-async function omrPushAbsent(seat, stu){
-  if(!CLS_SESSION || !CLS_SESSION.schoolId) return;
-  if(!omrAttInWindow()) return;   // اعتماد التغيب فقط بين 7:40 و10:00 صباحاً
+/* ====== الغياب المزدوج ======
+   • سجل المعلم الخاص: غياب لكل مادة لكل يوم (سجل الأعمال، مفتاح فصل::مادة).
+   • السجل المركزي: غياب الطالب لليوم، مستند واحد لكل طالب/يوم (نفس صيغة الصفحة الرئيسية)، بلا مادة.
+     أول معلم يغيّبه داخل نافذة التغيب ينشئه ويملكه؛ غيره يُعدّ تأكيدًا بلا تكرار.
+     صاحبه وحده يحذفه (داخل النافذة فقط)؛ معلم آخر يحضّره ⇒ تنبيه للوكيل بدل التعديل. */
+function omrCentralId(seat,dk){ return 'att_'+CLS_SESSION.schoolId+'_'+CLS_SESSION.period+'_'+seat+'_'+dk; }
+// كل سجلات اليوم المركزية للمدرسة (استعلام بفلتر schoolId — قابل للإثبات بالقواعد)
+async function omrCentralToday(){
+  const map = {};
+  if(!CLS_SESSION || !CLS_SESSION.schoolId) return map;
   try{
+    const dk = omrAttDateKey();
+    const snap = await db.collection('attendance').where('schoolId','==',CLS_SESSION.schoolId).where('date','==',dk).get();
+    snap.docs.forEach(d=>{ const a=d.data(); if(a.period===CLS_SESSION.period) map[String(a.seat)] = { id:d.id, ...a }; });
+  }catch(e){}
+  return map;
+}
+async function omrPushAbsent(seat, stu, central){
+  if(!CLS_SESSION || !CLS_SESSION.schoolId) return;
+  if(!omrAttInWindow()) return;   // الدفع للسجل المركزي داخل نافذة التغيب فقط
+  try{
+    const map = central || await omrCentralToday();
+    if(map[String(seat)]) return;   // موجود مسبقًا — تغييبي تأكيد فقط، بلا تكرار
     const dk=omrAttDateKey();
-    await db.collection('attendance').doc(omrAttDocId(seat,dk)).set({
+    await db.collection('attendance').doc(omrCentralId(seat,dk)).set({
       schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period, seat:String(seat), name:stu.name||'',
       classCode:String(stu.classCode||''), className:classNameByCode(stu.classCode)||'', date:dk, status:'absent',
-      markedBy:CLS_SESSION.userId, markedByName:CLS_SESSION.username, ts:Date.now() }, {merge:true});
+      source:'omr', subject:CLS_ACTIVE_SUBJECT||'',
+      markedBy:CLS_SESSION.userId, markedByName:CLS_SESSION.username, ts:Date.now() });
   }catch(e){}
 }
-async function omrRemoveAbsent(seat){
+// حضّر المعلم الطالب (حاضر/متأخر): لو غائب مركزيًا —
+//   سجلّي أنا وداخل النافذة ⇒ يُحذف من المركزي؛ سجلّي خارج النافذة ⇒ لا أثر؛ سجل غيري ⇒ تنبيه فقط
+async function omrCentralOnPresent(seat, stu, status, central){
   if(!CLS_SESSION || !CLS_SESSION.schoolId) return;
-  try{ const dk=omrAttDateKey(); await db.collection('attendance').doc(omrAttDocId(seat,dk)).delete(); }catch(e){}
+  try{
+    const map = central || await omrCentralToday();
+    const c = map[String(seat)];
+    if(!c || c.status!=='absent') return;
+    if(c.markedBy===CLS_SESSION.userId){
+      if(omrAttInWindow()) await db.collection('attendance').doc(c.id).delete();
+      return;
+    }
+    const dk=omrAttDateKey();
+    await db.collection('attAlerts').doc('alert_'+CLS_SESSION.schoolId+'_'+dk+'_'+seat+'_'+CLS_SESSION.userId).set({
+      schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period, date:dk, seat:String(seat), name:stu.name||'',
+      classCode:String(stu.classCode||''), className:classNameByCode(stu.classCode)||'', subject:CLS_ACTIVE_SUBJECT||'',
+      status: status||'present', centralId:c.id, centralByName:c.markedByName||'',
+      byUserId:CLS_SESSION.userId, byName:CLS_SESSION.username||'', ts:Date.now(), resolved:false });
+  }catch(e){}
 }
 function setAttendance(seat,status){
   if(!clsGuardEditSec('worklog')) return;
+  { const _s0 = findStudent(seat); if(_s0 && !clsSubjectGate(_s0.classCode)) return; }
   const noteEl = document.getElementById('attNote');
   const note = noteEl ? (noteEl.value||'').trim() : '';
   if(status==='present'){
@@ -2811,7 +2850,7 @@ function setAttendance(seat,status){
     if(note) state.attendance[seat].noteAt = Date.now();
   }
   const _stu = findStudent(seat);
-  if(_stu){ if(status==='absent') omrPushAbsent(seat,_stu); else if(status==='present') omrRemoveAbsent(seat); }
+  if(_stu){ if(status==='absent') omrPushAbsent(seat,_stu); else if(status==='present'||status==='late') omrCentralOnPresent(seat,_stu,status); }
   state.attMenuSeat = null;
   const y = window.scrollY;
   renderStudents();
@@ -2844,6 +2883,7 @@ function commitAttendance(){
   const filter = document.getElementById('stViewClass') ? document.getElementById('stViewClass').value : '';
   const filterCode = parseVKey(filter).classCode;
   if(!filterCode){ alert('اختر الصف أولاً.'); return; }
+  if(!clsSubjectGate(filterCode)) return;
   const list = state.students.filter(s=>s.classCode===filterCode);
   if(!list.length){ alert('لا يوجد طلاب لتسجيل حضورهم.'); return; }
   const date = todayStr(), ts = Date.now();
@@ -2860,6 +2900,14 @@ function commitAttendance(){
     if(existing){ existing.status=status; existing.note=note; existing.ts=ts; }
     else entry.events.push({ date, ts, status, note });
     if(status==='absent') nAbs++; else if(status==='late') nLate++; else if(status==='runaway') nRun++; else if(status==='excused') nExc++; else nPres++;
+  });
+  // مزامنة السجل المركزي بقراءة واحدة: غائب ⇒ إنشاء لو غير موجود؛ حاضر/متأخر ⇒ حذف (سجلّي بالنافذة) أو تنبيه (سجل غيري)
+  const _finals = list.map(s=>{ const e=workEntry(s.classCode,s.seat).events.find(x=>x.date===date); return {s, st: e?e.status:'present'}; });
+  omrCentralToday().then(central=>{
+    _finals.forEach(({s,st})=>{
+      if(st==='absent') omrPushAbsent(s.seat, s, central);
+      else if(st==='present'||st==='late') omrCentralOnPresent(s.seat, s, st, central);
+    });
   });
   // تصفير الاختيارات اللحظية فقط (الحالة المحفوظة تبقى ملوّنة من سجل اليوم)
   list.forEach(s=>{ delete state.attendance[s.seat]; });
@@ -2922,6 +2970,8 @@ function renderWorkLog(){
   const code = sel ? sel.value : '';   // مفتاح فصل افتراضي (فصل أو فصل::مادة)
   if(!code){ host.innerHTML='<div class="empty">اختر صفاً لعرض سجل أعماله.</div>'; return; }
   const realCode = parseVKey(code).classCode;
+  CLS_ACTIVE_SUBJECT = parseVKey(code).subject;
+  if(!clsSubjectGate(realCode,true)){ host.innerHTML='<div class="empty">⚠️ '+clsGateMsg(realCode)+'</div>'; return; }
   const studs = state.students.filter(s=>s.classCode===realCode);
   if(!studs.length){ host.innerHTML='<div class="empty">لا يوجد طلاب في هذا الصف.</div>'; return; }
   const log = state.workLog[code]||{};
@@ -3240,6 +3290,10 @@ function renderFollowView(){
   const vp=parseVKey(vkey); CLS_ACTIVE_SUBJECT=vp.subject;
   const studs=flStudents(vp.classCode);
   const body=document.getElementById('followBody'); if(!body) return;
+  if(clsNeedsSubject()){
+    if(!vp.classCode){ body.innerHTML='<p class="hint">اختر الصف والمادة من القائمة.</p>'; return; }
+    if(!clsSubjectGate(vp.classCode,true)){ body.innerHTML='<p class="hint">⚠️ '+clsGateMsg(vp.classCode)+'</p>'; return; }
+  }
   if(!studs.length){ body.innerHTML='<p class="hint">لا يوجد طلاب لعرضهم.</p>'; return; }
   body.innerHTML=studs.map((s,i)=>{
     const fu=fuList(s.seat);
@@ -3343,6 +3397,10 @@ function renderRecordView(){
   const studs=flStudents(vp.classCode);
   const cats=stickerCats();
   const body=document.getElementById('recordBody'); if(!body) return;
+  if(clsNeedsSubject()){
+    if(!vp.classCode){ body.innerHTML='<p class="hint">اختر الصف والمادة من القائمة.</p>'; return; }
+    if(!clsSubjectGate(vp.classCode,true)){ body.innerHTML='<p class="hint">⚠️ '+clsGateMsg(vp.classCode)+'</p>'; return; }
+  }
   if(!studs.length){ body.innerHTML='<p class="hint">لا يوجد طلاب لعرضهم.</p>'; return; }
   body.innerHTML=studs.map((s,i)=>{
     const r=fuCatSum(s.seat);
@@ -3625,7 +3683,13 @@ function openStudentRecord(seat){
   const idCard = '<div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
     '<div style="width:64px;height:64px;border-radius:50%;background:var(--teal-l);display:flex;align-items:center;justify-content:center;font-size:30px;flex:0 0 auto">👤</div>'+
     '<div style="flex:1;min-width:0;text-align:right"><div style="font-weight:800;font-size:17px;color:var(--ink)">'+escapeHtml(s.name)+'</div>'+
-    '<div style="font-size:12.5px;color:var(--muted);margin-top:3px">'+escapeHtml(classNameByCode(s.classCode)||'—')+' · '+escapeHtml(String(seat))+'</div></div></div>';
+    '<div style="font-size:12.5px;color:var(--muted);margin-top:3px">'+escapeHtml(classNameByCode(s.classCode)||'—')+(CLS_ACTIVE_SUBJECT?(' · '+escapeHtml(CLS_ACTIVE_SUBJECT)):'')+' · '+escapeHtml(String(seat))+'</div>'+
+    // عدّادات خاصة بالمستخدم ومادته: غيابي، تحويلاتي المرسلة (مع ردودها)، ملاحظاتي
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:12px;font-weight:700">'+
+      '<span style="background:#fdecec;color:#b5332e;border-radius:10px;padding:3px 9px">الغياب: '+toArabic(nAbsent)+'</span>'+
+      '<span style="background:#eef6f5;color:#0b5a54;border-radius:10px;padding:3px 9px">التحويلات: <span id="srCntT">…</span></span>'+
+      '<span style="background:#eef4fb;color:#2E73CC;border-radius:10px;padding:3px 9px">الملاحظات: <span id="srCntN">…</span></span>'+
+    '</div></div></div>';
 
   // المتابعة (دوائر الملصقات)
   const fu = fuList(seat);
@@ -3683,7 +3747,7 @@ async function srLoadNotes(seat){
     try{
       const privSnap = await db.collection('studentNotes').where('studentSeat','==',String(seat)).where('fromUserId','==',me).get();
       priv = privSnap.docs.map(d=>({id:d.id, kind:'private', ...d.data()}))
-        .filter(n=>n.schoolId===sid && (n.period||'')===per);
+        .filter(n=>n.schoolId===sid && (n.period||'')===per && (!CLS_ACTIVE_SUBJECT || (n.subject||'')===CLS_ACTIVE_SUBJECT));
     }catch(e){ console.warn('studentNotes', e); }
     if(CLS_SESSION.schoolId){ // الحساب الفردي بلا مدرسة — لا تحويلات له
       try{
@@ -3692,6 +3756,11 @@ async function srLoadNotes(seat){
           .filter(n=>n.period===CLS_SESSION.period && (n.fromUserId===me || (n.recipients||[]).includes(me)));
       }catch(e){ console.warn('notes', e); }
     }
+    // العدّادات: ملاحظاتي بهذه المادة، وتحويلاتي المرسلة فقط (المستلمة لا تُحتسب حتى لو رددت عليها)
+    const _mineSent = trans.filter(n=>n.fromUserId===me);
+    const _replies = _mineSent.reduce((a,n)=>a+((n.replies||[]).length),0);
+    const _ct=document.getElementById('srCntT'); if(_ct) _ct.textContent = toArabic(_mineSent.length)+(_replies?(' (ردود '+toArabic(_replies)+')'):'');
+    const _cn=document.getElementById('srCntN'); if(_cn) _cn.textContent = toArabic(priv.length);
     const list = priv.concat(trans).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
     if(!list.length){ host.innerHTML='<div class="hint">لا توجد ملاحظات أو تحويلات عن هذا الطالب بعد.</div>'; return; }
     host.innerHTML = list.map(n=>{
@@ -3701,7 +3770,7 @@ async function srLoadNotes(seat){
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
           '<div style="font-size:13px;color:var(--ink);flex:1">'+escapeHtml(n.text||'')+'</div>'+
           '<button onclick="srDeleteNote(\''+n.id+'\',\''+String(seat)+'\')" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:14px;flex:0 0 auto">🗑</button></div>'+
-          '<div style="font-size:11px;color:var(--muted);margin-top:4px">📝 ملاحظة خاصة · '+dateStr+'</div></div>';
+          '<div style="font-size:11px;color:var(--muted);margin-top:4px">📝 ملاحظة خاصة'+(n.subject?(' · '+escapeHtml(n.subject)):'')+' · '+dateStr+'</div></div>';
       }
       const dir = n.fromUserId===me ? 'مُرسَلة منك' : 'واردة إليك';
       const hasReplies = Array.isArray(n.replies) && n.replies.length>0;
@@ -4816,16 +4885,28 @@ function omrNoteCard(n,mineSent){
   const replyBtn = canReply
     ? '<button class="ghost" style="margin-top:4px" onclick="omrReplyNote(\''+n.id+'\')">↩︎ رد</button>'
     : (mineSent && !isClosed ? '<div class="sub" style="margin-top:4px">⏳ بانتظار رد المستلم قبل أن تتمكّن من الرد</div>' : '');
+  const lockedForMe = isClosed && mineSent && n.closedBy && n.closedBy!==me;
   const closeBtn = isForwarderView ? '' : (!isClosed
     ? '<button class="ghost" style="margin-top:4px" onclick="omrToggleNoteClosed(\''+n.id+'\',true)">✕ إغلاق</button>'
-    : '<button class="ghost" style="margin-top:4px" onclick="omrToggleNoteClosed(\''+n.id+'\',false)">↺ إعادة فتح</button>');
+    : (lockedForMe
+        ? '<div class="sub" style="margin-top:4px">🔒 أغلقها '+escapeHtml(n.closedByName||'المستلم')+' — لا يمكن إعادة فتحها</div>'
+        : '<button class="ghost" style="margin-top:4px" onclick="omrToggleNoteClosed(\''+n.id+'\',false)">↺ إعادة فتح</button>'));
   const closedBadge = isClosed ? '<div style="display:inline-block;margin-bottom:4px;padding:2px 10px;border-radius:12px;background:#eee;color:#666;font-size:12px;font-weight:700">🔒 مغلقة</div>' : '';
   return '<div class="subcard"'+(isClosed?' style="opacity:.75"':'')+'>'+closedBadge+'<div style="font-weight:700">'+who+'</div>'+stu+
     '<div style="margin:8px 0;padding:9px 11px;background:#fff;border-right:3px solid var(--teal,#0f766e);border-radius:8px;font-weight:600;white-space:pre-wrap">'+escapeHtml(n.text)+'</div>'+(reps||'')+
     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+replyBtn+closeBtn+'</div></div>';
 }
 async function omrToggleNoteClosed(id, closed){
-  try{ await db.collection('notes').doc(id).update({ closed }); }
+  try{
+    if(!closed){
+      const cur = await db.collection('notes').doc(id).get();
+      const d = cur.exists ? cur.data() : {};
+      if(d.fromUserId===CLS_SESSION.userId && d.closedBy && d.closedBy!==CLS_SESSION.userId){ alert('أغلقها المستلم — لا يمكنك إعادة فتحها.'); return; }
+    }
+    await db.collection('notes').doc(id).update(closed
+      ? { closed:true, closedBy:CLS_SESSION.userId, closedByName:CLS_SESSION.username||'' }
+      : { closed:false, closedBy:null, closedByName:null });
+  }
   catch(e){ alert('تعذّر '+(closed?'الإغلاق':'إعادة الفتح')+': '+(e.message||e)); return; }
   renderOmrNotes();
 }
@@ -5700,13 +5781,30 @@ function getVirtualClasses(){
     if(subs && subs.length){
       subs.forEach(subject=> out.push({ key: makeVKey(c.code,subject), classCode:c.code, subject, label: c.name+' '+c.code+' - '+subject }));
     } else {
-      out.push({ key: c.code, classCode:c.code, subject:null, label: c.name+' '+c.code });
+      out.push({ key: c.code, classCode:c.code, subject:null, noSubject: clsNeedsSubject(),
+        label: c.name+' '+c.code+(clsNeedsSubject()?' — لم تُسند له مواد':'') });
     }
   });
   return out;
 }
 // تُستدعى من onchange أي قائمة اختيار فصل افتراضي؛ تضبط المادة النشطة حسب الاختيار
-function onVClassChange(sel){ CLS_ACTIVE_SUBJECT = parseVKey(sel.value).subject; }
+function onVClassChange(sel){
+  const nv = parseVKey(sel.value).subject;
+  if(nv!==CLS_ACTIVE_SUBJECT) state.attendance = {};   // الاختيارات اللحظية خاصة بالمادة — لا تنتقل لمادة أخرى
+  CLS_ACTIVE_SUBJECT = nv;
+}
+// هل يلزم هذا المستخدم إسناد مادة قبل العمل على الصف؟ (المدير والأدمن مستثنيان)
+function clsNeedsSubject(){ return !(CLS_USER_ROLE==='admin' || CLS_USER_ROLE==='schoolAdmin'); }
+function clsClassHasSubject(classCode){ return (state.mySubjectAssignments||[]).some(a=>String(a.classCode)===String(classCode)); }
+// بوابة: يمنع الحضور/المتابعة/سجل الأعمال/الملاحظات لصف بلا مادة، أو بلا اختيار المادة
+function clsSubjectGate(classCode, silent){
+  if(!clsNeedsSubject()) return true;
+  if(CLS_ACTIVE_SUBJECT && clsClassHasSubject(classCode)) return true;
+  const msg = clsClassHasSubject(classCode) ? 'اختر الصف والمادة من القائمة أولًا.' : 'الصف لم تُسند له مواد.';
+  if(!silent) alert(msg);
+  return false;
+}
+function clsGateMsg(classCode){ return clsClassHasSubject(classCode) ? 'اختر الصف والمادة من القائمة أولًا.' : 'الصف لم تُسند له مواد — لا يمكن العمل عليه.'; }
 let CLS_USER_ASSIGNED = [];
 
 function rosterDocRef(){
@@ -5847,7 +5945,8 @@ async function loadStudentsFromCloud(manual){
           CLS_USER_ROLE = ctx.role||'';
         }
         CLS_USER_ASSIGNED = ctx && Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses : [];
-        state.mySubjectAssignments = ctx && Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments : [];
+        state.mySubjectAssignments = ctx && Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments
+          : (CLS_USER_ROLE==='soloTeacher' && u.solo && Array.isArray(u.solo.subjectAssignments) ? u.solo.subjectAssignments : []);
       }
     }
 

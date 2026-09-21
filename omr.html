@@ -2287,39 +2287,125 @@ function _modalRow(icon,label,onclick){
     <span>${icon} ${label}</span><span style="color:var(--muted)">‹</span>
   </button>`;
 }
-/* بيانات الفصول: يعرض للمعلم فصوله المسندة له فقط مع رموز دخول طلابه */
+/* بيانات الفصول:
+   • العرض (بلا تعديل/حذف) لكل من يملك الوصول لـ«الفصول والطلاب» — فصوله الظاهرة له.
+   • صلاحية «بيانات الفصول» (تعديل): زرّا تعديل (اسم الصف ورمز دخول الطلاب) وحذف.
+   • الحذف من المفوَّض يُسجَّل معلَّقًا ولا يُنفَّذ حتى يوافق مدير المدرسة؛ المدير/الأدمن/الفردي يحذفون ويوافقون مباشرة. */
+function ciIsApprover(){ return CLS_USER_ROLE==='admin' || CLS_USER_ROLE==='schoolAdmin' || CLS_USER_ROLE==='soloTeacher'; }
+function ciCanEdit(){ return ciIsApprover() || clsHasPerm('omr.classes.info','edit'); }
 async function openClassInfoModal(){
-  const canDelete = canManageStudents();
+  const canEdit = ciCanEdit(), approver = ciIsApprover();
+  const canGenCode = canManageStudents() || canEdit;
   const rows = state.classes.map(c=>{
     const cnt = state.students.filter(s=>String(s.classCode)===String(c.code)).length;
+    const code = escapeHtml(c.code);
     const codeCell = c.loginCode
-      ? '<span id="ciCode-'+escapeHtml(c.code)+'" style="font-weight:800;color:var(--ok,#1a7a4f);letter-spacing:1px">…</span>'
-      : (canDelete
-          ? '<button class="ghost" style="padding:4px 8px;font-size:12px" onclick="assignClassStage(\''+escapeHtml(c.code)+'\')">توليد رمز</button>'
+      ? '<span id="ciCode-'+code+'" style="font-weight:800;color:var(--ok,#1a7a4f);letter-spacing:1px">…</span>'
+      : (canGenCode
+          ? '<button class="ghost" style="padding:4px 8px;font-size:12px" onclick="assignClassStage(\''+code+'\')">توليد رمز</button>'
           : '<span style="color:var(--muted);font-size:12px">—</span>');
-    return '<tr>'+
+    const pd = c.pendingDelete;
+    let actions = '';
+    if(pd){
+      actions = '<div style="font-size:11.5px;color:#b7791f;font-weight:700;margin-bottom:4px">⏳ حذف معلَّق'+(pd.byName?(' — طلبه '+escapeHtml(pd.byName)):'')+'</div>'+
+        (approver
+          ? '<button class="ghost" style="padding:5px 8px;font-size:12px;color:var(--bad)" onclick="ciApproveDelete(\''+code+'\')">موافقة</button> '+
+            '<button class="ghost" style="padding:5px 8px;font-size:12px" onclick="ciRejectDelete(\''+code+'\')">رفض</button>'
+          : '<span style="font-size:11.5px;color:var(--muted)">بانتظار موافقة المدير</span>');
+    } else if(canEdit){
+      actions = '<button class="ghost" style="padding:5px 8px;font-size:12px" onclick="ciEditClass(\''+code+'\')">تعديل</button> '+
+        '<button class="ghost" style="padding:5px 8px;font-size:12px;color:var(--bad)" onclick="ciRequestDelete(\''+code+'\')">حذف</button>';
+    }
+    return '<tr'+(pd?' style="background:#fff8e6"':'')+'>'+
       '<td style="text-align:right;font-weight:600">'+escapeHtml(c.name)+'</td>'+
-      '<td style="font-weight:700">'+escapeHtml(c.code)+'</td>'+
+      '<td style="font-weight:700">'+code+'</td>'+
       '<td>'+codeCell+'</td>'+
       '<td>'+toArabic(cnt)+'</td>'+
-      (canDelete?'<td><button class="ghost" style="padding:6px 8px;color:var(--bad)" onclick="delClass(\''+escapeHtml(c.code)+'\')">حذف</button></td>':'')+
+      ((canEdit||state.classes.some(x=>x.pendingDelete))?'<td style="white-space:nowrap">'+actions+'</td>':'')+
     '</tr>';
   }).join('');
-
+  const showActCol = canEdit || state.classes.some(x=>x.pendingDelete);
+  const pendingN = state.classes.filter(x=>x.pendingDelete).length;
   omrModal(
     '<div style="text-align:center;font-weight:800;font-size:17px;margin-bottom:6px;">بيانات الفصول</div>'+
     '<div class="hint" style="text-align:center;margin-bottom:14px">رمز دخول الطلاب يُسلَّم لطلاب الفصل لتفعيل حساباتهم مرة واحدة.</div>'+
+    (approver && pendingN ? '<div style="background:#fff8e6;border:1px solid #f0d58c;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:13px;font-weight:700;color:#b7791f">⏳ '+toArabic(pendingN)+' طلب حذف بانتظار موافقتك</div>' : '')+
     (state.classes.length
-      ? '<div style="overflow-x:auto"><table><thead><tr><th>الصف</th><th>الرمز</th><th>رمز دخول الطلاب</th><th>الطلاب</th>'+(canDelete?'<th></th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'
+      ? '<div style="overflow-x:auto"><table><thead><tr><th>الصف</th><th>الرمز</th><th>رمز دخول الطلاب</th><th>الطلاب</th>'+(showActCol?'<th></th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'
       : '<div class="empty">لا توجد فصول متاحة لك.</div>')
   );
-
-  // تعبئة الرموز الكاملة (رمز المدرسة/المعلم + رمز الفصل)
   state.classes.forEach(async c=>{
     if(!c.loginCode) return;
     const el=document.getElementById('ciCode-'+c.code);
     if(el) el.textContent = await fullStudentLoginCode(c);
   });
+}
+async function ciEditClass(code){
+  if(!ciCanEdit()){ alert('ليست لديك صلاحية تعديل بيانات الفصول.'); return; }
+  const cl = (state.fullClasses.length?state.fullClasses:state.classes).find(c=>String(c.code)===String(code)); if(!cl) return;
+  const name = prompt('اسم الصف:', cl.name||''); if(name===null) return;
+  const newName = name.trim(); if(!newName){ alert('اسم الصف لا يكون فارغًا.'); return; }
+  let newLogin = cl.loginCode||'';
+  if(cl.loginCode){
+    const lc = prompt('رمز دخول الطلاب لهذا الصف (بدون رمز المدرسة):', cl.loginCode); if(lc===null) return;
+    newLogin = normalizeDigits(lc).trim();
+    if(!newLogin){ alert('الرمز لا يكون فارغًا.'); return; }
+  }
+  try{
+    await mutateSharedRoster((classes)=>{
+      if(newLogin!==(cl.loginCode||'') && classes.some(c=>String(c.code)!==String(code) && String(c.loginCode||'')===newLogin))
+        throw new Error('هذا الرمز مستخدم لصف آخر.');
+      const c = classes.find(x=>String(x.code)===String(code)); if(!c) throw new Error('الصف غير موجود.');
+      c.name = newName; if(cl.loginCode) c.loginCode = newLogin;
+    });
+  }catch(e){ alert('تعذّر التعديل: '+e.message); return; }
+  refreshClassDropdowns(); renderClasses(); renderStudents(); openClassInfoModal();
+}
+async function ciRequestDelete(code){
+  if(!ciCanEdit()){ alert('ليست لديك صلاحية حذف الفصول.'); return; }
+  if(ciIsApprover()){ await ciDeleteNow(code, true); return; }
+  const cl = state.classes.find(c=>String(c.code)===String(code));
+  if(!confirm('طلب حذف الصف «'+(cl?cl.name:code)+'»؟ لن يُحذف حتى يوافق مدير المدرسة.')) return;
+  try{
+    await mutateSharedRoster((classes)=>{
+      const c = classes.find(x=>String(x.code)===String(code)); if(!c) throw new Error('الصف غير موجود.');
+      c.pendingDelete = { byUserId:CLS_SESSION.userId, byName:CLS_SESSION.username||'', at:Date.now() };
+    });
+  }catch(e){ alert('تعذّر تسجيل طلب الحذف: '+e.message); return; }
+  alert('سُجِّل طلب الحذف، وهو بانتظار موافقة مدير المدرسة.');
+  renderClasses(); openClassInfoModal();
+}
+async function ciApproveDelete(code){
+  if(!ciIsApprover()){ alert('الموافقة على الحذف لمدير المدرسة فقط.'); return; }
+  await ciDeleteNow(code, true);
+}
+async function ciRejectDelete(code){
+  if(!ciIsApprover()){ alert('رفض الحذف لمدير المدرسة فقط.'); return; }
+  try{
+    await mutateSharedRoster((classes)=>{ const c=classes.find(x=>String(x.code)===String(code)); if(c) delete c.pendingDelete; });
+  }catch(e){ alert('تعذّر الرفض: '+e.message); return; }
+  renderClasses(); openClassInfoModal();
+}
+// حذف فعلي (للمدير/الأدمن/الفردي): يحذف الصف ويعلّم طلابه محذوفين — نفس منطق delClass
+async function ciDeleteNow(code, ask){
+  const studs = state.students.filter(s=>String(s.classCode)===String(code));
+  const cl = (state.fullClasses.length?state.fullClasses:state.classes).find(c=>String(c.code)===String(code));
+  const msg = studs.length>0
+    ? 'حذف الصف «'+(cl?cl.name:code)+'» سيحذف أيضًا '+toArabic(studs.length)+' طالبًا مرتبطين به. متابعة؟'
+    : 'حذف الصف «'+(cl?cl.name:code)+'»؟';
+  if(ask && !confirm(msg)) return;
+  studs.forEach(s=>{ delete state.attendance[s.seat]; delete state.selectedStudents[s.seat]; });
+  Object.keys(state.workLog).forEach(k=>{ if(k===code || k.indexOf(code+'::')===0) delete state.workLog[k]; });
+  try{
+    await mutateSharedRoster((classes, students)=>{
+      const idx = classes.findIndex(c=>String(c.code)===String(code));
+      if(idx>=0) classes.splice(idx,1);
+      for(let i=students.length-1;i>=0;i--){ if(String(students[i].classCode)===String(code)){ students[i].deleted=true; students[i].deletedAt=Date.now(); } }
+    });
+  }catch(e){ alert('فشل حذف الصف: '+e.message); return; }
+  refreshClassDropdowns(); renderClasses(); renderStudents(); renderWorkLog();
+  saveWorkLogToCloud();
+  openClassInfoModal();
 }
 function openAddClassesModal(){
   const canAdd = CLS_CAN_ADD_MANAGE, canSubj = clsHasPerm('omr.classes.subjects','edit');
@@ -4903,6 +4989,29 @@ async function omrReplyNote(id){
     renderOmrNotes();
   }catch(e){ alert('تعذّر الرد: '+e.message); }
 }
+/* الواردة والمرسلة (المفتوحة فقط) + تبويب «تحويلات مغلقة» يجمع المغلق من الاتجاهين مفروزًا حسب الفصل */
+let OMR_NOTES_CACHE = { rec:[], snt:[] }, OMR_NOTES_VIEW = 'rec';
+function setOmrNotesView(v){ OMR_NOTES_VIEW=v; paintOmrInbox(); }
+function paintOmrInbox(){
+  const host=document.getElementById('omrInbox'); if(!host) return;
+  const me=CLS_SESSION.userId;
+  const rec=OMR_NOTES_CACHE.rec.filter(n=>!n.closed), snt=OMR_NOTES_CACHE.snt.filter(n=>!n.closed);
+  const seen=new Set(); const closed=OMR_NOTES_CACHE.rec.concat(OMR_NOTES_CACHE.snt).filter(n=>n.closed && !seen.has(n.id) && seen.add(n.id));
+  const tabBtn=(v,label)=>'<button onclick="setOmrNotesView(\''+v+'\')" style="padding:7px 12px;border-radius:20px;border:1px solid var(--line);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;background:'+(OMR_NOTES_VIEW===v?'var(--teal-d,#0b5a54)':'#fff')+';color:'+(OMR_NOTES_VIEW===v?'#fff':'var(--ink)')+'">'+label+'</button>';
+  let body='';
+  if(OMR_NOTES_VIEW==='rec') body = rec.length ? rec.map(n=>omrNoteCard(n,false)).join('') : '<div class="empty">لا ملاحظات واردة مفتوحة.</div>';
+  else if(OMR_NOTES_VIEW==='snt') body = snt.length ? snt.map(n=>omrNoteCard(n,true)).join('') : '<div class="empty">لا ملاحظات مرسلة مفتوحة.</div>';
+  else {
+    const g={}; closed.forEach(n=>{ const k=n.className||'بلا فصل'; (g[k]=g[k]||[]).push(n); });
+    const keys=Object.keys(g).sort((a,b)=>String(a).localeCompare(String(b),'ar',{numeric:true}));
+    body = keys.length ? keys.map(k=>'<div style="margin:12px 0 6px;padding:6px 10px;background:#eef4f3;border-radius:8px;font-weight:800;font-size:13px;color:var(--teal-d,#0b5a54)">'+escapeHtml(k)+' ('+toArabic(g[k].length)+')</div>'+
+      g[k].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(n=>omrNoteCard(n,n.fromUserId===me)).join('')).join('')
+      : '<div class="empty">لا تحويلات مغلقة.</div>';
+  }
+  host.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
+    tabBtn('rec','📥 الواردة ('+toArabic(rec.length)+')')+tabBtn('snt','📤 المرسلة ('+toArabic(snt.length)+')')+tabBtn('closed','🔒 تحويلات مغلقة ('+toArabic(closed.length)+')')+
+    '</div>'+body;
+}
 function omrNoteCard(n,mineSent){
   const who=mineSent?('إلى: '+(n.recipientsInfo||[]).map(r=>escapeHtml(r.name)).join('، ')):('من: '+escapeHtml(n.fromName)+' ('+(OROLES[n.fromRole]||n.fromRole)+')');
   const stu=(n.studentName?('<div class="sub">بخصوص: '+escapeHtml(n.studentName)+(n.className?(' · '+escapeHtml(n.className)):'')+'</div>'):'')+
@@ -5031,9 +5140,8 @@ async function renderOmrNotes(){
     const mine=p=>p===CLS_SESSION.period;
     const rec=recv.docs.map(d=>({id:d.id,...d.data()})).filter(n=>mine(n.period)).sort((a,b)=>b.createdAt-a.createdAt);
     const snt=sent.docs.map(d=>({id:d.id,...d.data()})).filter(n=>mine(n.period)).sort((a,b)=>b.createdAt-a.createdAt);
-    document.getElementById('omrInbox').innerHTML=
-      '<div class="subtitle">📥 الواردة</div>'+(rec.length?rec.map(n=>omrNoteCard(n,false)).join(''):'<div class="empty">لا ملاحظات واردة.</div>')+
-      '<div class="subtitle" style="margin-top:12px">📤 المرسلة</div>'+(snt.length?snt.map(n=>omrNoteCard(n,true)).join(''):'<div class="empty">لا ملاحظات مرسلة.</div>');
+    OMR_NOTES_CACHE = { rec, snt };
+    paintOmrInbox();
   }catch(e){ document.getElementById('omrInbox').innerHTML='<div class="empty">تعذّر تحميل الملاحظات: '+escapeHtml(e.message)+'</div>'; }
 }
 
@@ -5484,7 +5592,8 @@ function clsApplySectionPerms(){
   }
   // بند ١٣: بطاقتا "بيانات الفصول" و"أسماء الطلاب" تُخفيان دون صلاحية access الخاصة بكل منهما
   const infoCard = document.getElementById('classInfoSecCard');
-  if(infoCard) infoCard.style.display = clsHasPerm('omr.classes.info','access') ? '' : 'none';
+  // بيانات الفصول تظهر (عرضًا) لكل من يملك الوصول لـ«الفصول والطلاب»؛ التعديل/الحذف بصلاحية «بيانات الفصول»
+  if(infoCard) infoCard.style.display = (clsHasPerm('omr.classes','access') || ciIsApprover()) ? '' : 'none';
   const studentsCard = document.getElementById('studentsSecCard');
   if(studentsCard) studentsCard.style.display = clsHasPerm('omr.classes.names','access') ? '' : 'none';
   // بطاقة "إضافة الفصول والمواد" ككل تحتاج إحدى الصلاحيتين الفرعيتين (إضافة أو إسناد) على الأقل

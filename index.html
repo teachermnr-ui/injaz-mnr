@@ -515,7 +515,7 @@ const PERM_TREE = [
     { key:'omr.classes',        label:'الفصول والطلاب', only:['access'] },
     { key:'omr.classes.addManage', label:'إضافة الفصول والطلاب', sub:true, only:['edit'] },
     { key:'omr.classes.subjects',  label:'إسناد المواد', sub:true, only:['edit'] },
-    { key:'omr.classes.info',      label:'بيانات الفصول', sub:true, only:['access'] },
+    { key:'omr.classes.info',      label:'بيانات الفصول (تعديل وحذف)', sub:true, only:['edit'] },
     { key:'omr.classes.names',     label:'أسماء الطلاب', sub:true, only:['access'] },
     { key:'omr.design',  label:'التصميم' },
     { key:'omr.grade',   label:'التصحيح' },
@@ -3415,6 +3415,23 @@ async function replyNote(id){
     toast('تم إرسال الرد'); refreshUnread(); (activeTab==='received'?renderReceived:renderSent)($('#content'));
   }catch(e){ toast('خطأ: '+e.message); }
 }
+/* التحويلات المفتوحة والمغلقة بتبويبين؛ المغلقة مفروزة حسب الفصل */
+let NOTES_VIEW = 'open';
+function setNotesView(v){ NOTES_VIEW=v; (activeTab==='received'?renderReceived:renderSent)($('#content')); }
+function notesTabsHtml(arr, mineSent, counts, emptyHtml){
+  if(!arr.length) return emptyHtml;
+  const open=arr.filter(n=>!n.closed), closed=arr.filter(n=>n.closed);
+  if(NOTES_VIEW==='closed' && !closed.length) NOTES_VIEW='open';
+  const tabBtn=(v,label)=>'<button onclick="setNotesView(\''+v+'\')" style="padding:7px 14px;border-radius:20px;border:1px solid var(--line);font:inherit;font-size:13px;font-weight:700;cursor:pointer;background:'+(NOTES_VIEW===v?'var(--accent)':'#fff')+';color:'+(NOTES_VIEW===v?'#fff':'var(--ink)')+'">'+label+'</button>';
+  const tabs='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+tabBtn('open','المفتوحة ('+open.length+')')+tabBtn('closed','🔒 تحويلات مغلقة ('+closed.length+')')+'</div>';
+  if(NOTES_VIEW==='open'){
+    return tabs+(open.length ? open.map(n=>noteCard(n,mineSent,counts)).join('') : '<div class="empty">لا تحويلات مفتوحة.</div>');
+  }
+  const g={}; closed.forEach(n=>{ const k=n.className||'بلا فصل'; (g[k]=g[k]||[]).push(n); });
+  const keys=Object.keys(g).sort((a,b)=>_normN(a).localeCompare(_normN(b),undefined,{numeric:true}));
+  return tabs+keys.map(k=>'<div style="margin:12px 0 6px;padding:6px 10px;background:var(--surface-2);border-radius:8px;font-weight:800;font-size:13px;color:var(--brand)">'+esc(k)+' ('+g[k].length+')</div>'+
+    g[k].map(n=>noteCard(n,mineSent,counts)).join('')).join('');
+}
 async function renderSent(c){
   const canCompose = (CURRENT.role==='agent'||CURRENT.role==='counselor');
   c.innerHTML='<div class="panel-head"><h2>التحويلات المرسلة</h2>'+(canCompose?'<button class="btn sm" id="composeBtn">+ تحويل جديد</button>':'')+'</div><div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
@@ -3422,10 +3439,7 @@ async function renderSent(c){
   try{
     const snap=await notesCol().where('fromUserId','==',CURRENT.id).get();
     let arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period).sort((a,b)=>noteLastActivity(b)-noteLastActivity(a));
-    const open=arr.filter(n=>!n.closed), closed=arr.filter(n=>n.closed);
-    $('#notesList').innerHTML = arr.length
-      ? open.map(n=>noteCard(n,true)).join('') + (closed.length?'<h3 style="margin:16px 4px 8px;font-size:14px;color:var(--muted)">مغلقة ('+closed.length+')</h3>'+closed.map(n=>noteCard(n,true)).join(''):'')
-      : '<div class="empty"><span class="e-emoji">📤</span>لا تحويلات مرسلة.</div>';
+    $('#notesList').innerHTML = notesTabsHtml(arr, true, null, '<div class="empty"><span class="e-emoji">📤</span>لا تحويلات مرسلة.</div>');
   }catch(e){ $('#notesList').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
 async function renderReceived(c){
@@ -3436,10 +3450,7 @@ async function renderReceived(c){
     const seats=[...new Set(arr.flatMap(noteSeats))];
     const counts={};
     await Promise.all(seats.map(async seat=>{ counts[seat]=await studentNoteCount(seat); }));
-    const open=arr.filter(n=>!n.closed), closed=arr.filter(n=>n.closed);
-    $('#notesList').innerHTML = arr.length
-      ? open.map(n=>noteCard(n,false,counts)).join('') + (closed.length?'<h3 style="margin:16px 4px 8px;font-size:14px;color:var(--muted)">مغلقة ('+closed.length+')</h3>'+closed.map(n=>noteCard(n,false,counts)).join(''):'')
-      : '<div class="empty"><span class="e-emoji">📥</span>لا تحويلات واردة.</div>';
+    $('#notesList').innerHTML = notesTabsHtml(arr, false, counts, '<div class="empty"><span class="e-emoji">📥</span>لا تحويلات واردة.</div>');
   }catch(e){ $('#notesList').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
 async function refreshUnread(){

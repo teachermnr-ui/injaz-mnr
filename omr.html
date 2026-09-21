@@ -2552,9 +2552,11 @@ function omrModal(html){
 }
 function closeOmrModal(){ const o=document.getElementById('omrModalOv'); if(o) o.remove(); }
 async function omrStudentNoteCount(seat){
+  // فلتر schoolId داخل الاستعلام نفسه إلزامي — بدونه يرفض Firestore الاستعلام كليًا (القاعدة غير قابلة للإثبات)
+  if(!CLS_SESSION || !CLS_SESSION.schoolId) return 0;
   try{
-    const snap=await db.collection('notes').where('studentSeat','==',String(seat)).get();
-    return snap.docs.map(d=>d.data()).filter(n=>n.schoolId===CLS_SESSION.schoolId && n.period===CLS_SESSION.period).length;
+    const snap=await db.collection('notes').where('schoolId','==',CLS_SESSION.schoolId).where('studentSeat','==',String(seat)).get();
+    return snap.docs.map(d=>d.data()).filter(n=>n.period===CLS_SESSION.period).length;
   }catch(e){ return 0; }
 }
 async function bulkNote(kind){
@@ -3676,15 +3678,20 @@ async function srLoadNotes(seat){
     const me = CLS_SESSION.userId;
     const sid = CLS_SESSION.schoolId || ('solo_'+me);
     const per = CLS_SESSION.period||'';
-    const [privSnap, transSnap] = await Promise.all([
-      db.collection('studentNotes').where('studentSeat','==',String(seat)).where('fromUserId','==',me).get(),
-      db.collection('notes').where('studentSeat','==',String(seat)).get()
-    ]);
-    const priv = privSnap.docs.map(d=>({id:d.id, kind:'private', ...d.data()}))
-      .filter(n=>n.schoolId===sid && (n.period||'')===per);
-    const trans = transSnap.docs.map(d=>({id:d.id, kind:'transfer', ...d.data()}))
-      .filter(n=>n.schoolId===CLS_SESSION.schoolId && n.period===CLS_SESSION.period
-        && (n.fromUserId===me || (n.recipients||[]).includes(me)));
+    // استعلامان مستقلان — فشل أحدهما لا يُسقط الآخر (كان Promise.all يُفشل السجل كاملًا)
+    let priv=[], trans=[];
+    try{
+      const privSnap = await db.collection('studentNotes').where('studentSeat','==',String(seat)).where('fromUserId','==',me).get();
+      priv = privSnap.docs.map(d=>({id:d.id, kind:'private', ...d.data()}))
+        .filter(n=>n.schoolId===sid && (n.period||'')===per);
+    }catch(e){ console.warn('studentNotes', e); }
+    if(CLS_SESSION.schoolId){ // الحساب الفردي بلا مدرسة — لا تحويلات له
+      try{
+        const transSnap = await db.collection('notes').where('schoolId','==',CLS_SESSION.schoolId).where('studentSeat','==',String(seat)).get();
+        trans = transSnap.docs.map(d=>({id:d.id, kind:'transfer', ...d.data()}))
+          .filter(n=>n.period===CLS_SESSION.period && (n.fromUserId===me || (n.recipients||[]).includes(me)));
+      }catch(e){ console.warn('notes', e); }
+    }
     const list = priv.concat(trans).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
     if(!list.length){ host.innerHTML='<div class="hint">لا توجد ملاحظات أو تحويلات عن هذا الطالب بعد.</div>'; return; }
     host.innerHTML = list.map(n=>{
@@ -4784,6 +4791,10 @@ async function omrResolveClassAdmins(classCode){
     .map(u=>({userId:u.id,name:u.username,role:u.role}));
 }
 async function omrReplyNote(id){
+  try{
+    const cur=await db.collection('notes').doc(id).get();
+    if(cur.exists && cur.data().closed){ alert('هذه الرسالة مغلقة ولا يمكن الرد عليها.'); renderOmrNotes(); return; }
+  }catch(e){}
   const t=prompt('اكتب ردّك:'); if(!t||!t.trim()) return;
   try{
     await db.collection('notes').doc(id).update({ replies: firebase.firestore.FieldValue.arrayUnion(
@@ -4795,8 +4806,28 @@ function omrNoteCard(n,mineSent){
   const who=mineSent?('إلى: '+(n.recipientsInfo||[]).map(r=>escapeHtml(r.name)).join('، ')):('من: '+escapeHtml(n.fromName)+' ('+(OROLES[n.fromRole]||n.fromRole)+')');
   const stu=(n.studentName?('<div class="sub">بخصوص: '+escapeHtml(n.studentName)+(n.className?(' · '+escapeHtml(n.className)):'')+'</div>'):'')+
     (n.referralReason?('<div class="sub">سبب الإحالة: <b>'+escapeHtml(n.referralReason)+'</b></div>'):'');
-  const reps=(n.replies||[]).map(r=>'<div style="border-top:1px solid var(--line);padding:5px 0;font-size:13px"><b>'+escapeHtml(r.fromName)+':</b> '+escapeHtml(r.text)+'</div>').join('');
-  return '<div class="subcard"><div style="font-weight:700">'+who+'</div>'+stu+'<div style="margin:6px 0;white-space:pre-wrap">'+escapeHtml(n.text)+'</div>'+(reps||'')+'<button class="ghost" style="margin-top:4px" onclick="omrReplyNote(\''+n.id+'\')">↩︎ رد</button></div>';
+  const reps=(n.replies||[]).slice().sort((a,b)=>(a.at||0)-(b.at||0)).map(r=>'<div style="border-top:1px solid var(--line);padding:5px 0;font-size:13px"><b>'+escapeHtml(r.fromName)+':</b> '+escapeHtml(r.text)+'</div>').join('');
+  // نفس منطق index.html: حالة الإغلاق مشتركة على المستند فتسري على المرسل والمستقبل بكل الصفحات
+  const me=CLS_SESSION.userId;
+  const isClosed=!!n.closed;
+  const repliedByOther=(n.replies||[]).some(r=>r.fromUserId!==me);
+  const isForwarderView=!mineSent && n.forwarded && n.forwarded.byUserId===me;
+  const canReply=!isClosed && !isForwarderView && (mineSent ? repliedByOther : true);
+  const replyBtn = canReply
+    ? '<button class="ghost" style="margin-top:4px" onclick="omrReplyNote(\''+n.id+'\')">↩︎ رد</button>'
+    : (mineSent && !isClosed ? '<div class="sub" style="margin-top:4px">⏳ بانتظار رد المستلم قبل أن تتمكّن من الرد</div>' : '');
+  const closeBtn = isForwarderView ? '' : (!isClosed
+    ? '<button class="ghost" style="margin-top:4px" onclick="omrToggleNoteClosed(\''+n.id+'\',true)">✕ إغلاق</button>'
+    : '<button class="ghost" style="margin-top:4px" onclick="omrToggleNoteClosed(\''+n.id+'\',false)">↺ إعادة فتح</button>');
+  const closedBadge = isClosed ? '<div style="display:inline-block;margin-bottom:4px;padding:2px 10px;border-radius:12px;background:#eee;color:#666;font-size:12px;font-weight:700">🔒 مغلقة</div>' : '';
+  return '<div class="subcard"'+(isClosed?' style="opacity:.75"':'')+'>'+closedBadge+'<div style="font-weight:700">'+who+'</div>'+stu+
+    '<div style="margin:8px 0;padding:9px 11px;background:#fff;border-right:3px solid var(--teal,#0f766e);border-radius:8px;font-weight:600;white-space:pre-wrap">'+escapeHtml(n.text)+'</div>'+(reps||'')+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+replyBtn+closeBtn+'</div></div>';
+}
+async function omrToggleNoteClosed(id, closed){
+  try{ await db.collection('notes').doc(id).update({ closed }); }
+  catch(e){ alert('تعذّر '+(closed?'الإغلاق':'إعادة الفتح')+': '+(e.message||e)); return; }
+  renderOmrNotes();
 }
 function omrComposeSend(){
   const code=document.getElementById('onClass').value, seat=document.getElementById('onStudent').value, text=(document.getElementById('onText').value||'').trim();

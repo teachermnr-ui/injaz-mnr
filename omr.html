@@ -404,9 +404,14 @@ body.alt-theme main{ padding-bottom:110px; }
    بمغادرة الصفحة كاملة إلى الرئيسية. */
 body.alt-theme .flcard{ display:flex !important; }
 </style>
-
+<style>
+/* منع وميض التبويبات: مخفية حتى تُحسم الصلاحيات (أو تُستعاد من ذاكرة الجهاز) */
+body.cls-perm-pending nav.tabs > button{ visibility:hidden; }
+body.cls-perm-pending nav.tabs::after{ content:'⏳'; font-size:14px; opacity:.6; padding:6px 10px; }
+body.cls-panels-pending section.panel{ visibility:hidden; }
+</style>
 </head>
-<body>
+<body class="cls-perm-pending cls-panels-pending">
 <div id="soloLinkBanner" style="display:none;background:#fff7e6;border-bottom:2px solid #e0a716;padding:10px 14px;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px">
   <span style="flex:1;min-width:200px">اربط رقم هويتك لتقدر تتنقّل لاحقًا بسهولة بين حسابك الفردي وأي مدرسة تشتغل فيها.</span>
   <input id="soloLinkIdInput" placeholder="رقم الهوية" inputmode="numeric" style="padding:6px 8px;border:1px solid #e0a716;border-radius:6px;width:140px">
@@ -424,6 +429,19 @@ body.alt-theme .flcard{ display:flex !important; }
     <button id="tab-notes" onclick="showTab('notes')">تحويلات الطلاب</button>
     <button id="tab-worksheets" onclick="window.location.href='worksheets.html'">🗂️ أنشطة رقمية</button>
   </nav>
+  <script>
+  /* آخر تبويبات مسموحة لهذا المستخدم/المدرسة من ذاكرة الجهاز — للعرض فقط، والصلاحيات الفعلية تُصحّحها بعد التحميل */
+  (function(){
+    try{
+      var ss = JSON.parse(localStorage.getItem('cls_session')||'null'); if(!ss || !ss.userId) return;
+      var cache = JSON.parse(localStorage.getItem('cls_tabs_'+ss.userId+'_'+(ss.schoolId||'solo'))||'null');
+      if(!cache || !Array.isArray(cache.tabs)) return;
+      document.querySelectorAll('nav.tabs > button').forEach(function(b){ b.style.display = cache.tabs.indexOf(b.id)>=0 ? '' : 'none'; });
+      document.body.classList.remove('cls-perm-pending');
+      if(cache.tabs.indexOf('tab-students')>=0) document.body.classList.remove('cls-panels-pending');
+    }catch(e){}
+  })();
+  </script>
 </header>
 
 <main>
@@ -5207,6 +5225,43 @@ function doMoveStudentOmr(seat){
   st.classCode=to; renderStudents(); saveStudentsToCloud();
   alert('تم نقل الطالب.');
 }
+
+/* ===================== التحديث الحي لتحويلات الطلاب =====================
+   الواردة والمرسلة: شريط «تحديثات جديدة — اضغط للعرض» بدل تحريك القائمة. يُغلق عند مغادرة التبويب،
+   ويتوقف بعد ١٥ دقيقة خمول ويُستأنف عند العودة. */
+const OLIVE = { subs:{}, lastActive: Date.now(), paused:false, sig:null };
+function oliveOff(){ Object.keys(OLIVE.subs).forEach(k=>{ try{ OLIVE.subs[k](); }catch(e){} delete OLIVE.subs[k]; }); }
+function oliveSig(arr){ return arr.map(n=>n.id+':'+(n.createdAt||0)+':'+((n.replies||[]).length)+':'+(n.closed?1:0)).sort().join('|'); }
+function oliveNotice(show){
+  const el=document.getElementById('omrLiveNotice'); if(!el) return;
+  el.innerHTML = show ? '<button style="width:100%;margin-bottom:10px;padding:10px;border:none;border-radius:10px;background:var(--teal,#0f766e);color:#fff;font:inherit;font-weight:700;cursor:pointer" onclick="oliveNotice(false);renderOmrNotes()">🔄 تحديثات جديدة — اضغط للعرض</button>' : '';
+}
+function oliveAttach(){
+  oliveOff();
+  if(!CLS_SESSION || !CLS_SESSION.userId) return;
+  const per=CLS_SESSION.period, me=CLS_SESSION.userId;
+  const cur={ rec:null, snt:null };
+  const check=()=>{
+    if(cur.rec==null || cur.snt==null) return;
+    const sig=oliveSig(cur.rec.concat(cur.snt));
+    if(OLIVE.sig!=null && sig!==OLIVE.sig) oliveNotice(true);
+  };
+  const handle=k=>snap=>{ cur[k]=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===per); check(); };
+  try{
+    OLIVE.subs.rec = db.collection('notes').where('recipients','array-contains',me).onSnapshot(handle('rec'), e=>console.warn('olive rec',e));
+    OLIVE.subs.snt = db.collection('notes').where('fromUserId','==',me).onSnapshot(handle('snt'), e=>console.warn('olive snt',e));
+  }catch(e){}
+}
+function oliveNotesTabActive(){ const p=document.getElementById('panel-notes'); return !!(p && p.classList.contains('active')); }
+function oliveTouch(){
+  OLIVE.lastActive=Date.now();
+  if(OLIVE.paused && oliveNotesTabActive()){ OLIVE.paused=false; renderOmrNotes(); }
+}
+['pointerdown','keydown','touchstart','scroll'].forEach(ev=>window.addEventListener(ev, oliveTouch, {passive:true}));
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') oliveTouch(); });
+setInterval(()=>{
+  if(!OLIVE.paused && Object.keys(OLIVE.subs).length && Date.now()-OLIVE.lastActive > 15*60*1000){ oliveOff(); OLIVE.paused=true; }
+}, 60*1000);
 async function renderOmrNotes(){
   const host=document.getElementById('omrNotesHost'); if(!host) return;
   const classOpts=state.classes.map(c=>'<option value="'+c.code+'">'+escapeHtml(c.name)+'</option>').join('');
@@ -5221,7 +5276,7 @@ async function renderOmrNotes(){
     '<label class="field" style="margin-top:8px">المستلِم<select id="onRecip"><option value="">— اختر الطالب أولاً —</option></select></label>'+
     '<label class="field" style="margin-top:8px">نص الملاحظة<textarea id="onText" rows="3" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fcfdfd"></textarea></label>'+
     '<button class="primary" style="margin-top:8px" onclick="omrComposeSend()">📨 إرسال</button></div>'+
-    '<div id="omrInbox" style="margin-top:12px"><div class="empty">جارٍ تحميل الملاحظات…</div></div>';
+    '<div id="omrLiveNotice" style="margin-top:12px"></div><div id="omrInbox" style="margin-top:12px"><div class="empty">جارٍ تحميل الملاحظات…</div></div>';
   const cs=document.getElementById('onClass');
   if(cs) cs.onchange=function(){ const code=this.value; const studs=state.students.filter(s=>String(s.classCode)===String(code));
     document.getElementById('onStudent').innerHTML='<option value="">— اختر —</option>'+studs.map(s=>'<option value="'+s.seat+'">'+escapeHtml(s.name)+'</option>').join('');
@@ -5248,7 +5303,10 @@ async function renderOmrNotes(){
     const rec=recv.docs.map(d=>({id:d.id,...d.data()})).filter(n=>mine(n.period)).sort((a,b)=>b.createdAt-a.createdAt);
     const snt=sent.docs.map(d=>({id:d.id,...d.data()})).filter(n=>mine(n.period)).sort((a,b)=>b.createdAt-a.createdAt);
     OMR_NOTES_CACHE = { rec, snt };
+    OLIVE.sig = oliveSig(rec.concat(snt));
+    oliveNotice(false);
     paintOmrInbox();
+    oliveAttach();
   }catch(e){ document.getElementById('omrInbox').innerHTML='<div class="empty">تعذّر تحميل الملاحظات: '+escapeHtml(e.message)+'</div>'; }
 }
 
@@ -5262,7 +5320,7 @@ function showTab(t){
   if(t==='students'){ collapseStudentCards(); if(flc) flc.classList.add('show'); }
   else { if(flc) flc.classList.remove('show'); closeStuOverlays(); }
   if(t==='cloud'){ autofillWlHeader().then(renderWlHeader); renderWlSetup(); renderStickerSetup(); renderWorkLog(); }
-  if(t==='notes') renderOmrNotes();
+  if(t==='notes') renderOmrNotes(); else oliveOff();   // مستمعو التحويلات تعمل فقط والتبويب مفتوح
 }
 function collapseStudentCards(){
   // طيّ بطاقتَي الإضافة والاستيراد، وإبقاء «طلاب الصف» مفتوحة
@@ -5436,6 +5494,7 @@ function initFirebase(){
       return;
     }
     if(CLS_SESSION.role==='admin' && !CLS_SESSION.schoolId){
+      document.body.classList.remove('cls-perm-pending','cls-panels-pending');   // الأدمن يرى كل التبويبات
       showAdminSchoolPicker();
     } else {
       initFirebaseData();
@@ -5639,6 +5698,22 @@ document.addEventListener('DOMContentLoaded', function(){
   };
 });
 async function clsLoadPerms(){
+  try{ await clsLoadPermsInner(); }
+  finally{ clsPermsReady(); }
+}
+// الصلاحيات حُسمت: احفظ التبويبات الظاهرة بذاكرة الجهاز، واكشف التبويبات واللوحات
+function clsPermsReady(){
+  try{
+    if(CLS_SESSION && CLS_SESSION.userId){
+      const tabs = [...document.querySelectorAll('nav.tabs > button')].filter(b=>b.style.display!=='none').map(b=>b.id);
+      localStorage.setItem('cls_tabs_'+CLS_SESSION.userId+'_'+(CLS_SESSION.schoolId||'solo'), JSON.stringify({ tabs, at: Date.now() }));
+    }
+  }catch(e){}
+  document.body.classList.remove('cls-perm-pending','cls-panels-pending');
+}
+// صمّام أمان: لو تعطّل التحميل لأي سبب لا تبقى الواجهة مخفية
+setTimeout(()=>{ document.body.classList.remove('cls-perm-pending','cls-panels-pending'); }, 8000);
+async function clsLoadPermsInner(){
   try{
     if(!CLS_SESSION || !CLS_SESSION.userId) return;
     const snap = await db.collection('users').doc(CLS_SESSION.userId).get();
@@ -5711,7 +5786,7 @@ function clsApplySectionPerms(){
 }
 /* فحص صلاحية فرعية محدَّدة بمعزل عن CLS_SEC_PERM المُجمَّعة (بند ١٣) */
 function clsHasPerm(key, field){
-  if(CLS_USER_ROLE==='admin' || CLS_USER_ROLE==='soloTeacher') return true;
+  if(CLS_USER_ROLE==='admin' || CLS_USER_ROLE==='soloTeacher' || CLS_USER_ROLE==='schoolAdmin') return true;
   const p = (CLS_ALL_PERMS && CLS_ALL_PERMS[key]) || null;
   return !!(p && p[field]);
 }

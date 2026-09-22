@@ -1399,7 +1399,7 @@ function permsForNewUser(role){
   const t = ROLE_TEMPLATES[role];
   return (t && typeof t==='object' && Object.keys(t).length) ? JSON.parse(JSON.stringify(t)) : defaultPerms(role);
 }
-function logout(){ try{ firebase.auth().signOut(); }catch(e){} localStorage.removeItem('cls_session'); SESSION=null; CURRENT=null; if($('#liPass'))$('#liPass').value=''; alertBox('loginAlert','',''); show('loginView'); }
+function logout(){ try{ liveOffAll(); }catch(e){} try{ firebase.auth().signOut(); }catch(e){} localStorage.removeItem('cls_session'); SESSION=null; CURRENT=null; if($('#liPass'))$('#liPass').value=''; alertBox('loginAlert','',''); show('loginView'); }
 
 /* ========================================================================
    تغيير كلمة المرور
@@ -1465,6 +1465,7 @@ function enterApp(){
   watchActive();
   buildIndexCtxSwitcher();
   if(typeof refreshUnread==='function') refreshUnread();
+  if(typeof liveStartBadge==='function') liveStartBadge();
 }
 /* بند ١٤ لـindex.html: مبدّل سريع بين مدارس مدير عنده أكثر من مدرسة، بلا تسجيل خروج */
 function buildIndexCtxSwitcher(){
@@ -1813,6 +1814,7 @@ async function renderAbsence(c){
     const snap=await q.get();
     const arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period && n.status && n.status!=='present');
     ABS_CACHE={arr,canEdit}; paintAbsence();
+    liveAttachAbsence(canEdit);
   }catch(e){ $('#absRoot').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
 function hijriMonthLabel(dt){
@@ -2005,8 +2007,84 @@ function paintSSRecords(){
   }).join('');
 }
 function ssShowClassTab(cc){ SS_RECORDS_TAB=cc; paintSSRecords(); }
+
+/* ===================== التحديث الحي (Firestore onSnapshot) =====================
+   • نطاق ضيق: غياب اليوم فقط + التنبيهات غير المحسومة + تحويلاتي (واردة/مرسلة).
+   • الغياب والتنبيهات: تحديث تلقائي كامل. التحويلات: شريط «تحديثات جديدة — اضغط للعرض».
+   • المستمعون يُغلَقون عند مغادرة التبويب، ويتوقفون بعد ١٥ دقيقة خمول ويُستأنفون عند العودة. */
+const LIVE = { subs:{}, lastActive: Date.now(), paused:false, sig:{} };
+const LIVE_IDLE_MS = 15*60*1000;
+function liveOn(key, query, onSnap){
+  liveOff(key);
+  try{ LIVE.subs[key] = query.onSnapshot(onSnap, err=>{ console.warn('live', key, err); liveOff(key); }); }catch(e){}
+}
+function liveOff(key){ if(LIVE.subs[key]){ try{ LIVE.subs[key](); }catch(e){} delete LIVE.subs[key]; } }
+function liveOffAll(keep){ Object.keys(LIVE.subs).forEach(k=>{ if(!(keep||[]).includes(k)) liveOff(k); }); }
+function liveModalOpen(){ const m=$('#modalRoot'); return !!(m && m.innerHTML.trim()); }
+function liveSig(arr){ return arr.map(n=>n.id+':'+noteLastActivity(n)+':'+(n.closed?1:0)).sort().join('|'); }
+function liveNotice(show){
+  const el=$('#liveNotice'); if(!el) return;
+  el.innerHTML = show ? '<button class="btn sm" style="width:100%;margin-bottom:10px" onclick="liveNotice(false);renderPanel()">🔄 تحديثات جديدة — اضغط للعرض</button>' : '';
+}
+// شارة الواردة + شريط تحديث الواردة: مستمع دائم طوال الجلسة
+function liveStartBadge(){
+  if(!CURRENT || !CURRENT.id) return;
+  liveOn('rcv', notesCol().where('recipients','array-contains',CURRENT.id), snap=>{
+    const arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period);
+    unreadNotes=arr.filter(n=>!n.closed && noteLastActivity(n) > ((n.readAt && n.readAt[CURRENT.id]) || 0)).length;
+    const bd=$('#rcvBadge'); if(bd){ bd.textContent=unreadNotes; bd.style.display=unreadNotes>0?'inline-flex':'none'; }
+    const sig=liveSig(arr);
+    if(activeTab==='received' && LIVE.sig.received!=null && sig!==LIVE.sig.received) liveNotice(true);
+  });
+}
+function liveAttachSent(){
+  let first=true;
+  liveOn('snt', notesCol().where('fromUserId','==',CURRENT.id), snap=>{
+    const arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period);
+    const sig=liveSig(arr);
+    if(first){ first=false; if(LIVE.sig.sent==null) LIVE.sig.sent=sig; }
+    if(activeTab==='sent' && sig!==LIVE.sig.sent) liveNotice(true);
+  });
+}
+function liveAttachAbsence(canEdit){
+  const sid=CURRENT.schoolId; if(!sid) return;
+  const today=attDateKey();
+  let first=true;
+  liveOn('absToday', attCol().where('schoolId','==',sid).where('date','==',today), snap=>{
+    if(first){ first=false; return; }   // التحميل الأول تمّ بالقراءة الكاملة
+    const todayArr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period && n.status && n.status!=='present');
+    if(!ABS_CACHE) return;
+    ABS_CACHE.arr = ABS_CACHE.arr.filter(a=>a.date!==today).concat(todayArr);
+    liveRepaint(()=>paintAbsence());
+  });
+  if(canEdit){
+    let firstA=true;
+    liveOn('alerts', db.collection('attAlerts').where('schoolId','==',sid).where('resolved','==',false), snap=>{
+      if(firstA){ firstA=false; return; }
+      liveRepaint(()=>renderAttAlerts());
+    });
+  }
+}
+// إعادة رسم تحافظ على التمرير، وتؤجَّل لو نافذة مفتوحة (كتابة رد مثلًا)
+function liveRepaint(fn){
+  if(liveModalOpen()){ clearTimeout(LIVE._defer); LIVE._defer=setTimeout(()=>liveRepaint(fn), 3000); return; }
+  const y=window.scrollY; try{ fn(); }catch(e){} window.scrollTo(0,y);
+}
+// الخمول: إيقاف المستمعين بعد ١٥ دقيقة بلا تفاعل (أو والصفحة مخفية)، واستئنافها عند العودة
+function liveTouch(){
+  LIVE.lastActive=Date.now();
+  if(LIVE.paused && CURRENT){ LIVE.paused=false; liveStartBadge(); renderPanel(); }
+}
+['pointerdown','keydown','touchstart','scroll'].forEach(ev=>window.addEventListener(ev, liveTouch, {passive:true}));
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') liveTouch(); });
+setInterval(()=>{
+  if(!LIVE.paused && Object.keys(LIVE.subs).length && Date.now()-LIVE.lastActive > LIVE_IDLE_MS){
+    liveOffAll(); LIVE.paused=true;
+  }
+}, 60*1000);
 function renderPanel(){
   const c=$('#content');
+  liveOffAll(['rcv']); LIVE.sig.received=null; LIVE.sig.sent=null;   // مستمعو التبويب السابق تُغلق؛ شارة الواردة تبقى
   if(activeTab==='users')      return renderUsers(c);
   if(activeTab==='userPerms')  return renderUserPerms(c);
   if(activeTab==='settings')   return renderSettings(c);
@@ -3434,16 +3512,17 @@ function notesTabsHtml(arr, mineSent, counts, emptyHtml){
 }
 async function renderSent(c){
   const canCompose = (CURRENT.role==='agent'||CURRENT.role==='counselor');
-  c.innerHTML='<div class="panel-head"><h2>التحويلات المرسلة</h2>'+(canCompose?'<button class="btn sm" id="composeBtn">+ تحويل جديد</button>':'')+'</div><div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
+  c.innerHTML='<div class="panel-head"><h2>التحويلات المرسلة</h2>'+(canCompose?'<button class="btn sm" id="composeBtn">+ تحويل جديد</button>':'')+'</div><div id="liveNotice"></div><div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
   if($('#composeBtn')) $('#composeBtn').onclick=openCompose;
   try{
     const snap=await notesCol().where('fromUserId','==',CURRENT.id).get();
     let arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period).sort((a,b)=>noteLastActivity(b)-noteLastActivity(a));
     $('#notesList').innerHTML = notesTabsHtml(arr, true, null, '<div class="empty"><span class="e-emoji">📤</span>لا تحويلات مرسلة.</div>');
+    LIVE.sig.sent = liveSig(arr); liveAttachSent();
   }catch(e){ $('#notesList').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
 async function renderReceived(c){
-  c.innerHTML='<div class="panel-head"><h2>🔔 التحويلات الواردة</h2></div><div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
+  c.innerHTML='<div class="panel-head"><h2>🔔 التحويلات الواردة</h2></div><div id="liveNotice"></div><div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
   try{
     const snap=await notesCol().where('recipients','array-contains',CURRENT.id).get();
     let arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period).sort((a,b)=>noteLastActivity(b)-noteLastActivity(a));
@@ -3451,6 +3530,7 @@ async function renderReceived(c){
     const counts={};
     await Promise.all(seats.map(async seat=>{ counts[seat]=await studentNoteCount(seat); }));
     $('#notesList').innerHTML = notesTabsHtml(arr, false, counts, '<div class="empty"><span class="e-emoji">📥</span>لا تحويلات واردة.</div>');
+    LIVE.sig.received = liveSig(arr);
   }catch(e){ $('#notesList').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
 async function refreshUnread(){

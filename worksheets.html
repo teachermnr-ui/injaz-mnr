@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- إصدار: 2026-09-23.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -2063,6 +2064,10 @@ body.alt-theme .flcard{ display:flex !important; }
         try { followup = fuSnap.exists() ? JSON.parse(fuSnap.data().value || "{}") : {}; } catch (e) { followup = {}; }
 
         const now = Date.now();
+        // مفتاح سجل المتابعة بـomr.html يصير دايمًا "رقم_الهوية::المادة" لأي معلم عادي
+        // (fuKey يعتمد المادة النشطة، وأي معلم غير مدير/أدمن ملزَم بمادة). نطابقها هنا حرفيًا
+        // وإلا الدرجة تُحفظ فعليًا لكن ما تظهر له أبدًا.
+        const fuSeatKey = (seat) => (w.subject ? (seat + "::" + w.subject) : seat);
         students.forEach((stu) => {
           const seat = String(stu.seat);
           const sub = subBy[seat];
@@ -2073,8 +2078,9 @@ body.alt-theme .flcard{ display:flex !important; }
             const outOf = m ? parseFloat(m[2]) : maxScore;
             if (!isNaN(got) && outOf > 0) earned = Math.round((got / outOf) * 10 * 10) / 10;
           }
-          if (!followup[seat]) followup[seat] = [];
-          followup[seat].push({
+          const fk = fuSeatKey(seat);
+          if (!followup[fk]) followup[fk] = [];
+          followup[fk].push({
             id: "dg" + now + "_" + seat,
             sid: "digital_" + currentWorksheetId,
             icon: meta.icon, name: meta.name,

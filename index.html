@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-23.1 -->
+<!-- إصدار: 2026-09-23.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -713,6 +713,24 @@ async function doStudentGoogleLogin(){
       localStorage.setItem('stu_session', JSON.stringify({
         accountId: q.docs[0].id, googleUid: gUser.uid, email: gUser.email,
         seat: data.seat, name: data.name || gUser.displayName || ''
+      }));
+      window.location.href='student-worksheets.html';
+      return;
+    }
+
+    // ما فيه حساب بالـ UID الحالي — نبحث احتياطيًا بالبريد قبل ما نعتبره تسجيلاً جديدًا:
+    // لو Firebase Auth انحذف وأُعيد إنشاؤه لنفس الطالب (نفس Gmail)، الـ UID يتغيّر رغم إنه نفس الحساب،
+    // فنكتشفه بالبريد وندمجه على المعرّف الجديد بدل ما نطلب منه يسجّل رقم الهوية ورمز الفصل من جديد
+    const qEmail = await studentAccountsCol().where('email','==',gUser.email).limit(1).get();
+    if(!qEmail.empty){
+      const oldDoc = qEmail.docs[0];
+      const data = oldDoc.data();
+      const payload = { ...data, googleUid: gUser.uid, name: data.name || gUser.displayName || '', updatedAt: Date.now() };
+      await studentAccountsCol().doc(gUser.uid).set(payload);
+      await oldDoc.ref.delete();
+      localStorage.setItem('stu_session', JSON.stringify({
+        accountId: gUser.uid, googleUid: gUser.uid, email: gUser.email,
+        seat: data.seat, name: payload.name
       }));
       window.location.href='student-worksheets.html';
       return;

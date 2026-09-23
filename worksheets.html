@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-23.1 -->
+<!-- إصدار: 2026-09-23.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -2057,7 +2057,8 @@ body.alt-theme .flcard{ display:flex !important; }
         const maxScore = (w.exercises || []).reduce((sum, ex) => sum + (ex.maxScore ?? 1), 0) || 1;
 
         // سجل المتابعة يُخزَّن في مجموعة exams بمفتاح followup + namespace المعلم
-        const ns = "_" + currentTeacher.schoolId + "_" + (CLS_SESSION.period || "first") + "_" + currentTeacher.uid;
+        // نطابق نفس صيغة CLS_NS بـomr.html بالضبط: schoolId فارغ (معلم فردي) يصير "admin" لا "null" نصية
+        const ns = "_" + (currentTeacher.schoolId || "admin") + "_" + (CLS_SESSION.period || "first") + "_" + currentTeacher.uid;
         const fuRef = doc(db, "results", "followup" + ns);
         const fuSnap = await getDoc(fuRef);
         let followup = {};

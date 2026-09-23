@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- إصدار: 2026-09-23.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -768,9 +769,11 @@ async function doStudentVerify(){
       linkedRosters: [matched.rosterId],   // النسخة الفردية تحتاج تأكيداً لكل معلم على حدة
       verifiedAt: now, updatedAt: now
     };
-    const ref = await studentAccountsCol().add(payload);
+    // معرّف المستند = googleUid نفسه (لا معرّف عشوائي) — قاعدة isStudent() بـ firestore.rules
+    // تتحقق من وجود studentAccounts/{uid} بالضبط، فلازم يتطابقا
+    await studentAccountsCol().doc(STU_PENDING_GOOGLE.uid).set(payload);
     localStorage.setItem('stu_session', JSON.stringify({
-      accountId: ref.id, googleUid: payload.googleUid, email: payload.email,
+      accountId: STU_PENDING_GOOGLE.uid, googleUid: payload.googleUid, email: payload.email,
       seat, name: payload.name
     }));
     window.location.href='student-worksheets.html';

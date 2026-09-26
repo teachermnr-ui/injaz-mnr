@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-26.1 -->
+<!-- إصدار: 2026-09-26.3 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -274,6 +274,7 @@ body.theme-glass .tab.active{background:var(--accent);color:#fff}
 @media (max-width:767px){
   body.theme-glass .tabbar{right:10px;width:calc(100% - 20px);max-height:calc(100vh - 150px);overflow:auto}
 }
+/* [ADMIN-TOOLS:BEGIN] */
 
 /* ===== تبويب «أدوات إدارية» المنسدل ===== */
 .tab.tools-toggle{display:inline-flex;align-items:center;gap:6px}
@@ -298,6 +299,7 @@ body.theme-glass .tab.active{background:var(--accent);color:#fff}
 body.theme-glass .tools-menu.inline .tools-item{padding-right:22px}
 body.theme-night .tools-menu{border-color:#37345d}
 body.theme-night .tab.tools-toggle.open{color:#fff}
+/* [ADMIN-TOOLS:END] */
 </style>
 
 <script>
@@ -327,6 +329,7 @@ body.theme-night .tab.tools-toggle.open{color:#fff}
       });
       var tb = document.getElementById('tabbar');
       if(tb) tb.addEventListener('click', function(e){
+        /* [ADMIN-TOOLS:MOD] ORIG: if(e.target.closest('.tab') && document.body.classList.contains('theme-glass')){ */
         if(e.target.closest('.tab') && !e.target.closest('.tools-toggle') && document.body.classList.contains('theme-glass')){
           document.body.classList.remove('nav-open');
         }
@@ -536,11 +539,13 @@ const PERM_TREE = [
     { key:'index.users',    label:'المستخدمون', only:['access'] },
     { key:'index.users.perms', label:'الصلاحيات الخاصة', sub:true, only:['edit'] },
   ]},
+/* [ADMIN-TOOLS:BEGIN] */
   /* الأدوات الإدارية — كل أداة صفحة مستقلة. تُفوَّض فرديًا من «الصلاحيات الخاصة» فقط (لا قوالب أدوار):
      أدمن النظام ومدير المدرسة يملكانها تلقائيًا، والتفويض لغيرهما بيد من يملك «الصلاحيات الخاصة» لتلك المدرسة */
   { key:'tools', label:'الأدوات الإدارية', leaves:[
     { key:'tools.timetable', label:'بناء الجدول المدرسي', only:['access','edit'] },
   ]},
+/* [ADMIN-TOOLS:END] */
   { key:'omr', label:'إدارة الصفوف', leaves:[
     { key:'omr.classes',        label:'الفصول والطلاب', only:['access'] },
     { key:'omr.classes.addManage', label:'إضافة الفصول والطلاب', sub:true, only:['edit'] },
@@ -609,6 +614,7 @@ const INDEX_TABS = [
   { key:'userPerms', perm:'index.users.perms', label:'الصلاحيات الخاصة' },
   { key:'settings', perm:'',               label:'إعدادات النظام' },
 ];
+/* [ADMIN-TOOLS:BEGIN] */
 
 /* الأدوات الإدارية — تبويب منسدل قبل «انضباط الطلاب»؛ كل بند ينقل لصفحته المستقلة */
 const ADMIN_TOOLS = [
@@ -623,6 +629,7 @@ function visibleTools(){
   const pm = CURRENT.permissions||{};
   return ADMIN_TOOLS.filter(t=> pm[t.perm] && pm[t.perm].access);
 }
+/* [ADMIN-TOOLS:END] */
 
 /* ---------- حالة ---------- */
 let SESSION = null;     // {userId, username, role, schoolId, period}
@@ -1518,6 +1525,7 @@ function enterApp(){
   const _ob=$('#tbOmr'); if(_ob) _ob.style.display=(CURRENT.role==='admin'||_omrKeys.some(k=>can(k,'access')))?'flex':'none';
   const tabs=visibleTabs();
   const bar=$('#tabbar'); bar.innerHTML='';
+/* [ADMIN-TOOLS:BEGIN] */
   closeToolsMenu();
   /* تبويب «أدوات إدارية» المنسدل — أول الشريط (قبل «انضباط الطلاب»)، ويختفي إن لم يكن للمستخدم أي أداة */
   if(visibleTools().length){
@@ -1527,7 +1535,9 @@ function enterApp(){
     tb.onclick=(e)=>{ e.stopPropagation(); toggleToolsMenu(tb); };
     bar.appendChild(tb);
   }
+/* [ADMIN-TOOLS:END] */
   tabs.forEach(t=>{
+    /* [ADMIN-TOOLS:MOD] ORIG: const b=document.createElement('button'); b.className='tab'; b.textContent=t.label; */
     const b=document.createElement('button'); b.className='tab'; b.dataset.key=t.key; b.textContent=t.label;
     if(t.key==='received'){ const bd=document.createElement('span'); bd.id='rcvBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
     b.onclick=()=>{ activeTab=t.key; renderTabs(); renderPanel(); };
@@ -1582,8 +1592,10 @@ function watchActive(){
   }, ()=>{});
 }
 function renderTabs(){
+  /* [ADMIN-TOOLS:MOD] ORIG: [...$('#tabbar').children].forEach((b,i)=> b.classList.toggle('active', visibleTabs()[i] && visibleTabs()[i].key===activeTab)); */
   [...$('#tabbar').querySelectorAll('.tab[data-key]')].forEach(b=> b.classList.toggle('active', b.dataset.key===activeTab));
 }
+/* [ADMIN-TOOLS:BEGIN] */
 /* ---------- القائمة المنسدلة للأدوات الإدارية ----------
    الشريط العادي فيه تمرير أفقي يقصّ أي قائمة مطلقة داخله، فالقائمة تُثبَّت على مستوى الصفحة تحت الزر.
    في الثيم الزجاجي (الشريط قائمة جانبية) تنفتح القائمة داخل الشريط تحت الزر مباشرة. */
@@ -1625,6 +1637,7 @@ document.addEventListener('click', e=>{
 window.addEventListener('resize', ()=>{ const m=document.getElementById('toolsMenu'); if(m && !m.classList.contains('inline')) closeToolsMenu(); });
 window.addEventListener('scroll', ()=>{ const m=document.getElementById('toolsMenu'); if(m && !m.classList.contains('inline')) closeToolsMenu(); }, true);
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeToolsMenu(); });
+/* [ADMIN-TOOLS:END] */
 $('#tbOmr').onclick = ()=>{ window.location.href='omr.html'; };
 $('#tbPw').onclick  = ()=>{ openChangePw(false); };
 $('#tbOut').onclick = ()=>{ logout(); };
@@ -3041,6 +3054,7 @@ function renderTplTree(){
     <div class="perm-head">${esc(g.label)}</div>
     ${g.leaves.map(l=>{
       const p=tplPerms[l.key]||{access:false,edit:false,del:false};
+      /* [ADMIN-TOOLS:MOD] ORIG: const locked = l.key==='index.users.perms'; */
       const locked = TEMPLATE_LOCKED_PERMS.includes(l.key);
       const only = l.only;
       const chk=(f,label)=> (!only||only.includes(f)) ? `<label class="chk"><input type="checkbox" ${locked?'disabled':''} data-k="${l.key}" data-f="${f}" data-only="${only?'1':''}" ${p[f]?'checked':''}> ${label}</label>` : '';
@@ -3188,7 +3202,9 @@ function wipeData(){
       await wipeSchoolUsers(schoolId);
       try{ await rosterDoc(schoolId).delete(); }catch(e){}
       try{ await db.collection('rosterIndex').doc(schoolId).delete(); }catch(e){}
-      for(const col of ['worksheets','submissions','notes','exams','results','attendance','questionBank']){
+      // ص-١: الأنشطة الرقمية وبنك الأسئلة ملك المعلمين ولا تُحذف مع المدرسة؛ الدالة المجدولة archiveDepartedTeachers
+      // تؤرشف المنشور منها وتخفي تسليماته بعد حذف المدرسة، ويبقى محتواها مسودات في مكتبات أصحابها.
+      for(const col of ['notes','exams','results','attendance']){
         try{ await wipeQuery(col,'schoolId','==',schoolId); }catch(e){}
       }
       delete SCHOOLS[schoolId]; await schoolDocById(schoolId).delete();

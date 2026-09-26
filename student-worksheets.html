@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- إصدار: 2026-09-26.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -204,12 +205,25 @@
       }
       // إزالة التكرار (نشاط مسند لأكثر من فصل يخص الطالب)
       const seen = new Set();
-      const uniqueDocs = wDocs.filter(d => (seen.has(d.id) ? false : (seen.add(d.id), true)));
+      // ص-١: رموز الفصول قد تتكرر بين المدارس — النشاط يُعرض فقط إن كان من روستر الطالب نفسه (مدرسته أو معلمه الفردي)
+      const belongs = (w) => {
+        const rid = w.schoolId ? String(w.schoolId) : ("solo_" + w.createdBy);
+        const m = approved.find((a) => String(a.rosterId) === rid);
+        return !!m && (w.assignedClassIds || []).some((c) => m.classCodes.map(String).includes(String(c)));
+      };
+      const uniqueDocs = wDocs.filter(d => (seen.has(d.id) ? false : (seen.add(d.id), true))).filter(d => belongs(d.data()));
 
-      const sq = query(collection(db, "submissions"), where("studentId", "==", String(STU.seat)));
-      const sSnap = await getDocs(sq);
+      // تسليماتي: الجديدة بحساب الطالب، والقديمة برقم الهوية إن سمحت بها القواعد
       const submissionByWorksheet = {};
-      sSnap.docs.forEach((d) => { submissionByWorksheet[d.data().worksheetId] = { id: d.id, ...d.data() }; });
+      const au = auth.currentUser;
+      if (au) {
+        const s1 = await getDocs(query(collection(db, "submissions"), where("studentUid", "==", au.uid)));
+        s1.docs.forEach((d) => { submissionByWorksheet[d.data().worksheetId] = { id: d.id, ...d.data() }; });
+      }
+      try {
+        const s2 = await getDocs(query(collection(db, "submissions"), where("studentId", "==", String(STU.seat))));
+        s2.docs.forEach((d) => { if (!submissionByWorksheet[d.data().worksheetId]) submissionByWorksheet[d.data().worksheetId] = { id: d.id, ...d.data() }; });
+      } catch (e) { /* الاستعلام القديم غير مسموح — تكفي التسليمات الجديدة */ }
 
       if (!uniqueDocs.length) {
         const p = document.createElement("div");

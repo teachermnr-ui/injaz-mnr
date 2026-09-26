@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- إصدار: 2026-09-26.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -569,6 +570,12 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
             <label class="field" style="flex:2">اسم الصف<select id="clName"><option value="">— اختر المرحلة أولاً —</option></select></label>
             <label class="field" style="flex:1.2">رمز الصف<input id="clCode" placeholder="مثال: 101"></label>
           </div>
+          <!-- [ADMIN-TOOLS:BEGIN] -->
+          <div class="row" id="clTrackRow" style="margin-bottom:10px;display:none">
+            <label class="field" style="flex:1">المسار (للمرحلة الثانوية)<select id="clTrack"></select></label>
+          </div>
+          <div class="sub" id="clCodeHint" style="margin:-4px 0 10px;display:none">الرمز مقترح تلقائيًا ويمكن تعديله.</div>
+          <!-- [ADMIN-TOOLS:END] -->
           <button class="primary" onclick="addClass()">➕ إضافة الصف</button>
           <div id="classesHost" style="margin-top:12px"><div class="empty">لا توجد فصول بعد. أضف فصلاً للبدء.</div></div>
         </div>
@@ -1744,6 +1751,85 @@ function onClStageChange(){
   sel.innerHTML = '<option value="">'+(opts.length?'— اختر —':'— اختر المرحلة أولاً —')+'</option>' +
     opts.map(o=>'<option value="'+o+'">'+o+'</option>').join('');
 }
+/* [ADMIN-TOOLS:BEGIN] */
+/* مسارات المرحلة الثانوية والرمز الافتراضي للفصل — من أداة «بناء الجدول المدرسي» */
+const CLS_TRACKS = [
+  { name:'مشترك', letter:'' }, { name:'عام', letter:'' },
+  { name:'علوم الحاسب والهندسة', letter:'ح' }, { name:'الصحة والحياة', letter:'ص' },
+  { name:'إدارة الأعمال', letter:'إ' }, { name:'الشرعي', letter:'ش' }
+];
+const CLS_SECTION_LETTERS = ['أ','ب','ج','د','هـ','و','ز','ح','ط','ي','ك','ل','م','ن','س','ع'];
+function clsGradeNum(name){
+  const g = ['أول','ثاني','ثالث','رابع','خامس','سادس'];
+  const s = String(name||'').trim();
+  for(let i=0;i<g.length;i++) if(s.indexOf(g[i])===0) return i+1;
+  return 0;
+}
+// المسار الافتراضي: أول ثانوي «مشترك»، وبقية الثانوي «عام»
+function clsDefaultTrack(grade){ return clsGradeNum(grade)===1 ? 'مشترك' : 'عام'; }
+function clsTrackOf(cl){ return (cl && cl.stage==='ثانوية') ? (cl.track || clsDefaultTrack(cl.name)) : ''; }
+// الرمز الافتراضي: الابتدائي 1أ، المتوسط م1أ، الثانوي 101/201 (وحرف المسار لغير المشترك والعام: ح201)
+function clsDefaultCode(stage, grade, track){
+  const all = state.fullClasses.length ? state.fullClasses : state.classes;
+  const used = new Set(all.map(c=>String(c.code)));
+  const n = clsGradeNum(grade); if(!n) return '';
+  if(stage==='ابتدائية' || stage==='متوسطة'){
+    const pre = (stage==='متوسطة' ? 'م' : '') + n;
+    for(const L of CLS_SECTION_LETTERS){ if(!used.has(pre+L)) return pre+L; }
+    return '';
+  }
+  if(stage==='ثانوية'){
+    const tr = CLS_TRACKS.find(t=>t.name===track);
+    const pre = (n>1 && tr) ? tr.letter : '';
+    for(let k=1;k<100;k++){ const code = pre + String(n*100+k); if(!used.has(code)) return code; }
+  }
+  return '';
+}
+function clsRefreshTrackAndCode(){
+  const stage = (document.getElementById('clStage')||{}).value||'';
+  const grade = (document.getElementById('clName')||{}).value||'';
+  const row = document.getElementById('clTrackRow'), tsel = document.getElementById('clTrack');
+  const codeEl = document.getElementById('clCode'), hint = document.getElementById('clCodeHint');
+  if(!row || !tsel || !codeEl) return;
+  if(stage==='ثانوية' && grade){
+    const first = clsGradeNum(grade)===1;
+    const opts = first ? CLS_TRACKS.filter(t=>t.name==='مشترك') : CLS_TRACKS.filter(t=>t.name!=='مشترك');
+    const cur = tsel.value;
+    tsel.innerHTML = opts.map(t=>'<option value="'+t.name+'">'+t.name+'</option>').join('');
+    tsel.value = opts.some(t=>t.name===cur) ? cur : opts[0].name;
+    row.style.display = '';
+  } else { row.style.display = 'none'; }
+  // اقتراح الرمز فقط إن كان الحقل فارغًا أو مقترحًا تلقائيًا
+  if(!codeEl.value.trim() || codeEl.dataset.auto==='1'){
+    const sug = (stage && grade) ? clsDefaultCode(stage, grade, tsel.value) : '';
+    codeEl.value = sug; codeEl.dataset.auto = sug ? '1' : '';
+    if(hint) hint.style.display = sug ? '' : 'none';
+  }
+}
+function clsSelectedTrack(stage, grade){
+  if(stage!=='ثانوية') return '';
+  const tsel = document.getElementById('clTrack');
+  return (tsel && tsel.value) || clsDefaultTrack(grade);
+}
+async function clsSetTrack(code, track){
+  if(!(CLS_CAN_ADD_MANAGE || ciCanEdit())){ alert('ليست لديك صلاحية تعديل بيانات الفصول.'); renderClasses(); return; }
+  try{
+    await mutateSharedRoster((classes)=>{
+      const c = classes.find(x=>String(x.code)===String(code)); if(!c) throw new Error('الصف غير موجود.');
+      c.track = track;
+    });
+    renderClasses();
+  }catch(e){ alert('تعذّر حفظ المسار: '+e.message); renderClasses(); }
+}
+document.addEventListener('DOMContentLoaded', function(){
+  ['clStage','clName','clTrack'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', ()=>setTimeout(clsRefreshTrackAndCode,0));
+  });
+  const codeEl = document.getElementById('clCode');
+  if(codeEl) codeEl.addEventListener('input', ()=>{ codeEl.dataset.auto=''; const h=document.getElementById('clCodeHint'); if(h) h.style.display='none'; });
+});
+/* [ADMIN-TOOLS:END] */
 
 /* ---- رمز دخول الطلاب: حرف المرحلة + رقم تسلسلي يُحرق ولا يُعاد استخدامه بعد الحذف ---- */
 const CLS_STAGE_LETTER = { 'ابتدائية':'P', 'متوسطة':'M', 'ثانوية':'H' };
@@ -1849,6 +1935,9 @@ function onSubjectSelectChange(){
   const btn = document.getElementById('subjSaveBtn');
   const delegate = subjDelegateMode() && !!CLS_SESSION.schoolId;
   if(delegate && !SUBJ_TARGET){ host.innerHTML='<div class="empty">اختر المستخدم أولًا.</div>'; btn.style.display='none'; return; }
+  /* [ADMIN-TOOLS:BEGIN] */
+  if(clsTtManaged(delegate)){ host.innerHTML='<div class="empty">'+CLS_TT_LOCK_MSG+'</div>'; btn.style.display='none'; return; }
+  /* [ADMIN-TOOLS:END] */
   if(!subject){ host.innerHTML=''; btn.style.display='none'; return; }
   const srcClasses = delegate ? SUBJ_TARGET.classes : state.classes;
   const srcAssign = delegate ? SUBJ_TARGET.assignments : (state.mySubjectAssignments||[]);
@@ -1864,6 +1953,9 @@ function onSubjectSelectChange(){
 }
 async function saveSubjectAssignment(){
   if(!clsHasPerm('omr.classes.subjects','edit')){ alert('إسناد المواد صلاحية مقصورة على المفوَّض بها.'); return; }
+  /* [ADMIN-TOOLS:BEGIN] */
+  if(clsTtManaged(subjDelegateMode() && !!CLS_SESSION.schoolId)){ alert(CLS_TT_LOCK_MSG); return; }
+  /* [ADMIN-TOOLS:END] */
   const subject = document.getElementById('subjSelect').value;
   if(!subject) return;
   const checked = [...document.querySelectorAll('.subjClsChk:checked')].map(x=>x.value);
@@ -1919,15 +2011,20 @@ async function addClass(){
   if(!code){ alert('أدخل رمز الصف.'); return; }
   if(!stage){ alert('اختر المرحلة أولًا.'); return; }
   if(state.fullClasses.some(c=>c.code===code)){ alert('رمز الصف مستخدم من قبل. اختر رمزاً غير متكرر.'); return; }
-  if(state.fullClasses.some(c=>c.name===name)){ alert('اسم الصف مستخدم من قبل. اختر اسماً غير متكرر.'); return; }
+  /* [ADMIN-TOOLS:MOD] ORIG: if(state.fullClasses.some(c=>c.name===name)){ alert('اسم الصف مستخدم من قبل. اختر اسماً غير متكرر.'); return; } */
+  /* الاسم يتكرر بين الشعب (أول متوسط أ، أول متوسط ب)؛ الرمز وحده هو الفريد */
   try{
     await mutateSharedRoster((classes, students, customSubjects, loginCodeCounters)=>{
       const loginCode = stage ? nextClassLoginCode(stage, loginCodeCounters) : '';
-      classes.push({ name, code, stage, loginCode, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null });
+      /* [ADMIN-TOOLS:MOD] ORIG: classes.push({ name, code, stage, loginCode, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null }); */
+      classes.push(Object.assign({ name, code, stage, loginCode, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null }, stage==='ثانوية' ? { track: clsSelectedTrack(stage, name) } : {}));
     });
   }catch(e){ alert('فشل حفظ الصف: '+e.message); return; }
   document.getElementById('clStage').value=''; onClStageChange();
   document.getElementById('clCode').value='';
+  /* [ADMIN-TOOLS:BEGIN] */
+  document.getElementById('clCode').dataset.auto=''; clsRefreshTrackAndCode();
+  /* [ADMIN-TOOLS:END] */
   refreshClassDropdowns(); renderClasses(); renderStudents();
 }
 async function delClass(code){
@@ -1970,13 +2067,21 @@ async function assignClassStage(code){
 function renderClasses(){
   const host=document.getElementById('classesHost'); if(!host) return;
   if(!state.classes.length){ host.innerHTML='<div class="empty">لا توجد فصول بعد. أضف فصلاً للبدء.</div>'; return; }
-  let html='<div style="overflow-x:auto"><table><thead><tr><th>الصف</th><th>الرمز</th><th>رمز دخول الطلاب</th><th>الطلاب</th><th></th></tr></thead><tbody>';
+  /* [ADMIN-TOOLS:MOD] ORIG: let html='<div style="overflow-x:auto"><table><thead><tr><th>الصف</th><th>الرمز</th><th>رمز دخول الطلاب</th><th>الطلاب</th><th></th></tr></thead><tbody>'; */
+  let html='<div style="overflow-x:auto"><table><thead><tr><th>الصف</th><th>الرمز</th><th>المسار</th><th>رمز دخول الطلاب</th><th>الطلاب</th><th></th></tr></thead><tbody>';
   state.classes.forEach(c=>{
     const cnt=state.students.filter(s=>s.classCode===c.code).length;
     const loginCell = c.loginCode
       ? `<span id="loginCode-${escapeHtml(c.code)}" style="font-weight:800;color:var(--ok);letter-spacing:1px;">…</span>`
       : `<button class="ghost" style="padding:4px 8px;font-size:12px" onclick="assignClassStage('${escapeHtml(c.code)}')">توليد رمز</button>`;
-    html+=`<tr><td style="text-align:right;font-weight:600">${escapeHtml(c.name)}</td><td style="font-weight:700">${escapeHtml(c.code)}</td><td>${loginCell}</td><td>${toArabic(cnt)}</td><td><button class="ghost" style="padding:6px 8px;color:var(--bad)" onclick="delClass('${escapeHtml(c.code)}')">حذف</button></td></tr>`;
+    /* [ADMIN-TOOLS:BEGIN] */
+    const trackCell = c.stage!=='ثانوية' ? '—'
+      : ((CLS_CAN_ADD_MANAGE || ciCanEdit())
+          ? `<select style="padding:4px 6px;font-size:12px" onchange="clsSetTrack('${escapeHtml(c.code)}', this.value)">${(clsGradeNum(c.name)===1 ? CLS_TRACKS.filter(t=>t.name==='مشترك') : CLS_TRACKS.filter(t=>t.name!=='مشترك')).map(t=>`<option value="${t.name}" ${clsTrackOf(c)===t.name?'selected':''}>${t.name}</option>`).join('')}</select>${c.track?'':'<div style="font-size:10.5px;color:var(--warn,#b7791f)">افتراضي — لم يُحفظ</div>'}`
+          : escapeHtml(clsTrackOf(c)));
+    /* [ADMIN-TOOLS:END] */
+    /* [ADMIN-TOOLS:MOD] ORIG: html+=`<tr><td style="text-align:right;font-weight:600">${escapeHtml(c.name)}</td><td style="font-weight:700">${escapeHtml(c.code)}</td><td>${loginCell}</td><td>${toArabic(cnt)}</td><td><button class="ghost" style="padding:6px 8px;color:var(--bad)" onclick="delClass('${escapeHtml(c.code)}')">حذف</button></td></tr>`; */
+    html+=`<tr><td style="text-align:right;font-weight:600">${escapeHtml(c.name)}</td><td style="font-weight:700">${escapeHtml(c.code)}</td><td>${trackCell}</td><td>${loginCell}</td><td>${toArabic(cnt)}</td><td><button class="ghost" style="padding:6px 8px;color:var(--bad)" onclick="delClass('${escapeHtml(c.code)}')">حذف</button></td></tr>`;
   });
   host.innerHTML=html+'</tbody></table></div>';
   // تعبئة رمز الدخول الكامل (رمز المدرسة + رمز الفصل) بشكل غير متزامن لكل صف عنده رمز
@@ -2425,7 +2530,8 @@ async function ciEditClass(code){
   const newName = nm.trim(); if(!newName){ alert('اسم الصف لا يكون فارغًا.'); return; }
   const cd = prompt('رمز الصف:', cl.code||''); if(cd===null) return;
   const newCode = normalizeDigits(cd).trim(); if(!newCode){ alert('رمز الصف لا يكون فارغًا.'); return; }
-  if(newName!==cl.name && all.some(c=>String(c.code)!==String(code) && c.name===newName)){ alert('اسم الصف مستخدم لصف آخر.'); return; }
+  /* [ADMIN-TOOLS:MOD] ORIG: if(newName!==cl.name && all.some(c=>String(c.code)!==String(code) && c.name===newName)){ alert('اسم الصف مستخدم لصف آخر.'); return; } */
+  /* الاسم يتكرر بين الشعب؛ الرمز وحده هو الفريد */
   const codeChanged = newCode!==String(cl.code);
   if(codeChanged && all.some(c=>String(c.code)===newCode)){ alert('رمز الصف مستخدم لصف آخر.'); return; }
   // تغيير الرمز يمس إسنادات المستخدمين — المدير/الأدمن يحدّثها تلقائيًا؛ المفوَّض يُمنع لو الصف مسنَد لأحد
@@ -2465,6 +2571,10 @@ async function ciEditClass(code){
           await db.collection('users').doc(u.id).update({
             ['schools.'+CLS_SESSION.schoolId+'.assignedClasses']: mapCodes(ctx.assignedClasses),
             ['schools.'+CLS_SESSION.schoolId+'.subjectAssignments']: mapSubj(ctx.subjectAssignments),
+/* [ADMIN-TOOLS:BEGIN] */
+            ...(ctx.subjectAssignmentsByPeriod ? { ['schools.'+CLS_SESSION.schoolId+'.subjectAssignmentsByPeriod']:
+              Object.fromEntries(Object.entries(ctx.subjectAssignmentsByPeriod).map(([k,v])=>[k, mapSubj(v)])) } : {}),
+/* [ADMIN-TOOLS:END] */
             _editCtx: CLS_SESSION.schoolId, updatedAt: Date.now() });
         }catch(e){ console.warn('cascade', u.id, e); }
       }
@@ -6086,6 +6196,18 @@ async function loadResultsFromCloud(manual){
 /* ---- الروستر المشترك (فصول + طلاب) — مستند واحد لكل مدرسة، يشترك فيه كل المعلمين ---- */
 let CLS_USER_ROLE = '';
 let CLS_ACTIVE_SUBJECT = null; // المادة النشطة حاليًا حسب آخر قائمة فصل اختارها المعلم
+/* [ADMIN-TOOLS:BEGIN] */
+// هل إسناد المواد لهذا المستخدم يُدار من «الجدول المدرسي»؟ (يُقفل الإسناد اليدوي ويصبح عرضًا فقط)
+let CLS_TT_MANAGED_SELF = false;
+function clsTtManaged(delegate){
+  if(!delegate) return CLS_TT_MANAGED_SELF;
+  if(!SUBJ_TARGET) return false;
+  const u = (SUBJ_USERS||[]).find(x=>x.id===SUBJ_TARGET.id);
+  const ctx = u && u.schools && u.schools[CLS_SESSION.schoolId];
+  return !!(ctx && ctx.subjectAssignmentsByPeriod && typeof ctx.subjectAssignmentsByPeriod==='object');
+}
+const CLS_TT_LOCK_MSG = 'يُسند هذا المستخدم من «الجدول المدرسي» (الأدوات الإدارية)؛ القائمة هنا للاطلاع فقط.';
+/* [ADMIN-TOOLS:END] */
 
 // يفكّك مفتاح الفصل الافتراضي (رمز_الفصل أو رمز_الفصل::المادة) لعنصريه
 function parseVKey(vkey){
@@ -6270,6 +6392,18 @@ async function loadStudentsFromCloud(manual){
         CLS_USER_ASSIGNED = ctx && Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses : [];
         state.mySubjectAssignments = ctx && Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments
           : (CLS_USER_ROLE==='soloTeacher' && u.solo && Array.isArray(u.solo.subjectAssignments) ? u.solo.subjectAssignments : []);
+        /* [ADMIN-TOOLS:BEGIN] */
+        // إسناد الفترة الحالية المنشور من «الجدول المدرسي» يتقدّم على القائمة العامة (كل فترة مستقلة)
+        CLS_TT_MANAGED_SELF = !!(ctx && ctx.subjectAssignmentsByPeriod && typeof ctx.subjectAssignmentsByPeriod==='object');
+        if(CLS_TT_MANAGED_SELF){
+          const _byP = ctx.subjectAssignmentsByPeriod[(CLS_SESSION && CLS_SESSION.period) || 'first'];
+          state.mySubjectAssignments = Array.isArray(_byP) ? _byP : [];
+          // المعلم يرى فصول فترته فقط (ما لم يُمنح «كل الفصول»)
+          if(CLS_USER_ROLE==='teacher' && !CLS_USER_ASSIGNED.includes('__all__')){
+            CLS_USER_ASSIGNED = [...new Set(state.mySubjectAssignments.map(a=>String(a.classCode)))];
+          }
+        }
+        /* [ADMIN-TOOLS:END] */
       }
     }
 

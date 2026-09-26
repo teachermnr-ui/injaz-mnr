@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-23.2 -->
+<!-- إصدار: 2026-09-26.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -532,6 +532,7 @@ body.alt-theme .flcard{ display:flex !important; }
       getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, setDoc, getDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
 
     /* إعدادات مشروع Firebase الموحّد — عدّلها بمفاتيح المشروع الجديد فور توفرها */
     const firebaseConfig = {
@@ -584,6 +585,37 @@ body.alt-theme .flcard{ display:flex !important; }
       }
     });
     const currentTeacher = { uid: CLS_SESSION.userId, name: CLS_SESSION.username, schoolId: CLS_SESSION.schoolId };
+    /* ===== ص-١: الأنشطة ملك المعلم وتنتقل معه =====
+       المكتبة (المسودات وبنك الأسئلة) تظهر في أي سياق يدخله المعلم (مدرسة أو حساب فردي).
+       النشر (الفصول والتسليمات والدرجات) مرتبط بالسياق الحالي وفترته فقط. */
+    const CUR_PERIOD = (CLS_SESSION && CLS_SESSION.period) || "first";
+    function wsInCurrentCtx(w) {
+      return ((w.schoolId || null) === (currentTeacher.schoolId || null)) && ((w.period || "first") === CUR_PERIOD);
+    }
+    // تسليمات نشاط: الجديدة تحمل teacherUid، والقديمة تُقرأ باستعلام احتياطي إن سمحت به القواعد
+    async function getSubmissionsFor(worksheetId) {
+      const byId = new Map();
+      const s1 = await getDocs(query(collection(db, "submissions"), where("worksheetId", "==", worksheetId), where("teacherUid", "==", currentTeacher.uid)));
+      s1.docs.forEach((d) => byId.set(d.id, d));
+      try {
+        const s2 = await getDocs(query(collection(db, "submissions"), where("worksheetId", "==", worksheetId)));
+        s2.docs.forEach((d) => byId.set(d.id, d));
+      } catch (e) { /* القواعد لا تسمح بالاستعلام القديم — تكفي التسليمات الجديدة */ }
+      return [...byId.values()];
+    }
+    // استرجاع المحتوى من حساب سابق بنفس البريد (بعد حذف الحساب وإعادة إنشائه) — مرة لكل جلسة
+    authReady.then(async (au) => {
+      if (!au) return;
+      try {
+        if (sessionStorage.getItem("ws_reclaim_" + au.uid)) return;
+        sessionStorage.setItem("ws_reclaim_" + au.uid, "1");
+        const res = await httpsCallable(getFunctions(app), "reclaimTeacherContent")({});
+        if (res && res.data && res.data.moved > 0) {
+          try { await loadDrafts(); await loadBank(); } catch (e) {}
+          alert("تم استرجاع " + res.data.moved + " من أنشطتك وأسئلتك من حسابك السابق.");
+        }
+      } catch (e) { /* الدالة غير منشورة بعد أو لا يوجد ما يُسترجع */ }
+    });
     // روستر المدرسة، أو روستر المعلم الفردي (بلا مدرسة)
     function rosterDocId() { return currentTeacher.schoolId ? ("roster_" + currentTeacher.schoolId) : ("roster_solo_" + currentTeacher.uid); }
     /* سياق المستخدم بالنموذج الموحَّد: الدور من الجلسة، والفصول والمواد من schools[sid] (أو solo للفردي) — لا حقول top-level */
@@ -597,7 +629,8 @@ body.alt-theme .flcard{ display:flex !important; }
         isAdmin: role === "admin" || role === "schoolAdmin",
         isSolo: role === "soloTeacher",
         assigned: Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses.map(String) : [],
-        subjectAssignments: Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments : []
+        /* [ADMIN-TOOLS:MOD] ORIG: subjectAssignments: Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments : [] */
+        subjectAssignments: (ctx.subjectAssignmentsByPeriod && typeof ctx.subjectAssignmentsByPeriod === "object") ? (Array.isArray(ctx.subjectAssignmentsByPeriod[CLS_SESSION.period || "first"]) ? ctx.subjectAssignmentsByPeriod[CLS_SESSION.period || "first"] : []) : (Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments : [])
       };
     }
 
@@ -921,7 +954,7 @@ body.alt-theme .flcard{ display:flex !important; }
           previewWrap.appendChild(box);
         }
       } catch (err) {
-        previewWrap.innerHTML = `<p style="font-size:12px;color:var(--bad);">حصل خطأ في المعاينة: ${err.message}</p>`;
+        previewWrap.innerHTML = `<p style="font-size:12px;color:var(--bad);">حدث خطأ في المعاينة: ${err.message}</p>`;
       }
     });
 
@@ -1099,7 +1132,7 @@ body.alt-theme .flcard{ display:flex !important; }
         document.getElementById("reviewCard").style.display = "block";
         document.getElementById("saveCard").style.display = "block";
       } catch (err) {
-        statusEl.textContent = "حصل خطأ أثناء المعالجة: " + err.message;
+        statusEl.textContent = "حدث خطأ أثناء المعالجة: " + err.message;
         statusEl.style.color = "var(--bad)";
       }
     });
@@ -1457,7 +1490,7 @@ body.alt-theme .flcard{ display:flex !important; }
         document.getElementById("worksheetUnit").value = "";
         document.getElementById("worksheetLesson").value = "";
       } catch (err) {
-        statusEl.textContent = "حصل خطأ أثناء الحفظ: " + err.message;
+        statusEl.textContent = "حدث خطأ أثناء الحفظ: " + err.message;
         statusEl.style.color = "var(--bad)";
       }
     });
@@ -1497,7 +1530,7 @@ body.alt-theme .flcard{ display:flex !important; }
         }
 
         if (classes.length === 0) {
-          box.innerHTML = `<p style="font-size:13px;color:var(--bad);">مفيش فصول مُسندة لك لمادة «${wSubject || "—"}» — راجع تبويب «إسناد المواد» في إدارة الصف.</p>`;
+          box.innerHTML = `<p style="font-size:13px;color:var(--bad);">لا توجد فصول مُسندة لك في مادة «${wSubject || "—"}» — راجع تبويب «إسناد المواد» في إدارة الصف.</p>`;
         } else {
           box.innerHTML = classes.map((c) => `
             <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:14px;">
@@ -1506,7 +1539,7 @@ body.alt-theme .flcard{ display:flex !important; }
             </label>`).join("");
         }
       } catch (err) {
-        box.innerHTML = `<p style="font-size:13px;color:var(--bad);">حصل خطأ: ${err.message}</p>`;
+        box.innerHTML = `<p style="font-size:13px;color:var(--bad);">حدث خطأ: ${err.message}</p>`;
       }
 
       document.getElementById("publishCard").style.display = "block";
@@ -1534,9 +1567,12 @@ body.alt-theme .flcard{ display:flex !important; }
           assignedClassIds: selected,
           activityTarget,
           dueDate: dueDateVal || null,
-          publishedAt: serverTimestamp()
+          publishedAt: serverTimestamp(),
+          // ص-١: النشر يرتبط بالسياق الحالي وفترته (المسودة قد تكون أُنشئت في سياق آخر)
+          schoolId: currentTeacher.schoolId || null,
+          period: CUR_PERIOD
         });
-        statusEl.textContent = "تم نشر الورقة بنجاح — هتظهر للطلاب في الفصول المحددة.";
+        statusEl.textContent = "تم نشر الورقة بنجاح، وستظهر للطلاب في الفصول المحددة.";
         statusEl.style.color = "var(--ok)";
 
         if (confirm("هل ترغب في حفظ نسخة من هذا النشاط في بنك الأسئلة الخاص بك؟")) {
@@ -1562,7 +1598,7 @@ body.alt-theme .flcard{ display:flex !important; }
 
         await loadDrafts();
       } catch (err) {
-        statusEl.textContent = "حصل خطأ أثناء النشر: " + err.message;
+        statusEl.textContent = "حدث خطأ أثناء النشر: " + err.message;
         statusEl.style.color = "var(--bad)";
       }
     });
@@ -1576,7 +1612,7 @@ body.alt-theme .flcard{ display:flex !important; }
       const snap = await getDocs(q);
 
       if (snap.empty) {
-        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">مفيش مسودات حاليًا.</p>`;
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">لا توجد مسودات حاليًا.</p>`;
         return;
       }
 
@@ -1631,7 +1667,7 @@ body.alt-theme .flcard{ display:flex !important; }
 
       listEl.querySelectorAll("[data-tobank]").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          if (!confirm("هتُنقل الورقة دي لبنك الأسئلة وتختفي من المسودات. متابعة؟")) return;
+          if (!confirm("ستُنقل هذه الورقة إلى بنك الأسئلة وتُحذف من المسودات. متابعة؟")) return;
           const wDoc = snap.docs.find((d) => d.id === btn.dataset.tobank);
           const w = wDoc.data();
           await addDoc(collection(db, "questionBank"), {
@@ -1864,14 +1900,43 @@ body.alt-theme .flcard{ display:flex !important; }
       listEl.innerHTML = "جاري التحميل...";
       const q = query(collection(db, "worksheets"),
         where("createdBy", "==", currentTeacher.uid), where("status", "==", "published"));
-      const snap = await getDocs(q);
-
-      if (snap.empty) {
-        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">مفيش أوراق منشورة حاليًا.</p>`;
-        return;
-      }
+      const snapAll = await getDocs(q);
+      // ص-١: المنشورة هنا = منشورة في هذا السياق وهذه الفترة؛ غيرها يُعرض للنسخ فقط
+      const hereDocs = snapAll.docs.filter((d) => wsInCurrentCtx(d.data()));
+      const otherDocs = snapAll.docs.filter((d) => !wsInCurrentCtx(d.data()));
+      const snap = { docs: hereDocs, empty: !hereDocs.length };
 
       listEl.innerHTML = "";
+      let otherBox = null;
+      if (snap.empty) {
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">لا توجد أوراق منشورة في ${currentTeacher.schoolId ? "هذه المدرسة" : "حسابك الفردي"} خلال ${CUR_PERIOD === "second" ? "الفترة الثانية" : "الفترة الأولى"}.</p>`;
+      }
+      if (otherDocs.length) {
+        const box = document.createElement("div");
+        box.style.cssText = "margin-top:14px;padding:10px;background:var(--paper);border-radius:10px;";
+        box.innerHTML = `<p style="margin:0 0 6px;font-weight:700;font-size:13px;">أنشطة منشورة في سياق أو فترة أخرى (${otherDocs.length})</p>
+          <p style="margin:0 0 8px;font-size:12px;color:var(--ink-soft);">تسليماتها ودرجاتها تبقى في سياقها. يمكنك نسخ محتواها كمسودة جديدة هنا.</p>` +
+          otherDocs.map((d) => { const w = d.data(); return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);">
+            <span style="font-size:13px;">${escapeHtml(w.title || "")} <span style="color:var(--ink-soft);font-size:11px;">${w.schoolId ? "مدرسة" : "حساب فردي"} — ${(w.period || "first") === "second" ? "الفترة الثانية" : "الفترة الأولى"}</span></span>
+            <button class="btn btn-secondary small-btn" data-copy-here="${d.id}">نسخ كمسودة هنا</button></div>`; }).join("");
+        box.querySelectorAll("[data-copy-here]").forEach((btn) => btn.addEventListener("click", async () => {
+          const src = otherDocs.find((x) => x.id === btn.dataset.copyHere).data();
+          btn.disabled = true;
+          try {
+            await addDoc(collection(db, "worksheets"), {
+              schoolId: currentTeacher.schoolId || null, createdBy: currentTeacher.uid, createdByName: currentTeacher.name,
+              subject: src.subject || "", grade: src.grade || "", title: src.title || "", unit: src.unit || "", lesson: src.lesson || "",
+              sourceFileName: src.sourceFileName || "", status: "draft", assignedClassIds: [], assignedStudentIds: [], dueDate: null,
+              createdAt: serverTimestamp(), publishedAt: null, exercises: src.exercises || [], copiedFrom: btn.dataset.copyHere
+            });
+            btn.textContent = "✓ نُسخت إلى المسودات";
+            await loadDrafts();
+          } catch (e) { btn.disabled = false; alert("تعذّر النسخ: " + e.message); }
+        }));
+        otherBox = box;
+      }
+      if (snap.empty) { if (otherBox) listEl.appendChild(otherBox); return; }
+
       snap.docs.forEach((d) => {
         const w = d.data();
         const row = document.createElement("div");
@@ -1895,6 +1960,7 @@ body.alt-theme .flcard{ display:flex !important; }
         row.querySelector("[data-open-ws]").addEventListener("click", () => selectWorksheetForSubmissions(d.id, w));
         listEl.appendChild(row);
       });
+      if (otherBox) listEl.appendChild(otherBox);
 
       listEl.querySelectorAll("[data-toggle-stop]").forEach((btn) => {
         btn.addEventListener("click", async (e) => {
@@ -1937,8 +2003,8 @@ body.alt-theme .flcard{ display:flex !important; }
           e.stopPropagation();
           const wId = btn.dataset.republishAll;
           if (!confirm("سيتم حذف جميع التسليمات الحالية لهذه الورقة نهائياً. هل ترغب في المتابعة؟")) return;
-          const subsSnap = await getDocs(query(collection(db, "submissions"), where("worksheetId", "==", wId)));
-          await Promise.all(subsSnap.docs.map((sd) => deleteDoc(doc(db, "submissions", sd.id))));
+          const subsDocs = await getSubmissionsFor(wId);
+          await Promise.all(subsDocs.map((sd) => deleteDoc(doc(db, "submissions", sd.id))));
           await updateDoc(doc(db, "worksheets", wId), { stopped: false });
           await loadWorksheetsForSubmissions();
         });
@@ -1975,7 +2041,7 @@ body.alt-theme .flcard{ display:flex !important; }
 
       const classCodes = w.assignedClassIds || [];
       if (classCodes.length === 0) {
-        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">الورقة دي مش معيّنة لأي فصل.</p>`;
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">هذه الورقة غير مُسندة لأي فصل.</p>`;
         return;
       }
 
@@ -1984,13 +2050,12 @@ body.alt-theme .flcard{ display:flex !important; }
       try { rosterStudents = (JSON.parse((rosterSnap.exists() ? rosterSnap.data().value : "{}") || "{}").students || []).filter(x=>!x.deleted); } catch (e) { rosterStudents = []; }
       const students = rosterStudents.filter((s) => classCodes.includes(String(s.classCode)));
 
-      const subsQ = query(collection(db, "submissions"), where("worksheetId", "==", worksheetId));
-      const subsSnap = await getDocs(subsQ);
+      const subsDocs = await getSubmissionsFor(worksheetId);
       const subByStudent = {};
-      subsSnap.docs.forEach((d) => { subByStudent[d.data().studentId] = { id: d.id, ...d.data() }; });
+      subsDocs.forEach((d) => { subByStudent[d.data().studentId] = { id: d.id, ...d.data() }; });
 
       if (students.length === 0) {
-        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">مفيش طلاب في الفصول المعيّنة.</p>`;
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">لا يوجد طلاب في الفصول المحددة.</p>`;
         return;
       }
 
@@ -2049,9 +2114,9 @@ body.alt-theme .flcard{ display:flex !important; }
         if (!students.length) throw new Error("لا يوجد طلاب في الفصول المستهدفة.");
 
         // التسليمات
-        const subsSnap = await getDocs(query(collection(db, "submissions"), where("worksheetId", "==", currentWorksheetId)));
+        const subsDocs = await getSubmissionsFor(currentWorksheetId);
         const subBy = {};
-        subsSnap.docs.forEach((d) => { subBy[String(d.data().studentId)] = d.data(); });
+        subsDocs.forEach((d) => { subBy[String(d.data().studentId)] = d.data(); });
 
         // الدرجة الكاملة للنشاط
         const maxScore = (w.exercises || []).reduce((sum, ex) => sum + (ex.maxScore ?? 1), 0) || 1;
@@ -2168,7 +2233,7 @@ body.alt-theme .flcard{ display:flex !important; }
             out += row(sVal, cellData.value, ok);
           }
         }
-        return out || `<p style="font-size:12px;color:var(--ink-soft);">مفيش خانات إجابة في الجدول.</p>`;
+        return out || `<p style="font-size:12px;color:var(--ink-soft);">لا توجد خانات إجابة في الجدول.</p>`;
       }
       return "";
     }
@@ -2284,7 +2349,7 @@ body.alt-theme .flcard{ display:flex !important; }
         statusEl.style.color = "var(--ok)";
         await selectWorksheetForSubmissions(currentWorksheetId, currentWorksheet);
       } catch (err) {
-        statusEl.textContent = "حصل خطأ أثناء الحفظ: " + err.message;
+        statusEl.textContent = "حدث خطأ أثناء الحفظ: " + err.message;
         statusEl.style.color = "var(--bad)";
       }
     });

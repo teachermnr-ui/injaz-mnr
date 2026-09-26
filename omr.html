@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-26.1 -->
+<!-- إصدار: 2026-09-27.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -1760,14 +1760,41 @@ const CLS_TRACKS = [
 ];
 const CLS_SECTION_LETTERS = ['أ','ب','ج','د','هـ','و','ز','ح','ط','ي','ك','ل','م','ن','س','ع'];
 function clsGradeNum(name){
-  const g = ['أول','ثاني','ثالث','رابع','خامس','سادس'];
-  const s = String(name||'').trim();
-  for(let i=0;i<g.length;i++) if(s.indexOf(g[i])===0) return i+1;
-  return 0;
+  // يقبل «أول ثانوي» و«الأول الثانوي ٧» و«الصف الاول الثانوى»
+  const g = ['اول','ثاني','ثالث','رابع','خامس','سادس'];
+  const w = String(name||'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').trim().split(/\s+/).map(x=>x.replace(/^ال(?=\S\S)/,'')).filter((x,i)=>!(i===0&&x==='صف'));
+  const i = g.indexOf(w[0]||'');
+  return i+1;
 }
 // المسار الافتراضي: أول ثانوي «مشترك»، وبقية الثانوي «عام»
 function clsDefaultTrack(grade){ return clsGradeNum(grade)===1 ? 'مشترك' : 'عام'; }
-function clsTrackOf(cl){ return (cl && cl.stage==='ثانوية') ? (cl.track || clsDefaultTrack(cl.name)) : ''; }
+function clsTrackOf(cl){
+  if(!cl || cl.stage!=='ثانوية') return '';
+  if(clsGradeNum(cl.name)===1) return 'مشترك';   // أول ثانوي مشترك دائمًا
+  return (cl.track && cl.track!=='مشترك') ? cl.track : 'عام';
+}
+// حقل «المسار» في نافذة مراجعة الاستيراد (لفصول الثانوي)
+function clsImpTrackRender(gi){
+  const g = pendingImport && pendingImport.groups[gi]; if(!g) return;
+  const stEl = document.getElementById('impStage'+gi); if(!stEl) return;
+  let box = document.getElementById('impTrackBox'+gi);
+  if(!box){ box = document.createElement('label'); box.className='field'; box.id='impTrackBox'+gi; box.style.marginBottom='6px'; stEl.closest('label').after(box); }
+  if(g.stage!=='ثانوية'){ box.style.display='none'; g.track=''; return; }
+  const first = clsGradeNum(g.className)===1;
+  const opts = first ? CLS_TRACKS.filter(t=>t.name==='مشترك') : CLS_TRACKS.filter(t=>t.name!=='مشترك');
+  if(!opts.some(t=>t.name===g.track)) g.track = opts[0].name;
+  box.style.display='';
+  box.innerHTML = 'المسار' + (first?' <span style="color:var(--muted);font-weight:400">(الأول الثانوي مشترك)</span>':'') +
+    '<select onchange="pendingImport.groups['+gi+'].track=this.value">' + opts.map(t=>'<option value="'+t.name+'"'+(t.name===g.track?' selected':'')+'>'+t.name+'</option>').join('') + '</select>';
+}
+function clsImpTrackAll(){
+  if(!pendingImport) return;
+  pendingImport.groups.forEach((g,gi)=>{
+    clsImpTrackRender(gi);
+    const st = document.getElementById('impStage'+gi);
+    if(st && !st.dataset.ttHook){ st.dataset.ttHook='1'; st.addEventListener('change', ()=>setTimeout(()=>clsImpTrackRender(gi),0)); }
+  });
+}
 // الرمز الافتراضي: الابتدائي 1أ، المتوسط م1أ، الثانوي 101/201 (وحرف المسار لغير المشترك والعام: ح201)
 function clsDefaultCode(stage, grade, track){
   const all = state.fullClasses.length ? state.fullClasses : state.classes;
@@ -2373,6 +2400,9 @@ function openImportReview(){
     </div>`;
   });
   body.innerHTML = html;
+  /* [ADMIN-TOOLS:BEGIN] */
+  try{ clsImpTrackAll(); }catch(e){}
+  /* [ADMIN-TOOLS:END] */
   closeOmrModal();   // إغلاق نافذة الإضافة قبل فتح نافذة المراجعة حتى لا تتراكبا
   document.getElementById('importReviewOverlay').style.display='block';
 }
@@ -2413,7 +2443,8 @@ async function confirmImport(){
           let nm = g.className; let n=2;
           while(classes.some(c=>c.name===nm)) nm = g.className+' ('+(n++)+')';
           const loginCode = nextClassLoginCode(g.stage, loginCodeCounters);
-          cls = { name: nm, code: g.code, stage: g.stage, loginCode, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null };
+          /* [ADMIN-TOOLS:MOD] ORIG: cls = { name: nm, code: g.code, stage: g.stage, loginCode, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null }; */
+          cls = Object.assign({ name: nm, code: g.code, stage: g.stage, loginCode, createdBy: (CLS_SESSION&&CLS_SESSION.userId)||null }, g.stage==='ثانوية' ? { track: (clsGradeNum(g.className)===1 ? 'مشترك' : (g.track||'عام')) } : {});
           classes.push(cls); addedClasses++;
         }
         g.students.forEach(s=>{

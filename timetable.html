@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-26.2 -->
+<!-- إصدار: 2026-09-27.1 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -586,9 +586,14 @@ function ro(){ return TT.canEdit ? '' : 'disabled'; }
 /* =========================================================================
    نموذج المدرسة: الفصول، المراحل، الخطط، الأوقات
    ========================================================================= */
+// توحيد كتابة اسم الصف: «الأول الثانوي ٧» و«الصف الاول الثانوى» ← «اول ثانوي 7»
+function normGradeText(t){
+  return String(t||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ـ/g,'')
+    .replace(/\s*\(\d+\)\s*$/,'').trim().split(/\s+/).map(w=>w.replace(/^ال(?=\S\S)/,'')).filter((w,i)=>!(i===0&&w==='صف')).join(' ');
+}
 function gradeOf(c){
-  const nm = String(c.name||'').replace(/\s*\(\d+\)\s*$/,'').trim();
-  for(const s of STAGES) for(const g of s.grades) if(nm.indexOf(g)===0) return g;
+  const nm = normGradeText(c.name);
+  for(const s of STAGES) for(const g of s.grades){ const ng=normGradeText(g); if(nm===ng || nm.indexOf(ng+' ')===0) return g; }
   return '';
 }
 function gradeNum(g){ const i=['أول','ثاني','ثالث','رابع','خامس','سادس'].findIndex(x=>String(g||'').indexOf(x)===0); return i+1; }
@@ -600,8 +605,8 @@ function classStageKey(c){
 }
 function classTrack(c){
   if(classStageKey(c)!=='h') return '';
-  if(c.track) return c.track;
-  return gradeNum(gradeOf(c))===1 ? 'مشترك' : 'عام';
+  if(gradeNum(gradeOf(c))===1) return 'مشترك';   // أول ثانوي مشترك دائمًا
+  return (c.track && c.track!=='مشترك') ? c.track : 'عام';
 }
 function planKeyOf(c){ const sk=classStageKey(c); return sk+'|'+gradeOf(c)+'|'+classTrack(c); }
 function planKeyLabel(pk){ const [sk,g,t]=pk.split('|'); return g + (t ? ' — '+t : ''); }

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!-- إصدار: 2026-09-26.1 -->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>بناء الجدول المدرسي</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8f7; --surface:#ffffff; --surface-2:#eef4f3;
+  --brand:#0f766e; --brand-2:#0b5a54; --ink:#15242b; --muted:#5b6f76; --line:#d8e2e0;
+  --r:16px; --shadow:0 1px 2px rgba(16,40,40,.06),0 8px 24px rgba(16,40,40,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Tajawal',"Segoe UI",Tahoma,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.6;min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none}
+.topbar{position:sticky;top:0;z-index:30;background:var(--brand);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px}
+.topbar h1{margin:0;font-size:17px;font-weight:800;flex:1}
+.back-btn{background:rgba(255,255,255,.16);color:#fff;padding:8px 14px;border-radius:11px;font-size:14px;font-weight:700;white-space:nowrap}
+.back-btn:active{background:rgba(255,255,255,.28)}
+.content{padding:24px 16px;max-width:760px;margin:0 auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:28px 20px;box-shadow:var(--shadow);text-align:center}
+.card .ico{font-size:44px;line-height:1;margin-bottom:10px}
+.card h2{margin:0 0 6px;font-size:19px;font-weight:800}
+.card p{margin:0;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>🗓️ بناء الجدول المدرسي</h1>
+  <button class="back-btn" id="backBtn" type="button">→ الرئيسية</button>
+</div>
+<div class="content">
+  <div class="card">
+    <div class="ico">🗓️</div>
+    <h2>بناء الجدول المدرسي</h2>
+    <p>هذه الصفحة قيد الإنشاء.</p>
+  </div>
+</div>
+<script>
+/* صفحة مؤقتة — التحقق الكامل من الصلاحية وبناء الجدول يأتيان مع دفعة بناء الصفحة */
+(function(){
+  var s = null;
+  try{ s = JSON.parse(localStorage.getItem('cls_session') || 'null'); }catch(e){ s = null; }
+  if(!s || !s.userId || s.role === 'soloTeacher'){ window.location.replace('index.html'); return; }
+  document.getElementById('backBtn').onclick = function(){ window.location.href = 'index.html'; };
+})();
+</script>
+</body>
+</html>

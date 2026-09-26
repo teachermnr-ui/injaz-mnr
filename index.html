@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-23.2 -->
+<!-- إصدار: 2026-09-26.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -274,6 +274,30 @@ body.theme-glass .tab.active{background:var(--accent);color:#fff}
 @media (max-width:767px){
   body.theme-glass .tabbar{right:10px;width:calc(100% - 20px);max-height:calc(100vh - 150px);overflow:auto}
 }
+
+/* ===== تبويب «أدوات إدارية» المنسدل ===== */
+.tab.tools-toggle{display:inline-flex;align-items:center;gap:6px}
+.tools-caret{font-size:.8em;transition:transform .15s;display:inline-block}
+.tab.tools-toggle.open{background:var(--surface-2);color:var(--ink)}
+.tab.tools-toggle.open .tools-caret{transform:rotate(180deg)}
+.tools-menu{
+  position:fixed;z-index:60;min-width:220px;max-width:calc(100vw - 16px);
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 14px 36px rgba(16,40,40,.16);padding:6px;
+  display:flex;flex-direction:column;gap:2px;
+}
+.tools-item{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:right;
+  padding:11px 12px;border-radius:10px;background:transparent;color:var(--ink);
+  font-size:14.5px;font-weight:500;
+}
+.tools-item:hover,.tools-item:active{background:var(--surface-2)}
+.tools-item .ti-ico{font-size:17px;width:22px;text-align:center;flex-shrink:0}
+/* الثيم الزجاجي: القائمة تنفتح داخل الشريط الجانبي تحت الزر */
+.tools-menu.inline{position:static;box-shadow:none;min-width:0;max-width:none;margin:0 0 4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.6)}
+body.theme-glass .tools-menu.inline .tools-item{padding-right:22px}
+body.theme-night .tools-menu{border-color:#37345d}
+body.theme-night .tab.tools-toggle.open{color:#fff}
 </style>
 
 <script>
@@ -303,7 +327,7 @@ body.theme-glass .tab.active{background:var(--accent);color:#fff}
       });
       var tb = document.getElementById('tabbar');
       if(tb) tb.addEventListener('click', function(e){
-        if(e.target.closest('.tab') && document.body.classList.contains('theme-glass')){
+        if(e.target.closest('.tab') && !e.target.closest('.tools-toggle') && document.body.classList.contains('theme-glass')){
           document.body.classList.remove('nav-open');
         }
       });
@@ -512,6 +536,11 @@ const PERM_TREE = [
     { key:'index.users',    label:'المستخدمون', only:['access'] },
     { key:'index.users.perms', label:'الصلاحيات الخاصة', sub:true, only:['edit'] },
   ]},
+  /* الأدوات الإدارية — كل أداة صفحة مستقلة. تُفوَّض فرديًا من «الصلاحيات الخاصة» فقط (لا قوالب أدوار):
+     أدمن النظام ومدير المدرسة يملكانها تلقائيًا، والتفويض لغيرهما بيد من يملك «الصلاحيات الخاصة» لتلك المدرسة */
+  { key:'tools', label:'الأدوات الإدارية', leaves:[
+    { key:'tools.timetable', label:'بناء الجدول المدرسي', only:['access','edit'] },
+  ]},
   { key:'omr', label:'إدارة الصفوف', leaves:[
     { key:'omr.classes',        label:'الفصول والطلاب', only:['access'] },
     { key:'omr.classes.addManage', label:'إضافة الفصول والطلاب', sub:true, only:['edit'] },
@@ -580,6 +609,20 @@ const INDEX_TABS = [
   { key:'userPerms', perm:'index.users.perms', label:'الصلاحيات الخاصة' },
   { key:'settings', perm:'',               label:'إعدادات النظام' },
 ];
+
+/* الأدوات الإدارية — تبويب منسدل قبل «انضباط الطلاب»؛ كل بند ينقل لصفحته المستقلة */
+const ADMIN_TOOLS = [
+  { key:'timetable', perm:'tools.timetable', label:'بناء الجدول المدرسي', icon:'🗓️', href:'timetable.html' },
+];
+/* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
+const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.timetable'];
+function visibleTools(){
+  if(!CURRENT) return [];
+  if(CURRENT.role==='admin') return ADMIN_TOOLS.slice();
+  if(CURRENT.role==='soloTeacher' || !CURRENT.schoolId) return [];
+  const pm = CURRENT.permissions||{};
+  return ADMIN_TOOLS.filter(t=> pm[t.perm] && pm[t.perm].access);
+}
 
 /* ---------- حالة ---------- */
 let SESSION = null;     // {userId, username, role, schoolId, period}
@@ -1475,8 +1518,17 @@ function enterApp(){
   const _ob=$('#tbOmr'); if(_ob) _ob.style.display=(CURRENT.role==='admin'||_omrKeys.some(k=>can(k,'access')))?'flex':'none';
   const tabs=visibleTabs();
   const bar=$('#tabbar'); bar.innerHTML='';
+  closeToolsMenu();
+  /* تبويب «أدوات إدارية» المنسدل — أول الشريط (قبل «انضباط الطلاب»)، ويختفي إن لم يكن للمستخدم أي أداة */
+  if(visibleTools().length){
+    const tb=document.createElement('button'); tb.type='button';
+    tb.className='tab tools-toggle'; tb.id='toolsToggle';
+    tb.innerHTML='أدوات إدارية <span class="tools-caret">▾</span>';
+    tb.onclick=(e)=>{ e.stopPropagation(); toggleToolsMenu(tb); };
+    bar.appendChild(tb);
+  }
   tabs.forEach(t=>{
-    const b=document.createElement('button'); b.className='tab'; b.textContent=t.label;
+    const b=document.createElement('button'); b.className='tab'; b.dataset.key=t.key; b.textContent=t.label;
     if(t.key==='received'){ const bd=document.createElement('span'); bd.id='rcvBadge'; bd.className='tab-dot'; bd.style.display='none'; b.appendChild(bd); }
     b.onclick=()=>{ activeTab=t.key; renderTabs(); renderPanel(); };
     bar.appendChild(b);
@@ -1530,8 +1582,49 @@ function watchActive(){
   }, ()=>{});
 }
 function renderTabs(){
-  [...$('#tabbar').children].forEach((b,i)=> b.classList.toggle('active', visibleTabs()[i] && visibleTabs()[i].key===activeTab));
+  [...$('#tabbar').querySelectorAll('.tab[data-key]')].forEach(b=> b.classList.toggle('active', b.dataset.key===activeTab));
 }
+/* ---------- القائمة المنسدلة للأدوات الإدارية ----------
+   الشريط العادي فيه تمرير أفقي يقصّ أي قائمة مطلقة داخله، فالقائمة تُثبَّت على مستوى الصفحة تحت الزر.
+   في الثيم الزجاجي (الشريط قائمة جانبية) تنفتح القائمة داخل الشريط تحت الزر مباشرة. */
+function closeToolsMenu(){
+  const m=document.getElementById('toolsMenu'); if(m) m.remove();
+  const t=document.getElementById('toolsToggle'); if(t) t.classList.remove('open');
+}
+function toggleToolsMenu(btn){
+  if(document.getElementById('toolsMenu')){ closeToolsMenu(); return; }
+  const tools=visibleTools(); if(!tools.length) return;
+  const m=document.createElement('div'); m.id='toolsMenu'; m.className='tools-menu';
+  m.innerHTML=tools.map(t=>`<button type="button" class="tools-item" data-href="${esc(t.href)}"><span class="ti-ico">${t.icon||'•'}</span><span>${esc(t.label)}</span></button>`).join('');
+  m.addEventListener('click',e=>{
+    e.stopPropagation();
+    const it=e.target.closest('.tools-item'); if(!it) return;
+    closeToolsMenu();
+    window.location.href=it.dataset.href;
+  });
+  btn.classList.add('open');
+  if(document.body.classList.contains('theme-glass')){
+    m.classList.add('inline');
+    btn.insertAdjacentElement('afterend', m);
+  } else {
+    document.body.appendChild(m);
+    const r=btn.getBoundingClientRect();
+    m.style.top=(r.bottom+6)+'px';
+    // RTL: محاذاة الحافة اليمنى للقائمة مع الحافة اليمنى للزر، مع إبقائها داخل الشاشة
+    const right=Math.max(8, window.innerWidth - r.right);
+    m.style.right=right+'px';
+    const mw=m.offsetWidth;
+    if(window.innerWidth - right - mw < 8) m.style.right=Math.max(8, window.innerWidth - mw - 8)+'px';
+  }
+}
+document.addEventListener('click', e=>{
+  if(!document.getElementById('toolsMenu')) return;
+  if(e.target.closest('#toolsMenu') || e.target.closest('#toolsToggle')) return;
+  closeToolsMenu();
+});
+window.addEventListener('resize', ()=>{ const m=document.getElementById('toolsMenu'); if(m && !m.classList.contains('inline')) closeToolsMenu(); });
+window.addEventListener('scroll', ()=>{ const m=document.getElementById('toolsMenu'); if(m && !m.classList.contains('inline')) closeToolsMenu(); }, true);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeToolsMenu(); });
 $('#tbOmr').onclick = ()=>{ window.location.href='omr.html'; };
 $('#tbPw').onclick  = ()=>{ openChangePw(false); };
 $('#tbOut').onclick = ()=>{ logout(); };
@@ -2948,7 +3041,7 @@ function renderTplTree(){
     <div class="perm-head">${esc(g.label)}</div>
     ${g.leaves.map(l=>{
       const p=tplPerms[l.key]||{access:false,edit:false,del:false};
-      const locked = l.key==='index.users.perms';
+      const locked = TEMPLATE_LOCKED_PERMS.includes(l.key);
       const only = l.only;
       const chk=(f,label)=> (!only||only.includes(f)) ? `<label class="chk"><input type="checkbox" ${locked?'disabled':''} data-k="${l.key}" data-f="${f}" data-only="${only?'1':''}" ${p[f]?'checked':''}> ${label}</label>` : '';
       return `<div class="perm-leaf ${l.sub?'sub':''}">

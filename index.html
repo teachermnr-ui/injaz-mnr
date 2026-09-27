@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-26.3 -->
+<!-- إصدار: 2026-09-27.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -543,6 +543,7 @@ const PERM_TREE = [
   /* الأدوات الإدارية — كل أداة صفحة مستقلة. تُفوَّض فرديًا من «الصلاحيات الخاصة» فقط (لا قوالب أدوار):
      أدمن النظام ومدير المدرسة يملكانها تلقائيًا، والتفويض لغيرهما بيد من يملك «الصلاحيات الخاصة» لتلك المدرسة */
   { key:'tools', label:'الأدوات الإدارية', leaves:[
+    { key:'tools.classes', label:'إضافة الفصول والطلاب', only:['access','edit'] },
     { key:'tools.timetable', label:'بناء الجدول المدرسي', only:['access','edit'] },
   ]},
 /* [ADMIN-TOOLS:END] */
@@ -618,10 +619,11 @@ const INDEX_TABS = [
 
 /* الأدوات الإدارية — تبويب منسدل قبل «انضباط الطلاب»؛ كل بند ينقل لصفحته المستقلة */
 const ADMIN_TOOLS = [
+  { key:'classes', perm:'tools.classes', label:'إضافة الفصول والطلاب', icon:'🏫', href:'omr.html' },
   { key:'timetable', perm:'tools.timetable', label:'بناء الجدول المدرسي', icon:'🗓️', href:'timetable.html' },
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
-const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.timetable'];
+const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable'];
 function visibleTools(){
   if(!CURRENT) return [];
   if(CURRENT.role==='admin') return ADMIN_TOOLS.slice();
@@ -2821,6 +2823,18 @@ async function renderUserPerms(c){
     userSel.onchange = ()=>loadUserPermsEditor(userSel.value, schoolSel.value);
   }catch(e){ $('#upBody').innerHTML = `<div class="alert err">${esc(e.message)}</div>`; }
 }
+/* [ADMIN-TOOLS:BEGIN] */
+// هل «بناء الجدول المدرسي» مفعّل لهذه المدرسة؟ إن كان مفعّلاً، تُدار الفصول المسندة من هناك فقط (عرض هنا).
+async function checkTtToolActive(schoolId){
+  if(!schoolId || schoolId==='__solo__') return false;
+  try{
+    const snap = await db.collection('timetables').doc(schoolId).collection('data').doc('meta').get();
+    if(!snap.exists) return false;
+    let d = {}; try{ d = JSON.parse(snap.data().value||'{}'); }catch(e){ return false; }
+    return d.toolActive !== false;
+  }catch(e){ return false; }
+}
+/* [ADMIN-TOOLS:END] */
 async function loadUserPermsEditor(id, schoolId){
   const host = $('#upBody');
   if(!id){ host.innerHTML=''; upSelectedUser=null; return; }
@@ -2838,6 +2852,9 @@ async function loadUserPermsEditor(id, schoolId){
   const ctx = (u.schools||{})[schoolId] || {role:'', permissions:{}, assignedClasses:[]};
   upEditPerms = JSON.parse(JSON.stringify(ctx.permissions || {}));
   const readOnly = CURRENT.role==='admin' && upReadOnlyForAdmin;
+  /* [ADMIN-TOOLS:BEGIN] */
+  const ttActive = await checkTtToolActive(schoolId);
+  /* [ADMIN-TOOLS:END] */
   const roleOpts = Object.entries(ROLES).filter(([k])=>k!=='admin'&&k!=='schoolAdmin'&&k!=='soloTeacher')
     .map(([k,v])=>`<option value="${k}" ${ctx.role===k?'selected':''}>${esc(v)}</option>`).join('');
   host.innerHTML = `<div class="card">
@@ -2847,6 +2864,9 @@ async function loadUserPermsEditor(id, schoolId){
       <div class="field"><label>الدور</label><select id="upRole" ${readOnly?'disabled':''}>${roleOpts}</select></div>
       <div class="divider"></div>
       <label style="font-weight:700;font-size:14px">الفصول المسندة</label>
+<!-- [ADMIN-TOOLS:BEGIN] -->
+      ${ttActive?'<div class="alert" style="margin:6px 0 8px">🔒 تُدار من «بناء الجدول المدرسي» (الأدوات الإدارية) لهذه المدرسة — عرض فقط. لإرجاعها يدويًا، ألغِ تفعيل الأداة من صفحة الجدول.</div>':''}
+      <!-- [ADMIN-TOOLS:END] -->
       <div id="upClassesHost" style="margin-top:8px"><div class="sub-note" style="margin:0">جارٍ تحميل الفصول…</div></div>
       <div class="divider"></div>
       <label style="font-weight:700;font-size:14px">الصفحات والصلاحيات</label>
@@ -2856,7 +2876,8 @@ async function loadUserPermsEditor(id, schoolId){
     </div>`;
   if(!readOnly) $('#upRole').onchange = ()=>{ upEditPerms = permsForNewUser($('#upRole').value); renderUpPermTree(); toast('طُبِّقت صلاحيات الدور الافتراضية — عدّلها إن أردت'); };
   renderUpPermTree(readOnly);
-  loadUpClasses(schoolId, ctx.assignedClasses||[], readOnly);
+  /* [ADMIN-TOOLS:MOD] ORIG: loadUpClasses(schoolId, ctx.assignedClasses||[], readOnly); */
+  loadUpClasses(schoolId, ctx.assignedClasses||[], readOnly || ttActive);
   if(!readOnly) $('#upSaveBtn').onclick = saveUserPerms;
 }
 /* إسناد الفصول من الصلاحيات الخاصة — يُحمَّل من روستر المدرسة الحيّ فيشمل أي فصل أُضيف حديثًا تلقائيًا */

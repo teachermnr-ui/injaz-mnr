@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-27.2 -->
+<!-- إصدار: 2026-10-02.1 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -2210,13 +2210,22 @@ async function openPublish(){
         const ctx = ((snap.data()||{}).schools||{})[TT.sid]; if(!ctx) throw new Error('لا سياق مدرسة');
         const byP = Object.assign({}, ctx.subjectAssignmentsByPeriod||{}); byP[P] = dedupeAssign(r.list);
         const union = dedupeAssign(Object.values(byP).flat());
-        let assigned = Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses.map(String) : [];
-        if(!assigned.includes('__all__')) assigned = [...new Set([...assigned, ...union.map(a=>a.classCode)])];
-        await db.collection('users').doc(r.u.id).update({
+        // فصول هذا الشخص المشتقة من الجدول تحديدًا (تُستبدَل كل نشر، لا تتراكم) — تُستخدم لتمييز "من الجدول" عن "يدوي"
+        const ttCodes = [...new Set(union.map(a=>a.classCode))];
+        const patch = {
           ['schools.'+TT.sid+'.subjectAssignmentsByPeriod']: byP,
           ['schools.'+TT.sid+'.subjectAssignments']: union,
-          ['schools.'+TT.sid+'.assignedClasses']: assigned,
-          _editCtx: TT.sid, updatedAt: Date.now() });
+          ['schools.'+TT.sid+'.ttAssignedClasses']: ttCodes,
+          _editCtx: TT.sid, updatedAt: Date.now() };
+        // دور معلم: فصوله بالجدول تندمج بفصوله المسندة كما كانت (مصدر واحد للتحكم).
+        // أي دور غير معلم: لا تُلمَس فصوله المسندة اليدوية إطلاقًا؛ فصول الجدول تبقى بحقل منفصل (ttAssignedClasses)
+        // ليُعامل بهما كمعلم لهذي الفصول تحديدًا، مع بقاء دوره الإداري وفصوله اليدوية مستقلة وقابلة للتحرير.
+        if((ctx.role||'')==='teacher'){
+          let assigned = Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses.map(String) : [];
+          if(!assigned.includes('__all__')) assigned = [...new Set([...assigned, ...ttCodes])];
+          patch['schools.'+TT.sid+'.assignedClasses'] = assigned;
+        }
+        await db.collection('users').doc(r.u.id).update(patch);
         ok++;
       }catch(e){ fail.push(r.t.name+' ('+(e.message||e)+')'); }
     }

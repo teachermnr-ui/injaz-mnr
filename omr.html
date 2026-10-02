@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-27.2 -->
+<!-- إصدار: 2026-10-02.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -5908,6 +5908,22 @@ async function clsLoadPermsInner(){
       CLS_CAN_ADD_MANAGE=true; clsApplyAddManage(); clsApplySectionPerms(); return;
     }
     const perm=ctxPerms;
+    /* [ADMIN-TOOLS:BEGIN] */
+    // دور غير معلم مُسندة له فصول من «بناء الجدول المدرسي»: يُعامل كمعلم لتلك الفصول تحديدًا —
+    // يُمنح كامل صلاحيات دور المعلم الافتراضية (إدارة الصفوف + الأنشطة الرقمية)، فوق صلاحياته الإدارية الأصلية
+    if(ctxRole && ctxRole!=='teacher' && CLS_SESSION.schoolId){
+      await refreshTtToolActive(CLS_SESSION.schoolId);
+      const ttCls = (u.schools && u.schools[CLS_SESSION.schoolId] && Array.isArray(u.schools[CLS_SESSION.schoolId].ttAssignedClasses))
+        ? u.schools[CLS_SESSION.schoolId].ttAssignedClasses.map(String) : [];
+      CLS_TT_EXTRA_CLASSES = (clsTtManaged() && ttCls.length) ? ttCls : [];
+      if(CLS_TT_EXTRA_CLASSES.length){
+        CLS_TEACHER_BASELINE_PERM_KEYS.forEach(k=>{
+          const full={access:true,edit:true,del:true};
+          perm[k] = (perm[k] && perm[k].access) ? perm[k] : full;
+        });
+      }
+    } else { CLS_TT_EXTRA_CLASSES = []; }
+    /* [ADMIN-TOOLS:END] */
     CLS_ALL_PERMS = perm;
     const dflt={access:false,edit:false,del:false};
     CLS_SEC_PERM={
@@ -6258,6 +6274,11 @@ let CLS_ACTIVE_SUBJECT = null; // المادة النشطة حاليًا حسب 
 // هل «بناء الجدول المدرسي» مفعّل لهذه المدرسة؟ إن كان مفعّلاً، يُدار إسناد المواد وإضافتها من هناك فقط
 // (قفل على مستوى المدرسة كاملة، وليس على مستخدم بعينه — يتحكم به مدير الأداة بزر «تفعيل/إلغاء تفعيل» داخل timetable.html)
 let CLS_TT_TOOL_ACTIVE = false;
+// فصول مُسندة من الجدول لمستخدم دوره غير معلم (وكيل/موجه/مساعد...) — يُعامَل بها كمعلم إضافةً لدوره الأصلي
+let CLS_TT_EXTRA_CLASSES = [];
+// صلاحيات دور المعلم الافتراضية (مطابقة لـ defaultPerms('teacher') في index.html) — تُمنح فوق صلاحيات
+// صاحب الدور الآخر حين تكون له فصول مُسندة من الجدول، ليقدر يستخدم إدارة الصفوف والأنشطة الرقمية لتلك الفصول
+const CLS_TEACHER_BASELINE_PERM_KEYS = ['omr.classes','omr.classes.info','omr.classes.names','omr.design','omr.grade','omr.results','omr.worklog','worksheets.enabled'];
 async function refreshTtToolActive(schoolId){
   CLS_TT_TOOL_ACTIVE = false;
   if(!schoolId) return;
@@ -6467,6 +6488,11 @@ async function loadStudentsFromCloud(manual){
           }
         }
         await refreshTtToolActive(CLS_SESSION.schoolId);
+        // دور غير معلم مُسندة له فصول من الجدول: تُضاف لفصوله المسندة (دون المساس بفصوله اليدوية) —
+        // يُعامل كمعلم لهذي الفصول تحديدًا، مع بقاء دوره الإداري وفصوله الأخرى كما هي
+        if(CLS_USER_ROLE && CLS_USER_ROLE!=='teacher' && clsTtManaged() && ctx && Array.isArray(ctx.ttAssignedClasses) && ctx.ttAssignedClasses.length && !CLS_USER_ASSIGNED.includes('__all__')){
+          CLS_USER_ASSIGNED = [...new Set([...CLS_USER_ASSIGNED, ...ctx.ttAssignedClasses.map(String)])];
+        }
         /* [ADMIN-TOOLS:END] */
       }
     }

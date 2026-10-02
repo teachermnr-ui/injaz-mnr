@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-27.1 -->
+<!-- إصدار: 2026-10-02.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -545,6 +545,7 @@ const PERM_TREE = [
   { key:'tools', label:'الأدوات الإدارية', leaves:[
     { key:'tools.classes', label:'إضافة الفصول والطلاب', only:['access','edit'] },
     { key:'tools.timetable', label:'بناء الجدول المدرسي', only:['access','edit'] },
+    { key:'tools.circulars', label:'التوقيع على التعاميم', only:['access','edit'] },
   ]},
 /* [ADMIN-TOOLS:END] */
   { key:'omr', label:'إدارة الصفوف', leaves:[
@@ -621,12 +622,14 @@ const INDEX_TABS = [
 const ADMIN_TOOLS = [
   { key:'classes', perm:'tools.classes', label:'إضافة الفصول والطلاب', icon:'🏫', href:'omr.html' },
   { key:'timetable', perm:'tools.timetable', label:'بناء الجدول المدرسي', icon:'🗓️', href:'timetable.html' },
+  // noAdmin: خصوصية كاملة للمدرسة بطلب صريح من المستخدم — لا صلاحية تلقائية لأدمن النظام هنا إطلاقًا (خلاف كل أداة أخرى)
+  { key:'circulars', perm:'tools.circulars', label:'التوقيع على التعاميم', icon:'✍️', href:'circulars.html', noAdmin:true },
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
-const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable'];
+const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars'];
 function visibleTools(){
   if(!CURRENT) return [];
-  if(CURRENT.role==='admin') return ADMIN_TOOLS.slice();
+  if(CURRENT.role==='admin') return ADMIN_TOOLS.filter(t=>!t.noAdmin);
   if(CURRENT.role==='soloTeacher' || !CURRENT.schoolId) return [];
   const pm = CURRENT.permissions||{};
   return ADMIN_TOOLS.filter(t=> pm[t.perm] && pm[t.perm].access);
@@ -960,7 +963,8 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
       if(!ctx || ctx.active===false){ await cleanSignOut(); throw new Error('هذا السياق معطّل. راجع المسؤول'); }
       const block = schoolLoginBlockReason(sid, period);
       if(block){ await cleanSignOut(); throw new Error(block); }
-      flat = { role:ctx.role, schoolId:sid, permissions:ctx.permissions, active:true, assignedClasses:ctx.assignedClasses||[] };
+      /* [ADMIN-TOOLS:MOD] ORIG: flat = { role:ctx.role, schoolId:sid, permissions:ctx.permissions, active:true, assignedClasses:ctx.assignedClasses||[] }; */
+      flat = { role:ctx.role, schoolId:sid, permissions:ctx.permissions, active:true, assignedClasses:visibleClassesOf(ctx) };
     }
   } else { throw new Error('سياق دخول غير معروف'); }
   AUTH_JUST_CREATED = false;
@@ -969,6 +973,19 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
   localStorage.setItem('cls_session', JSON.stringify(SESSION));
   function finishLogin(){
     if(flat.role==='soloTeacher'){ window.location.href='omr.html'; return; }
+    /* [ADMIN-TOOLS:BEGIN] */
+    // رابط تعميم بانتظار تسجيل الدخول (من circulars.html) — نكمل المسار له مباشرة بدل الدخول العادي
+    try{
+      const pend = JSON.parse(localStorage.getItem('cls_pending_circular')||'null');
+      if(pend && pend.sid && pend.cid){
+        localStorage.removeItem('cls_pending_circular');
+        if(pend.sid === flat.schoolId){
+          window.location.href = 'circulars.html?sid='+encodeURIComponent(pend.sid)+'&cid='+encodeURIComponent(pend.cid);
+          return;
+        }
+      }
+    }catch(e){}
+    /* [ADMIN-TOOLS:END] */
     enterApp();
   }
   async function checkMergeThenFinish(){
@@ -1788,8 +1805,10 @@ async function renderNotPreparedClasses(){
     const uSnap = await usersCol().get();
     const teachers = uSnap.docs.map(d=>({id:d.id,...d.data()}))
       .filter(u=>!u.migratedTo && u.schools && u.schools[CURRENT.schoolId])
-      .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[]}; })
-      .filter(u=>u.role==='teacher' && u.assignedClasses.length);
+      /* [ADMIN-TOOLS:MOD] ORIG: .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[]}; }) */
+      .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:teacherDutyClasses(ctx)}; })
+      /* [ADMIN-TOOLS:MOD] ORIG: .filter(u=>u.role==='teacher' && u.assignedClasses.length); */
+      .filter(u=>u.assignedClasses.length);
     // لا خروج مبكر لو لا معلمين — الفصول بلا معلم تُعرض كغير محضَّرة
     const roster = await rosterDoc(CURRENT.schoolId).get();
     const classesMeta = {};
@@ -2824,6 +2843,21 @@ async function renderUserPerms(c){
   }catch(e){ $('#upBody').innerHTML = `<div class="alert err">${esc(e.message)}</div>`; }
 }
 /* [ADMIN-TOOLS:BEGIN] */
+// الفصول اللي يُعامل بها هذا المستخدم "كمعلم" فعليًا (تحضير، استقبال تحويلات...) بصرف النظر عن دوره الإداري:
+// دور معلم → فصوله المسندة كاملة (أصلًا تشمل فصول الجدول عبر الدمج القديم عند النشر).
+// أي دور آخر → فقط الفصول اللي جته من الجدول تحديدًا (ttAssignedClasses)، لا فصوله اليدوية كوكيل/موجّه مثلًا.
+function teacherDutyClasses(ctx){
+  if(!ctx) return [];
+  if(ctx.role==='teacher') return Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses.map(String) : [];
+  return Array.isArray(ctx.ttAssignedClasses) ? ctx.ttAssignedClasses.map(String) : [];
+}
+// كل الفصول اللي للمستخدم أي وصول/تصرف فيها: دوره اليدوي + فصول الجدول (معلم أو غيره) — بلا تكرار
+function visibleClassesOf(ctx){
+  const manual = Array.isArray(ctx && ctx.assignedClasses) ? ctx.assignedClasses.map(String) : [];
+  if(manual.includes('__all__')) return manual;
+  const tt = Array.isArray(ctx && ctx.ttAssignedClasses) ? ctx.ttAssignedClasses.map(String) : [];
+  return tt.length ? [...new Set([...manual, ...tt])] : manual;
+}
 // هل «بناء الجدول المدرسي» مفعّل لهذه المدرسة؟ إن كان مفعّلاً، تُدار الفصول المسندة من هناك فقط (عرض هنا).
 async function checkTtToolActive(schoolId){
   if(!schoolId || schoolId==='__solo__') return false;
@@ -2854,6 +2888,13 @@ async function loadUserPermsEditor(id, schoolId){
   const readOnly = CURRENT.role==='admin' && upReadOnlyForAdmin;
   /* [ADMIN-TOOLS:BEGIN] */
   const ttActive = await checkTtToolActive(schoolId);
+  const ttCls = Array.isArray(ctx.ttAssignedClasses) ? ctx.ttAssignedClasses.map(String) : [];
+  const isTeacherRole = ctx.role === 'teacher';
+  // دور معلم مُضاف بالجدول ومنشور له: الفصول المسندة كاملة تُدار من الجدول فقط (عرض هنا)
+  const ttLockTeacher = ttActive && isTeacherRole && ttCls.length>0;
+  // أي دور آخر: فصوله اليدوية تبقى قابلة للتحرير كاملة؛ فصول الجدول تُعرض بقائمة منفصلة مقفولة
+  // (يُعامل بها كمعلم لتلك الفصول تحديدًا، إضافة لدوره الأصلي، بلا أي تعارض مع فصوله اليدوية)
+  const ttExtraForOther = (ttActive && !isTeacherRole) ? ttCls : [];
   /* [ADMIN-TOOLS:END] */
   const roleOpts = Object.entries(ROLES).filter(([k])=>k!=='admin'&&k!=='schoolAdmin'&&k!=='soloTeacher')
     .map(([k,v])=>`<option value="${k}" ${ctx.role===k?'selected':''}>${esc(v)}</option>`).join('');
@@ -2865,7 +2906,7 @@ async function loadUserPermsEditor(id, schoolId){
       <div class="divider"></div>
       <label style="font-weight:700;font-size:14px">الفصول المسندة</label>
 <!-- [ADMIN-TOOLS:BEGIN] -->
-      ${ttActive?'<div class="alert" style="margin:6px 0 8px">🔒 تُدار من «بناء الجدول المدرسي» (الأدوات الإدارية) لهذه المدرسة — عرض فقط. لإرجاعها يدويًا، ألغِ تفعيل الأداة من صفحة الجدول.</div>':''}
+      ${ttLockTeacher?'<div class="alert" style="margin:6px 0 8px">🔒 تُدار من «بناء الجدول المدرسي» (الأدوات الإدارية) لهذه المدرسة — عرض فقط. لإرجاعها يدويًا، ألغِ تفعيل الأداة من صفحة الجدول.</div>':''}
       <!-- [ADMIN-TOOLS:END] -->
       <div id="upClassesHost" style="margin-top:8px"><div class="sub-note" style="margin:0">جارٍ تحميل الفصول…</div></div>
       <div class="divider"></div>
@@ -2877,12 +2918,12 @@ async function loadUserPermsEditor(id, schoolId){
   if(!readOnly) $('#upRole').onchange = ()=>{ upEditPerms = permsForNewUser($('#upRole').value); renderUpPermTree(); toast('طُبِّقت صلاحيات الدور الافتراضية — عدّلها إن أردت'); };
   renderUpPermTree(readOnly);
   /* [ADMIN-TOOLS:MOD] ORIG: loadUpClasses(schoolId, ctx.assignedClasses||[], readOnly); */
-  loadUpClasses(schoolId, ctx.assignedClasses||[], readOnly || ttActive);
+  loadUpClasses(schoolId, ctx.assignedClasses||[], readOnly || ttLockTeacher, ttExtraForOther);
   if(!readOnly) $('#upSaveBtn').onclick = saveUserPerms;
 }
 /* إسناد الفصول من الصلاحيات الخاصة — يُحمَّل من روستر المدرسة الحيّ فيشمل أي فصل أُضيف حديثًا تلقائيًا */
 let upSelectedClasses = [];
-async function loadUpClasses(schoolId, pre, readOnly){
+async function loadUpClasses(schoolId, pre, readOnly, ttExtra){
   const host=$('#upClassesHost'); if(!host) return;
   upSelectedClasses = (pre||[]).map(String);
   const allSelected = upSelectedClasses.includes('__all__');
@@ -2892,12 +2933,21 @@ async function loadUpClasses(schoolId, pre, readOnly){
   try{ const s=await rosterDoc(schoolId).get(); if(s.exists){ const d=JSON.parse(s.data().value||'{}'); classes=Array.isArray(d.classes)?d.classes:[]; } }catch(e){}
   const allBox = '<label style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1.5px solid var(--accent);border-radius:10px;background:#fff;font-weight:700;font-size:13.5px;cursor:pointer;margin-bottom:8px">'+
     '<input type="checkbox" id="upAllClasses" '+dis+' '+(allSelected?'checked':'')+' style="width:17px;height:17px;accent-color:var(--accent)">كل الفصول (يشمل أي فصل يُضاف لاحقًا تلقائيًا)</label>';
-  if(!classes.length){ host.innerHTML=allBox+'<div class="sub-note" style="margin:0">لا توجد فصول في روستر هذه المدرسة بعد.</div>'; }
+  /* [ADMIN-TOOLS:BEGIN] */
+  // فصول مُسندة من «بناء الجدول المدرسي» لمستخدم دوره غير معلم — تُعرض منفصلة ومقفولة، لا تُزال إلا من الجدول
+  let ttExtraHtml = '';
+  if(Array.isArray(ttExtra) && ttExtra.length){
+    const names = ttExtra.map(code=>{ const c=classes.find(x=>String(x.code)===String(code)); return esc(c?(c.name+' '+c.code):code); });
+    ttExtraHtml = '<div class="sub-note" style="margin:10px 0 6px">🔒 مُسندة له أيضًا <b>كمعلم</b> من «بناء الجدول المدرسي» (إضافةً لدوره أعلاه، لا تُزال إلا من صفحة الجدول):</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:8px">'+names.map(n=>'<span style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1.5px dashed var(--line);border-radius:10px;background:var(--surface-2);font-weight:600;font-size:13.5px;opacity:.85">🔒 '+n+'</span>').join('')+'</div>';
+  }
+  /* [ADMIN-TOOLS:END] */
+  if(!classes.length){ host.innerHTML=allBox+'<div class="sub-note" style="margin:0">لا توجد فصول في روستر هذه المدرسة بعد.</div>'+ttExtraHtml; }
   else{
     host.innerHTML=allBox+'<div id="upClsIndiv" style="display:flex;flex-wrap:wrap;gap:8px'+(allSelected?';opacity:.45;pointer-events:none':'')+'">'+classes.map(c=>
       '<label style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface-2);font-weight:600;font-size:13.5px;cursor:pointer">'+
       '<input type="checkbox" class="upCls" value="'+esc(c.code)+'" '+dis+' '+(upSelectedClasses.includes(String(c.code))?'checked':'')+' style="width:17px;height:17px;accent-color:var(--accent)">'+esc(c.name)+'</label>'
-    ).join('')+'</div>';
+    ).join('')+'</div>'+ttExtraHtml;
   }
   const allCb=$('#upAllClasses');
   if(allCb && !readOnly) allCb.onchange=()=>{
@@ -3495,11 +3545,16 @@ async function resolveRecipients(opts){
   const snap = await usersCol().get();
   const users = snap.docs.map(d=>({id:d.id,...d.data()}))
     .filter(u=>!u.migratedTo && u.id!==CURRENT.id && u.schools && u.schools[opts.schoolId])
-    .map(u=>{ const ctx=u.schools[opts.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; })
+    /* [ADMIN-TOOLS:MOD] ORIG: .map(u=>{ const ctx=u.schools[opts.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; }) */
+    .map(u=>{ const ctx=u.schools[opts.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], ttDuty:teacherDutyClasses(ctx), active:ctx.active}; })
     .filter(u=>u.active!==false);
   const hasClass=u=>u.assignedClasses.includes('__all__') || u.assignedClasses.map(_normN).includes(_normN(opts.classCode));
+  /* [ADMIN-TOOLS:BEGIN] */
+  const hasTeacherDuty=u=>u.ttDuty.map(_normN).includes(_normN(opts.classCode));
+  /* [ADMIN-TOOLS:END] */
   let recs=[];
-  if(opts.kind==='toTeacher') recs=users.filter(u=>u.role==='teacher'&&hasClass(u));
+  /* [ADMIN-TOOLS:MOD] ORIG: if(opts.kind==='toTeacher') recs=users.filter(u=>u.role==='teacher'&&hasClass(u)); */
+  if(opts.kind==='toTeacher') recs=users.filter(u=>(u.role==='teacher'&&hasClass(u))||hasTeacherDuty(u));
   else if(opts.kind==='toPeers'){ const other=opts.fromRole==='agent'?'counselor':'agent'; recs=users.filter(u=>u.role===other); }
   return recs.map(u=>({userId:u.id,name:u.username,role:u.role}));
 }
@@ -3701,7 +3756,8 @@ async function openCompose(){
     const us=await usersCol().get();
     composeUsers=us.docs.map(d=>({id:d.id,...d.data()}))
       .filter(u=>!u.migratedTo && u.id!==CURRENT.id && u.schools && u.schools[CURRENT.schoolId])
-      .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; })
+      /* [ADMIN-TOOLS:MOD] ORIG: .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; }) */
+      .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], ttDuty:teacherDutyClasses(ctx), active:ctx.active}; })
       .filter(u=>u.active!==false);
   }catch(e){}
   const _myCls = (CURRENT.assignedClasses||[]);
@@ -3725,7 +3781,8 @@ async function openCompose(){
   const fillRecip=()=>{
     const kind=$('#cmpKind').value, code=$('#cmpClass').value, sel=$('#cmpRecip'); if(!sel) return;
     if(kind==='toTeacher'){
-      const teachers=composeUsers.filter(u=>u.role==='teacher' && ((u.assignedClasses||[]).includes('__all__') || (u.assignedClasses||[]).map(_normN).includes(_normN(code))));
+      /* [ADMIN-TOOLS:MOD] ORIG: const teachers=composeUsers.filter(u=>u.role==='teacher' && ((u.assignedClasses||[]).includes('__all__') || (u.assignedClasses||[]).map(_normN).includes(_normN(code)))); */
+      const teachers=composeUsers.filter(u=>(u.role==='teacher' && ((u.assignedClasses||[]).includes('__all__') || (u.assignedClasses||[]).map(_normN).includes(_normN(code)))) || (u.ttDuty||[]).map(_normN).includes(_normN(code)));
       sel.innerHTML='<option value="">جميع معلمي الطالب</option>'+teachers.map(u=>'<option value="'+esc(u.id)+'">'+esc(u.username)+'</option>').join('');
     } else {
       const peers=composeUsers.filter(u=>(u.role==='agent'||u.role==='counselor'||u.role==='assistant')

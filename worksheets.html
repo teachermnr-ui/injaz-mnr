@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-26.1 -->
+<!-- إصدار: 2026-10-02.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -574,7 +574,20 @@ body.alt-theme .flcard{ display:flex !important; }
           const u = uSnap.exists() ? uSnap.data() : {};
           const ctx = (u.schools && CLS_SESSION.schoolId && u.schools[CLS_SESSION.schoolId]) || {};
           const perm = ctx.permissions || u.permissions || {};
-          const allowed = !!(perm['worksheets.enabled'] && perm['worksheets.enabled'].edit);
+          /* [ADMIN-TOOLS:MOD] ORIG: const allowed = !!(perm['worksheets.enabled'] && perm['worksheets.enabled'].edit); */
+          let allowed = !!(perm['worksheets.enabled'] && perm['worksheets.enabled'].edit);
+          /* [ADMIN-TOOLS:BEGIN] */
+          // دور غير معلم مُسندة له فصول من «بناء الجدول المدرسي»: يُعامل كمعلم ويُمنح وصول الأنشطة الرقمية لتلك الفصول
+          if (!allowed && CLS_SESSION.role !== 'teacher' && CLS_SESSION.schoolId && Array.isArray(ctx.ttAssignedClasses) && ctx.ttAssignedClasses.length) {
+            try {
+              const metaSnap = await getDoc(doc(db, "timetables", CLS_SESSION.schoolId, "data", "meta"));
+              if (metaSnap.exists()) {
+                let d = {}; try { d = JSON.parse(metaSnap.data().value || "{}"); } catch (e) {}
+                if (d.toolActive !== false) allowed = true;
+              }
+            } catch (e) {}
+          }
+          /* [ADMIN-TOOLS:END] */
           if (!allowed) {
             document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:inherit">'
               + '<h2>ليست لديك صلاحية الوصول إلى الأنشطة الرقمية</h2>'
@@ -618,17 +631,39 @@ body.alt-theme .flcard{ display:flex !important; }
     });
     // روستر المدرسة، أو روستر المعلم الفردي (بلا مدرسة)
     function rosterDocId() { return currentTeacher.schoolId ? ("roster_" + currentTeacher.schoolId) : ("roster_solo_" + currentTeacher.uid); }
+    /* [ADMIN-TOOLS:BEGIN] */
+    // هل «بناء الجدول المدرسي» مفعّل لهذه المدرسة؟ (نفس منطق omr.html — قفل/تفعيل على مستوى المدرسة)
+    async function wsTtToolActive(schoolId) {
+      if (!schoolId) return false;
+      try {
+        const metaSnap = await getDoc(doc(db, "timetables", schoolId, "data", "meta"));
+        if (!metaSnap.exists()) return false;
+        let d = {}; try { d = JSON.parse(metaSnap.data().value || "{}"); } catch (e) { return false; }
+        return d.toolActive !== false;
+      } catch (e) { return false; }
+    }
+    /* [ADMIN-TOOLS:END] */
     /* سياق المستخدم بالنموذج الموحَّد: الدور من الجلسة، والفصول والمواد من schools[sid] (أو solo للفردي) — لا حقول top-level */
     async function loadMyCtx() {
       const snap = await getDoc(doc(db, "users", currentTeacher.uid));
       const u = snap.exists() ? snap.data() : {};
       const role = CLS_SESSION.role || "";
       const ctx = currentTeacher.schoolId ? ((u.schools || {})[currentTeacher.schoolId] || {}) : (u.solo || {});
+      /* [ADMIN-TOOLS:BEGIN] */
+      // دور غير معلم مُسندة له فصول من الجدول: تُضاف لفصوله المسندة هنا أيضًا (دون المساس بفصوله اليدوية)
+      let assigned = Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses.map(String) : [];
+      if (role !== "teacher" && role !== "soloTeacher" && role !== "admin" && role !== "schoolAdmin"
+          && Array.isArray(ctx.ttAssignedClasses) && ctx.ttAssignedClasses.length && !assigned.includes("__all__")) {
+        if (await wsTtToolActive(currentTeacher.schoolId)) {
+          assigned = [...new Set([...assigned, ...ctx.ttAssignedClasses.map(String)])];
+        }
+      }
+      /* [ADMIN-TOOLS:END] */
       return {
         u, role, ctx,
         isAdmin: role === "admin" || role === "schoolAdmin",
         isSolo: role === "soloTeacher",
-        assigned: Array.isArray(ctx.assignedClasses) ? ctx.assignedClasses.map(String) : [],
+        assigned,
         /* [ADMIN-TOOLS:MOD] ORIG: subjectAssignments: Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments : [] */
         subjectAssignments: (ctx.subjectAssignmentsByPeriod && typeof ctx.subjectAssignmentsByPeriod === "object") ? (Array.isArray(ctx.subjectAssignmentsByPeriod[CLS_SESSION.period || "first"]) ? ctx.subjectAssignmentsByPeriod[CLS_SESSION.period || "first"] : []) : (Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments : [])
       };

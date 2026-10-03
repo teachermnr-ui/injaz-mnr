@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-02.2 -->
+<!-- إصدار: 2026-10-03.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -468,6 +468,9 @@ body.theme-night .tab.tools-toggle.open{color:#fff}
     <div class="tb-row2">
       <span class="tb-badge" id="tbPeriod"></span>
       <span id="tbCtxSwitchWrap"></span>
+      <!-- [ADMIN-TOOLS:BEGIN] -->
+      <button class="tb-icon" id="circAlertBtn" title="التعاميم" style="display:none;position:relative" onclick="location.href='circulars.html'">📋<span id="circAlertDot" style="display:none;position:absolute;top:-4px;left:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:16px"></span></button>
+      <!-- [ADMIN-TOOLS:END] -->
       <span class="tb-spacer"></span>
       <button id="navToggle" type="button" aria-label="فتح القوائم">☰ القوائم</button>
       <button class="tb-icon tb-wide" id="tbOmr" title="إدارة الصف">إدارة الصف</button>
@@ -633,6 +636,31 @@ function visibleTools(){
   if(CURRENT.role==='soloTeacher' || !CURRENT.schoolId) return [];
   const pm = CURRENT.permissions||{};
   return ADMIN_TOOLS.filter(t=> pm[t.perm] && pm[t.perm].access);
+}
+/* زر/تنبيه «التعاميم» في الشريط العلوي — يظهر لأي موظف مُستلِم تعميم ولو لم تُمنح له صلاحية الأداة نفسها
+   (صاحب الصلاحية أصلًا يدخل من «أدوات إدارية»؛ هذا الزر مخصَّص للمستلم العادي كي يرى تعاميمه ويوقّع). */
+async function checkCircularAlerts(){
+  const btn = $('#circAlertBtn'); if(!btn) return;
+  btn.style.display='none';
+  try{
+    if(!CURRENT || !CURRENT.id || CURRENT.role==='admin' || CURRENT.role==='soloTeacher' || !CURRENT.schoolId) return;
+    const snap = await db.collection('circulars').doc(CURRENT.schoolId).collection('items')
+      .where('recipients','array-contains', CURRENT.id).get();
+    if(snap.empty) return;
+    let pending = 0;
+    await Promise.all(snap.docs.map(async d=>{
+      const c = d.data();
+      if(!c.mandatory) return;
+      const sig = await db.collection('circulars').doc(CURRENT.schoolId).collection('items').doc(d.id).collection('signatures').doc(CURRENT.id).get();
+      if(!sig.exists) pending++;
+    }));
+    btn.style.display='flex';
+    const dot = $('#circAlertDot');
+    if(dot){
+      if(pending>0){ dot.style.display='flex'; dot.textContent=String(pending); }
+      else dot.style.display='none';
+    }
+  }catch(e){ /* صمت: الزر ببساطة لا يظهر لو تعذّرت القراءة */ }
 }
 /* [ADMIN-TOOLS:END] */
 
@@ -1546,6 +1574,7 @@ function enterApp(){
   const bar=$('#tabbar'); bar.innerHTML='';
 /* [ADMIN-TOOLS:BEGIN] */
   closeToolsMenu();
+  checkCircularAlerts();
   /* تبويب «أدوات إدارية» المنسدل — أول الشريط (قبل «انضباط الطلاب»)، ويختفي إن لم يكن للمستخدم أي أداة */
   if(visibleTools().length){
     const tb=document.createElement('button'); tb.type='button';

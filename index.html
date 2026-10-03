@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-03.1 -->
+<!-- إصدار: 2026-10-03.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -468,9 +468,6 @@ body.theme-night .tab.tools-toggle.open{color:#fff}
     <div class="tb-row2">
       <span class="tb-badge" id="tbPeriod"></span>
       <span id="tbCtxSwitchWrap"></span>
-      <!-- [ADMIN-TOOLS:BEGIN] -->
-      <button class="tb-icon" id="circAlertBtn" title="التعاميم" style="display:none;position:relative" onclick="location.href='circulars.html'">📋<span id="circAlertDot" style="display:none;position:absolute;top:-4px;left:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:16px"></span></button>
-      <!-- [ADMIN-TOOLS:END] -->
       <span class="tb-spacer"></span>
       <button id="navToggle" type="button" aria-label="فتح القوائم">☰ القوائم</button>
       <button class="tb-icon tb-wide" id="tbOmr" title="إدارة الصف">إدارة الصف</button>
@@ -637,30 +634,134 @@ function visibleTools(){
   const pm = CURRENT.permissions||{};
   return ADMIN_TOOLS.filter(t=> pm[t.perm] && pm[t.perm].access);
 }
-/* زر/تنبيه «التعاميم» في الشريط العلوي — يظهر لأي موظف مُستلِم تعميم ولو لم تُمنح له صلاحية الأداة نفسها
-   (صاحب الصلاحية أصلًا يدخل من «أدوات إدارية»؛ هذا الزر مخصَّص للمستلم العادي كي يرى تعاميمه ويوقّع). */
-async function checkCircularAlerts(){
-  const btn = $('#circAlertBtn'); if(!btn) return;
-  btn.style.display='none';
+/* ============ تبويب «لوحتي» — صندوق شخصي دائم لكل موظف عادي (التعاميم الآن، جدولي، وإضافات لاحقًا) ============
+   مستقل تمامًا عن قائمة «أدوات إدارية» (تلك لصاحب الصلاحية لإدارة الأداة؛ هذا لأي موظف عادي كي يرى ما يخصّه شخصيًا). */
+function myBoardVisible(){
+  return !!CURRENT && !!CURRENT.id && CURRENT.role!=='admin' && CURRENT.role!=='soloTeacher' && !!CURRENT.schoolId;
+}
+const MYBOARD_WEEKDAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const MYBOARD = { pendingCirculars:0, scheduleChanged:false, scheduleCache:null };
+let MYBOARD_SUB = 'circulars';
+async function refreshMyBoardAlerts(){
+  MYBOARD.pendingCirculars = 0; MYBOARD.scheduleChanged = false; MYBOARD.scheduleCache = null;
+  updateMyBoardBadges();
+  if(!myBoardVisible()) return;
   try{
-    if(!CURRENT || !CURRENT.id || CURRENT.role==='admin' || CURRENT.role==='soloTeacher' || !CURRENT.schoolId) return;
     const snap = await db.collection('circulars').doc(CURRENT.schoolId).collection('items')
       .where('recipients','array-contains', CURRENT.id).get();
-    if(snap.empty) return;
-    let pending = 0;
-    await Promise.all(snap.docs.map(async d=>{
-      const c = d.data();
-      if(!c.mandatory) return;
-      const sig = await db.collection('circulars').doc(CURRENT.schoolId).collection('items').doc(d.id).collection('signatures').doc(CURRENT.id).get();
-      if(!sig.exists) pending++;
-    }));
-    btn.style.display='flex';
-    const dot = $('#circAlertDot');
-    if(dot){
-      if(pending>0){ dot.style.display='flex'; dot.textContent=String(pending); }
-      else dot.style.display='none';
+    if(!snap.empty){
+      let pending = 0;
+      await Promise.all(snap.docs.map(async d=>{
+        const cc = d.data(); if(!cc.mandatory) return;
+        const sig = await db.collection('circulars').doc(CURRENT.schoolId).collection('items').doc(d.id).collection('signatures').doc(CURRENT.id).get();
+        if(!sig.exists) pending++;
+      }));
+      MYBOARD.pendingCirculars = pending;
     }
-  }catch(e){ /* صمت: الزر ببساطة لا يظهر لو تعذّرت القراءة */ }
+  }catch(e){ /* صمت: لا داعي لكسر الدخول لو تعذّرت قراءة التعاميم */ }
+  try{
+    const sched = await loadMySchedule();
+    MYBOARD.scheduleCache = sched;
+    // مدير المدرسة مستند مستقل بلا خريطة schools[sid] يُسجَّل فيها الاطّلاع — لا نظهر له علامة تغيير لا تُقفل أبدًا
+    if(CURRENT.role!=='schoolAdmin'){
+      const seen = ((CURRENT.schools||{})[CURRENT.schoolId]||{}).schedSeenAt || {};
+      const seenAt = seen[SESSION.period] || 0;
+      MYBOARD.scheduleChanged = !!(sched.lessons.length && sched.latestApprovedAt && sched.latestApprovedAt > seenAt);
+    }
+  }catch(e){ /* صمت: الجدول أداة منفصلة قد لا تكون مفعَّلة أصلًا لهذه المدرسة */ }
+  updateMyBoardBadges();
+}
+function updateMyBoardBadges(){
+  const tabBtn = $('#myBoardTab');
+  if(tabBtn) tabBtn.style.display = myBoardVisible() ? 'flex' : 'none';
+  const total = MYBOARD.pendingCirculars + (MYBOARD.scheduleChanged?1:0);
+  const tabDot = $('#myBoardDot'); if(tabDot) tabDot.style.display = total>0 ? 'inline-flex' : 'none';
+  const cDot = $('#mbCircDot'); if(cDot){ cDot.style.display = MYBOARD.pendingCirculars>0?'inline-flex':'none'; cDot.textContent = String(MYBOARD.pendingCirculars); }
+  const sDot = $('#mbSchedDot'); if(sDot) sDot.style.display = MYBOARD.scheduleChanged?'inline-flex':'none';
+}
+/* قراءة جدول الموظف الشخصي من أداة «بناء الجدول المدرسي» (إن كانت مفعّلة ومُعتمَدة لهذه الفترة) —
+   قراءة فقط، لا تتطلّب صلاحية الأداة نفسها (قاعدة Firestore تسمح لأي موظف فعّال بقراءة مستندات
+   الخطة والجدول المعتمد تحديدًا، لا غير — أنظر firestore.rules). */
+async function loadMySchedule(){
+  const period = SESSION.period, sid = CURRENT.schoolId;
+  const result = { lessons:[], latestApprovedAt:0 };
+  const col = db.collection('timetables').doc(sid).collection('data');
+  let subjMap = {};
+  try{
+    const cfgSnap = await col.doc(period+'_config').get();
+    if(cfgSnap.exists){
+      const cfgData = JSON.parse(cfgSnap.data().value||'null');
+      if(cfgData && cfgData.plans) Object.values(cfgData.plans).forEach(arr=>{ (arr||[]).forEach(s=>{ if(s && s.id) subjMap[s.id]=s.name||'—'; }); });
+    }
+  }catch(e){}
+  for(const sk of ['p','m','h']){
+    try{
+      const tSnap = await col.doc(period+'_'+sk+'_approved').get();
+      if(!tSnap.exists) continue;
+      const tData = JSON.parse(tSnap.data().value||'null'); if(!tData) continue;
+      if(tData.approvedAt && tData.approvedAt>result.latestApprovedAt) result.latestApprovedAt = tData.approvedAt;
+      (tData.lessons||[]).forEach(l=>{
+        if(l.t!==CURRENT.id) return;
+        result.lessons.push({ day:l.d, period:l.p, len:l.n||1, classCode:l.c, subject: subjMap[l.s]||'—' });
+      });
+    }catch(e){}
+  }
+  result.lessons.sort((a,b)=> a.day-b.day || a.period-b.period);
+  return result;
+}
+async function renderMyBoard(c){
+  c.innerHTML = `<div class="panel-head"><h2>لوحتي</h2></div>
+    <div class="sub-note">كل ما يخصّك شخصيًا هنا: التعاميم المرسلة لك، وجدولك الدراسي — وتظهر عليها علامة حمراء عند أي تحديث جديد.</div>
+    <div id="mbSubTabs" style="display:flex;gap:6px;flex-wrap:wrap;background:var(--surface-2);padding:6px;border-radius:12px;margin-bottom:14px">
+      <button type="button" class="tab" data-sub="circulars" style="position:relative">📨 التعاميم<span id="mbCircDot" class="tab-dot" style="display:none"></span></button>
+      <button type="button" class="tab" data-sub="schedule" style="position:relative">📅 جدولي<span id="mbSchedDot" class="tab-dot" style="display:none"></span></button>
+    </div>
+    <div id="mbContent"><div class="empty"><span class="spin"></span></div></div>`;
+  document.querySelectorAll('#mbSubTabs .tab').forEach(b=>{
+    b.classList.toggle('active', b.dataset.sub===MYBOARD_SUB);
+    b.onclick = ()=>{ MYBOARD_SUB=b.dataset.sub; renderMyBoard(c); };
+  });
+  updateMyBoardBadges();
+  const host = $('#mbContent');
+  if(MYBOARD_SUB==='schedule') await renderMyBoardSchedule(host);
+  else renderMyBoardCirculars(host);
+}
+function renderMyBoardCirculars(host){
+  host.innerHTML = `<iframe src="circulars.html" title="التعاميم" style="width:100%;min-height:520px;height:70vh;border:1px solid var(--line);border-radius:14px;background:#fff"></iframe>`;
+}
+async function renderMyBoardSchedule(host){
+  let sched = MYBOARD.scheduleCache;
+  if(!sched){ try{ sched = await loadMySchedule(); MYBOARD.scheduleCache = sched; }catch(e){ sched = {lessons:[], latestApprovedAt:0}; } }
+  if(!host.isConnected) return;
+  // فتح هذا القسم يُسجَّل اطّلاعًا فوريًا على آخر نسخة معتمدة، فتختفي علامة «جدولي» حتى تغيير جديد
+  // (مدير المدرسة مستند مستقل بلا خريطة schools[sid]، فلا تسجيل اطّلاع له هنا — دخوله أصلًا من «أدوات إدارية»)
+  if(sched.lessons.length && sched.latestApprovedAt && CURRENT.role!=='schoolAdmin'){
+    try{
+      await usersCol().doc(CURRENT.id).update({ ['schools.'+CURRENT.schoolId+'.schedSeenAt.'+SESSION.period]: sched.latestApprovedAt, updatedAt: Date.now() });
+      CURRENT.schools = CURRENT.schools || {};
+      CURRENT.schools[CURRENT.schoolId] = CURRENT.schools[CURRENT.schoolId] || {};
+      CURRENT.schools[CURRENT.schoolId].schedSeenAt = CURRENT.schools[CURRENT.schoolId].schedSeenAt || {};
+      CURRENT.schools[CURRENT.schoolId].schedSeenAt[SESSION.period] = sched.latestApprovedAt;
+    }catch(e){}
+    MYBOARD.scheduleChanged = false; updateMyBoardBadges();
+  }
+  if(!host.isConnected) return;
+  if(!sched.lessons.length){
+    host.innerHTML = `<div class="empty"><span class="e-emoji">📅</span>لا يوجد جدول معتمَد لك حتى الآن لهذه الفترة.</div>`;
+    return;
+  }
+  const byDay = {};
+  sched.lessons.forEach(l=>{ (byDay[l.day]=byDay[l.day]||[]).push(l); });
+  const days = Object.keys(byDay).map(Number).sort((a,b)=>a-b);
+  host.innerHTML = days.map(d=>`
+    <div class="card" style="padding:12px;margin-bottom:10px">
+      <h3 style="margin:0 0 8px">${esc(MYBOARD_WEEKDAYS[d]||'')}</h3>
+      ${byDay[d].sort((a,b)=>a.period-b.period).map(l=>`
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)">
+          <span>الحصة ${l.period+1}${l.len>1?' (مزدوجة)':''}</span>
+          <span>${esc(l.subject)} — ${esc(l.classCode)}</span>
+        </div>`).join('')}
+    </div>`).join('');
 }
 /* [ADMIN-TOOLS:END] */
 
@@ -1574,7 +1675,6 @@ function enterApp(){
   const bar=$('#tabbar'); bar.innerHTML='';
 /* [ADMIN-TOOLS:BEGIN] */
   closeToolsMenu();
-  checkCircularAlerts();
   /* تبويب «أدوات إدارية» المنسدل — أول الشريط (قبل «انضباط الطلاب»)، ويختفي إن لم يكن للمستخدم أي أداة */
   if(visibleTools().length){
     const tb=document.createElement('button'); tb.type='button';
@@ -1583,6 +1683,15 @@ function enterApp(){
     tb.onclick=(e)=>{ e.stopPropagation(); toggleToolsMenu(tb); };
     bar.appendChild(tb);
   }
+  /* تبويب «لوحتي» — دائم لأي موظف عادي (التعاميم + جدولي)، قبل «انضباط الطلاب»، بصرف النظر عن صلاحيات الأدوات */
+  if(myBoardVisible()){
+    const mb=document.createElement('button'); mb.type='button';
+    mb.className='tab'; mb.id='myBoardTab'; mb.dataset.key='myboard';
+    mb.innerHTML='لوحتي<span id="myBoardDot" class="tab-dot" style="display:none"></span>';
+    mb.onclick=()=>{ activeTab='myboard'; renderTabs(); renderPanel(); };
+    bar.appendChild(mb);
+  }
+  refreshMyBoardAlerts();
 /* [ADMIN-TOOLS:END] */
   tabs.forEach(t=>{
     /* [ADMIN-TOOLS:MOD] ORIG: const b=document.createElement('button'); b.className='tab'; b.textContent=t.label; */
@@ -1591,7 +1700,8 @@ function enterApp(){
     b.onclick=()=>{ activeTab=t.key; renderTabs(); renderPanel(); };
     bar.appendChild(b);
   });
-  if(!tabs.find(t=>t.key===activeTab)) activeTab = tabs.length?tabs[0].key:null;
+  /* [ADMIN-TOOLS:MOD] ORIG: if(!tabs.find(t=>t.key===activeTab)) activeTab = tabs.length?tabs[0].key:null; */
+  if(!tabs.find(t=>t.key===activeTab) && !(activeTab==='myboard' && myBoardVisible())) activeTab = tabs.length?tabs[0].key:null;
   renderTabs(); renderPanel();
   watchActive();
   buildIndexCtxSwitcher();
@@ -2270,6 +2380,9 @@ function renderPanel(){
   if(activeTab==='received')   return renderReceived(c);
   if(activeTab==='absence')    return renderAbsence(c);
   if(activeTab==='studentStatus') return renderStudentStatus(c);
+  /* [ADMIN-TOOLS:BEGIN] */
+  if(activeTab==='myboard') return renderMyBoard(c);
+  /* [ADMIN-TOOLS:END] */
   const labels={classes:'الفصول والطلاب',sent:'التحويلات المرسلة',received:'التحويلات الواردة',absence:'غياب الطلاب'};
   c.innerHTML=`<div class="panel-head"><h2>${esc(labels[activeTab]||'')}</h2></div>
     <div class="empty"><span class="e-emoji">🚧</span>هذا التبويب قيد التطوير في المرحلة القادمة.</div>`;

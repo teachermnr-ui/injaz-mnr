@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<!-- إصدار: 2026-10-03.1 -->
+<!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>جدولي</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f7f6; --surface:#ffffff; --surface-2:#eef4f3; --surface-3:#e3ecea;
+  --brand:#0f766e; --brand-2:#0b5a54; --brand-l:#d5ece9;
+  --ink:#15242b; --muted:#5b6f76; --line:#d8e2e0;
+  --danger:#c0392b; --warn:#b7791f; --ok:#1f9d55;
+  --r:14px; --shadow:0 1px 2px rgba(16,40,40,.06),0 8px 24px rgba(16,40,40,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Tajawal',"Segoe UI",Tahoma,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14.5px;line-height:1.55;min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none}
+.hidden{display:none !important}
+.boot{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted);text-align:center;padding:20px}
+.spin{display:inline-block;width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.topbar{position:sticky;top:0;z-index:40;background:var(--brand);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.topbar h1{margin:0;font-size:17px;font-weight:800;white-space:nowrap}
+.tb-badge{background:rgba(255,255,255,.15);padding:5px 12px;border-radius:20px;font-size:13px;font-weight:600;white-space:nowrap}
+.tb-spacer{flex:1}
+.tb-btn{background:rgba(255,255,255,.17);color:#fff;padding:7px 14px;border-radius:10px;font-weight:700;font-size:13px;white-space:nowrap}
+.tb-btn:hover{background:rgba(255,255,255,.27)}
+main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 8px;font-size:16px}
+.sub{color:var(--muted);font-size:12.5px}
+.lesson-row{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-top:1px solid var(--line)}
+.lesson-row:first-of-type{border-top:none}
+.empty{color:var(--muted);text-align:center;padding:40px 10px}
+.empty .e-emoji{display:block;font-size:34px;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div id="bootView" class="boot"><span class="spin"></span><div id="bootMsg">جارٍ التحميل…</div></div>
+
+<div id="app" class="hidden">
+  <div class="topbar">
+    <h1>📅 جدولي</h1>
+    <span class="tb-badge" id="tbSchool">—</span>
+    <span class="tb-spacer"></span>
+    <button class="tb-btn" id="tbBack">→ الرئيسية</button>
+  </div>
+  <main id="main"></main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script>
+'use strict';
+/* =========================================================================
+   جدولي — عرض شخصي للموظف لحصصه هو فقط، مصدرها أداة «بناء الجدول المدرسي»
+   قراءة فقط بالكامل؛ لا تعديل على بيانات الجدول من هنا إطلاقًا.
+   خصوصية كالتعاميم: لا صلاحية لأدمن النظام ولا للحساب الفردي — أداة مدرسية بحتة.
+   ========================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCEW-BTrfkqLUFXj7drtts7GkN6PXpbV4A",
+  authDomain: "injaz-classroom.firebaseapp.com",
+  projectId: "injaz-classroom",
+  storageBucket: "injaz-classroom.firebasestorage.app",
+  messagingSenderId: "640060389242",
+  appId: "1:640060389242:web:37e42c456d7b4e015e88c3"
+};
+let db = null;
+const WEEKDAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+
+/* ---------- أدوات عامة ---------- */
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function fatal(msg){
+  $('#bootView').innerHTML = `<div class="card" style="max-width:460px;text-align:center"><h3>${esc(msg)}</h3>
+    <button class="tb-btn" style="background:var(--brand);color:#fff" onclick="location.href='index.html'">العودة للرئيسية</button></div>`;
+}
+
+const MS = { session:null, sid:null, me:null, period:'first' };
+(function start(){
+  let s=null; try{ s = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){}
+  if(!s || !s.userId){ location.replace('index.html'); return; }
+  if(s.role==='soloTeacher' || s.role==='admin'){ fatal('هذه الأداة خاصة بموظفي المدرسة ولا صلاحية لأدمن النظام أو الحساب الفردي عليها.'); return; }
+  if(!s.schoolId){ fatal('لا يمكن تحديد المدرسة.'); return; }
+  MS.session = s; MS.sid = s.schoolId; MS.period = s.period || 'first';
+  try{ firebase.initializeApp(firebaseConfig); db = firebase.firestore(); }
+  catch(e){ fatal('تعذّر الاتصال بقاعدة البيانات.'); return; }
+  firebase.auth().onAuthStateChanged(async au=>{
+    if(!au){ try{ localStorage.removeItem('cls_session'); }catch(e){} location.replace('index.html'); return; }
+    try{ await boot(au); }catch(e){ console.error(e); fatal('تعذّر تحميل جدولك: '+(e.message||e)); }
+  });
+})();
+
+async function boot(au){
+  const us = await db.collection('users').doc(MS.session.userId).get();
+  if(!us.exists || us.data().authUid !== au.uid){ await firebase.auth().signOut(); location.replace('index.html'); return; }
+  const u = us.data();
+  if(u.active===false){ fatal('حسابك موقوف.'); return; }
+  MS.me = { id: us.id, name: u.username||MS.session.username||'', role: u.role };
+  if(u.role!=='schoolAdmin'){
+    const ctx = (u.schools||{})[MS.sid];
+    if(!ctx || ctx.active===false){ fatal('ليست لديك صلاحية الوصول لهذه المدرسة.'); return; }
+  } else if(!(u.adminSchools||[]).includes(MS.sid)){
+    fatal('لا يمكن الوصول لهذه المدرسة.'); return;
+  }
+  $('#tbSchool').textContent = MS.sid;
+  try{
+    const sd = await db.collection('schoolData').doc(MS.sid).get();
+    if(sd.exists) $('#tbSchool').textContent = sd.data().name || MS.sid;
+  }catch(e){}
+  $('#tbBack').onclick = ()=>location.href='index.html';
+  $('#bootView').classList.add('hidden'); $('#app').classList.remove('hidden');
+  await renderSchedule();
+}
+
+async function loadMySchedule(){
+  const period = MS.period, sid = MS.sid;
+  const result = { lessons:[], latestApprovedAt:0 };
+  const col = db.collection('timetables').doc(sid).collection('data');
+  let subjMap = {};
+  try{
+    const cfgSnap = await col.doc(period+'_config').get();
+    if(cfgSnap.exists){
+      const cfgData = JSON.parse(cfgSnap.data().value||'null');
+      if(cfgData && cfgData.plans) Object.values(cfgData.plans).forEach(arr=>{ (arr||[]).forEach(s=>{ if(s && s.id) subjMap[s.id]=s.name||'—'; }); });
+    }
+  }catch(e){}
+  for(const sk of ['p','m','h']){
+    try{
+      const tSnap = await col.doc(period+'_'+sk+'_approved').get();
+      if(!tSnap.exists) continue;
+      const tData = JSON.parse(tSnap.data().value||'null'); if(!tData) continue;
+      if(tData.approvedAt && tData.approvedAt>result.latestApprovedAt) result.latestApprovedAt = tData.approvedAt;
+      (tData.lessons||[]).forEach(l=>{
+        if(l.t!==MS.me.id) return;
+        result.lessons.push({ day:l.d, period:l.p, len:l.n||1, classCode:l.c, subject: subjMap[l.s]||'—' });
+      });
+    }catch(e){}
+  }
+  result.lessons.sort((a,b)=> a.day-b.day || a.period-b.period);
+  return result;
+}
+
+async function renderSchedule(){
+  $('#main').innerHTML = `<div class="empty"><span class="spin"></span></div>`;
+  let sched; try{ sched = await loadMySchedule(); }catch(e){ sched = {lessons:[], latestApprovedAt:0}; }
+
+  // تسجيل اطّلاع فوري — مدير المدرسة مستند مستقل بلا خريطة schools[sid]، فيُستثنى من هذا التسجيل
+  if(sched.lessons.length && sched.latestApprovedAt && MS.me.role!=='schoolAdmin'){
+    try{
+      await db.collection('users').doc(MS.me.id).update({
+        ['schools.'+MS.sid+'.schedSeenAt.'+MS.period]: sched.latestApprovedAt, updatedAt: Date.now()
+      });
+    }catch(e){}
+  }
+
+  if(!sched.lessons.length){
+    $('#main').innerHTML = `<div class="empty"><span class="e-emoji">📅</span>لا يوجد جدول معتمَد لك حتى الآن لهذه الفترة.</div>`;
+    return;
+  }
+  const byDay = {};
+  sched.lessons.forEach(l=>{ (byDay[l.day]=byDay[l.day]||[]).push(l); });
+  const days = Object.keys(byDay).map(Number).sort((a,b)=>a-b);
+  $('#main').innerHTML = days.map(d=>`
+    <div class="card">
+      <h3>${esc(WEEKDAYS[d]||'')}</h3>
+      ${byDay[d].sort((a,b)=>a.period-b.period).map(l=>`
+        <div class="lesson-row">
+          <span>الحصة ${l.period+1}${l.len>1?' (مزدوجة)':''}</span>
+          <span>${esc(l.subject)} — ${esc(l.classCode)}</span>
+        </div>`).join('')}
+    </div>`).join('');
+}
+</script>
+</body>
+</html>

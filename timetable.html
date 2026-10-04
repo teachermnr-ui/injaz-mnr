@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-02.1 -->
+<!-- إصدار: 2026-10-03.1 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -172,6 +172,42 @@ table.tt.small td.dn,table.tt.small th.dn{font-weight:800;min-width:80px;backgro
 .sol{border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
 .sol:hover{border-color:var(--brand);background:var(--surface-2)}
 .sol ol{margin:6px 0 0;padding-right:20px;font-size:13px}
+.sol-tabs{margin:12px 0 10px}
+.sol-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sol-go{font-size:12.5px;color:var(--brand);font-weight:700}
+.sol-view{margin-top:8px}
+.tchip{display:inline-flex;align-items:center;font-weight:700;font-size:12.5px;padding:2px 10px;border-radius:20px;white-space:nowrap}
+.sv-legend{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+.sv-rows{display:flex;flex-direction:column;gap:5px}
+.mvrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;border-radius:10px;font-size:13px}
+.mvn{color:var(--muted);min-width:14px}
+.mvft{margin-inline-start:auto;white-space:nowrap;color:var(--muted)}
+.ch-step{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:#fff}
+.ch-step.first{border:2px solid var(--brand)}
+.ch-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ch-lbl{background:var(--surface-3);font-size:12px;font-weight:700;padding:2px 9px;border-radius:20px}
+.ch-step.first .ch-lbl{background:var(--brand);color:#fff}
+.ch-body{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.ch-x{font-size:17px;color:var(--brand);font-weight:800}
+.ch-why{display:flex;align-items:center;gap:8px;padding:6px 18px;color:#b45309;font-size:12.5px}
+.ch-arrow{font-size:16px}
+.ch-done{padding:8px 18px 0;color:#065f46;font-weight:700;font-size:13px}
+.mg-wrap{display:flex;flex-wrap:wrap;gap:16px}
+.mg-col{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:6px;overflow-x:auto}
+.mg{display:grid;gap:3px;font-size:11.5px}
+.mg-h{text-align:center;font-weight:700;color:var(--muted);padding:3px 0}
+.mg-n{font-weight:700;align-self:center;font-size:12px}
+.mg-c{border-radius:7px;padding:5px 3px;text-align:center;line-height:1.3;border:2px solid transparent}
+.mg-c.empty{background:var(--surface-2);color:#a7b4b1}
+.mg-c.chg{border:2px dashed #7c3aed}
+.mg-key{display:inline-block;width:16px;height:11px;border:2px dashed #7c3aed;border-radius:3px;vertical-align:middle}
+/* معاينة التبديل: حرف كبير بنفسجي = الحصة وصلت هنا، حرف صغير رمادي = خرجت من هنا */
+table.tt td.cell .mvL{position:absolute;top:1px;right:2px;background:#7c3aed;color:#fff;font-size:11px;font-weight:800;line-height:1;padding:2px 4px;border-radius:4px}
+table.tt td.cell .mvS{position:absolute;bottom:1px;left:3px;color:#8a9aa0;font-size:9.5px;font-weight:800;line-height:1}
+/* تثبيت المعلم: الضغط على اسمه */
+table.tt td.nm.nm-click{cursor:pointer}
+table.tt td.nm.nm-click:hover{background:var(--surface-2)}
+table.tt td.nm.nm-sel{background:#cfe3ff;box-shadow:inset 0 0 0 2px var(--info)}
 /* ===== الطباعة ===== */
 #printArea{display:none}
 @media print{
@@ -346,7 +382,8 @@ const docIds = {
   meta:     ()=>'meta',
   config:   (p)=>(p||TT.period)+'_config',
   assign:   (p)=>(p||TT.period)+'_assign',
-  table:    (sk,which,p)=>(p||TT.period)+'_'+sk+'_'+(which||'draft')
+  table:    (sk,which,p)=>(p||TT.period)+'_'+sk+'_'+(which||'draft'),
+  published:(p)=>(p||TT.period)+'_published'   // نسخة «جدولي» المنشورة لكل مستخدم (تُكتب عند النشر فقط)
 };
 async function loadDoc(id){
   const snap = await ttCol().doc(id).get();
@@ -1622,9 +1659,10 @@ function renderMaster(sk, S0, editable){
   if(!pr.units.length){ host.innerHTML = '<div class="card empty">لا توجد حصص: أضف مواد في «الخطة الدراسية».</div>'; return; }
   const rows = masterRows(S);
   const days = slotCols(sk, true);
+  const inPreview = !!(TT.preview && TT.preview.sk===sk);
   const sel = TT.sel && TT.sel.sk===sk ? TT.sel : null;
-  const optMap = {};   // "row|d|p" -> status
-  if(sel && sel.options){
+  const optMap = {};   // "row|d|p" -> status — لا ألوان تحديد أثناء المعاينة (تُشتّت عن التغيير)
+  if(sel && sel.options && !inPreview){
     const selU = pr.units[pr.units.findIndex(u=>u.id===sel.unitId)];
     sel.options.forEach(o=>{
       const d = pr.days.indexOf(o.target.day);
@@ -1635,11 +1673,17 @@ function renderMaster(sk, S0, editable){
     });
   }
   const changed = new Set();
-  if(TT.preview && TT.preview.sk===sk) TT.preview.moves.forEach(m=>{
+  const mvBig = {}, mvSmall = {};   // حرف لكل حركة: كبير في الخانة التي وصلت إليها، صغير في الخانة التي خرجت منها
+  if(inPreview) TT.preview.moves.forEach((m,i)=>{
     const u = pr.units.find(x=>x.id===m.unitId); const rk = u.ti>=0 ? 't:'+pr.teachers[u.ti] : 'd:'+u.subjName;
-    changed.add(rk+'|'+pr.days.indexOf(m.to.day)+'|'+m.to.p);
+    const L = i<26 ? String.fromCharCode(65+i) : String.fromCharCode(65+Math.floor(i/26)-1)+String.fromCharCode(65+i%26);
+    const toK = rk+'|'+pr.days.indexOf(m.to.day)+'|'+m.to.p, fromK = rk+'|'+pr.days.indexOf(m.from.day)+'|'+m.from.p;
+    changed.add(toK);
+    mvBig[toK] = (mvBig[toK]||'') + L;
+    (mvSmall[fromK] = mvSmall[fromK] || []).push(L);
   });
-  const selId = sel ? sel.unitId : null;
+  const selId = sel && !inPreview ? sel.unitId : null;
+  const selTRow = sel && sel.teacherRow && !inPreview ? sel.teacherRow : null;
   let h = `<div class="tt-wrap"><table class="tt ${editable?'editable':''}" id="masterTbl"><thead><tr><th class="sq" rowspan="2">م</th><th class="nm" rowspan="2">المعلم</th>`;
   days.forEach(dd=>{ h += `<th class="day day-end" colspan="${dd.cols.length}">${WEEKDAYS[dd.w]}</th>`; });
   h += '</tr><tr>';
@@ -1649,7 +1693,11 @@ function renderMaster(sk, S0, editable){
   rows.forEach((r,i)=>{
     const load = r.ti>=0 ? pr.units.filter(u=>u.ti===r.ti).reduce((a,u)=>a+u.len,0) : 0;
     const placed = r.ti>=0 ? pr.units.reduce((a,u,ui)=>a+(u.ti===r.ti && st.pos[ui]>=0 ? u.len:0),0) : 0;
-    h += `<tr class="${r.ti<0?'defrow':''}"><td class="sq">${r.ti>=0?ar(i+1):''}</td><td class="nm">${esc(r.name)}${r.shared?' <span title="معلم مشترك بين المراحل">⇄</span>':''}${r.ti>=0?`<div class="sub" style="font-weight:500">${ar(placed)}/${ar(load)}</div>`:''}</td>`;
+    // 📌 عند الاسم: كل حصص المعلم الموزَّعة مثبَّتة (تثبيت المعلم)
+    const placedUis = r.ti>=0 ? pr.units.map((u,ui)=>ui).filter(ui=>pr.units[ui].ti===r.ti && S0.st.pos[ui]>=0) : [];
+    const tAllPinned = placedUis.length>0 && placedUis.every(ui=>S0.pins.has(pr.units[ui].id));
+    const nmCls = 'nm' + (r.ti>=0 && editable && !inPreview ? ' nm-click' : '') + (selTRow===r.key ? ' nm-sel' : '');
+    h += `<tr class="${r.ti<0?'defrow':''}"><td class="sq">${r.ti>=0?ar(i+1):''}</td><td class="${nmCls}"${r.ti>=0?` data-trow="${esc(r.key)}"`:''}>${tAllPinned?'<span title="جميع حصص المعلم مثبَّتة">📌</span> ':''}${esc(r.name)}${r.shared?' <span title="معلم مشترك بين المراحل">⇄</span>':''}${r.ti>=0?`<div class="sub" style="font-weight:500">${ar(placed)}/${ar(load)}</div>`:''}</td>`;
     days.forEach(dd=>dd.cols.forEach((c,ci)=>{
       const end = ci===dd.cols.length-1 ? ' day-end':'';
       if(c.kind!=='p'){ h += `<td class="brk${end}"></td>`; return; }
@@ -1661,22 +1709,32 @@ function renderMaster(sk, S0, editable){
       else { cls += ' free'; if(blocked) cls+=' blocked'; }
       if(optMap[k]) cls += ' opt-'+optMap[k];
       if(changed.has(k)) cls += ' changed';
-      const inner = uis.length
+      const marks = (mvBig[k] ? `<span class="mvL">${mvBig[k]}</span>` : '') + (mvSmall[k] ? `<span class="mvS">${mvSmall[k].join(' ')}</span>` : '');
+      const inner = (uis.length
         ? `<span class="s">${esc(shortSubj(pr.units[uis[0]].subjName))}</span><span class="c">${uis.map(ui=>esc(pr.classes[pr.units[ui].ci])).join('، ')}</span>`
-        : (blocked ? '' : '<span class="plus">＋</span>');
+        : (blocked || inPreview ? '' : '<span class="plus">＋</span>')) + marks;
       h += `<td class="${cls}" data-row="${esc(r.key)}" data-d="${c.d}" data-p="${c.p}" title="${uis.length?esc(pr.units[uis[0]].subjName+' — '+uis.map(ui=>classLabel(pr.classes[pr.units[ui].ci])).join('، ')):(blocked?'غير متاح':'')}">${inner}</td>`;
     }));
     h += '</tr>';
   });
   h += '</tbody></table></div>';
-  if(editable) h += `<div class="legend"><span><i style="background:var(--green-bg);border:2px solid var(--green-bd)"></i>تبديل مباشر</span><span><i style="background:var(--orange-bg);border:2px solid var(--orange-bd)"></i>تبديل بحل تعارض (سلسلة)</span><span><i style="background:var(--red-bg)"></i>مستحيل دون خلل</span><span><i style="box-shadow:inset 0 0 0 2px var(--info)"></i>مثبَّتة 📌</span><span><i style="background:repeating-linear-gradient(135deg,#e6e9e8,#e6e9e8 3px,#fff 3px,#fff 7px);border:1px solid var(--line)"></i>غير متاح للمعلم (عدم توفر أو حصة في مرحلة أخرى)</span></div>`;
+  if(editable && inPreview) h += `<div class="legend"><span><i style="background:#7c3aed"></i>حرف كبير: الحصة وصلت إلى هذه الخانة</span><span><b style="color:#8a9aa0;font-size:11px">A</b> حرف صغير رمادي: الحصة خرجت من هذه الخانة</span><span><i style="outline:2px dashed #7c3aed;outline-offset:-2px"></i>خانة تغيّرت</span></div>`;
+  else if(editable) h += `<div class="legend"><span>اضغط اسم المعلم لتثبيت جميع حصصه ·</span><span><i style="background:var(--green-bg);border:2px solid var(--green-bd)"></i>تبديل مباشر</span><span><i style="background:var(--orange-bg);border:2px solid var(--orange-bd)"></i>تبديل بحل تعارض (سلسلة)</span><span><i style="background:var(--red-bg)"></i>مستحيل دون خلل</span><span><i style="box-shadow:inset 0 0 0 2px var(--info)"></i>مثبَّتة 📌</span><span><i style="background:repeating-linear-gradient(135deg,#e6e9e8,#e6e9e8 3px,#fff 3px,#fff 7px);border:1px solid var(--line)"></i>غير متاح للمعلم (عدم توفر أو حصة في مرحلة أخرى)</span></div>`;
   host.innerHTML = h;
   renderSelBar(sk, S0, editable);
   if(!editable || TT.preview) return;
   $('#masterTbl').addEventListener('click', e=>{
+    const nm = e.target.closest('td.nm[data-trow]');
+    if(nm){ onTeacherNameClick(sk, S0, nm.dataset.trow); return; }
     const td = e.target.closest('td.cell'); if(!td) return;
     onMasterClick(sk, S0, td.dataset.row, +td.dataset.d, +td.dataset.p);
   });
+}
+// تثبيت المعلم: الضغط على اسمه يحدّده ويفتح شريطًا بزر تثبيت/إلغاء تثبيت جميع حصصه الموزَّعة
+function onTeacherNameClick(sk, S, rowKey){
+  const row = masterRows(S).find(r=>r.key===rowKey); if(!row || row.ti<0) return;
+  TT.sel = (TT.sel && TT.sel.sk===sk && TT.sel.teacherRow===rowKey) ? null : { sk, teacherRow: rowKey };
+  renderTableBody(sk);
 }
 function onMasterClick(sk, S, rowKey, d, p){
   const rows = masterRows(S); const row = rows.find(r=>r.key===rowKey); if(!row) return;
@@ -1709,17 +1767,144 @@ function selectUnit(sk, S, unitId){
   TT.sel = { sk, unitId, options, ms: Math.round(performance.now()-t0) };
   renderTableBody(sk);
 }
+/* ---------- نافذة حلول التبديل: أربع طرق عرض لنفس الحلول (نصي، ألوان المعلمين، سلسلة، قبل/بعد) ---------- */
+const SOL_VIEWS = [ { k:'text', l:'نصي' }, { k:'color', l:'ألوان المعلمين' }, { k:'chain', l:'سلسلة' }, { k:'grid', l:'قبل / بعد' } ];
+const T_PALETTE = [ ['#92400e','#fef3c7','#fffbeb'], ['#1d4ed8','#dbeafe','#eff6ff'], ['#7e22ce','#f3e8ff','#faf5ff'], ['#be123c','#ffe4e6','#fff1f2'],
+  ['#047857','#d1fae5','#ecfdf5'], ['#0e7490','#cffafe','#ecfeff'], ['#4d7c0f','#ecfccb','#f7fee7'], ['#c2410c','#ffedd5','#fff7ed'] ];
+const DEF_COLOR = ['#475569','#e2e8f0','#f8fafc'];
+function solMoveInfo(pr, m){
+  const u = pr.units.find(x=>x.id===m.unitId);
+  const tid = u.ti>=0 ? pr.teachers[u.ti] : null;
+  return { m, u, tid, tkey: tid ? 't:'+tid : 'd:'+u.subjName, tn: tid ? teacherName(tid) : 'عجز – '+u.subjName,
+    subj: u.subjName, cls: pr.classes[u.ci],
+    fromS: pr.days.indexOf(m.from.day)*pr.P + (+m.from.p), toS: pr.days.indexOf(m.to.day)*pr.P + (+m.to.p),
+    fromT: WEEKDAYS[m.from.day]+' '+ar(+m.from.p+1), toT: WEEKDAYS[m.to.day]+' '+ar(+m.to.p+1) };
+}
+// لون ثابت لكل معلم عبر كل الحلول المعروضة في النافذة نفسها
+function solColors(pr, solutions){
+  const map = {}; let i = 0;
+  solutions.forEach(s=>s.moves.forEach(m=>{
+    const f = solMoveInfo(pr, m); if(map[f.tkey]) return;
+    map[f.tkey] = f.tid ? T_PALETTE[i++ % T_PALETTE.length] : DEF_COLOR;
+  }));
+  return map;
+}
+function slotText(pr, s){ return WEEKDAYS[pr.days[Math.floor(s/pr.P)]]+' '+ar(s%pr.P+1); }
+function tChip(f, col, extra){ return `<span class="tchip" style="background:${col[1]};color:${col[0]}">${esc(f.tn)}${extra||''}</span>`; }
+
+function solViewText(pr, s){
+  return `<ol>${s.moves.map(m=>{ const f = solMoveInfo(pr, m);
+    return `<li>حصة ${esc(f.tid?f.tn:'عجز')} (${esc(f.subj)} — ${esc(f.cls)}): ${f.fromT} ← ${f.toT}</li>`; }).join('')}</ol>`;
+}
+function solViewColor(pr, s, colors){
+  const infs = s.moves.map(m=>solMoveInfo(pr, m));
+  const cnt = {}, order = [];
+  infs.forEach(f=>{ if(!cnt[f.tkey]){ cnt[f.tkey]=0; order.push(f); } cnt[f.tkey]++; });
+  return `<div class="sv-legend"><span class="sub">المعلمون في هذا الحل:</span>${order.map(f=>tChip(f, colors[f.tkey], cnt[f.tkey]>1?' ×'+ar(cnt[f.tkey]):'')).join('')}</div>
+    <div class="sv-rows">${infs.map((f,i)=>{ const c = colors[f.tkey];
+      return `<div class="mvrow" style="background:${c[2]}"><span class="mvn">${ar(i+1)}</span>${tChip(f,c)}<span>${esc(f.subj)} – ${esc(f.cls)}</span>
+        <span class="mvft">${f.fromT} <b style="color:${c[0]}">←</b> <b>${f.toT}</b></span></div>`; }).join('')}</div>`;
+}
+// السلسلة: الحركات تُجمَع تبديلاتٍ داخل الشعبة الواحدة، وبين كل خطوة والتي تليها سبب الحاجة إليها
+function solViewChain(pr, s, colors){
+  const infs = s.moves.map(m=>solMoveInfo(pr, m));
+  const used = new Set(), steps = [];
+  for(let i=0;i<infs.length;i++){
+    if(used.has(i)) continue; used.add(i);
+    const a = infs[i]; let b = null;
+    for(let j=i+1;j<infs.length;j++){
+      if(used.has(j)) continue; const c = infs[j];
+      if(c.u.ci===a.u.ci && c.fromS===a.toS && c.toS===a.fromS){ b = c; used.add(j); break; }
+    }
+    steps.push({ a, b });
+  }
+  let h = '';
+  steps.forEach((st, k)=>{
+    if(k>0){
+      const prev = steps.slice(0,k).flatMap(x=>[x.a, x.b].filter(Boolean));
+      let why = null;
+      [st.a, st.b].filter(Boolean).some(x=>{
+        const p = prev.find(q=>q.tkey===x.tkey && q.toS===x.fromS);
+        if(p){ why = `لكن أصبح <b>${esc(x.tn)}</b> مشغولًا في ${p.toT} (لديه فيها شعبة ${esc(x.cls)})`; return true; }
+        return false;
+      });
+      h += `<div class="ch-why"><span class="ch-arrow">↓</span><span>${why || 'ولحل تعارض نتج عن الخطوة السابقة'}</span></div>`;
+    }
+    const { a, b } = st;
+    h += `<div class="ch-step${k===0?' first':''}">
+      <div class="ch-head"><span class="ch-lbl">الخطوة ${ar(k+1)} — ${k===0?'التبديل المطلوب':'لحل التعارض'}</span><span class="sub">شعبة ${esc(a.cls)}</span></div>
+      <div class="ch-body">${tChip(a, colors[a.tkey], ' · '+esc(shortSubj(a.subj)))}
+        ${b ? `<span class="ch-x">⇄</span>${tChip(b, colors[b.tkey], ' · '+esc(shortSubj(b.subj)))}<span class="sub">${a.fromT} ↔ ${a.toT}</span>`
+            : `<span class="sub">${a.fromT} ← ${a.toT}</span>`}</div></div>`;
+  });
+  h += `<div class="ch-done">✔ انتهت السلسلة — لا يوجد تعارض</div>`;
+  return h;
+}
+// قبل/بعد: المعلمون والأوقات المتأثرة فقط
+function solViewGrid(pr, st, s, colors){
+  const infs = s.moves.map(m=>solMoveInfo(pr, m));
+  const rows = []; infs.forEach(f=>{ if(!rows.some(r=>r.tkey===f.tkey)) rows.push(f); });
+  const slots = [...new Set(infs.flatMap(f=>[f.fromS, f.toS]))].sort((x,y)=>x-y);
+  const st2 = TTEngine.cloneState(st);
+  if(!TTEngine.applySolution(pr, st2, s.moves)) return '<div class="sub">تعذّر عرض المقارنة.</div>';
+  const movedIds = new Set(infs.map(f=>f.u.id));
+  const unitAt = (state, r, sl)=>{
+    if(r.u.ti>=0) return state.tGrid[r.u.ti*pr.S + sl];
+    const hit = infs.find(f=>f.tkey===r.tkey && state.pos[pr.units.indexOf(f.u)]===sl);
+    return hit ? pr.units.indexOf(hit.u) : -1;
+  };
+  const cell = (ui, col, changed)=>{
+    const chg = changed ? ' chg' : '';
+    if(ui<0) return `<div class="mg-c empty${chg}">فارغ</div>`;
+    const u = pr.units[ui];
+    const style = movedIds.has(u.id) ? `background:${col[1]};color:${col[0]}` : 'background:#eef2f1;color:#5b6f76';
+    return `<div class="mg-c${chg}" style="${style}">${esc(shortSubj(u.subjName))}<br><b>${esc(pr.classes[u.ci])}</b></div>`;
+  };
+  const grid = (after)=>{
+    let g = `<div class="mg" style="grid-template-columns:110px repeat(${slots.length}, minmax(60px, 1fr))"><span></span>${slots.map(sl=>`<span class="mg-h">${slotText(pr, sl)}</span>`).join('')}`;
+    rows.forEach(r=>{
+      const col = colors[r.tkey];
+      g += `<span class="mg-n" style="color:${col[0]}">${esc(r.tn)}</span>`;
+      slots.forEach(sl=>{
+        const b4 = unitAt(st, r, sl), af = unitAt(st2, r, sl);
+        g += after ? cell(af, col, af!==b4) : cell(b4, col, false);
+      });
+    });
+    return g + '</div>';
+  };
+  return `<div class="mg-wrap"><div class="mg-col"><b class="sub">قبل</b>${grid(false)}</div><div class="mg-col"><b style="color:var(--brand)">بعد</b>${grid(true)}</div></div>
+    <div class="sub" style="margin-top:6px"><span class="mg-key"></span> خانة تغيّرت · الخانات الرمادية حصص لا تتحرك</div>`;
+}
+
 function chooseOption(sk, S, opt){
   if(opt.status==='none'){ toast(opt.reason==='pinned'?'الحصة الهدف مثبَّتة':'لا يمكن هذا التبديل دون تعارض'); return; }
   if(opt.solutions.length===1 || opt.status==='direct'){ startPreview(sk, S, opt.solutions[0].moves); return; }
   const pr = S.pr;
-  const mvText = m=>{ const u=pr.units.find(x=>x.id===m.unitId); const tn = u.ti>=0 ? teacherName(pr.teachers[u.ti]) : 'عجز';
-    return `حصة ${esc(tn)} (${esc(u.subjName)} — ${esc(pr.classes[u.ci])}): ${WEEKDAYS[m.from.day]} ${ar(m.from.p+1)} ← ${WEEKDAYS[m.to.day]} ${ar(m.to.p+1)}`; };
-  modal(`<h2>حلول التبديل</h2><div class="sub">التبديل المطلوب يسبب تعارضًا، وهذه حلول تحلّه بتحريك حصص معلمين آخرين (مرتبة من الأقل حركة). الأنصبة لا تتغير.</div>
-    <div style="margin-top:10px">${opt.solutions.map((s,i)=>`<div class="sol" data-i="${i}"><b>الحل ${ar(i+1)}</b> — ${ar(s.moves.length)} حركات ${s.delta>0?`<span class="chip warn">يكسر رغبات (+${ar(s.delta)})</span>`:(s.delta<0?'<span class="chip ok">يحسّن الجدول</span>':'')}
-      <ol>${s.moves.map(m=>`<li>${mvText(m)}</li>`).join('')}</ol></div>`).join('')}</div>
+  const colors = solColors(pr, opt.solutions);
+  if(!SOL_VIEWS.some(v=>v.k===TT.ui.solView)) TT.ui.solView = 'text';
+  const viewOf = s=>{
+    const v = TT.ui.solView;
+    if(v==='color') return solViewColor(pr, s, colors);
+    if(v==='chain') return solViewChain(pr, s, colors);
+    if(v==='grid')  return solViewGrid(pr, S.st, s, colors);
+    return solViewText(pr, s);
+  };
+  const body = ()=>opt.solutions.map((s,i)=>`<div class="sol" data-i="${i}">
+      <div class="sol-head"><b>الحل ${ar(i+1)}</b> — ${ar(s.moves.length)} حركات ${s.delta>0?`<span class="chip warn">يكسر رغبات (+${ar(s.delta)})</span>`:(s.delta<0?'<span class="chip ok">يحسّن الجدول</span>':'')}
+        <span style="flex:1"></span><span class="sol-go">معاينة على الجدول ←</span></div>
+      <div class="sol-view">${viewOf(s)}</div></div>`).join('');
+  modal(`<h2>حلول التبديل</h2><div class="sub">التبديل المطلوب يسبب تعارضًا، وهذه حلول تحلّه بتحريك حصص معلمين آخرين (مرتبة من الأقل حركة). الأنصبة لا تتغير. اختر طريقة العرض الأوضح لك، ثم اضغط الحل لمعاينته.</div>
+    <div class="tabs sol-tabs">${SOL_VIEWS.map(v=>`<button type="button" data-sv="${v.k}" class="${TT.ui.solView===v.k?'active':''}">${v.l}</button>`).join('')}</div>
+    <div id="solBody">${body()}</div>
     <div class="modal-actions"><button class="btn sec" onclick="closeModal()">إلغاء</button></div>`, 'wide');
-  $$('#modalRoot .sol').forEach(el=>el.onclick=()=>{ closeModal(); startPreview(sk, S, opt.solutions[+el.dataset.i].moves); });
+  const bind = ()=>$$('#solBody .sol').forEach(el=>el.onclick=()=>{ closeModal(); startPreview(sk, S, opt.solutions[+el.dataset.i].moves); });
+  $$('#modalRoot [data-sv]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    TT.ui.solView = b.dataset.sv;
+    $$('#modalRoot [data-sv]').forEach(x=>x.classList.toggle('active', x===b));
+    $('#solBody').innerHTML = body(); bind();
+  });
+  bind();
 }
 function startPreview(sk, S, moves){
   const st2 = TTEngine.cloneState(S.st);
@@ -1743,6 +1928,31 @@ function renderSelBar(sk, S, editable){
     return;
   }
   if(!editable || !TT.sel || TT.sel.sk!==sk){ host.innerHTML=''; return; }
+  if(TT.sel.teacherRow){
+    const row = masterRows(S).find(r=>r.key===TT.sel.teacherRow);
+    if(!row || row.ti<0){ TT.sel=null; host.innerHTML=''; return; }
+    const all = S.pr.units.map((u,i)=>i).filter(i=>S.pr.units[i].ti===row.ti);
+    const placed = all.filter(i=>S.st.pos[i]>=0);
+    const pinnedN = placed.filter(i=>S.pins.has(S.pr.units[i].id)).length;
+    const allPinned = placed.length>0 && pinnedN===placed.length;
+    const unpl = all.length - placed.length;
+    host.innerHTML = `<div class="selbar"><b>${esc(row.name)}</b>
+      <span class="sub">${ar(placed.length)} حصة في الجدول · المثبَّت منها ${ar(pinnedN)}${unpl?` · غير موزعة ${ar(unpl)} (لا تُثبَّت)`:''}</span>
+      <span style="flex:1"></span>
+      <button class="btn sm sec" id="sbTPin" ${placed.length?'':'disabled'}>${allPinned?'إلغاء التثبيت':'📌 تثبيت'}</button>
+      <button class="btn sm ghost" id="sbX">إلغاء التحديد</button></div>`;
+    $('#sbX').onclick = ()=>{ TT.sel=null; renderTableBody(sk); };
+    $('#sbTPin').onclick = ()=>{
+      placed.forEach(i=>{
+        const u = S.pr.units[i];
+        if(allPinned){ S.pins.delete(u.id); u.pin = -1; }
+        else { S.pins.add(u.id); u.pin = S.st.pos[i]; }
+      });
+      saveStageState(S); renderTableBody(sk);
+      toast(allPinned ? 'أُلغي تثبيت جميع حصص المعلم' : 'ثُبِّتت جميع حصص المعلم');
+    };
+    return;
+  }
   const ui = S.pr.units.findIndex(u=>u.id===TT.sel.unitId); if(ui<0){ TT.sel=null; host.innerHTML=''; return; }
   const inf = unitInfo(S.pr, ui);
   const pinned = S.pins.has(inf.u.id);
@@ -2166,6 +2376,35 @@ function periodAssignmentsFor(tid){
 }
 const aKey = a=>String(a.classCode)+'::'+a.subject;
 function dedupeAssign(list){ const m = new Map(); list.forEach(a=>m.set(aKey(a), { classCode:String(a.classCode), subject:a.subject })); return [...m.values()]; }
+/* ---------- «جدولي»: نسخة منشورة من الجداول المعتمدة، مفهرسة بحساب كل مستخدم ---------- */
+// توقيع مختصر لحصص المستخدم: يتغير فقط إن تغيّرت حصصه هو، فيصله الإشعار وحده
+function schedSig(L){
+  const s = L.map(l=>[l.st,l.d,l.p,l.n,l.c,l.s].join('|')).join(';');
+  let h = 5381; for(let i=0;i<s.length;i++) h = ((h<<5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(36) + '.' + L.length;
+}
+function buildPublishedSchedule(idx){
+  const per = {}, missing = [];
+  enabledStages().forEach(s=>{
+    const doc = tableDoc(s.key, 'approved');
+    if(!doc || !(doc.lessons||[]).length){ missing.push(s.label); return; }
+    const { pr, st } = getStageState(s.key, 'approved');
+    pr.units.forEach((u,ui)=>{
+      if(u.ti<0 || st.pos[ui]<0) return;
+      const t = teacherById(pr.teachers[u.ti]); if(!t || !t.nid) return;
+      const usr = idx.byNid[normDigits(t.nid).trim()]; if(!usr || usr.pending || !usr.active) return;
+      const pos = st.pos[ui];
+      (per[usr.id] = per[usr.id] || []).push({ st: s.key, sl: s.label, d: pr.days[Math.floor(pos/pr.P)], p: pos%pr.P, n: u.len,
+        c: pr.classes[u.ci], cl: classLabel(pr.classes[u.ci]), s: u.subjName });
+    });
+  });
+  const byUser = {};
+  Object.keys(per).forEach(uid=>{
+    const L = per[uid].sort((a,b)=>a.d-b.d || a.p-b.p || a.st.localeCompare(b.st));
+    byUser[uid] = { sig: schedSig(L), lessons: L };
+  });
+  return { data: { publishedAt: Date.now(), by: TT.me.id, period: TT.period, byUser }, missing };
+}
 async function openPublish(){
   if(pendingSaves.size) await flushSaves();
   const idx = await ensureUserIndex(true);
@@ -2192,8 +2431,11 @@ async function openPublish(){
   });
   const linked = rows.filter(r=>r.status==='linked');
   const newSubjects = [...new Set(rows.flatMap(r=>r.list.map(a=>a.subject)))].filter(n=>!SYSTEM_FIXED_SUBJECTS.includes(n) && !TT.roster.customSubjects.includes(n));
+  const noApproved = enabledStages().filter(s=>{ const d = tableDoc(s.key,'approved'); return !d || !(d.lessons||[]).length; }).map(s=>s.label);
   modal(`<h2>نشر إسناد ${esc(PERIOD_LABEL[P])}</h2>
     <div class="sub">يُكتب لكل معلم مرتبط: إسناد هذه الفترة، ومجموع الفترتين في القائمة العامة (حتى لا يفقد أحد وصوله لو أُزيلت الأداة)، وتُضاف فصوله إلى فصوله المسندة.</div>
+    <div class="alert info" style="margin-top:10px">ويُنشر الجدول <b>المعتمد</b> لكل مرحلة في «لوحتي ← جدولي» لدى كل مستخدم مرتبط، ويصل إشعار فقط لمن تغيّر جدوله منذ آخر نشر. أي اعتماد لاحق لا يظهر للمستخدمين حتى تنشر مرة أخرى.</div>
+    ${noApproved.length?`<div class="alert warn" style="margin-top:8px">لا يوجد جدول معتمد لـ: ${noApproved.map(esc).join('، ')} — لن تُنشر حصصها في «جدولي».</div>`:''}
     <table class="tbl" style="margin-top:10px"><tr><th>المعلم</th><th>الحساب</th><th>المواد × الشعب</th><th>يُضاف</th><th>يُزال</th></tr>
     ${rows.map(r=>`<tr><td class="r">${esc(r.t.name)}${r.orphan?' <span class="chip warn">لم يعد في الجدول</span>':''}</td>
       <td>${r.status==='linked'?'<span class="chip ok">مرتبط</span>':(r.status==='pending'?'<span class="chip warn">لم يُفعَّل بعد</span>':'<span class="chip">غير مرتبط</span>')}</td>
@@ -2243,11 +2485,18 @@ async function openPublish(){
         TT.roster.customSubjects = TT.roster.customSubjects.concat(newSubjects);
       }catch(e){ fail.push('قائمة المواد ('+(e.message||e)+')'); }
     }
+    // نشر «جدولي»: نسخة ثابتة من الجداول المعتمدة الآن، مفهرسة بحساب كل مستخدم (قراءة لأي موظف بالمدرسة)
+    let schedUsers = 0;
+    try{
+      const { data } = buildPublishedSchedule(idx);
+      await ttCol().doc(docIds.published(P)).set({ value: JSON.stringify(data), rev: Date.now(), updatedAt: Date.now(), updatedBy: TT.me.id, sid: TT.sid });
+      schedUsers = Object.keys(data.byUser).length;
+    }catch(e){ fail.push('نشر الجدول في «جدولي» ('+(e.message||e)+')'); }
     const meta = D(docIds.meta()); meta.published = meta.published||{};
     meta.published[P] = { at: Date.now(), by: TT.me.id, count: ok, unlinked: rows.filter(r=>r.status!=='linked').length };
     markDirty(docIds.meta());
     TT.userIndex = null;
-    modal(`<h2>${fail.length?'⚠️ اكتمل النشر مع أخطاء':'✔ تم النشر'}</h2><div>نُشر الإسناد إلى ${ar(ok)} حساب.</div>
+    modal(`<h2>${fail.length?'⚠️ اكتمل النشر مع أخطاء':'✔ تم النشر'}</h2><div>نُشر الإسناد إلى ${ar(ok)} حساب.</div><div>ونُشر الجدول في «جدولي» لـ${ar(schedUsers)} مستخدم.</div>
       ${fail.length?`<div class="alert err" style="margin-top:10px">تعذّر: <ul>${fail.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div>`:''}
       <div class="modal-actions"><button class="btn" onclick="closeModal();show('export')">حسنًا</button></div>`);
   };

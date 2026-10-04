@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-03.1 -->
+<!-- إصدار: 2026-10-03.2 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -83,7 +83,7 @@ function fatal(msg){
     <button class="tb-btn" style="background:var(--brand);color:#fff" onclick="location.href='index.html'">العودة للرئيسية</button></div>`;
 }
 
-const MS = { session:null, sid:null, me:null, period:'first' };
+const MS = { session:null, sid:null, me:null, period:'first', seenSig:'' };
 (function start(){
   let s=null; try{ s = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){}
   if(!s || !s.userId){ location.replace('index.html'); return; }
@@ -107,6 +107,7 @@ async function boot(au){
   if(u.role!=='schoolAdmin'){
     const ctx = (u.schools||{})[MS.sid];
     if(!ctx || ctx.active===false){ fatal('ليست لديك صلاحية الوصول لهذه المدرسة.'); return; }
+    MS.seenSig = ((ctx.schedSeenSig||{})[MS.period]) || '';
   } else if(!(u.adminSchools||[]).includes(MS.sid)){
     fatal('لا يمكن الوصول لهذه المدرسة.'); return;
   }
@@ -120,61 +121,52 @@ async function boot(au){
   await renderSchedule();
 }
 
+// يُقرأ من النسخة المنشورة فقط ({period}_published) — يكتبها زر «نشر» في أداة الجدول، مفهرسة بحساب كل مستخدم.
+// الاعتماد وحده لا يظهر هنا حتى يُنشَر.
 async function loadMySchedule(){
-  const period = MS.period, sid = MS.sid;
-  const result = { lessons:[], latestApprovedAt:0 };
-  const col = db.collection('timetables').doc(sid).collection('data');
-  let subjMap = {};
+  const res = { published:false, publishedAt:0, sig:'', lessons:[] };
+  const snap = await db.collection('timetables').doc(MS.sid).collection('data').doc(MS.period+'_published').get();
+  if(!snap.exists) return res;
+  let data = null; try{ data = JSON.parse(snap.data().value||'null'); }catch(e){}
+  if(!data) return res;
+  res.published = true; res.publishedAt = data.publishedAt || 0;
+  const mine = (data.byUser||{})[MS.me.id];
+  if(mine){ res.sig = mine.sig || ''; res.lessons = mine.lessons || []; }
+  return res;
+}
+// ما شاهده المستخدم آخر مرة: في مستنده (schools.{sid}.schedSeenSig.{period})، ولمدير المدرسة في المتصفح
+// (مستنده مستقل بلا خريطة schools[sid] ولا يعدّله بنفسه)
+const seenKey = ()=>'injaz_schedSeen_'+MS.me.id+'_'+MS.sid+'_'+MS.period;
+async function markSeen(sig){
+  if(MS.me.role==='schoolAdmin'){ try{ localStorage.setItem(seenKey(), sig); }catch(e){} return; }
+  if(sig===MS.seenSig) return;
   try{
-    const cfgSnap = await col.doc(period+'_config').get();
-    if(cfgSnap.exists){
-      const cfgData = JSON.parse(cfgSnap.data().value||'null');
-      if(cfgData && cfgData.plans) Object.values(cfgData.plans).forEach(arr=>{ (arr||[]).forEach(s=>{ if(s && s.id) subjMap[s.id]=s.name||'—'; }); });
-    }
+    await db.collection('users').doc(MS.me.id).update({ ['schools.'+MS.sid+'.schedSeenSig.'+MS.period]: sig, updatedAt: Date.now() });
+    MS.seenSig = sig;
   }catch(e){}
-  for(const sk of ['p','m','h']){
-    try{
-      const tSnap = await col.doc(period+'_'+sk+'_approved').get();
-      if(!tSnap.exists) continue;
-      const tData = JSON.parse(tSnap.data().value||'null'); if(!tData) continue;
-      if(tData.approvedAt && tData.approvedAt>result.latestApprovedAt) result.latestApprovedAt = tData.approvedAt;
-      (tData.lessons||[]).forEach(l=>{
-        if(l.t!==MS.me.id) return;
-        result.lessons.push({ day:l.d, period:l.p, len:l.n||1, classCode:l.c, subject: subjMap[l.s]||'—' });
-      });
-    }catch(e){}
-  }
-  result.lessons.sort((a,b)=> a.day-b.day || a.period-b.period);
-  return result;
 }
 
 async function renderSchedule(){
   $('#main').innerHTML = `<div class="empty"><span class="spin"></span></div>`;
-  let sched; try{ sched = await loadMySchedule(); }catch(e){ sched = {lessons:[], latestApprovedAt:0}; }
-
-  // تسجيل اطّلاع فوري — مدير المدرسة مستند مستقل بلا خريطة schools[sid]، فيُستثنى من هذا التسجيل
-  if(sched.lessons.length && sched.latestApprovedAt && MS.me.role!=='schoolAdmin'){
-    try{
-      await db.collection('users').doc(MS.me.id).update({
-        ['schools.'+MS.sid+'.schedSeenAt.'+MS.period]: sched.latestApprovedAt, updatedAt: Date.now()
-      });
-    }catch(e){}
-  }
+  let sched; try{ sched = await loadMySchedule(); }catch(e){ sched = { published:false, lessons:[], sig:'' }; }
+  if(sched.published) await markSeen(sched.sig);   // تسجيل الاطّلاع فورًا فيختفي الإشعار
 
   if(!sched.lessons.length){
-    $('#main').innerHTML = `<div class="empty"><span class="e-emoji">📅</span>لا يوجد جدول معتمَد لك حتى الآن لهذه الفترة.</div>`;
+    $('#main').innerHTML = `<div class="empty"><span class="e-emoji">📅</span>${sched.published?'لا توجد لك حصص في الجدول المنشور لهذه الفترة.':'لم يُنشر الجدول بعد لهذه الفترة.'}</div>`;
     return;
   }
+  const multiStage = new Set(sched.lessons.map(l=>l.st)).size > 1;
   const byDay = {};
-  sched.lessons.forEach(l=>{ (byDay[l.day]=byDay[l.day]||[]).push(l); });
+  sched.lessons.forEach(l=>{ (byDay[l.d]=byDay[l.d]||[]).push(l); });
   const days = Object.keys(byDay).map(Number).sort((a,b)=>a-b);
-  $('#main').innerHTML = days.map(d=>`
+  $('#main').innerHTML = (sched.publishedAt ? `<div class="sub" style="margin-bottom:10px">آخر نشر: ${esc(new Date(sched.publishedAt).toLocaleString('ar-SA'))}</div>` : '')
+    + days.map(d=>`
     <div class="card">
       <h3>${esc(WEEKDAYS[d]||'')}</h3>
-      ${byDay[d].sort((a,b)=>a.period-b.period).map(l=>`
+      ${byDay[d].sort((a,b)=>a.p-b.p).map(l=>`
         <div class="lesson-row">
-          <span>الحصة ${l.period+1}${l.len>1?' (مزدوجة)':''}</span>
-          <span>${esc(l.subject)} — ${esc(l.classCode)}</span>
+          <span>الحصة ${l.p+1}${l.n>1?' (مزدوجة)':''}${multiStage?` <span class="sub">— ${esc(l.sl||'')}</span>`:''}</span>
+          <span>${esc(l.s)} — ${esc(l.cl||l.c)}</span>
         </div>`).join('')}
     </div>`).join('');
 }

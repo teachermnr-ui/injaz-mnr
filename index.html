@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-03.3 -->
+<!-- إصدار: 2026-10-03.4 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -663,12 +663,14 @@ async function refreshMyBoardAlerts(){
     }
   }catch(e){ /* صمت: لا داعي لكسر الدخول لو تعذّرت قراءة التعاميم */ }
   try{
-    const sched = await loadMySchedule();
-    // مدير المدرسة مستند مستقل بلا خريطة schools[sid] يُسجَّل فيها الاطّلاع — لا نظهر له علامة تغيير لا تُقفل أبدًا
-    if(CURRENT.role!=='schoolAdmin'){
-      const seen = ((CURRENT.schools||{})[CURRENT.schoolId]||{}).schedSeenAt || {};
-      const seenAt = seen[SESSION.period] || 0;
-      MYBOARD.scheduleChanged = !!(sched.lessons.length && sched.latestApprovedAt && sched.latestApprovedAt > seenAt);
+    // الإشعار فقط لمن تغيّرت حصصه هو منذ آخر اطّلاع: توقيع حصصه في النسخة المنشورة مقابل ما شاهده آخر مرة.
+    // مدير المدرسة مستنده مستقل بلا خريطة schools[sid]، فيُحفظ اطّلاعه في المتصفح.
+    const pub = await loadMySchedule();
+    if(pub.published){
+      let seen = '';
+      if(CURRENT.role==='schoolAdmin'){ try{ seen = localStorage.getItem('injaz_schedSeen_'+CURRENT.id+'_'+CURRENT.schoolId+'_'+SESSION.period) || ''; }catch(e){} }
+      else seen = ((((CURRENT.schools||{})[CURRENT.schoolId]||{}).schedSeenSig)||{})[SESSION.period] || '';
+      MYBOARD.scheduleChanged = pub.sig !== seen;
     }
   }catch(e){ /* صمت: الجدول أداة منفصلة قد لا تكون مفعَّلة أصلًا لهذه المدرسة */ }
   updateMyBoardBadges();
@@ -688,20 +690,17 @@ function updateMyBoardBadges(){
    قراءة فقط، لا تتطلّب صلاحية الأداة نفسها (قاعدة Firestore تسمح لأي موظف فعّال بقراءة مستندات
    الخطة والجدول المعتمد تحديدًا، لا غير — أنظر firestore.rules). تُستخدَم هنا فقط لحساب علامة التنبيه؛
    العرض الفعلي للجدول بصفحة myschedule.html المستقلة. */
+// النسخة المنشورة من الجدول ({period}_published، يكتبها زر «نشر» في أداة الجدول) — توقيع حصص هذا المستخدم فقط
 async function loadMySchedule(){
-  const period = SESSION.period, sid = CURRENT.schoolId;
-  const result = { lessons:[], latestApprovedAt:0 };
-  const col = db.collection('timetables').doc(sid).collection('data');
-  for(const sk of ['p','m','h']){
-    try{
-      const tSnap = await col.doc(period+'_'+sk+'_approved').get();
-      if(!tSnap.exists) continue;
-      const tData = JSON.parse(tSnap.data().value||'null'); if(!tData) continue;
-      if(tData.approvedAt && tData.approvedAt>result.latestApprovedAt) result.latestApprovedAt = tData.approvedAt;
-      (tData.lessons||[]).forEach(l=>{ if(l.t===CURRENT.id) result.lessons.push(l); });
-    }catch(e){}
-  }
-  return result;
+  const res = { published:false, sig:'' };
+  const snap = await db.collection('timetables').doc(CURRENT.schoolId).collection('data').doc(SESSION.period+'_published').get();
+  if(!snap.exists) return res;
+  let data = null; try{ data = JSON.parse(snap.data().value||'null'); }catch(e){}
+  if(!data) return res;
+  res.published = true;
+  const mine = (data.byUser||{})[CURRENT.id];
+  res.sig = mine ? (mine.sig||'') : '';
+  return res;
 }
 /* ---------- القائمة المنسدلة لـ«لوحتي» (نفس أسلوب قائمة «أدوات إدارية» تمامًا) ---------- */
 function closeMyBoardMenu(){

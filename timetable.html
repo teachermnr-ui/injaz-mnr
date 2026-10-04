@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-03.1 -->
+<!-- إصدار: 2026-10-04.1 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -2403,7 +2403,23 @@ function buildPublishedSchedule(idx){
     const L = per[uid].sort((a,b)=>a.d-b.d || a.p-b.p || a.st.localeCompare(b.st));
     byUser[uid] = { sig: schedSig(L), lessons: L };
   });
-  return { data: { publishedAt: Date.now(), by: TT.me.id, period: TT.period, byUser }, missing };
+  // شكل الشبكة لكل مرحلة (مطابق لـsingleGridHTML في «جدول معلم»): الأيام، حصص كل يوم، والأعمدة بالفسح والصلاة وأوقاتها
+  const layouts = {};
+  enabledStages().forEach(s=>{
+    const doc = tableDoc(s.key, 'approved'); if(!doc || !(doc.lessons||[]).length) return;
+    const sc = stageCfg(s.key), mp = maxP(s.key);
+    const refW = sc.days.reduce((a,w)=>(+sc.ppd[w]||0)>(+sc.ppd[a]||0)?w:a, sc.days[0]);
+    const refBell = bell(s.key, refW);
+    const cols = [];
+    for(let p=0;p<mp;p++){
+      const t = refBell.periods[p];
+      cols.push({ k:'p', p, t: t ? fmtTime(t.start)+' – '+fmtTime(t.end) : '' });
+      refBell.events.filter(e=>e.after===p+1).forEach(e=>cols.push({ k:'b', type: e.type }));
+    }
+    const ppd = {}; sc.days.forEach(w=>ppd[w] = +sc.ppd[w]||0);
+    layouts[s.key] = { label: s.label, days: sc.days.slice(), ppd, cols };
+  });
+  return { data: { publishedAt: Date.now(), by: TT.me.id, period: TT.period, layouts, byUser }, missing };
 }
 async function openPublish(){
   if(pendingSaves.size) await flushSaves();

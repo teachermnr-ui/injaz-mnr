@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-04.1 -->
+<!-- إصدار: 2026-10-04.2 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -269,6 +269,7 @@ table.tt td.nm.nm-sel{background:#cfe3ff;box-shadow:inset 0 0 0 2px var(--info)}
       <button data-sec="report">📊 تقرير التغطية</button>
       <button data-sec="table">🗓️ الجدول</button>
       <button data-sec="export">📤 التصدير والنشر</button>
+      <button data-sec="waiting">⏳ حصص الانتظار</button>
       <div class="side-note" id="sideNote"></div>
     </nav>
     <main id="main"><div id="ttBanner"></div><div id="mainBody"></div></main>
@@ -366,6 +367,7 @@ function shortSubj(n){ const w = String(n||'').trim().split(/\s+/); return w.len
 const TT = {
   session:null, sid:null, schoolName:'', schoolCode:'', period:'first',
   me:{ id:null, role:'', name:'' }, canView:false, canEdit:false, canPublish:false,
+  canWait:false, waitOnly:false,   // حصص الانتظار: كاملة للوكيل (بالدور) أو تفويض «حصص الانتظار»، ولصاحب تعديل الجدول
   roster:{ classes:[], students:[], customSubjects:[] },
   docs:{},            // id -> { rev, data }
   sec:'settings',
@@ -383,7 +385,10 @@ const docIds = {
   config:   (p)=>(p||TT.period)+'_config',
   assign:   (p)=>(p||TT.period)+'_assign',
   table:    (sk,which,p)=>(p||TT.period)+'_'+sk+'_'+(which||'draft'),
-  published:(p)=>(p||TT.period)+'_published'   // نسخة «جدولي» المنشورة لكل مستخدم (تُكتب عند النشر فقط)
+  published:(p)=>(p||TT.period)+'_published',   // نسخة «جدولي» المنشورة لكل مستخدم (تُكتب عند النشر فقط)
+  waiting:  (p)=>(p||TT.period)+'_waiting',     // جدول الانتظار (التوزيع، حدود المعلمين، المستثنون) — للإدارة وصاحب الصلاحية
+  waitpub:  (p)=>(p||TT.period)+'_waitpub',     // المنشور منه: مواقع «انتظار» لكل مستخدم في «جدولي» (بلا ترتيب)
+  wday:     (date,p)=>(p||TT.period)+'_wday_'+date   // التحديد اليومي للانتظار (الغائبون والبدلاء) — يقرؤه الموظفون
 };
 async function loadDoc(id){
   const snap = await ttCol().doc(id).get();
@@ -427,8 +432,10 @@ async function saveDocExternal(id, data, expectedRev){
   return newRev;
 }
 const pendingSaves = new Set(); let saveTimer = null, saving = false, saveBroken = false;
+const isWaitDoc = id=>/_(waiting|waitpub)$|_wday_/.test(id);
 function markDirty(id){
-  if(!TT.canEdit || saveBroken) return;
+  if(saveBroken) return;
+  if(!TT.canEdit && !(TT.canWait && isWaitDoc(id))) return;
   pendingSaves.add(id);
   setSaveStatus('غير محفوظ…');
   clearTimeout(saveTimer);
@@ -511,9 +518,14 @@ async function boot(au){
     if(!ctx || ctx.active===false){ fatal('ليست لديك صلاحية الوصول لهذه الأداة.'); return; }
     TT.me.role = ctx.role||'';
     const p = (ctx.permissions||{})['tools.timetable'] || {};
+    const pw = (ctx.permissions||{})['tools.waiting'] || {};
     TT.canView = !!p.access; TT.canEdit = !!p.edit; TT.canPublish = false;
+    // حصص الانتظار: الوكيل (بالدور) أو تفويض «حصص الانتظار» — صلاحية كاملة على الانتظار وحده، وعرض فقط لباقي الأداة
+    TT.canWait = TT.canEdit || ctx.role==='agent' || !!pw.edit;
+    if(!TT.canView && TT.canWait){ TT.canView = true; TT.waitOnly = true; }
     if(!TT.canView){ fatal('ليست لديك صلاحية الوصول إلى «بناء الجدول المدرسي».'); return; }
   }
+  if(TT.me.role==='admin' || TT.me.role==='schoolAdmin') TT.canWait = true;
   // مراقبة إيقاف الحساب أثناء العمل
   db.collection('users').doc(TT.me.id).onSnapshot(sn=>{
     if(!sn.exists || sn.data().active===false){ try{ localStorage.removeItem('cls_session'); }catch(e){} location.replace('index.html'); }
@@ -548,7 +560,7 @@ async function loadRoster(){
   TT.roster.customSubjects = Array.isArray(d.customSubjects) ? d.customSubjects : [];
 }
 async function loadAll(){
-  await Promise.all([ loadDoc(docIds.teachers()), loadDoc(docIds.meta()), loadDoc(docIds.config()), loadDoc(docIds.assign()) ]);
+  await Promise.all([ loadDoc(docIds.teachers()), loadDoc(docIds.meta()), loadDoc(docIds.config()), loadDoc(docIds.assign()), loadDoc(docIds.waiting()) ]);
   const tasks = [];
   STAGES.forEach(s=>{ tasks.push(loadDoc(docIds.table(s.key,'draft'))); tasks.push(loadDoc(docIds.table(s.key,'approved'))); });
   await Promise.all(tasks);
@@ -620,6 +632,8 @@ function initChrome(){
     $('#tbSwitchSchool').onclick = ()=>{ try{ sessionStorage.removeItem('cls_admin_school'); sessionStorage.removeItem('cls_admin_school_name'); }catch(e){} location.reload(); };
   }
   $$('#sideNav button[data-sec]').forEach(b=>b.onclick=()=>show(b.dataset.sec));
+  if(TT.waitOnly){ $$('#sideNav button[data-sec]').forEach(b=>{ if(b.dataset.sec!=='waiting') b.classList.add('hidden'); }); TT.sec = 'waiting'; $('#tbMode').textContent = 'حصص الانتظار'; }
+  try{ const q = new URLSearchParams(location.search).get('sec'); if(q==='waiting') TT.sec = 'waiting'; }catch(e){}
   $('#sideNote').innerHTML = 'كل فترة مستقلة بموادها وإسنادها وجدولها. سجل المعلمين مشترك بين الفترتين.';
 }
 const SECTIONS = {};
@@ -635,6 +649,7 @@ function show(sec){
 function toolIsActive(){ const m=D(docIds.meta()); return !!m && m.toolActive!==false; }
 function renderToolBanner(){
   const el = $('#ttBanner'); if(!el) return;
+  if(TT.waitOnly){ el.innerHTML=''; return; }   // الوكيل في وضع «حصص الانتظار» فقط
   const m = D(docIds.meta());
   if(!m){ el.innerHTML=''; return; }
   if(toolIsActive()){
@@ -2516,6 +2531,404 @@ async function openPublish(){
       ${fail.length?`<div class="alert err" style="margin-top:10px">تعذّر: <ul>${fail.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div>`:''}
       <div class="modal-actions"><button class="btn" onclick="closeModal();show('export')">حسنًا</button></div>`);
   };
+}
+
+/* =========================================================================
+   حصص الانتظار (ص-٢)
+   - جدول انتظار لكل مرحلة بنفس أيام وحصص الجدول المدرسي، لا علاقة له بالفصل أو المادة.
+   - حد المعلم: النصاب + الانتظار ≤ حدّه (افتراضيًا نصابه النظامي ٢٤، ويُعدَّل لكل معلم)، وحصة انتظار واحدة في اليوم (إلزامي).
+   - يتجنب يومه الذهبي؛ وإن تعذّر باختيار معلم آخر: بعد آخر حصة له مباشرة أو في فراغ قبلها.
+   - الحصة الواحدة: من ١ إلى ٤ معلمين (انتظار١..٤)، ويُعبَّأ الجدول قدر الإمكان. المستثنى لا يدخل التوزيع الآلي ويُسنَد يدويًا.
+   - النشر: «انتظار» في «جدولي» لكل معلم (بلا رقم)؛ الجدول العام للمدير وصاحب الصلاحية فقط.
+   - التحديد اليومي: الغائبون (يوم كامل) ← حصصهم الرسمية ← اختيار البديل (من معلمي انتظار الحصة، أو أي فارغ عبر +)،
+     مع عدد أيام انتظاره هذا الأسبوع؛ ثم «اعتماد وإرسال» يصل البديل في «لوحتي»، وطباعة «سجل توزيع حصص الانتظار» وإرساله واتساب PDF.
+   ========================================================================= */
+const W_MAX = 4;
+const W_ORD = ['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة','الثامنة','التاسعة','العاشرة'];
+TT.wsub = 'setup'; TT.wdate = null; TT.wdayCache = {};
+function wdoc(){
+  const id = docIds.waiting();
+  if(!D(id)) TT.docs[id] = { rev: TT.docs[id] ? TT.docs[id].rev : 0, data:{ caps:{}, excluded:{}, grid:{} } };
+  const d = D(id); d.caps = d.caps||{}; d.excluded = d.excluded||{}; d.grid = d.grid||{};
+  return d;
+}
+const wKey = (d,p)=>d+'|'+p;
+function wCell(sk, d, p){ const g = wdoc().grid[sk] || {}; return g[wKey(d,p)] || []; }
+function wSetCell(sk, d, p, list){ const W = wdoc(); W.grid[sk] = W.grid[sk] || {}; if(list.length) W.grid[sk][wKey(d,p)] = list; else delete W.grid[sk][wKey(d,p)]; W.updatedAt = Date.now(); markDirty(docIds.waiting()); }
+const wStages = ()=>enabledStages().filter(s=>{ const d=tableDoc(s.key,'approved'); return d && (d.lessons||[]).length; });
+// حصص المعلم المعتمدة لكل مرحلة: {sk: {w: Set(p)}}
+function wLessonMap(){
+  if(TT._wLM) return TT._wLM;
+  const m = {};
+  STAGES.forEach(s=>{
+    if(!stageCfg(s.key) || !stageCfg(s.key).enabled) return;
+    const doc = tableDoc(s.key,'approved');
+    (doc && doc.lessons || []).forEach(l=>{
+      if(l.d==null || !l.t) return;
+      const a = ((m[l.t] = m[l.t] || {})[s.key] = m[l.t][s.key] || {});
+      const set = a[l.d] = a[l.d] || new Set();
+      for(let k=0;k<(l.n||1);k++) set.add(l.p+k);
+    });
+  });
+  TT._wLM = m; return m;
+}
+// مشغول في (مرحلة، يوم، حصة)؟ — حصته بالمرحلة نفسها، أو حصة بمرحلة أخرى يتقاطع وقتها
+function wBusy(tid, sk, d, p){
+  const m = wLessonMap()[tid] || {};
+  if(m[sk] && m[sk][d] && m[sk][d].has(p)) return true;
+  const pp = bell(sk, d).periods[p]; if(!pp) return true;
+  return Object.keys(m).some(o=>{
+    if(o===sk || !m[o][d]) return false;
+    const b = bell(o, d);
+    return [...m[o][d]].some(q=>{ const x=b.periods[q]; return x && x.start < pp.end && pp.start < x.end; });
+  });
+}
+function wLast(tid, sk, d){ const m = wLessonMap()[tid] || {}; const set = m[sk] && m[sk][d]; return set && set.size ? Math.max(...set) : -1; }
+function wGolden(tid, sk){
+  try{ const S = getStageState(sk,'approved'); const ti = S.pr.teachers.indexOf(tid); return ti>=0 ? S.pr.goldenTarget[ti] : -1; }catch(e){ return -1; }
+}
+function wLoad(tid){ return ((teacherLoads()[tid])||{}).total || 0; }
+function wCap(tid){ const W = wdoc(); if(W.caps[tid]!=null) return +W.caps[tid]; const t = teacherById(tid); return +(t && t.quota) || 24; }
+function wTeachersOf(sk){ return teachers().filter(t=>(teacherStagesNow(t)||[]).includes(sk) && wLessonMap()[t.id]); }
+// ما خُصِّص للمعلم: {count, days:Set(w)} عبر كل المراحل
+function wAssigned(){
+  const a = {};
+  Object.entries(wdoc().grid).forEach(([sk,g])=>Object.entries(g||{}).forEach(([k,list])=>{ const d=+k.split('|')[0]; list.forEach(tid=>{ const x = a[tid] = a[tid] || { count:0, days:new Set() }; x.count++; x.days.add(d); }); }));
+  return a;
+}
+function wNeed(tid){ return Math.max(0, wCap(tid) - wLoad(tid)); }
+function wGoldenOk(tid, sk, d, p){ const g = wGolden(tid, sk); if(g!==d) return true; const last = wLast(tid, sk, d); return p <= last+1; }
+
+/* ---------- التوزيع الآلي ---------- */
+function wAutoDistribute(){
+  const W = wdoc(); W.grid = {};
+  const stages = wStages();
+  const used = {};       // tid -> Set(days)
+  const need = {};       // tid -> remaining
+  const all = new Set();
+  stages.forEach(s=>wTeachersOf(s.key).forEach(t=>all.add(t.id)));
+  all.forEach(tid=>{ used[tid] = new Set(); need[tid] = W.excluded[tid] ? 0 : wNeed(tid); });
+  const slots = [];
+  stages.forEach(s=>{ const sc = stageCfg(s.key); sc.days.forEach(d=>{ for(let p=0;p<(+sc.ppd[d]||0);p++) slots.push({ sk:s.key, d, p }); }); });
+  const cnt = sl=>((W.grid[sl.sk]||{})[wKey(sl.d,sl.p)]||[]).length;
+  const cands = sl=>wTeachersOf(sl.sk).map(t=>t.id).filter(tid=>need[tid]>0 && !used[tid].has(sl.d) && !wBusy(tid, sl.sk, sl.d, sl.p) && wGoldenOk(tid, sl.sk, sl.d, sl.p));
+  const isG = (tid, sl)=>wGolden(tid, sl.sk)===sl.d ? 1 : 0;
+  const put = (tid, sl)=>{ W.grid[sl.sk] = W.grid[sl.sk] || {}; const k = wKey(sl.d,sl.p); (W.grid[sl.sk][k] = W.grid[sl.sk][k] || []).push(tid); used[tid].add(sl.d); need[tid]--; };
+  // ١) تغطية الخانات الفارغة: الأصعب أولًا (أقل عدد مرشحين)
+  let guard = 0;
+  while(guard++ < 5000){
+    let best = null, bestC = null;
+    slots.forEach(sl=>{ if(cnt(sl)) return; const c = cands(sl); if(!c.length) return; if(!best || c.length < bestC.length){ best = sl; bestC = c; } });
+    if(!best) break;
+    bestC.sort((a,b)=> isG(a,best)-isG(b,best) || need[b]-need[a] || a.localeCompare(b));
+    put(bestC[0], best);
+  }
+  // ٢) إكمال حصص كل معلم حتى حده (يوم واحد لكل يوم)، بالتناوب بين المعلمين، وأقل الخانات ازدحامًا أولًا
+  let progress = true; guard = 0;
+  while(progress && guard++ < 200){
+    progress = false;
+    [...all].filter(tid=>need[tid]>0).sort((a,b)=>need[b]-need[a]).forEach(tid=>{
+      const opts = slots.filter(sl=>cnt(sl) < W_MAX && wTeachersOf(sl.sk).some(t=>t.id===tid) && !used[tid].has(sl.d) && !wBusy(tid, sl.sk, sl.d, sl.p) && wGoldenOk(tid, sl.sk, sl.d, sl.p));
+      if(!opts.length) return;
+      opts.sort((a,b)=> isG(tid,a)-isG(tid,b) || cnt(a)-cnt(b) || a.d-b.d || a.p-b.p);
+      put(tid, opts[0]); progress = true;
+    });
+  }
+  W.generatedAt = Date.now(); W.updatedAt = Date.now();
+  markDirty(docIds.waiting());
+}
+
+/* ---------- القسم ---------- */
+SECTIONS.waiting = function(main){
+  TT._wLM = null;
+  const stages = wStages();
+  const W = wdoc();
+  const pubTxt = W.publishedAt ? 'منشور '+new Date(W.publishedAt).toLocaleString('ar-SA') + (W.updatedAt > W.publishedAt ? ' — <b style="color:var(--warn)">عُدِّل بعد النشر</b>' : '') : 'لم يُنشر بعد';
+  main.innerHTML = `<div class="card"><div class="card-head"><h3>⏳ حصص الانتظار</h3>
+      <button class="btn sm ${TT.wsub==='setup'?'':'sec'}" data-ws="setup">جدول الانتظار</button>
+      <button class="btn sm ${TT.wsub==='daily'?'':'sec'}" data-ws="daily">تحديد الانتظار اليومي</button></div>
+      <div class="sub" style="margin-top:6px">${TT.canWait?'':'عرض فقط. '}الحالة: ${pubTxt}</div></div>
+    <div id="wBody"></div>`;
+  $$('[data-ws]').forEach(b=>b.onclick=()=>{ TT.wsub = b.dataset.ws; show('waiting'); });
+  if(!stages.length){ $('#wBody').innerHTML = '<div class="empty">لا يوجد جدول معتمد بعد. اعتمد الجدول المدرسي أولًا — منه تُحسب أوقات فراغ المعلمين.</div>'; return; }
+  if(TT.wsub==='daily') wRenderDaily($('#wBody')); else wRenderSetup($('#wBody'));
+};
+function wGridHtml(sk, cellFn){
+  const sc = stageCfg(sk), mp = maxP(sk);
+  let h = `<div class="tbl-wrap" style="overflow-x:auto"><table class="tbl" style="min-width:${120+mp*120}px"><tr><th style="width:80px">اليوم</th>${Array.from({length:mp},(_,p)=>`<th>${W_ORD[p]||ar(p+1)}</th>`).join('')}</tr>`;
+  sc.days.forEach(d=>{
+    h += `<tr><th>${WEEKDAYS[d]}</th>`;
+    for(let p=0;p<mp;p++) h += p < (+sc.ppd[d]||0) ? cellFn(d,p) : '<td style="background:#f3f3f3"></td>';
+    h += '</tr>';
+  });
+  return h + '</table></div>';
+}
+function wRenderSetup(body){
+  const W = wdoc(), stages = wStages(), A = wAssigned();
+  const allT = []; const seen = new Set();
+  stages.forEach(s=>wTeachersOf(s.key).forEach(t=>{ if(!seen.has(t.id)){ seen.add(t.id); allT.push(t); } }));
+  allT.sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  const ed = TT.canWait;
+  const rows = allT.map(t=>{
+    const load = wLoad(t.id), cap = wCap(t.id), got = (A[t.id]||{}).count||0, target = W.excluded[t.id] ? 0 : Math.min(wNeed(t.id), 5);
+    const gd = stages.map(s=>{ const g = wGolden(t.id, s.key); return g>=0 && (teacherStagesNow(t)||[]).includes(s.key) ? WEEKDAYS[g] : ''; }).filter(Boolean);
+    return `<tr><td class="r">${esc(t.name)}</td><td>${ar(load)}</td>
+      <td>${ed?`<input type="number" class="sm num" min="0" max="40" data-cap="${t.id}" value="${cap}" style="width:64px">`:ar(cap)}</td>
+      <td>${ar(got)}${W.excluded[t.id]?'':` / ${ar(target)}`}${!W.excluded[t.id] && got<target?' <span class="chip warn">ناقص</span>':''}${got && load+got>cap?' <span class="chip err">تجاوز الحد</span>':''}${!got && load>=cap?' <span class="chip">نصابه مكتمل</span>':''}</td>
+      <td>${esc([...new Set(gd)].join('، ')||'—')}</td>
+      <td><label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" data-exc="${t.id}" ${W.excluded[t.id]?'checked':''} ${ed?'':'disabled'}> مستثنى</label></td></tr>`;
+  }).join('');
+  const empty = stages.reduce((n,s)=>{ const sc=stageCfg(s.key); sc.days.forEach(d=>{ for(let p=0;p<(+sc.ppd[d]||0);p++) if(!wCell(s.key,d,p).length) n++; }); return n; }, 0);
+  body.innerHTML = `
+    <div class="card"><div class="card-head"><h3>التوزيع والنشر</h3>
+      ${ed?'<button class="btn" id="wAuto">⚙️ توزيع تلقائي</button><button class="btn sec" id="wPub">✔ اعتماد ونشر</button>':''}
+      <button class="btn sec" id="wPrint">🖨️ طباعة PDF</button></div>
+      <div class="sub" style="margin-top:6px">حصة انتظار واحدة في اليوم لكل معلم، ونصابه مع الانتظار لا يتجاوز حدّه. يُتجنَّب يومه الذهبي ما أمكن. من ١ إلى ٤ معلمين في الحصة. ${empty?`<b style="color:var(--warn)">خانات بلا انتظار: ${ar(empty)}</b> — أسندها يدويًا بـ ＋.`:''}</div></div>
+    <div class="card"><h3>المعلمون</h3>
+      <div class="sub" style="margin-bottom:8px">الحد افتراضيًا النصاب النظامي للمعلم (٢٤)، ويُعدَّل لكل معلم. المستثنى لا يدخل التوزيع الآلي ويُسنَد له يدويًا.</div>
+      <div style="overflow-x:auto"><table class="tbl"><tr><th>المعلم</th><th>النصاب</th><th>الحد</th><th>الانتظار (المخصص / المستهدف)</th><th>اليوم الذهبي</th><th></th></tr>${rows}</table></div></div>
+    ${stages.map(s=>`<div class="card"><h3>جدول الانتظار — ${esc(s.label)}</h3>${wGridHtml(s.key,(d,p)=>{
+        const list = wCell(s.key,d,p);
+        return `<td class="${ed?'wcell':''}" data-wc="${s.key}|${d}|${p}" style="vertical-align:top;${list.length?'':'background:#fff7e6;'}${ed?'cursor:pointer':''}">${list.map((tid,i)=>`<div style="font-size:12px;white-space:nowrap">انتظار${ar(i+1)}: <b>${esc(teacherName(tid))}</b></div>`).join('')}${ed && list.length<W_MAX?'<div style="color:var(--brand);font-weight:800">＋</div>':''}</td>`;
+      })}</div>`).join('')}`;
+  $('#wPrint').onclick = wPrintGeneral;
+  if(!ed) return;
+  $('#wAuto').onclick = ()=>{
+    const has = Object.values(W.grid).some(g=>Object.keys(g||{}).length);
+    const go = ()=>{ wAutoDistribute(); toast('تم التوزيع'); show('waiting'); };
+    if(has) confirmBox('إعادة التوزيع', 'يُستبدل جدول الانتظار الحالي (ومنه تعديلاتك اليدوية). متابعة؟', 'توزيع', true).then(ok=>{ if(ok) go(); }); else go();
+  };
+  $('#wPub').onclick = wPublish;
+  $$('[data-cap]').forEach(i=>i.onchange=()=>{ const v = Math.max(0, Math.min(40, +i.value||0)); W.caps[i.dataset.cap] = v; markDirty(docIds.waiting()); show('waiting'); });
+  $$('[data-exc]').forEach(c=>c.onchange=()=>{ if(c.checked) W.excluded[c.dataset.exc] = true; else delete W.excluded[c.dataset.exc]; markDirty(docIds.waiting()); show('waiting'); });
+  $$('[data-wc]').forEach(td=>td.onclick=()=>{ const [sk,d,p] = td.dataset.wc.split('|'); wEditCell(sk, +d, +p); });
+}
+function wEditCell(sk, d, p){
+  const list = wCell(sk, d, p).slice(), A = wAssigned();
+  const draw = ()=>{
+    const pool = wTeachersOf(sk).concat(teachers().filter(t=>!(teacherStagesNow(t)||[]).includes(sk) && wLessonMap()[t.id] && !wBusy(t.id, sk, d, p)))
+      .filter((t,i,arr)=>arr.findIndex(x=>x.id===t.id)===i && !list.includes(t.id) && !wBusy(t.id, sk, d, p));
+    const opts = pool.map(t=>{
+      const dayUsed = (A[t.id] && A[t.id].days.has(d)) ? true : false;
+      const over = wLoad(t.id) + ((A[t.id]||{}).count||0) >= wCap(t.id);
+      const gold = wGolden(t.id, sk)===d;
+      return { t, dayUsed, over, gold };
+    }).sort((a,b)=> a.dayUsed-b.dayUsed || a.over-b.over || a.gold-b.gold || a.t.name.localeCompare(b.t.name,'ar'));
+    modal(`<h2>انتظار ${WEEKDAYS[d]} — الحصة ${W_ORD[p]||ar(p+1)}</h2><div class="sub">${esc(STAGE_BY_KEY[sk].label)} · حتى ${ar(W_MAX)} معلمين</div>
+      <div style="margin:10px 0">${list.length?list.map((tid,i)=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><b style="flex:1">انتظار${ar(i+1)}: ${esc(teacherName(tid))}</b>
+        ${i>0?`<button class="btn sm ghost" data-up="${i}">▲</button>`:''}<button class="btn sm ghost" data-rm="${i}">حذف</button></div>`).join(''):'<div class="sub">لا يوجد.</div>'}</div>
+      ${list.length<W_MAX?`<h3 style="font-size:14px;margin:6px 0">＋ إضافة معلم فارغ في هذه الحصة</h3><div style="max-height:40vh;overflow:auto">${opts.map(o=>`<div class="row" style="padding:5px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${esc(o.t.name)}</span>
+        ${o.dayUsed?'<span class="chip err">لديه انتظار هذا اليوم</span>':''}${o.over?'<span class="chip warn">بلغ حدّه</span>':''}${o.gold?'<span class="chip info">يومه الذهبي</span>':''}
+        <button class="btn sm" data-add="${o.t.id}" ${o.dayUsed?'disabled':''}>إضافة</button></div>`).join('')||'<div class="sub">لا يوجد معلم فارغ.</div>'}</div>`:''}
+      <div class="modal-actions"><button class="btn" id="wcOk">حفظ</button><button class="btn sec" onclick="closeModal()">إلغاء</button></div>`);
+    $$('#modalRoot [data-rm]').forEach(b=>b.onclick=()=>{ list.splice(+b.dataset.rm,1); draw(); });
+    $$('#modalRoot [data-up]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.up; [list[i-1],list[i]]=[list[i],list[i-1]]; draw(); });
+    $$('#modalRoot [data-add]').forEach(b=>b.onclick=()=>{ if(list.length<W_MAX){ list.push(b.dataset.add); draw(); } });
+    $('#wcOk').onclick = ()=>{ wSetCell(sk, d, p, list); closeModal(); show('waiting'); };
+  };
+  draw();
+}
+async function wPublish(){
+  if(pendingSaves.size) await flushSaves();
+  const idx = await ensureUserIndex(true);
+  const byUser = {}; let unlinked = 0;
+  const tUser = tid=>{ const t = teacherById(tid); const u = t && t.nid ? idx.byNid[normDigits(t.nid).trim()] : null; return u && !u.pending && u.active ? u.id : null; };
+  Object.entries(wdoc().grid).forEach(([sk,g])=>Object.entries(g||{}).forEach(([k,list])=>{ const [d,p] = k.split('|').map(Number);
+    list.forEach(tid=>{ const u = tUser(tid); if(!u){ unlinked++; return; } (byUser[u] = byUser[u] || []).push({ st:sk, d, p }); }); }));
+  const ok = await confirmBox('اعتماد ونشر الانتظار', 'تظهر «انتظار» في «جدولي» لكل معلم مرتبط ('+ar(Object.keys(byUser).length)+')'+(unlinked?' — '+ar(unlinked)+' خانة لمعلمين غير مرتبطين بحساب لن تظهر لهم.':'.'), 'نشر');
+  if(!ok) return;
+  try{
+    await ttCol().doc(docIds.waitpub()).set({ value: JSON.stringify({ publishedAt: Date.now(), by: TT.me.id, byUser }), rev: Date.now(), updatedAt: Date.now(), updatedBy: TT.me.id, sid: TT.sid });
+    const W = wdoc(); W.publishedAt = Date.now(); W.updatedAt = W.publishedAt; markDirty(docIds.waiting()); await flushSaves();
+    toast('تم النشر'); show('waiting');
+  }catch(e){ toast('تعذّر النشر: '+(e.message||e)); }
+}
+function wPrintGeneral(){
+  const stages = wStages();
+  const html = stages.map(s=>{
+    const sc = stageCfg(s.key), mp = maxP(s.key);
+    let t = `<h2>جدول حصص الانتظار — ${esc(s.label)}</h2><table><tr><th>اليوم</th>${Array.from({length:mp},(_,p)=>`<th>${W_ORD[p]||ar(p+1)}</th>`).join('')}</tr>`;
+    sc.days.forEach(d=>{ t += `<tr><th>${WEEKDAYS[d]}</th>`; for(let p=0;p<mp;p++){ t += p<(+sc.ppd[d]||0) ? `<td>${wCell(s.key,d,p).map((tid,i)=>`انتظار${ar(i+1)}: ${esc(teacherName(tid))}`).join('<br>')}</td>` : '<td style="background:#eee"></td>'; } t += '</tr>'; });
+    return t + '</table>';
+  }).join('<div style="page-break-after:always"></div>');
+  const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة'); return; }
+  w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>جدول حصص الانتظار</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Tahoma,Arial}h2{text-align:center;font-size:18px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px;vertical-align:top}th{background:#eef4f3}</style></head><body><div style="text-align:center;font-weight:700">'+esc(TT.schoolName)+' · '+esc(PERIOD_LABEL[TT.period])+'</div>'+html+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
+  w.document.close();
+}
+
+/* ---------- التحديد اليومي ---------- */
+const wDk = dt=>dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+async function wLoadDay(date, fresh){
+  if(!fresh && TT.wdayCache[date]) return TT.wdayCache[date];
+  const id = docIds.wday(date);
+  const r = await loadDoc(id);
+  if(!r.data) TT.docs[id].data = { date, absents:[], items:[], sent:false };
+  TT.wdayCache[date] = TT.docs[id].data;
+  return TT.wdayCache[date];
+}
+function wWeekDates(date){ const d = new Date(date+'T12:00:00'); d.setDate(d.getDate()-d.getDay()); const out=[]; for(let i=0;i<5;i++){ const x=new Date(d); x.setDate(d.getDate()+i); out.push(wDk(x)); } return out; }
+// أيام انتظار المعلم في الأسبوع (من التحديد اليومي) — للعدالة
+function wWeekCount(tid, date){ return wWeekDates(date).filter(k=>{ const D0 = TT.wdayCache[k]; return D0 && (D0.items||[]).some(it=>it.subTid===tid); }).length; }
+// حصص الغائب الرسمية في يوم التاريخ عبر المراحل
+function wAbsentLessons(tid, date){
+  const w = new Date(date+'T12:00:00').getDay(); const out = [];
+  wStages().forEach(s=>{
+    const doc = tableDoc(s.key,'approved');
+    (doc && doc.lessons || []).forEach(l=>{ if(l.t!==tid || l.d!==w) return;
+      for(let k=0;k<(l.n||1);k++) out.push({ st:s.key, d:w, p:l.p+k, cls:l.c, clsLabel:classLabel(l.c), subj: subjNameOf(s.key, l) }); });
+  });
+  return out;
+}
+function subjNameOf(sk, l){ try{ const S = getStageState(sk,'approved'); const u = S.pr.units.find(x=>x.id===l.id); return u ? u.subjName : ''; }catch(e){ return ''; } }
+async function wRenderDaily(body){
+  if(!TT.wdate){ TT.wdate = wDk(new Date()); }
+  body.innerHTML = '<div class="empty"><span class="spin"></span></div>';
+  const date = TT.wdate;
+  await Promise.all(wWeekDates(date).concat([date]).map(k=>wLoadDay(k)));
+  const DY = TT.wdayCache[date];
+  const w = new Date(date+'T12:00:00').getDay();
+  const stages = wStages();
+  const schoolDay = stages.some(s=>stageCfg(s.key).days.includes(w));
+  const ed = TT.canWait;
+  const withLessons = teachers().filter(t=>wLessonMap()[t.id]).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  const itemsAt = (sk,p)=>(DY.items||[]).filter(it=>it.st===sk && it.p===p);
+  body.innerHTML = `
+    <div class="card"><div class="card-head"><h3>تحديد الانتظار اليومي</h3>
+      <input type="date" id="wdDate" value="${esc(date)}" class="sm">
+      <span class="chip">${WEEKDAYS[w]}</span>
+      ${DY.sent?`<span class="chip ok">أُرسل ${DY.sentAt?esc(new Date(DY.sentAt).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})):''}</span>`:''}
+      ${ed?'<button class="btn" id="wdSend">✔ اعتماد وإرسال للمعلمين</button>':''}
+      <button class="btn sec" id="wdPrint">🖨️ طباعة السجل</button>
+      <button class="btn sec" id="wdWa">📤 إرسال واتساب PDF</button></div>
+      ${schoolDay?'':'<div class="alert warn" style="margin-top:8px">هذا اليوم ليس من أيام الدوام.</div>'}
+      <div class="sub" style="margin-top:8px">حدّد المعلمين الغائبين (يوم كامل)، فتظهر حصصهم الرسمية على جدول الانتظار. اضغط الحصة لاختيار البديل. يصل البديل في «لوحتي» بعد «اعتماد وإرسال».</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${withLessons.map(t=>`<label class="chip ${DY.absents.includes(t.id)?'err':''}" style="cursor:pointer;padding:6px 12px"><input type="checkbox" data-abs="${t.id}" ${DY.absents.includes(t.id)?'checked':''} ${ed?'':'disabled'} style="margin:0 0 0 6px">${esc(t.name)}</label>`).join('')}</div>
+    </div>
+    ${stages.filter(s=>stageCfg(s.key).days.includes(w)).map(s=>{
+      const sc = stageCfg(s.key), mp = +sc.ppd[w]||0;
+      return `<div class="card"><h3>${esc(s.label)} — ${WEEKDAYS[w]}</h3><div style="overflow-x:auto"><table class="tbl" style="min-width:${mp*150}px"><tr>${Array.from({length:mp},(_,p)=>`<th>${W_ORD[p]||ar(p+1)}</th>`).join('')}</tr><tr>
+        ${Array.from({length:mp},(_,p)=>{
+          const list = wCell(s.key, w, p), its = itemsAt(s.key, p);
+          return `<td style="vertical-align:top;min-width:140px;${its.length?'background:#fff4e5;':''}">
+            ${list.map((tid,i)=>`<div style="font-size:11.5px;color:var(--muted);white-space:nowrap">انتظار${ar(i+1)}: ${esc(teacherName(tid))}</div>`).join('')}
+            ${its.map((it,j)=>`<div ${ed?`data-it="${(DY.items||[]).indexOf(it)}"`:''} style="margin-top:6px;border:1.5px solid ${it.subTid?'#1a7a4f':'#c0392b'};border-radius:8px;padding:5px;background:#fff;${ed?'cursor:pointer':''}">
+              <div style="font-size:11.5px">غياب: <b>${esc(it.absentName)}</b> · ${esc(it.clsLabel)} · ${esc(it.subj)}</div>
+              <div style="font-size:12.5px;font-weight:800;color:${it.subTid?'#1a7a4f':'#c0392b'}">${it.subTid?'← '+esc(it.subName):'اختر البديل'}</div></div>`).join('')}
+          </td>`;
+        }).join('')}</tr></table></div></div>`;
+    }).join('')}`;
+  $('#wdDate').onchange = ()=>{ TT.wdate = $('#wdDate').value || TT.wdate; show('waiting'); };
+  $('#wdPrint').onclick = ()=>wPrintDaily(false);
+  $('#wdWa').onclick = ()=>wPrintDaily(true);
+  if(!ed) return;
+  $$('[data-abs]').forEach(c=>c.onchange=()=>{ wToggleAbsent(c.dataset.abs, c.checked); });
+  $$('[data-it]').forEach(el=>el.onclick=()=>wPickSub(+el.dataset.it));
+  $('#wdSend').onclick = async()=>{
+    const miss = (DY.items||[]).filter(it=>!it.subTid).length;
+    if(!(DY.items||[]).length){ toast('لا توجد حصص غياب'); return; }
+    const ok = await confirmBox('اعتماد وإرسال', (miss?'تنبيه: '+ar(miss)+' حصة بلا بديل.\n':'')+'يصل كل بديل انتظاره لهذا اليوم في «لوحتي».', 'إرسال');
+    if(!ok) return;
+    const idx = await ensureUserIndex();
+    (DY.items||[]).forEach(it=>{ const t = teacherById(it.subTid); const u = t && t.nid ? idx.byNid[normDigits(t.nid).trim()] : null; it.subUid = u && !u.pending ? u.id : ''; });
+    DY.sent = true; DY.sentAt = Date.now(); DY.sentBy = TT.me.id;
+    markDirty(docIds.wday(date)); await flushSaves(); toast('تم الإرسال'); show('waiting');
+  };
+}
+function wToggleAbsent(tid, on){
+  const date = TT.wdate, DY = TT.wdayCache[date];
+  DY.absents = on ? [...new Set(DY.absents.concat([tid]))] : DY.absents.filter(x=>x!==tid);
+  DY.items = (DY.items||[]).filter(it=>it.absentTid!==tid);
+  if(on) DY.items.forEach(it=>{ if(it.subTid===tid){ it.subTid = ''; it.subName = ''; } });   // صار غائبًا فلا يكون بديلًا
+  if(on){
+    const t = teacherById(tid);
+    wAbsentLessons(tid, date).forEach(l=>{
+      const it = Object.assign({ absentTid:tid, absentName:t?t.name:'', subTid:'', subName:'' }, l);
+      // معلم انتظار واحد صالح في الحصة: يُحدَّد آليًا
+      const valid = wCell(l.st, l.d, l.p).filter(x=>wSubValid(x, it, DY));
+      if(valid.length===1){ it.subTid = valid[0]; it.subName = teacherName(valid[0]); }
+      DY.items.push(it);
+    });
+  }
+  DY.items.sort((a,b)=>String(a.absentName).localeCompare(String(b.absentName),'ar') || a.p-b.p);
+  DY.sent = false;
+  markDirty(docIds.wday(date)); show('waiting');
+}
+// البديل صالح: غير غائب، وغير مسند لحصة أخرى في نفس الوقت
+function wSubValid(tid, it, DY){
+  if(DY.absents.includes(tid)) return false;
+  return !(DY.items||[]).some(o=>o!==it && o.subTid===tid && o.d===it.d && o.p===it.p && o.st===it.st);
+}
+function wPickSub(i){
+  const date = TT.wdate, DY = TT.wdayCache[date], it = DY.items[i]; if(!it) return;
+  const waitList = wCell(it.st, it.d, it.p);
+  const row = (tid, tag)=>{ const ok = wSubValid(tid, it, DY); const n = wWeekCount(tid, date);
+    return `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${tag?`<b>${tag}:</b> `:''}${esc(teacherName(tid))}</span>
+      <span class="chip ${n?'warn':'ok'}">حُدِّد له هذا الأسبوع: ${ar(n)} يوم</span>${DY.absents.includes(tid)?'<span class="chip err">غائب</span>':(!ok?'<span class="chip err">مسند في هذه الحصة</span>':'')}
+      <button class="btn sm" data-sub="${tid}" ${ok?'':'disabled'}>${it.subTid===tid?'✓ محدد':'اختيار'}</button></div>`; };
+  const free = teachers().filter(t=>wLessonMap()[t.id] && !waitList.includes(t.id) && t.id!==it.absentTid && !wBusy(t.id, it.st, it.d, it.p))
+    .sort((a,b)=>wWeekCount(a.id,date)-wWeekCount(b.id,date) || a.name.localeCompare(b.name,'ar'));
+  modal(`<h2>بديل الحصة ${W_ORD[it.p]||ar(it.p+1)}</h2><div class="sub">غياب ${esc(it.absentName)} · ${esc(it.clsLabel)} · ${esc(it.subj)}</div>
+    <h3 style="font-size:14px;margin:10px 0 4px">معلمو الانتظار في هذه الحصة</h3>${waitList.map((tid,k)=>row(tid,'انتظار'+ar(k+1))).join('')||'<div class="sub">لا يوجد.</div>'}
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:800;color:var(--brand)">＋ معلم آخر فارغ في هذه الحصة</summary><div style="max-height:36vh;overflow:auto">${free.map(t=>row(t.id,'')).join('')||'<div class="sub">لا يوجد.</div>'}</div></details>
+    <div class="modal-actions">${it.subTid?'<button class="btn sec" id="wsClr">إلغاء البديل</button>':''}<button class="btn sec" onclick="closeModal()">إغلاق</button></div>`);
+  $$('#modalRoot [data-sub]').forEach(b=>b.onclick=()=>{ it.subTid = b.dataset.sub; it.subName = teacherName(it.subTid); DY.sent = false; markDirty(docIds.wday(date)); closeModal(); show('waiting'); });
+  if($('#wsClr')) $('#wsClr').onclick = ()=>{ it.subTid = ''; it.subName = ''; DY.sent = false; markDirty(docIds.wday(date)); closeModal(); show('waiting'); };
+}
+function wHijriYear(){ try{ const p=new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-latn',{year:'numeric'}).formatToParts(new Date()); return ((p.find(x=>x.type==='year')||{}).value||'')+'هـ'; }catch(e){ return ''; } }
+// «سجل توزيع حصص الانتظار» (نموذج رقم ٧) — فقرة وجدول لكل معلم غائب
+function wDailyHtml(date){
+  const DY = TT.wdayCache[date] || { items:[] };
+  const w = new Date(date+'T12:00:00').getDay();
+  const now = new Date(), printDate = now.getFullYear()+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+String(now.getDate()).padStart(2,'0');
+  const groups = []; (DY.items||[]).forEach(it=>{ let g = groups.find(x=>x.tid===it.absentTid); if(!g){ g = { tid:it.absentTid, name:it.absentName, items:[] }; groups.push(g); } g.items.push(it); });
+  return `<div class="wf-page" style="direction:rtl;font-family:Tahoma,Arial;color:#111;background:#fff;padding:24px;width:760px;box-sizing:border-box">
+    <div style="display:flex;justify-content:space-between;font-size:13px;line-height:1.9">
+      <div>المملكة العربية السعودية<br>وزارة التعليم<br>${esc(TT.schoolName)}<br>نموذج رقم (7)</div>
+      <div>سجل توزيع حصص الانتظار<br>تاريخ الطباعة: ${printDate}<br>اليوم: ${WEEKDAYS[w]}</div></div>
+    <div style="font-weight:700;margin:12px 0 4px">العام الدراسي ${esc(wHijriYear())} / الفصل (${esc(PERIOD_LABEL[TT.period])})</div>
+    ${groups.map(g=>`<div style="margin-top:14px;font-weight:700;font-size:13.5px;line-height:1.8">زملائي المعلمين / نظراً لغياب الزميل: ${esc(g.name)} لهذا اليوم ${WEEKDAYS[w]}<br>الموافق ${esc(date)} آمل تسديد مكانه حسب الجدول الموضح والتوقيع بالعلم ،، ولكم جزيل الشكر</div>
+      <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px">
+        <tr>${['الحصة','الصف','المادة','اسم المعلم للانتظار','ملاحظة','ما تم تنفيذه في حصة الانتظار','التوقيع','ملحوظات'].map(h=>`<th style="border:1px solid #333;padding:5px;background:#f1f1f1">${h}</th>`).join('')}</tr>
+        ${g.items.sort((a,b)=>a.p-b.p).map(it=>`<tr><td style="border:1px solid #333;padding:6px;text-align:center">${W_ORD[it.p]||ar(it.p+1)}</td><td style="border:1px solid #333;padding:6px;text-align:center">${esc(it.cls)}</td><td style="border:1px solid #333;padding:6px;text-align:center">${esc(it.subj)}</td><td style="border:1px solid #333;padding:6px">${esc(it.subName||'')}</td><td style="border:1px solid #333"></td><td style="border:1px solid #333;width:140px"></td><td style="border:1px solid #333;padding:6px;text-align:center">..........</td><td style="border:1px solid #333"></td></tr>`).join('')}
+      </table>`).join('') || '<p style="text-align:center;margin:30px">لا يوجد غياب مسجَّل لهذا اليوم.</p>'}
+    <div style="margin-top:36px;width:260px;text-align:center;font-size:13.5px;line-height:1.9">المدير<br><b>${esc(TT.schoolName)}</b><br>التوقيع</div>
+  </div>`;
+}
+function wLoadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('تعذّر تحميل مكتبة PDF')); document.head.appendChild(s); }); }
+async function wPrintDaily(asPdf){
+  const date = TT.wdate; const html = wDailyHtml(date);
+  if(!asPdf){
+    const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة'); return; }
+    w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سجل توزيع حصص الانتظار '+esc(date)+'</title><style>@page{size:A4 portrait;margin:8mm}body{margin:0}.wf-page{width:auto!important}tr{page-break-inside:avoid}</style></head><body>'+html+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
+    w.document.close(); return;
+  }
+  // PDF للإرسال بالواتساب: صورة الصفحة ← jsPDF، ثم المشاركة (الجوال) أو التنزيل (الكمبيوتر)
+  try{
+    toast('جارٍ تجهيز ملف PDF…');
+    if(!window.html2canvas) await wLoadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    if(!(window.jspdf && window.jspdf.jsPDF)) await wLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1'; host.innerHTML = html; document.body.appendChild(host);
+    const canvas = await window.html2canvas(host.firstElementChild, { scale:2, backgroundColor:'#ffffff' });
+    host.remove();
+    const pdf = new window.jspdf.jsPDF({ orientation:'p', unit:'mm', format:'a4' });
+    const pw = 210, ph = 297, imgH = canvas.height * pw / canvas.width;
+    const pageCanvasH = Math.floor(canvas.width * ph / pw);
+    for(let y=0, n=0; y < canvas.height; y += pageCanvasH, n++){
+      const c = document.createElement('canvas'); c.width = canvas.width; c.height = Math.min(pageCanvasH, canvas.height - y);
+      c.getContext('2d').drawImage(canvas, 0, y, canvas.width, c.height, 0, 0, canvas.width, c.height);
+      if(n) pdf.addPage();
+      pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, pw, c.height * pw / canvas.width);
+    }
+    const name = 'سجل-الانتظار-'+date+'.pdf';
+    const blob = pdf.output('blob');
+    const file = new File([blob], name, { type:'application/pdf' });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      await navigator.share({ files:[file], title:'سجل توزيع حصص الانتظار', text:'سجل توزيع حصص الانتظار — '+date });
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      toast('نُزِّل الملف — أرفقه في واتساب');
+    }
+  }catch(e){ if(e && e.name==='AbortError') return; toast('تعذّر إنشاء PDF: '+(e.message||e)); }
 }
 </script>
 </body>

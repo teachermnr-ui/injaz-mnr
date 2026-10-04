@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<!-- إصدار: 2026-10-04.1 -->
+<!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>المناوبة والإشراف</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f7f6; --surface:#ffffff; --surface-2:#eef4f3;
+  --brand:#0f766e; --brand-2:#0b5a54; --brand-l:#d5ece9;
+  --ink:#15242b; --muted:#5b6f76; --line:#d8e2e0;
+  --r:14px; --shadow:0 1px 2px rgba(16,40,40,.06),0 8px 24px rgba(16,40,40,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Tajawal',"Segoe UI",Tahoma,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14.5px;line-height:1.55;min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none}
+input,select{font-family:inherit;font-size:14px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:#fff}
+.hidden{display:none !important}
+.boot{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted);text-align:center;padding:20px}
+.spin{display:inline-block;width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.topbar{position:sticky;top:0;z-index:40;background:var(--brand);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.topbar h1{margin:0;font-size:17px;font-weight:800;white-space:nowrap}
+.tb-badge{background:rgba(255,255,255,.15);padding:5px 12px;border-radius:20px;font-size:13px;font-weight:600;white-space:nowrap}
+.tb-btn{background:rgba(255,255,255,.17);color:#fff;padding:7px 14px;border-radius:10px;font-weight:700;font-size:13px;white-space:nowrap}
+main{max-width:1240px;margin:0 auto;padding:16px 16px 60px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 8px;font-size:15.5px}
+.sub{color:var(--muted);font-size:12.5px}
+.btn{font-weight:700;font-size:13.5px;padding:8px 14px;border-radius:10px;border:1.5px solid var(--brand);background:#fff;color:var(--brand);min-height:38px;white-space:nowrap}
+.btn.pri{background:var(--brand);color:#fff}
+.btn.blue{border-color:#1e5aaa;color:#1e5aaa}
+.btn.ghost{border-color:var(--line);color:var(--muted)}
+.btn.sm{min-height:32px;padding:4px 10px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.pill{font-weight:700;font-size:13.5px;padding:6px 14px;border-radius:20px;border:1.5px solid var(--brand);background:#fff;color:var(--brand);min-height:36px}
+.pill.on{background:var(--brand);color:#fff}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{font-weight:700;font-size:14px;padding:10px 16px;background:transparent;color:var(--muted);border-bottom:3px solid transparent;min-height:44px}
+.tabs button.on{color:var(--brand);border-bottom-color:var(--brand)}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid2{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.grid2>*{flex:1 1 360px;min-width:0}
+.field{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.t{border-collapse:collapse;width:100%;font-size:13px}
+table.t th,table.t td{border:1px solid #cfdcd9;padding:7px 6px;text-align:center;vertical-align:middle}
+table.t thead th{background:#0d9488;color:#fff;font-weight:700}
+table.t thead tr.s th{background:#2f6fb3}
+table.t td.cl{cursor:pointer}
+table.t td.cl:hover{background:#e6f3f1}
+table.t td.miss{background:#fdecec}
+.ppl label{display:flex;align-items:center;gap:10px;padding:7px 4px;border-top:1px solid #eef2f1;font-size:14px;min-height:40px}
+.ppl input{width:18px;height:18px}
+.warn{background:#fff7e6;color:#8a4a00;border-radius:10px;padding:9px 12px;font-size:13px;margin-bottom:10px}
+.overlay{position:fixed;inset:0;background:rgba(10,30,30,.45);z-index:80;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto}
+.modal{background:#fff;border-radius:16px;width:100%;max-width:520px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.2)}
+.modal h2{margin:0 0 6px;font-size:18px}
+.alert{padding:9px 12px;border-radius:10px;font-size:13px;margin:8px 0;background:#fdecec;color:#a32020}
+.empty{color:var(--muted);text-align:center;padding:40px 10px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#15242b;color:#fff;padding:10px 18px;border-radius:12px;z-index:99;font-size:14px}
+</style>
+</head>
+<body>
+<div id="bootView" class="boot"><span class="spin"></span><div>جارٍ التحميل…</div></div>
+<div id="app" class="hidden">
+  <div class="topbar">
+    <h1>المناوبة والإشراف</h1>
+    <span class="tb-badge" id="tbSchool">—</span>
+    <span class="tb-badge" id="tbPeriod">—</span>
+    <span style="flex:1"></span>
+    <button class="tb-btn" id="tbBack">→ الرئيسية</button>
+  </div>
+  <main id="main"></main>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script>
+'use strict';
+/* =========================================================================
+   المناوبة والإشراف — أداة من «أدوات إدارية» (مدير المدرسة والوكيل بالدور، أو تفويض «المناوبة والإشراف»).
+   - لكل مرحلة جدولها (مستند dutyPlans/{sid}_{period}_{stage})، والأوقات والحصص من الجدول المنشور ({period}_published).
+   - المناوبة (صباحًا وبعد خروج آخر طالب): بالتواريخ من/إلى، عدد المناوبين في اليوم، تُستبعد أيام الإجازة.
+     الأولوية: من عنده الحصة الأخيرة ذلك اليوم، ثم قبل الأخيرة، وهكذا.
+   - الإشراف (الفسحة والصلاة): ثابت أسبوعيًا، أماكن يدخلها صاحب الصلاحية ولكل مكان عدد مشرفين.
+     الأولوية: (أ) حصة قبلها وفراغ بعدها، (ب) فراغ قبلها وحصة بعدها — بنفس الدرجة، ثم (ج) حصة قبلها وبعدها، ثم (د) فراغ قبلها وبعدها.
+   - «اعتماد ورفع كتعميم»: لمدير المدرسة أو صاحب صلاحية التعاميم فقط — يكتب النسخة المعتمدة (pub + members) فيصل
+     كل معلم تنبيه في «لوحتي ← مناوبتي»، وينشئ تعميمًا إلزاميًا للمحددين؛ توقيعه = الاستلام الإلكتروني.
+   خصوصية كالتعاميم: لا صلاحية لأدمن النظام ولا للحساب الفردي.
+   ========================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCEW-BTrfkqLUFXj7drtts7GkN6PXpbV4A",
+  authDomain: "injaz-classroom.firebaseapp.com",
+  projectId: "injaz-classroom",
+  storageBucket: "injaz-classroom.firebasestorage.app",
+  messagingSenderId: "640060389242",
+  appId: "1:640060389242:web:37e42c456d7b4e015e88c3"
+};
+let db = null;
+const WEEKDAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const TIERS = [ {k:'أ', t:'حصة قبلها وفراغ بعدها', bg:'#e7f6ee', fg:'#197a44'}, {k:'ب', t:'فراغ قبلها وحصة بعدها', bg:'#e7f6ee', fg:'#197a44'},
+                {k:'ج', t:'حصة قبلها وبعدها', bg:'#e9f1fd', fg:'#1e5aaa'}, {k:'د', t:'فراغ قبلها وبعدها', bg:'#fff1e0', fg:'#8a4a00'} ];
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const arN = n=>String(n).replace(/\d/g, d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+const periodLabel = p=> p==='second'?'الفترة الثانية':'الفترة الأولى';
+function toast(m){ const t=document.createElement('div'); t.className='toast'; t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
+function fatal(msg){
+  $('#bootView').innerHTML = `<div class="card" style="max-width:460px;text-align:center"><h3>${esc(msg)}</h3>
+    <button class="tb-btn" style="background:var(--brand);color:#fff" onclick="location.href='index.html'">العودة للرئيسية</button></div>`;
+}
+const dk = d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const wdOf = k=>new Date(k+'T12:00:00').getDay();
+function hijri(k){
+  if(!k) return '';
+  try{
+    const parts = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-arab',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(k+'T12:00:00'));
+    const g = t=>((parts.find(x=>x.type===t)||{}).value||'').replace(/[^٠-٩\d]/g,'');
+    return g('year')+'/'+g('month')+'/'+g('day')+'هـ';
+  }catch(e){ return k; }
+}
+function hijriYear(){ try{ const p=new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-arab',{year:'numeric'}).formatToParts(new Date()); return ((p.find(x=>x.type==='year')||{}).value||'').replace(/[^٠-٩\d]/g,'')+'هـ'; }catch(e){ return ''; } }
+
+const DS = { sid:null, period:'first', me:null, canEdit:false, canPublish:false, schoolName:'', stages:{}, stage:'', users:[], plans:{}, tab:'setup' };
+const col = ()=>db.collection('dutyPlans');
+const planId = st=>DS.sid+'_'+DS.period+'_'+st;
+const emptyPlan = ()=>({ participants:[], places:[], dutyFrom:'', dutyTo:'', perDay:1, holidays:[], dutyDays:{}, sup:{}, agentName:'', principalName:'' });
+
+(function start(){
+  let s=null; try{ s = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){}
+  if(!s || !s.userId){ location.replace('index.html'); return; }
+  if(s.role==='soloTeacher' || s.role==='admin'){ fatal('هذه الأداة خاصة بإدارة المدرسة ولا صلاحية لأدمن النظام أو الحساب الفردي عليها.'); return; }
+  if(!s.schoolId){ fatal('لا يمكن تحديد المدرسة.'); return; }
+  DS.sid = s.schoolId; DS.period = s.period || 'first'; DS.session = s;
+  try{ firebase.initializeApp(firebaseConfig); db = firebase.firestore(); }
+  catch(e){ fatal('تعذّر الاتصال بقاعدة البيانات.'); return; }
+  firebase.auth().onAuthStateChanged(async au=>{
+    if(!au){ try{ localStorage.removeItem('cls_session'); }catch(e){} location.replace('index.html'); return; }
+    try{ await boot(au); }catch(e){ console.error(e); fatal('تعذّر التحميل: '+(e.message||e)); }
+  });
+})();
+
+async function boot(au){
+  const us = await db.collection('users').doc(DS.session.userId).get();
+  if(!us.exists || us.data().authUid !== au.uid){ await firebase.auth().signOut(); location.replace('index.html'); return; }
+  const u = us.data();
+  if(u.active===false){ fatal('حسابك موقوف.'); return; }
+  DS.me = { id: us.id, name: u.username||'', role: u.role||'' };
+  if(u.role==='schoolAdmin'){
+    if(!(u.adminSchools||[]).includes(DS.sid)){ fatal('لا يمكن الوصول لهذه المدرسة.'); return; }
+    DS.canEdit = true; DS.canPublish = true;
+  } else {
+    const ctx = (u.schools||{})[DS.sid];
+    if(!ctx || ctx.active===false){ fatal('ليست لديك صلاحية الوصول لهذه المدرسة.'); return; }
+    const pm = ctx.permissions||{}, p = pm['tools.duty']||{};
+    if(ctx.role!=='agent' && !p.access && !p.edit){ fatal('هذه الأداة لمدير المدرسة والوكيل أو من فُوِّض بها.'); return; }
+    DS.canEdit = ctx.role==='agent' || !!p.edit;
+    DS.canPublish = !!(pm['tools.circulars']||{}).edit;
+    DS.me.role = ctx.role||'';
+  }
+  $('#tbPeriod').textContent = periodLabel(DS.period);
+  $('#tbBack').onclick = ()=>location.href='index.html';
+  try{ const sd = await db.collection('schoolData').doc(DS.sid).get(); DS.schoolName = sd.exists ? (sd.data().name||DS.sid) : DS.sid; }catch(e){ DS.schoolName = DS.sid; }
+  $('#tbSchool').textContent = DS.schoolName;
+  $('#bootView').classList.add('hidden'); $('#app').classList.remove('hidden');
+  await loadAll();
+  render();
+}
+
+/* ---------- التحميل: الجدول المنشور (الأوقات والحصص) + الموظفون + خطط المراحل ---------- */
+async function loadAll(){
+  let pub = null;
+  try{
+    const ps = await db.collection('timetables').doc(DS.sid).collection('data').doc(DS.period+'_published').get();
+    if(ps.exists) pub = JSON.parse(ps.data().value||'null');
+  }catch(e){}
+  DS.stages = {};
+  if(pub && pub.layouts){
+    Object.keys(pub.layouts).forEach(k=>{
+      const L = pub.layouts[k]; const events = []; let after = 0;
+      (L.cols||[]).forEach(c=>{
+        if(c.k==='p'){ after = c.p+1; return; }
+        const type = c.type==='prayer' ? 'prayer' : 'break';
+        const n = events.filter(e=>e.type===type).length + 1;
+        events.push({ key: type+'_'+after, type, after, label: (type==='prayer'?'الصلاة':'الفسحة')+(n>1?' '+arN(n):''), sub:'بعد الحصة '+arN(after) });
+      });
+      DS.stages[k] = { label: L.label||k, days: (L.days||[]).slice().sort((a,b)=>a-b), ppd: L.ppd||{}, events };
+    });
+  }
+  const byUser = (pub && pub.byUser) || {};
+  const uSnap = await db.collection('users').get();
+  DS.users = uSnap.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(x=>!x.migratedTo && x.authUid && x.active!==false && x.schools && x.schools[DS.sid] && x.schools[DS.sid].active!==false)
+    .map(x=>{
+      const lessons = (byUser[x.id] && byUser[x.id].lessons) || [];
+      const busy = {};   // stage -> weekday -> Set(period)
+      lessons.forEach(l=>{ const b = (busy[l.st] = busy[l.st] || {}); const s = (b[l.d] = b[l.d] || new Set()); for(let i=0;i<(l.n||1);i++) s.add(l.p+i); });
+      return { id:x.id, name:x.username||'', role:x.schools[DS.sid].role||'', busy, stagesTaught: Object.keys(busy) };
+    })
+    .sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  DS.plans = {};
+  try{
+    const q = await col().where('schoolId','==',DS.sid).get();
+    q.docs.forEach(d=>{ const v=d.data(); if(v.period===DS.period) DS.plans[v.stage] = Object.assign(emptyPlan(), v); });
+  }catch(e){}
+  const keys = Object.keys(DS.stages);
+  if(!DS.stage || !DS.stages[DS.stage]) DS.stage = keys[0] || '';
+  keys.forEach(k=>{ if(!DS.plans[k]) DS.plans[k] = defaultPlan(k); });
+}
+// خطة جديدة: يُحدَّد مبدئيًا من يدرّس في هذه المرحلة وحدها؛ معلم المرحلتين يُحدَّد يدويًا في إحداهما
+function defaultPlan(st){
+  const p = emptyPlan(); p.stage = st; p.isNew = true;
+  p.participants = DS.users.filter(u=>u.stagesTaught.length===1 && u.stagesTaught[0]===st).map(u=>u.id);
+  return p;
+}
+const P = ()=>DS.plans[DS.stage];
+const S = ()=>DS.stages[DS.stage];
+const uName = id=>{ const u=DS.users.find(x=>x.id===id); if(u) return u.name; const pub=(P()||{}).pub; return (pub && pub.names && pub.names[id]) || '—'; };
+const busySet = (uid, w)=>{ const u=DS.users.find(x=>x.id===uid); return (u && u.busy[DS.stage] && u.busy[DS.stage][w]) || new Set(); };
+function otherStageOf(uid){ return Object.keys(DS.plans).find(k=>k!==DS.stage && (DS.plans[k].participants||[]).includes(uid)) || ''; }
+
+async function savePlan(silent){
+  const p = P(); if(!p || !DS.canEdit) return;
+  const doc = { kind:'plan', schoolId:DS.sid, period:DS.period, stage:DS.stage, stageLabel:S().label,
+    participants:p.participants, places:p.places, dutyFrom:p.dutyFrom, dutyTo:p.dutyTo, perDay:+p.perDay||1, holidays:p.holidays,
+    dutyDays:p.dutyDays, sup:p.sup, agentName:p.agentName||'', principalName:p.principalName||'',
+    updatedAt:Date.now(), updatedBy:DS.me.id, updatedByName:DS.me.name };
+  try{ await col().doc(planId(DS.stage)).set(doc, { merge:true }); p.isNew = false; p.updatedAt = doc.updatedAt; if(!silent) toast('حُفظ'); }
+  catch(e){ toast('خطأ في الحفظ: '+(e.message||e)); }
+}
+
+/* ---------- الحساب ---------- */
+function dutyDates(){
+  const p = P(), s = S(); if(!p.dutyFrom || !p.dutyTo || p.dutyTo < p.dutyFrom) return [];
+  const out = []; const d = new Date(p.dutyFrom+'T12:00:00'); const end = p.dutyTo; let guard = 0;
+  while(dk(d) <= end && guard++ < 400){ const k = dk(d); if(s.days.includes(d.getDay()) && !(p.holidays||[]).includes(k)) out.push(k); d.setDate(d.getDate()+1); }
+  return out;
+}
+// ترتيب المناوب في يوم: ٠ = عنده الحصة الأخيرة، ١ = قبل الأخيرة، … ، ٩٩ = لا حصص له ذلك اليوم
+function dutyRank(uid, w){
+  const last = (+S().ppd[w]||0) - 1; const b = busySet(uid, w);
+  if(!b.size || last<0) return 99;
+  return last - Math.max(...b);
+}
+function dutyRankLabel(r){ return r===0 ? 'الحصة الأخيرة' : r===99 ? 'لا حصص له' : r===1 ? 'قبل الأخيرة' : 'قبل الأخيرة بـ'+arN(r); }
+// درجة المشرف لحدث: ٠ = (أ) أو (ب)، ١ = (ج)، ٢ = (د)
+function supTier(uid, w, ev){
+  const b = busySet(uid, w); const before = b.has(ev.after-1), after = b.has(ev.after);
+  if(before && !after) return { rank:0, t:TIERS[0] };
+  if(!before && after) return { rank:0, t:TIERS[1] };
+  if(before && after) return { rank:1, t:TIERS[2] };
+  return { rank:2, t:TIERS[3] };
+}
+const evOnDay = (ev, w)=> ev.after>=1 && ev.after <= (+S().ppd[w]||0);
+function autoDistribute(){
+  const p = P(), s = S(), ppl = p.participants.slice();
+  // المناوبة
+  const dCount = {}; ppl.forEach(id=>dCount[id]=0);
+  p.dutyDays = {};
+  dutyDates().forEach(k=>{
+    const w = wdOf(k);
+    const pick = ppl.slice().sort((a,b)=> dutyRank(a,w)-dutyRank(b,w) || dCount[a]-dCount[b] || uName(a).localeCompare(uName(b),'ar')).slice(0, Math.max(1,+p.perDay||1));
+    pick.forEach(id=>dCount[id]++); p.dutyDays[k] = pick;
+  });
+  // الإشراف
+  const sCount = {}; ppl.forEach(id=>sCount[id]=0);
+  p.sup = {};
+  s.days.forEach(w=>{
+    p.sup[w] = {};
+    s.events.forEach(ev=>{
+      if(!evOnDay(ev,w)) return;
+      const used = new Set(); p.sup[w][ev.key] = {};
+      p.places.forEach(pl=>{
+        const n = +((pl.counts||{})[ev.key])||0; if(!n) return;
+        const pick = ppl.filter(id=>!used.has(id)).sort((a,b)=> supTier(a,w,ev).rank-supTier(b,w,ev).rank || sCount[a]-sCount[b] || uName(a).localeCompare(uName(b),'ar')).slice(0,n);
+        pick.forEach(id=>{ used.add(id); sCount[id]++; });
+        p.sup[w][ev.key][pl.id] = pick;
+      });
+    });
+  });
+}
+function warnings(){
+  const p = P(), s = S(), out = [];
+  const dutyC = {}, supC = {};
+  Object.values(p.dutyDays||{}).forEach(a=>a.forEach(id=>dutyC[id]=(dutyC[id]||0)+1));
+  Object.values(p.sup||{}).forEach(byEv=>Object.values(byEv||{}).forEach(byPl=>Object.values(byPl||{}).forEach(a=>a.forEach(id=>supC[id]=(supC[id]||0)+1))));
+  const hasDuty = Object.keys(p.dutyDays||{}).length, hasSup = Object.keys(p.sup||{}).length;
+  const noDuty = p.participants.filter(id=>!dutyC[id]), noSup = p.participants.filter(id=>!supC[id]);
+  if(hasDuty && noDuty.length) out.push('لم يُكلَّف بمناوبة: '+noDuty.map(uName).join('، '));
+  if(hasSup && noSup.length) out.push('لم يُكلَّف بإشراف: '+noSup.map(uName).join('، '));
+  const short = dutyDates().filter(k=>((p.dutyDays||{})[k]||[]).length < (+p.perDay||1)).length;
+  if(hasDuty && short) out.push('أيام مناوبة ناقصة العدد: '+arN(short)+' — أكملها يدويًا.');
+  let supShort = 0;
+  s.days.forEach(w=>s.events.forEach(ev=>{ if(!evOnDay(ev,w)) return; p.places.forEach(pl=>{ const n=+((pl.counts||{})[ev.key])||0; if(n && ((((p.sup||{})[w]||{})[ev.key]||{})[pl.id]||[]).length < n) supShort++; }); }));
+  if(hasSup && supShort) out.push('خانات إشراف ناقصة: '+arN(supShort)+' — أكملها يدويًا.');
+  return out;
+}
+
+/* ---------- العرض ---------- */
+function render(){
+  const keys = Object.keys(DS.stages);
+  if(!keys.length){ $('#main').innerHTML = '<div class="empty">لا يوجد جدول منشور لهذه الفترة.<br>انشر الجدول أولًا من أداة «بناء الجدول المدرسي» — منه تُؤخذ أوقات الفسحة والصلاة وحصص المعلمين.</div>'; return; }
+  const p = P();
+  const pubTxt = p.pub ? 'معتمد ومرفوع '+(p.pub.circular?('بتعميم رقم '+arN(p.pub.circular.number)):'')+' — '+new Date(p.pub.at).toLocaleDateString('ar-SA') : 'لم يُعتمد بعد';
+  $('#main').innerHTML = `
+    <div class="row" style="margin-bottom:6px">
+      <span class="sub">المرحلة:</span>
+      ${keys.map(k=>`<button class="pill ${k===DS.stage?'on':''}" data-st="${esc(k)}">${esc(DS.stages[k].label)}</button>`).join('')}
+      <span style="flex:1"></span>
+      ${DS.canEdit?'<button class="btn pri" id="btnAuto">توزيع تلقائي</button>':''}
+      <button class="btn" id="btnPrint">طباعة السجل</button>
+      <button class="btn blue" id="btnPub" ${DS.canPublish?'':'disabled'}>اعتماد ورفع كتعميم</button>
+    </div>
+    <div class="sub" style="margin-bottom:12px">الحالة: <b>${esc(pubTxt)}</b>${DS.canPublish?'':' · «اعتماد ورفع كتعميم» لمدير المدرسة أو صاحب صلاحية التعاميم — الوكيل يجهّز التوزيع.'}${p.pub&&p.updatedAt>p.pub.at?' · <b style="color:#8a4a00">عُدِّل بعد الاعتماد — أعد الاعتماد ليصل التعديل للمعلمين.</b>':''}</div>
+    <div class="tabs">${[['setup','الإعداد'],['duty','المناوبة'],['sup','الإشراف'],['recv','الاستلام']].map(([k,l])=>`<button data-tab="${k}" class="${DS.tab===k?'on':''}">${l}</button>`).join('')}</div>
+    <div id="tabBody"></div>`;
+  document.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ DS.stage=b.dataset.st; render(); });
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ DS.tab=b.dataset.tab; render(); });
+  if($('#btnAuto')) $('#btnAuto').onclick = async()=>{
+    const pp = P();
+    if(!pp.participants.length){ toast('حدّد المشمولين أولًا'); return; }
+    if((Object.keys(pp.dutyDays||{}).length || Object.keys(pp.sup||{}).length) && !confirm('إعادة التوزيع تستبدل التوزيع الحالي (ومنه تعديلاتك اليدوية). متابعة؟')) return;
+    autoDistribute(); await savePlan(true); toast('تم التوزيع'); if(DS.tab==='setup') DS.tab='duty'; render();
+  };
+  $('#btnPrint').onclick = printRecord;
+  $('#btnPub').onclick = publish;
+  const body = $('#tabBody');
+  if(DS.tab==='setup') renderSetup(body);
+  else if(DS.tab==='duty') renderDuty(body);
+  else if(DS.tab==='sup') renderSup(body);
+  else renderRecv(body);
+}
+function warnHtml(){ const w = warnings(); return w.length ? '<div class="warn">'+w.map(esc).join('<br>')+'</div>' : ''; }
+
+function renderSetup(body){
+  const p = P(), s = S(), dis = DS.canEdit ? '' : 'disabled';
+  const ppl = DS.users.map(u=>{
+    const other = otherStageOf(u.id);
+    const both = u.stagesTaught.length>1;
+    const note = other ? 'محدد في '+(DS.stages[other]||{}).label : both ? 'يدرّس المرحلتين — حدّده في إحداهما' : !u.stagesTaught.length ? 'لا حصص له في الجدول' : '';
+    return `<label><input type="checkbox" data-pp="${esc(u.id)}" ${p.participants.includes(u.id)?'checked':''} ${other||!DS.canEdit?'disabled':''}><span style="flex:1">${esc(u.name)}</span><span class="sub">${esc(note)}</span></label>`;
+  }).join('');
+  const evHead = s.events.map(ev=>`<th>${esc(ev.label)}<div style="font-size:11px;font-weight:500">${esc(ev.sub)}</div></th>`).join('');
+  const places = p.places.map((pl,i)=>`<tr><td><input data-pn="${i}" value="${esc(pl.name)}" ${dis} style="width:100%"></td>${s.events.map(ev=>`<td><input data-pc="${i}" data-ev="${esc(ev.key)}" type="number" min="0" max="20" value="${(+((pl.counts||{})[ev.key])||0)}" ${dis} style="width:64px;text-align:center"></td>`).join('')}<td>${DS.canEdit?`<button class="btn ghost sm" data-pdel="${i}">حذف</button>`:''}</td></tr>`).join('');
+  body.innerHTML = `
+    <div class="grid2">
+      <section class="card ppl">
+        <h3>المشمولون بالمناوبة والإشراف</h3>
+        <div class="sub" style="margin-bottom:6px">كل المحددين يأخذون مناوبة وإشرافًا. غير المحدد مستثنى. معلم المرحلتين يُحدَّد في إحداهما فقط.</div>
+        ${ppl||'<div class="sub">لا يوجد موظفون.</div>'}
+      </section>
+      <div>
+        <section class="card">
+          <h3>المناوبة — صباحًا وبعد خروج آخر طالب</h3>
+          <div class="row">
+            <label class="field" style="flex:1 1 140px">من تاريخ<input type="date" id="dFrom" value="${esc(p.dutyFrom)}" ${dis}></label>
+            <label class="field" style="flex:1 1 140px">إلى تاريخ<input type="date" id="dTo" value="${esc(p.dutyTo)}" ${dis}></label>
+            <label class="field" style="flex:1 1 120px">المناوبون في اليوم<input type="number" id="dPer" min="1" max="10" value="${+p.perDay||1}" ${dis}></label>
+          </div>
+          <div class="sub" style="margin:8px 0">أيام الدوام فقط (${s.days.map(w=>WEEKDAYS[w]).join('، ')}). الأولوية لمن عنده الحصة الأخيرة ذلك اليوم، ثم قبل الأخيرة، وهكذا. عدد أيام المناوبة: <b>${arN(dutyDates().length)}</b></div>
+          <div class="row"><b style="font-size:13px">أيام الإجازة:</b>
+            ${(p.holidays||[]).slice().sort().map(h=>`<span class="chip" style="background:#eef2f1;color:#15242b">${esc(WEEKDAYS[wdOf(h)])} ${esc(hijri(h))}${DS.canEdit?` <button class="btn ghost sm" style="min-height:24px;padding:0 6px" data-hdel="${esc(h)}" aria-label="حذف">×</button>`:''}</span>`).join('')||'<span class="sub">لا يوجد</span>'}
+            ${DS.canEdit?'<input type="date" id="hNew" style="width:auto"><button class="btn sm" id="hAdd">+ إضافة إجازة</button>':''}
+          </div>
+        </section>
+        <section class="card">
+          <h3>الإشراف — الأماكن وعدد المشرفين</h3>
+          <div class="sub" style="margin-bottom:8px">الأوقات من إعدادات الجدول لهذه المرحلة. الأولوية: (أ) حصة قبلها وفراغ بعدها، و(ب) فراغ قبلها وحصة بعدها، ثم (ج) حصة قبلها وبعدها، ثم (د) فراغ قبلها وبعدها.</div>
+          ${s.events.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th style="text-align:right">المكان</th>${evHead}<th></th></tr></thead><tbody>${places||`<tr><td colspan="${s.events.length+2}" class="sub">أضف مكانًا.</td></tr>`}</tbody></table></div>
+          ${DS.canEdit?'<button class="btn sm" id="plAdd" style="margin-top:8px">+ إضافة مكان</button>':''}`:'<div class="sub">لا توجد فسحة أو صلاة في إعدادات الجدول لهذه المرحلة.</div>'}
+        </section>
+        <section class="card">
+          <h3>أسماء التوقيع في السجل</h3>
+          <div class="row">
+            <label class="field" style="flex:1 1 200px">وكيل الشؤون التعليمية<input id="sgA" value="${esc(p.agentName)}" ${dis} maxlength="80"></label>
+            <label class="field" style="flex:1 1 200px">مدير المدرسة<input id="sgP" value="${esc(p.principalName)}" ${dis} maxlength="80"></label>
+          </div>
+        </section>
+      </div>
+    </div>`;
+  if(!DS.canEdit) return;
+  const sv = ()=>savePlan(true);
+  body.querySelectorAll('[data-pp]').forEach(c=>c.onchange=()=>{ const id=c.dataset.pp; p.participants = c.checked ? p.participants.concat([id]) : p.participants.filter(x=>x!==id); sv(); });
+  $('#dFrom').onchange = ()=>{ p.dutyFrom=$('#dFrom').value; sv(); render(); };
+  $('#dTo').onchange = ()=>{ p.dutyTo=$('#dTo').value; sv(); render(); };
+  $('#dPer').onchange = ()=>{ p.perDay=Math.max(1,Math.min(10,+$('#dPer').value||1)); sv(); };
+  if($('#hAdd')) $('#hAdd').onclick = ()=>{ const v=$('#hNew').value; if(!v) return; if(!(p.holidays||[]).includes(v)) p.holidays=(p.holidays||[]).concat([v]); delete (p.dutyDays||{})[v]; sv(); render(); };
+  body.querySelectorAll('[data-hdel]').forEach(b=>b.onclick=()=>{ p.holidays=p.holidays.filter(x=>x!==b.dataset.hdel); sv(); render(); });
+  if($('#plAdd')) $('#plAdd').onclick = ()=>{ p.places = p.places.concat([{ id:'pl'+Date.now().toString(36), name:'', counts:{} }]); sv(); render(); setTimeout(()=>{ const ins=body.querySelectorAll('[data-pn]'); if(ins.length) ins[ins.length-1].focus(); },0); };
+  body.querySelectorAll('[data-pn]').forEach(i=>i.onchange=()=>{ p.places[+i.dataset.pn].name=i.value.trim(); sv(); });
+  body.querySelectorAll('[data-pc]').forEach(i=>i.onchange=()=>{ const pl=p.places[+i.dataset.pc]; pl.counts=Object.assign({}, pl.counts, { [i.dataset.ev]: Math.max(0,Math.min(20,+i.value||0)) }); sv(); });
+  body.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>{ if(!confirm('حذف المكان؟')) return; const id=p.places[+b.dataset.pdel].id; p.places.splice(+b.dataset.pdel,1);
+    Object.values(p.sup||{}).forEach(byEv=>Object.values(byEv||{}).forEach(byPl=>{ delete byPl[id]; })); sv(); render(); });
+  $('#sgA').onchange = ()=>{ p.agentName=$('#sgA').value.trim(); sv(); };
+  $('#sgP').onchange = ()=>{ p.principalName=$('#sgP').value.trim(); sv(); };
+}
+
+function renderDuty(body){
+  const p = P(), dates = dutyDates();
+  if(!dates.length){ body.innerHTML = '<div class="empty">حدّد تاريخ البداية والنهاية للمناوبة من «الإعداد».</div>'; return; }
+  const need = +p.perDay||1;
+  const rows = dates.map(k=>{
+    const w = wdOf(k), ids = (p.dutyDays||{})[k]||[];
+    const chips = ids.map(id=>{ const r=dutyRank(id,w); const c = r===0?['#e7f6ee','#197a44']:r===99?['#fdecec','#a32020']:['#fff1e0','#8a4a00'];
+      return `<span class="chip" style="background:${c[0]};color:${c[1]}">${esc(uName(id))} · ${esc(dutyRankLabel(r))}</span>`; }).join(' ');
+    const miss = ids.length < need;
+    return `<tr><td><b>${esc(WEEKDAYS[w])}</b></td><td>${esc(hijri(k))}<div class="sub">${esc(k)}</div></td><td class="${DS.canEdit?'cl':''} ${miss?'miss':''}" data-dd="${k}" style="text-align:right">${chips}${miss?` <span class="chip" style="background:#fdecec;color:#a32020">ناقص ${arN(need-ids.length)}</span>`:''}</td></tr>`;
+  }).join('');
+  body.innerHTML = warnHtml()+`<div class="card"><div class="row" style="margin-bottom:8px"><h3 style="margin:0">جدول المناوبة بالتواريخ</h3><span style="flex:1"></span>${DS.canEdit?'<span class="sub">اضغط خانة المناوبين لتعديلها يدويًا</span>':''}</div>
+    <div class="tbl-wrap"><table class="t" style="min-width:600px"><thead><tr><th style="width:90px">اليوم</th><th style="width:130px">التاريخ</th><th>المناوبون (عدد اليوم: ${arN(need)})</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="row sub" style="margin-top:8px"><span><b style="color:#197a44">الحصة الأخيرة</b> = الشرط متحقق</span><span><b style="color:#8a4a00">قبل الأخيرة</b> = لم يكفِ من عندهم الأخيرة</span><span><b style="color:#a32020">ناقص</b> = يكمله صاحب الصلاحية</span></div></div>`;
+  if(DS.canEdit) body.querySelectorAll('[data-dd]').forEach(td=>td.onclick=()=>editDutyDay(td.dataset.dd));
+}
+function editDutyDay(k){
+  const p = P(), w = wdOf(k), cur = new Set((p.dutyDays||{})[k]||[]);
+  const list = p.participants.slice().sort((a,b)=>dutyRank(a,w)-dutyRank(b,w) || uName(a).localeCompare(uName(b),'ar'));
+  openPick(`مناوبة ${WEEKDAYS[w]} ${hijri(k)}`, `المطلوب ${arN(+p.perDay||1)} — مرتّبون حسب الأولوية`, list.map(id=>({ id, label:uName(id), tag:dutyRankLabel(dutyRank(id,w)), on:cur.has(id) })), async ids=>{
+    p.dutyDays = Object.assign({}, p.dutyDays, { [k]: ids }); await savePlan(true); render();
+  });
+}
+
+function renderSup(body){
+  const p = P(), s = S();
+  const cols = []; s.events.forEach(ev=>p.places.forEach(pl=>{ const n=+((pl.counts||{})[ev.key])||0; if(n) cols.push({ ev, pl, n }); }));
+  if(!cols.length){ body.innerHTML = '<div class="empty">أضف أماكن الإشراف وعدد المشرفين من «الإعداد».</div>'; return; }
+  const evGroups = s.events.map(ev=>({ ev, span: cols.filter(c=>c.ev.key===ev.key).length })).filter(g=>g.span);
+  const rows = s.days.map(w=>`<tr><td><b>${esc(WEEKDAYS[w])}</b></td>${cols.map(c=>{
+      if(!evOnDay(c.ev,w)) return '<td style="background:#f3f3f3"></td>';
+      const ids = ((((p.sup||{})[w]||{})[c.ev.key]||{})[c.pl.id])||[];
+      const chips = ids.map(id=>{ const t=supTier(id,w,c.ev).t; return `<div style="margin:2px 0"><span class="chip" style="background:${t.bg};color:${t.fg}">(${t.k}) ${esc(uName(id))}</span></div>`; }).join('');
+      const miss = ids.length < c.n;
+      return `<td class="${DS.canEdit?'cl':''} ${miss?'miss':''}" data-sw="${w}" data-se="${esc(c.ev.key)}" data-sp="${esc(c.pl.id)}">${chips}${miss?`<span class="chip" style="background:#fdecec;color:#a32020">ناقص ${arN(c.n-ids.length)}</span>`:''}</td>`;
+    }).join('')}</tr>`).join('');
+  body.innerHTML = warnHtml()+`<div class="card"><div class="row" style="margin-bottom:8px"><h3 style="margin:0">جدول الإشراف — ثابت أسبوعيًا</h3><span style="flex:1"></span>${DS.canEdit?'<span class="sub">اضغط الخانة لتعديلها يدويًا</span>':''}</div>
+    <div class="tbl-wrap"><table class="t" style="min-width:${200+cols.length*130}px"><thead>
+      <tr><th rowspan="2" style="width:90px">اليوم</th>${evGroups.map(g=>`<th colspan="${g.span}">${esc(g.ev.label)} <span style="font-weight:500;font-size:11px">(${esc(g.ev.sub)})</span></th>`).join('')}</tr>
+      <tr class="s">${cols.map(c=>`<th>${esc(c.pl.name||'—')} (${arN(c.n)})</th>`).join('')}</tr>
+    </thead><tbody>${rows}</tbody></table></div>
+    <div class="row sub" style="margin-top:8px">${TIERS.map(t=>`<span><span class="chip" style="background:${t.bg};color:${t.fg}">(${t.k})</span> ${t.t}</span>`).join('')}</div>
+    <div class="sub">الأولوية: (أ) و(ب) بنفس الدرجة، ثم (ج)، ثم (د) عند عدم كفاية العدد.</div></div>`;
+  if(DS.canEdit) body.querySelectorAll('[data-sw]').forEach(td=>td.onclick=()=>editSup(+td.dataset.sw, td.dataset.se, td.dataset.sp));
+}
+function editSup(w, evKey, plId){
+  const p = P(), ev = S().events.find(e=>e.key===evKey), pl = p.places.find(x=>x.id===plId);
+  const cur = new Set(((((p.sup||{})[w]||{})[evKey]||{})[plId])||[]);
+  const elsewhere = new Set(); Object.entries((((p.sup||{})[w]||{})[evKey])||{}).forEach(([k,a])=>{ if(k!==plId) a.forEach(id=>elsewhere.add(id)); });
+  const list = p.participants.filter(id=>!elsewhere.has(id)).sort((a,b)=>supTier(a,w,ev).rank-supTier(b,w,ev).rank || uName(a).localeCompare(uName(b),'ar'));
+  openPick(`${ev.label} — ${pl.name||''} — ${WEEKDAYS[w]}`, `المطلوب ${arN(+((pl.counts||{})[evKey])||0)} — مرتّبون حسب الأولوية`, list.map(id=>{ const t=supTier(id,w,ev).t; return { id, label:uName(id), tag:'('+t.k+') '+t.t, on:cur.has(id) }; }), async ids=>{
+    p.sup = p.sup || {}; p.sup[w] = p.sup[w] || {}; p.sup[w][evKey] = Object.assign({}, p.sup[w][evKey], { [plId]: ids }); await savePlan(true); render();
+  });
+}
+function openPick(title, sub, items, onSave){
+  const o = document.createElement('div'); o.className='overlay'; o.id='ovl';
+  o.innerHTML = `<div class="modal"><h2>${esc(title)}</h2><div class="sub" style="margin-bottom:8px">${esc(sub)}</div>
+    <div class="ppl" style="max-height:55vh;overflow:auto">${items.map(it=>`<label><input type="checkbox" value="${esc(it.id)}" ${it.on?'checked':''}><span style="flex:1">${esc(it.label)}</span><span class="sub">${esc(it.tag)}</span></label>`).join('')||'<div class="sub">لا يوجد مشمولون.</div>'}</div>
+    <div class="row" style="margin-top:12px"><button class="btn pri" id="pkOk">حفظ</button><button class="btn ghost" id="pkNo">إلغاء</button></div></div>`;
+  document.body.appendChild(o);
+  $('#pkNo').onclick = ()=>o.remove();
+  $('#pkOk').onclick = async()=>{ const ids=[...o.querySelectorAll('input:checked')].map(i=>i.value); o.remove(); await onSave(ids); };
+}
+
+async function renderRecv(body){
+  const p = P();
+  if(!p.pub){ body.innerHTML = '<div class="empty">لم يُعتمد التوزيع بعد. بعد «اعتماد ورفع كتعميم» يصل كل معلم تنبيه في «لوحتي ← مناوبتي»، وتظهر هنا حالة توقيع التعميم.</div>'; return; }
+  const c = p.pub.circular;
+  const members = p.pub.members||[];
+  body.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">الاستلام — توقيع التعميم</h3>${c?`<span class="chip" style="background:#e9f1fd;color:#1e5aaa">تعميم رقم ${arN(c.number)}</span>`:''}<span style="flex:1"></span><b id="rcvSum"></b></div><div id="rcvList" style="margin-top:10px"><span class="spin"></span></div></div>`;
+  let sigs = null;
+  if(c && DS.canPublish){
+    try{ const s = await db.collection('circulars').doc(DS.sid).collection('items').doc(c.id).collection('signatures').get(); sigs = {}; s.docs.forEach(d=>sigs[d.id]=d.data()); }catch(e){ sigs = null; }
+  }
+  if(!sigs){ $('#rcvList').innerHTML = '<div class="sub">'+(c?'حالة التوقيع تظهر لمدير المدرسة أو صاحب صلاحية التعاميم (ومن صفحة التعاميم نفسها).':'لم يُنشأ تعميم.')+'</div>'+members.map(id=>`<div style="padding:7px 2px;border-top:1px solid #eef2f1">${esc(uName(id))}</div>`).join(''); return; }
+  const done = members.filter(id=>sigs[id]).length;
+  $('#rcvSum').textContent = 'وقّع '+arN(done)+' من '+arN(members.length);
+  $('#rcvList').innerHTML = members.map(id=>{ const s=sigs[id]; return `<div class="row" style="padding:7px 2px;border-top:1px solid #eef2f1"><span style="flex:1;font-weight:700">${esc(uName(id))}</span>${s?`<span class="chip" style="background:#e7f6ee;color:#197a44">وقّع</span><span class="sub">${s.at?esc(new Date(s.at).toLocaleString('ar-SA')):''}</span>`:'<span class="chip" style="background:#fdecec;color:#a32020">لم يوقّع</span>'}</div>`; }).join('');
+}
+
+/* ---------- السجل الأسبوعي (للطباعة وصفحات التعميم) ---------- */
+// صفوف كل يوم: المناوبون (من الجدول بالتواريخ) + المشرفون (من الجدول الأسبوعي الثابت)
+function dayRows(k){
+  const p = P(), s = S(), w = wdOf(k);
+  const duty = ((p.dutyDays||{})[k]||[]).map(uName);
+  const sup = [];
+  s.events.forEach(ev=>{ if(!evOnDay(ev,w)) return; p.places.forEach(pl=>{ (((((p.sup||{})[w]||{})[ev.key]||{})[pl.id])||[]).forEach(id=>sup.push([uName(id), ev.label+' — '+(pl.name||'')])); }); });
+  const n = Math.max(duty.length, sup.length, 1);
+  return Array.from({length:n}, (_,i)=>({ duty: duty[i]||'', sup: (sup[i]||[])[0]||'', where: (sup[i]||[])[1]||'' }));
+}
+function recordWeeks(){
+  const dates = dutyDates();
+  if(!dates.length){ const d=new Date(); d.setDate(d.getDate()-d.getDay()); return [S().days.map(w=>{ const x=new Date(d); x.setDate(d.getDate()+w); return dk(x); })]; }
+  const weeks = []; let cur = null, curKey = '';
+  dates.forEach(k=>{ const d=new Date(k+'T12:00:00'); d.setDate(d.getDate()-d.getDay()); const wk=dk(d); if(wk!==curKey){ curKey=wk; cur=[]; weeks.push(cur); } cur.push(k); });
+  return weeks;
+}
+const ORD = ['الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن','التاسع','العاشر','الحادي عشر','الثاني عشر','الثالث عشر','الرابع عشر','الخامس عشر','السادس عشر','السابع عشر','الثامن عشر','التاسع عشر','العشرون'];
+function printRecord(){
+  const p = P(), weeks = recordWeeks();
+  const page = (days, wi)=>{
+    const rows = []; days.forEach(k=>{ const rs = dayRows(k); rs.forEach((r,i)=>rows.push({ k, r, first:i===0, span:rs.length })); });
+    const body = rows.map((x,i)=>`<tr>${i===0?`<td rowspan="${rows.length}" class="wk">${ORD[wi]||arN(wi+1)}</td>`:''}${x.first?`<td rowspan="${x.span}" class="b">${esc(WEEKDAYS[wdOf(x.k)])}</td><td rowspan="${x.span}">${esc(hijri(x.k))}</td>`:''}<td>${esc(x.r.duty)}</td><td></td><td>${esc(x.r.sup)}</td><td>${esc(x.r.where)}</td><td></td><td></td></tr>`).join('');
+    return `<section class="pg"><div class="hd">[الترويسة — تُحدَّد لاحقًا] · ${esc(DS.schoolName)}</div><h1>سجل المناوبة والإشراف اليومي</h1>
+      <div class="meta"><span>العام الدراسي: ${esc(hijriYear())}</span><span>الفصل الدراسي: ${esc(periodLabel(DS.period))}</span><span>المرحلة: ${esc(S().label)}</span></div>
+      <table><thead><tr><th rowspan="2" style="width:52px">الأسبوع</th><th rowspan="2" style="width:62px">اليوم</th><th rowspan="2" style="width:80px">التاريخ</th><th colspan="2">المناوبة</th><th colspan="3">الإشراف</th><th rowspan="2" style="width:70px">ملحوظات</th></tr>
+      <tr><th>الاسم</th><th style="width:64px">التوقيع</th><th>الاسم</th><th>الإشراف</th><th style="width:64px">التوقيع</th></tr></thead><tbody>${body}</tbody></table>
+      <div class="sig"><div>وكيل الشؤون التعليمية: ${esc(p.agentName)||'....................'}<br><br>التوقيع: ....................</div><div>مدير المدرسة: ${esc(p.principalName)||'....................'}<br><br>التوقيع: ....................</div></div></section>`;
+  };
+  const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
+  w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سجل المناوبة والإشراف اليومي</title>'+
+    '<style>@page{size:A4 portrait;margin:10mm}body{font-family:Tahoma,Arial;color:#111;margin:0}.pg{page-break-after:always}.pg:last-child{page-break-after:auto}'+
+    '.hd{border:1px dashed #999;border-radius:8px;padding:14px;text-align:center;color:#555;font-size:12px}h1{text-align:center;font-size:20px;margin:10px 0 6px;color:#0c2d48}'+
+    '.meta{display:flex;justify-content:space-between;font-weight:700;font-size:12.5px;margin:4px 6px 8px}table{width:100%;border-collapse:collapse}'+
+    'th,td{border:1px solid #222;padding:5px 4px;text-align:center;font-size:11.5px;height:20px}th{background:#eef4f3}td.wk{font-weight:800}td.b{font-weight:700}'+
+    'tr{page-break-inside:avoid}.sig{display:flex;justify-content:space-between;margin-top:18px;font-weight:700;font-size:13px}</style></head><body>'+
+    weeks.map(page).join('')+
+    '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
+  w.document.close();
+}
+
+/* ---------- صفحات التعميم (صور مرسومة على لوحة) — حتى ٤ صفحات ---------- */
+function drawPages(){
+  const p = P(), s = S(), W = 1240, H = 1754, M = 60;
+  const pages = [];
+  const newPage = title=>{
+    const cv = document.createElement('canvas'); cv.width=W; cv.height=H; const c = cv.getContext('2d');
+    c.fillStyle='#fff'; c.fillRect(0,0,W,H); c.direction='rtl'; c.fillStyle='#111';
+    c.font='bold 34px Tahoma, Arial'; c.textAlign='center'; c.fillText(title, W/2, 90);
+    c.font='bold 20px Tahoma, Arial'; c.fillText(DS.schoolName+' · '+s.label+' · '+periodLabel(DS.period), W/2, 130);
+    pages.push(cv); return c;
+  };
+  const fit = (c, txt, w)=>{ let t = String(txt||''); while(t && c.measureText(t).width > w-10) t = t.slice(0,-1); return t; };
+  const cell = (c, x, y, w, h, txt, bold, bg)=>{ if(bg){ c.fillStyle=bg; c.fillRect(x,y,w,h); c.fillStyle='#111'; } c.strokeRect(x,y,w,h); c.font=(bold?'bold ':'')+'17px Tahoma, Arial'; c.textAlign='center'; c.fillText(fit(c,txt,w), x+w/2, y+h/2+6); };
+  // الصفحة ١: الإشراف الأسبوعي
+  const cols = []; s.events.forEach(ev=>p.places.forEach(pl=>{ if(+((pl.counts||{})[ev.key])||0) cols.push({ev,pl}); }));
+  if(cols.length){
+    const c = newPage('جدول الإشراف الأسبوعي (الفسحة والصلاة)'); c.lineWidth=1.5; c.strokeStyle='#222';
+    const dayW = 110, cw = Math.floor((W-2*M-dayW)/cols.length); let y = 170; const rh = 34;
+    let x = W-M-dayW; cell(c, x, y, dayW, rh*2, 'اليوم', true, '#eef4f3');
+    cols.forEach((cl,i)=>{ const cx = x-(i+1)*cw; cell(c, cx, y, cw, rh, cl.ev.label, true, '#eef4f3'); cell(c, cx, y+rh, cw, rh, cl.pl.name||'', true, '#eef4f3'); });
+    y += rh*2;
+    s.days.forEach(w=>{
+      const lists = cols.map(cl=> evOnDay(cl.ev,w) ? ((((((p.sup||{})[w]||{})[cl.ev.key]||{})[cl.pl.id])||[]).map(uName)) : []);
+      const n = Math.max(1, ...lists.map(l=>l.length)), h = rh*n;
+      cell(c, x, y, dayW, h, WEEKDAYS[w], true);
+      lists.forEach((l,i)=>{ const cx = x-(i+1)*cw; c.strokeRect(cx,y,cw,h); c.font='17px Tahoma, Arial'; l.forEach((nm,j)=>c.fillText(fit(c,nm,cw), cx+cw/2, y+j*rh+rh/2+6)); });
+      y += h;
+    });
+  }
+  // صفحات المناوبة: عمودان في الصفحة
+  const dates = dutyDates().filter(k=>((p.dutyDays||{})[k]||[]).length);
+  const perCol = 44, colW = (W-2*M-30)/2;
+  for(let i=0; i<dates.length && pages.length<4; i+=perCol*2){
+    const c = newPage('جدول المناوبة (صباحًا وبعد خروج آخر طالب)'); c.lineWidth=1.5; c.strokeStyle='#222';
+    [0,1].forEach(side=>{
+      const chunk = dates.slice(i+side*perCol, i+(side+1)*perCol); if(!chunk.length) return;
+      const x0 = W-M-side*(colW+30); const wDay=90, wDate=150, wNames=colW-wDay-wDate; let y=170; const rh=32;
+      cell(c, x0-wDay, y, wDay, rh, 'اليوم', true, '#eef4f3'); cell(c, x0-wDay-wDate, y, wDate, rh, 'التاريخ', true, '#eef4f3'); cell(c, x0-colW, y, wNames, rh, 'المناوبون', true, '#eef4f3'); y+=rh;
+      chunk.forEach(k=>{ cell(c, x0-wDay, y, wDay, rh, WEEKDAYS[wdOf(k)]); cell(c, x0-wDay-wDate, y, wDate, rh, hijri(k)); cell(c, x0-colW, y, wNames, rh, ((p.dutyDays||{})[k]||[]).map(uName).join('، ')); y+=rh; });
+    });
+  }
+  return pages.map(cv=>cv.toDataURL('image/jpeg', 0.82));
+}
+
+/* ---------- الاعتماد: النسخة المعتمدة + تعميم إلزامي للمحددين ---------- */
+async function publish(){
+  if(!DS.canPublish){ toast('للمدير أو صاحب صلاحية التعاميم'); return; }
+  const p = P();
+  const members = new Set();
+  Object.values(p.dutyDays||{}).forEach(a=>a.forEach(id=>members.add(id)));
+  Object.values(p.sup||{}).forEach(byEv=>Object.values(byEv||{}).forEach(byPl=>Object.values(byPl||{}).forEach(a=>a.forEach(id=>members.add(id)))));
+  if(!members.size){ toast('لا يوجد توزيع لاعتماده'); return; }
+  const w = warnings();
+  if(!confirm((w.length?('تنبيهات:\n'+w.join('\n')+'\n\n'):'')+'اعتماد التوزيع ورفعه تعميمًا إلزاميًا لـ '+members.size+' معلم؟ يصل كل معلم تنبيه في «لوحتي».')) return;
+  $('#btnPub').disabled = true;
+  try{
+    const names = {}; members.forEach(id=>names[id]=uName(id));
+    const pages = drawPages();
+    // التعميم: نفس آلية أداة التعاميم (عدّاد ترقيم + المستند + الصفحات)
+    const counterRef = db.collection('circulars').doc(DS.sid);
+    const itemRef = db.collection('circulars').doc(DS.sid).collection('items').doc();
+    let number = 0;
+    await db.runTransaction(async tx=>{
+      const snap = await tx.get(counterRef);
+      number = snap.exists ? (snap.data().nextNumber||1) : 1;
+      tx.set(counterRef, { nextNumber: number+1 }, { merge:true });
+      tx.set(itemRef, { number, title:'سجل المناوبة والإشراف — '+S().label, mandatory:true, recipients:[...members], pageCount:pages.length,
+        createdBy:DS.me.id, createdByName:DS.me.name, createdAt:Date.now(), source:'duty' });
+    });
+    await Promise.all(pages.map((dataUrl,i)=>itemRef.collection('pages').doc(String(i)).set({ dataUrl, index:i })));
+    const s = S();
+    const pub = { at:Date.now(), by:DS.me.id, byName:DS.me.name, stageLabel:s.label, names, members:[...members],
+      dutyDays:p.dutyDays||{}, sup:p.sup||{}, places:p.places.map(x=>({id:x.id,name:x.name})),
+      events:s.events.map(e=>({key:e.key,label:e.label,sub:e.sub})), circular:{ id:itemRef.id, number } };
+    await col().doc(planId(DS.stage)).set({ kind:'plan', schoolId:DS.sid, period:DS.period, stage:DS.stage, pub, members:[...members], updatedAt:pub.at-1 }, { merge:true });
+    p.pub = pub; p.members = pub.members; p.updatedAt = pub.at-1;
+    toast('تم الاعتماد ورفع التعميم رقم '+number); DS.tab='recv'; render();
+  }catch(e){ toast('خطأ: '+(e.message||e)); $('#btnPub').disabled = false; }
+}
+</script>
+</body>
+</html>

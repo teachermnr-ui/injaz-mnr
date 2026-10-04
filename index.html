@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-03.4 -->
+<!-- إصدار: 2026-10-04.5 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -530,10 +530,13 @@ const ROLES = {
 const PERM_TREE = [
   { key:'index', label:'الصفحة الرئيسية', leaves:[
     { key:'index.classes',  label:'انضباط الطلاب', only:['access'] },
+    { key:'index.leave',    label:'تسجيل الاستئذان', sub:true, only:['edit'] },
     { key:'index.sent',     label:'التحويلات المرسلة', only:['access','edit'] },
     { key:'index.received', label:'التحويلات الواردة', only:['access','edit'] },
     { key:'index.absence',  label:'تأخر وغياب الطلاب', only:['access','edit'] },
     { key:'index.attendanceWindow', label:'إعدادات نافذة التغيب', sub:true, only:['edit'] },
+    { key:'index.guidance', label:'الإرشاد الطلابي', only:['access','edit'] },
+    { key:'index.appointments', label:'مواعيد أولياء الأمور', sub:true, only:['edit'] },
     { key:'index.studentStatus', label:'حالات الطلاب', only:['access','edit'] },
     { key:'index.studentRecord', label:'سجل الطالب التفصيلي', sub:true, only:['access'] },
     { key:'index.users',    label:'المستخدمون', only:['access'] },
@@ -546,6 +549,9 @@ const PERM_TREE = [
     { key:'tools.classes', label:'إضافة الفصول والطلاب', only:['access','edit'] },
     { key:'tools.timetable', label:'بناء الجدول المدرسي', only:['access','edit'] },
     { key:'tools.circulars', label:'التوقيع على التعاميم', only:['access','edit'] },
+    { key:'tools.visits', label:'الزيارات الصفية', only:['access','edit'] },
+    { key:'tools.duty', label:'المناوبة والإشراف', only:['access','edit'] },
+    { key:'tools.waiting', label:'حصص الانتظار', only:['edit'] },
   ]},
 /* [ADMIN-TOOLS:END] */
   { key:'omr', label:'إدارة الصفوف', leaves:[
@@ -588,8 +594,10 @@ function defaultPerms(role){
   }
   if(role==='agent'){        // وكيل: وصول+تعديل (المرسلة، الواردة، الغياب)
     ['index.sent','index.received','index.absence'].forEach(k=>set(k,true,true,false));
-  } else if(role==='counselor'){    // موجه: وصول+تعديل (المرسلة، الواردة) + مشاهدة (الغياب)
-    ['index.sent','index.received'].forEach(k=>set(k,true,true,false));
+    set('index.appointments',false,true,false);
+  } else if(role==='counselor'){    // موجه: وصول+تعديل (المرسلة، الواردة، الإرشاد الطلابي) + مشاهدة (الغياب)
+    ['index.sent','index.received','index.guidance'].forEach(k=>set(k,true,true,false));
+    set('index.appointments',false,true,false);
     set('index.absence',true,false,false);
     set('index.studentStatus',true,true,false);
   } else if(role==='assistant'){    // مساعد إداري: وصول+تعديل (الفصول والطلاب، الغياب)
@@ -611,6 +619,8 @@ const INDEX_TABS = [
   { key:'sent',     perm:'index.sent',     label:'التحويلات المرسلة' },
   { key:'received', perm:'index.received', label:'التحويلات الواردة' },
   { key:'absence',  perm:'index.absence',  label:'تأخر وغياب الطلاب' },
+  { key:'dashboard', perm:'',              label:'المؤشرات' },
+  { key:'guidance', perm:'index.guidance', label:'الإرشاد الطلابي' },
   { key:'studentStatus', perm:'index.studentStatus', label:'حالات الطلاب' },
   { key:'users',    perm:'index.users',    label:'المستخدمون' },
   { key:'userPerms', perm:'index.users.perms', label:'الصلاحيات الخاصة' },
@@ -624,15 +634,21 @@ const ADMIN_TOOLS = [
   { key:'timetable', perm:'tools.timetable', label:'بناء الجدول المدرسي', icon:'🗓️', href:'timetable.html' },
   // noAdmin: خصوصية كاملة للمدرسة بطلب صريح من المستخدم — لا صلاحية تلقائية لأدمن النظام هنا إطلاقًا (خلاف كل أداة أخرى)
   { key:'circulars', perm:'tools.circulars', label:'التوقيع على التعاميم', icon:'✍️', href:'circulars.html', noAdmin:true },
+  // الزيارات الصفية (نموذج ٤٩): مدير المدرسة والوكيل بالدور تلقائيًا، وغيرهما بالتفويض — ولا أدمن النظام
+  { key:'visits', perm:'tools.visits', label:'الزيارات الصفية', icon:'👁', href:'visits.html', noAdmin:true, roles:['schoolAdmin','agent'] },
+  // المناوبة والإشراف: مدير المدرسة والوكيل بالدور، وغيرهما بالتفويض — ولا أدمن النظام. الاعتماد والرفع كتعميم للمدير أو صاحب صلاحية التعاميم
+  { key:'duty', perm:'tools.duty', label:'المناوبة والإشراف', icon:'🛡️', href:'duty.html', noAdmin:true, roles:['schoolAdmin','agent'] },
+  // حصص الانتظار: تبويب في أداة الجدول — صلاحية كاملة للوكيل بالدور (أو تفويض «حصص الانتظار»)، وتفتح عليه مباشرة
+  { key:'waiting', perm:'tools.waiting', permField:'edit', label:'حصص الانتظار', icon:'⏳', href:'timetable.html?sec=waiting', roles:['schoolAdmin','agent'] },
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
-const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars'];
+const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting'];
 function visibleTools(){
   if(!CURRENT) return [];
   if(CURRENT.role==='admin') return ADMIN_TOOLS.filter(t=>!t.noAdmin);
   if(CURRENT.role==='soloTeacher' || !CURRENT.schoolId) return [];
   const pm = CURRENT.permissions||{};
-  return ADMIN_TOOLS.filter(t=> pm[t.perm] && pm[t.perm].access);
+  return ADMIN_TOOLS.filter(t=> (pm[t.perm] && pm[t.perm][t.permField||'access']) || (t.roles && t.roles.includes(CURRENT.role)));
 }
 /* ============ «لوحتي» — قائمة منسدلة دائمة لكل موظف عادي (التعاميم الآن، جدولي، وإضافات لاحقًا) ============
    مستقلة تمامًا عن قائمة «أدوات إدارية» (تلك لصاحب الصلاحية لإدارة الأداة؛ هذه لأي موظف عادي كي يرى ما يخصّه شخصيًا).
@@ -643,10 +659,24 @@ function myBoardVisible(){
 const MYBOARD_ITEMS = [
   { key:'circulars', href:'circulars.html', icon:'📨', label:'التعاميم' },
   { key:'schedule',  href:'myschedule.html', icon:'📅', label:'جدولي' },
+  // الإرشاد الطلابي: مواعيد أولياء الأمور (الوكيل والموجه) + متابعات الحالات المستحقة (الموجه)
+  { key:'appts',     action:'appts',     icon:'🗓️', label:'مواعيدي',  when:()=>typeof canAppts==='function' && canAppts() },
+  { key:'followups', action:'followups', icon:'📌', label:'متابعاتي', when:()=>typeof guideFull==='function' && guideFull() && !!CURRENT.schoolId },
+  // الزيارات الصفية: يظهر لمن جُدولت له زيارة في هذه الفترة، وعلامته حمراء عند جدولة/تعديل لم يطّلع عليه
+  { key:'visits',    action:'visits',    icon:'👁', label:'زياراتي',  when:()=>MYBOARD.visits.length>0 },
+  // المناوبة والإشراف: يظهر لمن كُلِّف في النسخة المعتمدة، وعلامته حمراء عند اعتماد جديد لم يطّلع عليه
+  { key:'duty',      action:'duty',      icon:'🛡️', label:'مناوبتي',  when:()=>MYBOARD.duty.length>0 },
+  // حصص الانتظار اليومية: يظهر لمن حُدِّد بديلًا اليوم أو غدًا (بعد «اعتماد وإرسال» في أداة الجدول)
+  { key:'wait',      action:'wait',      icon:'⏳', label:'انتظاري',  when:()=>MYBOARD.wait.length>0 },
 ];
-const MYBOARD = { pendingCirculars:0, scheduleChanged:false };
+const MYBOARD = { pendingCirculars:0, scheduleChanged:false, apptsToday:0, followupsDue:0, visits:[], visitsSig:'', visitsChanged:false, duty:[], dutySig:'', dutyChanged:false, wait:[], waitSig:'', waitChanged:false };
+const myBoardDotOn = key=> key==='circulars' ? MYBOARD.pendingCirculars>0 : key==='schedule' ? MYBOARD.scheduleChanged
+  : key==='appts' ? MYBOARD.apptsToday>0 : key==='followups' ? MYBOARD.followupsDue>0 : key==='visits' ? MYBOARD.visitsChanged : key==='duty' ? MYBOARD.dutyChanged : key==='wait' ? MYBOARD.waitChanged : false;
 async function refreshMyBoardAlerts(){
-  MYBOARD.pendingCirculars = 0; MYBOARD.scheduleChanged = false;
+  MYBOARD.pendingCirculars = 0; MYBOARD.scheduleChanged = false; MYBOARD.apptsToday = 0; MYBOARD.followupsDue = 0;
+  MYBOARD.visits = []; MYBOARD.visitsSig = ''; MYBOARD.visitsChanged = false;
+  MYBOARD.duty = []; MYBOARD.dutySig = ''; MYBOARD.dutyChanged = false;
+  MYBOARD.wait = []; MYBOARD.waitSig = ''; MYBOARD.waitChanged = false;
   updateMyBoardBadges();
   if(!myBoardVisible()) return;
   try{
@@ -673,18 +703,126 @@ async function refreshMyBoardAlerts(){
       MYBOARD.scheduleChanged = pub.sig !== seen;
     }
   }catch(e){ /* صمت: الجدول أداة منفصلة قد لا تكون مفعَّلة أصلًا لهذه المدرسة */ }
+  const today = attDateKey();
+  try{
+    if(canAppts()){
+      const as = await gAppts().where('byUserId','==',CURRENT.id).get();
+      MYBOARD.apptsToday = as.docs.map(d=>d.data()).filter(a=>a.schoolId===CURRENT.schoolId && a.date===today && a.status==='scheduled').length;
+    }
+  }catch(e){}
+  try{
+    if(guideFull()){
+      const cs = await gCases().where('schoolId','==',CURRENT.schoolId).get();
+      MYBOARD.followupsDue = cs.docs.map(d=>d.data()).filter(c=>c.period===SESSION.period && c.status!=='closed' && c.nextFollowUp && c.nextFollowUp<=today).length;
+    }
+  }catch(e){}
+  try{
+    const vs = await db.collection('classVisits').where('teacherId','==',CURRENT.id).get();
+    const plan = vs.docs.map(d=>d.data()).find(v=>v.kind==='plan' && v.schoolId===CURRENT.schoolId && v.period===SESSION.period);
+    if(plan){
+      MYBOARD.visits = [['الأولى',plan.v1],['الثانية',plan.v2]].filter(x=>x[1] && x[1].date).map(x=>Object.assign({ label:x[0] }, x[1]));
+      MYBOARD.visitsSig = MYBOARD.visits.map(v=>v.date+'|'+v.p+'|'+(v.cls||'')).join(';');
+      let seen = ''; try{ seen = localStorage.getItem(myVisitsSeenKey()) || ''; }catch(e){}
+      MYBOARD.visitsChanged = !!MYBOARD.visitsSig && MYBOARD.visitsSig !== seen;
+    }
+  }catch(e){}
+  try{
+    const ds = await db.collection('dutyPlans').where('members','array-contains',CURRENT.id).get();
+    MYBOARD.duty = ds.docs.map(d=>d.data()).filter(v=>v.schoolId===CURRENT.schoolId && v.period===SESSION.period && v.pub).map(v=>myDutyOf(v.pub));
+    MYBOARD.duty = MYBOARD.duty.filter(x=>x.duty.length || x.sup.length);
+    MYBOARD.dutySig = MYBOARD.duty.map(x=>x.at).join(';');
+    let seen = ''; try{ seen = localStorage.getItem(myDutySeenKey()) || ''; }catch(e){}
+    MYBOARD.dutyChanged = !!MYBOARD.dutySig && MYBOARD.dutySig !== seen;
+  }catch(e){}
+  try{
+    const dates = [today, (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return attDateKey(d); })()];
+    const out = [];
+    for(const dk of dates){
+      const sn = await db.collection('timetables').doc(CURRENT.schoolId).collection('data').doc(SESSION.period+'_wday_'+dk).get();
+      if(!sn.exists) continue;
+      let v = null; try{ v = JSON.parse(sn.data().value||'null'); }catch(e){}
+      if(!v || !v.sent) continue;
+      (v.items||[]).filter(it=>it.subUid===CURRENT.id).forEach(it=>out.push(Object.assign({ date:dk, sentAt:v.sentAt||0 }, it)));
+    }
+    MYBOARD.wait = out.sort((a,b)=>a.date.localeCompare(b.date) || a.p-b.p);
+    MYBOARD.waitSig = MYBOARD.wait.map(x=>x.date+'|'+x.st+'|'+x.p+'|'+x.sentAt).join(';');
+    let seen = ''; try{ seen = localStorage.getItem(myWaitSeenKey()) || ''; }catch(e){}
+    MYBOARD.waitChanged = !!MYBOARD.waitSig && MYBOARD.waitSig !== seen;
+  }catch(e){}
   updateMyBoardBadges();
+}
+/* «لوحتي ← انتظاري»: حصص الانتظار المسندة للمعلم اليوم/غدًا (التحديد اليومي في أداة الجدول) */
+const myWaitSeenKey = ()=>'injaz_waitSeen_'+CURRENT.id+'_'+CURRENT.schoolId+'_'+SESSION.period;
+function openMyWait(){
+  const ORD = ['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة','الثامنة','التاسعة','العاشرة'];
+  const W = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const today = attDateKey();
+  const rows = MYBOARD.wait.map(x=>'<div class="card" style="margin:8px 0;padding:12px">'+
+    '<div style="font-weight:800">الحصة '+(ORD[x.p]||(x.p+1))+' — '+(x.date===today?'<span style="color:#b45309">اليوم</span>':'غدًا')+' ('+esc(W[new Date(x.date+'T12:00:00').getDay()]||'')+')</div>'+
+    '<div style="margin-top:4px">الفصل: '+esc(x.clsLabel||x.cls||'')+' · المادة: '+esc(x.subj||'')+'</div>'+
+    '<div class="umeta">بدلًا من: '+esc(x.absentName||'')+'</div></div>').join('');
+  modal('<h2>انتظاري</h2>'+(rows||'<div class="empty">لا توجد حصص انتظار.</div>')+'<div class="modal-row"><button class="btn" onclick="closeModal()">إغلاق</button></div>');
+  try{ localStorage.setItem(myWaitSeenKey(), MYBOARD.waitSig); }catch(e){}
+  MYBOARD.waitChanged = false; updateMyBoardBadges();
+}
+/* «لوحتي ← مناوبتي»: تكليفات المعلم من النسخة المعتمدة لأداة «المناوبة والإشراف» (لكل مرحلة كُلِّف فيها) */
+const myDutySeenKey = ()=>'injaz_dutySeen_'+CURRENT.id+'_'+CURRENT.schoolId+'_'+SESSION.period;
+function myDutyOf(pub){
+  const me = CURRENT.id, W = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const duty = Object.keys(pub.dutyDays||{}).filter(k=>(pub.dutyDays[k]||[]).includes(me)).sort();
+  const evL = {}; (pub.events||[]).forEach(e=>evL[e.key]=e.label);
+  const plL = {}; (pub.places||[]).forEach(p=>plL[p.id]=p.name);
+  const sup = [];
+  Object.keys(pub.sup||{}).sort((a,b)=>a-b).forEach(w=>Object.keys(pub.sup[w]||{}).forEach(ev=>Object.keys(pub.sup[w][ev]||{}).forEach(pl=>{
+    if((pub.sup[w][ev][pl]||[]).includes(me)) sup.push({ day:W[+w]||'', ev:evL[ev]||'', place:plL[pl]||'' });
+  })));
+  return { stage:pub.stageLabel||'', at:pub.at||0, duty, sup, circular:pub.circular||null };
+}
+function openMyDuty(){
+  const W = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const hij = dk=>{ try{ return new Date(dk+'T12:00:00').toLocaleDateString('ar-SA-u-ca-islamic-umalqura',{year:'numeric',month:'long',day:'numeric'}); }catch(e){ return dk; } };
+  const today = attDateKey();
+  const tomorrow = (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return attDateKey(d); })();
+  const html = MYBOARD.duty.map(x=>{
+    const up = x.duty.filter(k=>k>=today), past = x.duty.length - up.length;
+    return (MYBOARD.duty.length>1?'<div class="umeta" style="font-weight:800;margin-top:10px">'+esc(x.stage)+'</div>':'')+
+      '<div class="card" style="margin:8px 0;padding:12px"><div style="font-weight:800">المناوبة <span class="umeta">(صباحًا، وبعد الدوام حتى خروج آخر طالب)</span></div>'+
+      (up.length ? up.map(k=>'<div style="margin-top:4px">'+esc(W[new Date(k+'T12:00:00').getDay()]||'')+' '+esc(hij(k))+(k===today?' <b style="color:#b45309">اليوم</b>':k===tomorrow?' <b style="color:#b45309">غدًا</b>':'')+'</div>').join('') : '<div class="umeta">لا مناوبات قادمة.</div>')+
+      (past?'<div class="umeta" style="margin-top:4px">مضت: '+past+'</div>':'')+'</div>'+
+      '<div class="card" style="margin:8px 0;padding:12px"><div style="font-weight:800">الإشراف — كل أسبوع</div>'+
+      (x.sup.length ? x.sup.map(s=>'<div style="margin-top:4px">'+esc(s.day)+': '+esc(s.ev)+' — '+esc(s.place)+'</div>').join('') : '<div class="umeta">لا إشراف.</div>')+'</div>'+
+      (x.circular?'<a class="btn" style="display:flex;justify-content:center;text-decoration:none" href="circulars.html">التوقيع على التعميم رقم '+x.circular.number+' (الاستلام)</a>':'');
+  }).join('');
+  modal('<h2>مناوبتي وإشرافي</h2>'+(html||'<div class="empty">لا توجد تكليفات.</div>')+'<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إغلاق</button></div>');
+  try{ localStorage.setItem(myDutySeenKey(), MYBOARD.dutySig); }catch(e){}
+  MYBOARD.dutyChanged = false; updateMyBoardBadges();
+}
+/* «لوحتي ← زياراتي»: مواعيد زيارات المعلم الصفية (من أداة «الزيارات الصفية») — يُسجَّل الاطّلاع في المتصفح */
+const myVisitsSeenKey = ()=>'injaz_visitsSeen_'+CURRENT.id+'_'+CURRENT.schoolId+'_'+SESSION.period;
+function openMyVisits(){
+  const W = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const hij = dk=>{ try{ return new Date(dk+'T12:00:00').toLocaleDateString('ar-SA-u-ca-islamic-umalqura',{year:'numeric',month:'long',day:'numeric'}); }catch(e){ return dk; } };
+  const today = attDateKey();
+  const rows = MYBOARD.visits.map(v=>{
+    const past = v.date < today;
+    return '<div class="card" style="margin:8px 0;padding:12px;'+(past?'opacity:.65':'')+'">'+
+      '<div style="font-weight:800">الزيارة '+esc(v.label)+(past?' <span class="umeta">(مضت)</span>':'')+'</div>'+
+      '<div style="margin-top:4px">'+esc(W[new Date(v.date+'T12:00:00').getDay()]||'')+' '+esc(hij(v.date))+'</div>'+
+      '<div class="umeta">'+(v.p!==''&&v.p!=null?'الحصة '+(+v.p+1)+' · ':'')+esc(v.cls||'')+' · الزائر: مدير المدرسة</div>'+
+      ((v.unit||v.activity)?'<div class="umeta">'+(v.unit?'الوحدة: '+esc(v.unit):'')+(v.unit&&v.activity?' · ':'')+(v.activity?'النشاط: '+esc(v.activity):'')+'</div>':'')+
+    '</div>';
+  }).join('');
+  modal('<h2>زياراتي الصفية</h2>'+(rows||'<div class="empty">لا توجد زيارات مجدولة.</div>')+'<div class="modal-row"><button class="btn" onclick="closeModal()">إغلاق</button></div>');
+  try{ localStorage.setItem(myVisitsSeenKey(), MYBOARD.visitsSig); }catch(e){}
+  MYBOARD.visitsChanged = false; updateMyBoardBadges();
 }
 function updateMyBoardBadges(){
   const btn = $('#myBoardToggle');
   if(btn) btn.style.display = myBoardVisible() ? 'inline-flex' : 'none';
-  const total = MYBOARD.pendingCirculars + (MYBOARD.scheduleChanged?1:0);
-  const dot = $('#myBoardDot'); if(dot) dot.style.display = total>0 ? 'inline-flex' : 'none';
+  const any = MYBOARD_ITEMS.some(t=>(!t.when || t.when()) && myBoardDotOn(t.key));
+  const dot = $('#myBoardDot'); if(dot) dot.style.display = any ? 'inline-flex' : 'none';
   // لو القائمة مفتوحة فعلًا حدّث نقاطها الفرعية فورًا (بلا إعادة بنائها فتُغلَق سهوًا)
-  const cDot = document.querySelector('#myBoardMenu [data-key="circulars"] .tab-dot');
-  if(cDot) cDot.style.display = MYBOARD.pendingCirculars>0 ? 'inline-flex' : 'none';
-  const sDot = document.querySelector('#myBoardMenu [data-key="schedule"] .tab-dot');
-  if(sDot) sDot.style.display = MYBOARD.scheduleChanged ? 'inline-flex' : 'none';
+  MYBOARD_ITEMS.forEach(t=>{ const d=document.querySelector('#myBoardMenu [data-key="'+t.key+'"] .tab-dot'); if(d) d.style.display = myBoardDotOn(t.key) ? 'inline-flex' : 'none'; });
 }
 /* قراءة جدول الموظف الشخصي من أداة «بناء الجدول المدرسي» (إن كانت مفعّلة ومُعتمَدة لهذه الفترة) —
    قراءة فقط، لا تتطلّب صلاحية الأداة نفسها (قاعدة Firestore تسمح لأي موظف فعّال بقراءة مستندات
@@ -710,9 +848,9 @@ function closeMyBoardMenu(){
 function toggleMyBoardMenu(btn){
   if(document.getElementById('myBoardMenu')){ closeMyBoardMenu(); return; }
   const m=document.createElement('div'); m.id='myBoardMenu'; m.className='tools-menu';
-  m.innerHTML=MYBOARD_ITEMS.map(t=>{
-    const show = t.key==='circulars' ? MYBOARD.pendingCirculars>0 : MYBOARD.scheduleChanged;
-    return `<button type="button" class="tools-item" data-key="${t.key}" data-href="${esc(t.href)}">
+  m.innerHTML=MYBOARD_ITEMS.filter(t=>!t.when || t.when()).map(t=>{
+    const show = myBoardDotOn(t.key);
+    return `<button type="button" class="tools-item" data-key="${t.key}" data-href="${esc(t.href||'')}" data-action="${esc(t.action||'')}">
       <span class="ti-ico">${t.icon}</span><span>${esc(t.label)}</span>
       <span class="tab-dot" style="display:${show?'inline-flex':'none'};margin-left:auto;margin-right:0"></span>
     </button>`;
@@ -721,6 +859,11 @@ function toggleMyBoardMenu(btn){
     e.stopPropagation();
     const it=e.target.closest('.tools-item'); if(!it) return;
     closeMyBoardMenu();
+    if(it.dataset.action==='appts'){ openMyAppointments(); return; }
+    if(it.dataset.action==='visits'){ openMyVisits(); return; }
+    if(it.dataset.action==='duty'){ openMyDuty(); return; }
+    if(it.dataset.action==='wait'){ openMyWait(); return; }
+    if(it.dataset.action==='followups'){ activeTab='guidance'; GUIDE.sub='cases'; GUIDE.caseFilter='open'; renderTabs(); renderPanel(); return; }
     window.location.href=it.dataset.href;
   });
   btn.classList.add('open');
@@ -1625,7 +1768,18 @@ $('#pwBtn').onclick = async ()=>{
 /* ========================================================================
    دخول التطبيق + التبويبات
    ======================================================================== */
+// «الإرشاد الطلابي» يظهر لمن له الدور أو الصلاحية (حتى لو لم تُخزَّن الصلاحية للمستخدمين القدامى)، ويتطلب مدرسة محددة
+// «المؤشرات» لمدير المدرسة فقط (لا أدمن النظام ولا غيره)
 function visibleTabs(){
+  const base = visibleTabsCore().filter(t=>t.key!=='guidance' && t.key!=='dashboard');
+  const extra = [];
+  if(CURRENT.schoolId && guideView()) extra.push(INDEX_TABS.find(t=>t.key==='guidance'));
+  if(dashVisible()) extra.push(INDEX_TABS.find(t=>t.key==='dashboard'));
+  if(!extra.length) return base;
+  const order = INDEX_TABS.map(t=>t.key);
+  return base.concat(extra).sort((a,b)=>order.indexOf(a.key)-order.indexOf(b.key));
+}
+function visibleTabsCore(){
   if(CURRENT.role==='admin') return INDEX_TABS.slice();
   const pm=CURRENT.permissions||{};
   if(CURRENT.role==='schoolAdmin'){
@@ -1891,6 +2045,91 @@ async function loadNoteCounts(){
       .forEach(n=>{ noteSeats(n).forEach(seat=>{ RNOTES[seat]=(RNOTES[seat]||0)+1; }); });
   }catch(e){}
 }
+/* ===================== سجل الاستئذان (الخروج المبكر) =====================
+   مجموعة مستقلة leaves — لا تلمس السجل المركزي للغياب ولا حالة «مستأذن» القائمة فيه، ولا تُحتسب من أيام الغياب.
+   يسجّله: من له تعديل الغياب، أو بند «تسجيل الاستئذان» (index.leave) المستقل. */
+const leavesCol = ()=>db.collection('leaves');
+const LEAVE_REASONS = ['مراجعة طبية','مرض','ظرف عائلي','أخرى'];
+const LEAVE_RELS = ['الأب','الأم','الأخ','العم','الخال','الجد','أخرى'];
+let LEAVE_BY_ID = {};
+function canLeave(){ return can('index.absence','edit') || can('index.leave','edit'); }
+function nowHHMM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function leaveReasonText(l){ return l.reason==='أخرى' ? (l.reasonText||'أخرى') : (l.reason||''); }
+function openLeaveForm(seat, code){
+  const st=RStudents.find(x=>x.seat===seat&&String(x.classCode)===String(code))||RStudents.find(x=>x.seat===seat); if(!st) return;
+  const cl=RClasses.find(c=>String(c.code)===String(code))||{};
+  modal('<h2>تسجيل استئذان</h2><div class="sub-note">'+esc(st.name)+' — '+esc(cl.name||code||'')+'</div>'+
+    '<div class="field"><label>وقت الخروج</label><input id="lvTime" type="time" value="'+nowHHMM()+'"></div>'+
+    '<div class="field"><label>السبب</label><select id="lvReason">'+LEAVE_REASONS.map(r=>'<option>'+r+'</option>').join('')+'</select></div>'+
+    '<div class="field" id="lvOtherWrap" style="display:none"><label>اذكر السبب</label><input id="lvOther" maxlength="120"></div>'+
+    '<div class="field"><label>اسم المستلِم</label><input id="lvRecv" maxlength="80" placeholder="من استلم الطالب"></div>'+
+    '<div class="field"><label>صلة القرابة</label><select id="lvRel">'+LEAVE_RELS.map(r=>'<option>'+r+'</option>').join('')+'</select></div>'+
+    '<div class="field"><label>جوال المستلِم (اختياري)</label><input id="lvPhone" inputmode="tel" maxlength="20"></div>'+
+    '<div class="field"><label>ملاحظة (اختياري)</label><input id="lvNote" maxlength="200"></div>'+
+    '<div class="sub-note" style="margin:4px 0 10px">أذن له: <b>'+esc(CURRENT.username||'')+'</b></div>'+
+    '<div id="lvAlert"></div>'+
+    '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="lvOk">حفظ</button></div>');
+  $('#lvReason').onchange=()=>{ $('#lvOtherWrap').style.display = $('#lvReason').value==='أخرى' ? '' : 'none'; };
+  $('#lvOk').onclick=async()=>{
+    const time=$('#lvTime').value, reason=$('#lvReason').value, other=($('#lvOther').value||'').trim(), recv=($('#lvRecv').value||'').trim();
+    if(!time){ alertBox('lvAlert','err','حدّد وقت الخروج.'); return; }
+    if(reason==='أخرى' && !other){ alertBox('lvAlert','err','اذكر سبب الاستئذان.'); return; }
+    if(!recv){ alertBox('lvAlert','err','اكتب اسم المستلِم.'); return; }
+    const rec={ schoolId:RSchoolId||CURRENT.schoolId, period:SESSION.period, seat:String(seat), name:st.name||'',
+      classCode:String(code||''), className:cl.name||'', date:attDateKey(), time, reason, reasonText: reason==='أخرى'?other:'',
+      receiverName:recv, receiverRel:$('#lvRel').value, receiverPhone:($('#lvPhone').value||'').trim(), note:($('#lvNote').value||'').trim(),
+      byUserId:CURRENT.id, byName:CURRENT.username||'', ts:Date.now() };
+    $('#lvOk').disabled=true;
+    try{
+      const ref = await leavesCol().add(rec);
+      const full = Object.assign({ id:ref.id }, rec); LEAVE_BY_ID[ref.id] = full;
+      modal('<h2>✔ تم تسجيل الاستئذان</h2><div class="sub-note">'+esc(rec.name)+' — خرج الساعة '+esc(time)+' مع '+esc(recv)+' ('+esc(rec.receiverRel)+')</div>'+
+        '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إغلاق</button><button class="btn" id="lvPrint">🖨️ طباعة إذن الخروج</button></div>');
+      $('#lvPrint').onclick=()=>printLeaveSlip(ref.id);
+      toast('تم تسجيل الاستئذان');
+    }catch(e){ $('#lvOk').disabled=false; alertBox('lvAlert','err','تعذّر الحفظ: '+(e.message||e)); }
+  };
+}
+// «إذن خروج طالب» — طباعة اختيارية: البيانات + توقيع المستلِم + توقيع المسؤول + ختم المدرسة
+function printLeaveSlip(id){
+  const l = LEAVE_BY_ID[id]; if(!l) return;
+  const school = (SCHOOLS[l.schoolId]||{}).name || '';
+  let dGreg=l.date, dHij='';
+  try{ const d=new Date(l.date+'T00:00:00'); dGreg=d.toLocaleDateString('ar',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); dHij=d.toLocaleDateString('ar-SA-u-ca-islamic',{year:'numeric',month:'long',day:'numeric'}); }catch(e){}
+  const row=(k,v)=>'<tr><th>'+k+'</th><td>'+esc(v||'—')+'</td></tr>';
+  const w=window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
+  w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>إذن خروج — '+esc(l.name)+'</title>'+
+    '<style>body{font-family:Tahoma,Arial;padding:28px;max-width:720px;margin:auto}h1{text-align:center;font-size:22px;margin:6px 0 2px}.sch{text-align:center;font-size:15px;color:#333}.dt{text-align:center;font-size:13px;color:#555;margin-bottom:16px}'+
+    'table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:9px 10px;font-size:14px;text-align:right}th{background:#f1f1f1;width:30%}'+
+    '.sig{display:flex;gap:16px;margin-top:34px}.sig div{flex:1;text-align:center;font-size:14px}.sig span{display:block;border-bottom:1px solid #333;height:46px;margin-bottom:6px}'+
+    '.stamp{margin:28px auto 0;width:150px;height:150px;border:2px dashed #999;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px}</style></head><body>'+
+    (school?'<div class="sch">'+esc(school)+'</div>':'')+'<h1>إذن خروج طالب</h1><div class="dt">'+esc(dGreg)+(dHij?' — '+esc(dHij):'')+'</div>'+
+    '<table>'+row('اسم الطالب',l.name)+row('رقم الهوية',l.seat)+row('الفصل',l.className||l.classCode)+row('وقت الخروج',l.time)+row('السبب',leaveReasonText(l))+
+      row('اسم المستلِم',l.receiverName)+row('صلة القرابة',l.receiverRel)+(l.receiverPhone?row('جوال المستلِم',l.receiverPhone):'')+(l.note?row('ملاحظة',l.note):'')+row('أذن له',l.byName)+'</table>'+
+    '<div class="sig"><div><span></span>توقيع المستلِم</div><div><span></span>توقيع المسؤول</div></div><div class="stamp">ختم المدرسة</div>'+
+    '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
+  w.document.close();
+}
+async function delLeave(id){
+  if(!confirm('حذف سجل الاستئذان؟')) return;
+  try{ await leavesCol().doc(id).delete(); toast('حُذف'); renderAbsence($('#content')); }catch(e){ toast('خطأ: '+e.message); }
+}
+function leaveRow(l, canDel){
+  return '<div style="border:1px solid #DCCEF3;border-radius:12px;padding:10px;margin-bottom:8px;background:#F6F1FD">'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'+
+      '<div><div style="font-weight:700">'+esc(l.name)+'</div>'+
+        '<div class="umeta">'+esc(l.seat)+' · '+esc(l.className||l.classCode||'')+'</div>'+
+        '<div class="umeta" style="margin-top:2px">السبب: <b>'+esc(leaveReasonText(l))+'</b></div>'+
+        '<div class="umeta">المستلِم: <b>'+esc(l.receiverName||'')+'</b> ('+esc(l.receiverRel||'')+')'+(l.receiverPhone?' · '+esc(l.receiverPhone):'')+'</div>'+
+        (l.note?'<div class="umeta">ملاحظة: '+esc(l.note)+'</div>':'')+
+        '<div class="umeta">أذن له: <b>'+esc(l.byName||'')+'</b></div></div>'+
+      '<div style="text-align:left;white-space:nowrap"><div style="font-weight:700;font-size:13px;color:#6d3fc0">🚪 خرج '+esc(l.time||'')+'</div>'+
+        '<div style="display:flex;gap:4px;margin-top:8px;justify-content:flex-end">'+
+          '<button class="btn ghost sm" onclick="printLeaveSlip(\''+esc(l.id)+'\')" title="طباعة إذن الخروج">🖨️ إذن</button>'+
+          (canDel?'<button class="btn ghost sm" onclick="delLeave(\''+esc(l.id)+'\')" title="حذف">🗑️</button>':'')+
+        '</div></div>'+
+    '</div></div>';
+}
 function markAbsentFromClasses(seat,code,status){
   const st=RStudents.find(x=>x.seat===seat&&String(x.classCode)===String(code))||RStudents.find(x=>x.seat===seat); if(!st) return;
   const cl=RClasses.find(c=>String(c.code)===String(code))||{};
@@ -1910,6 +2149,61 @@ function markAbsentFromClasses(seat,code,status){
     catch(e){ toast('خطأ: '+e.message); }
   });
 }
+/* حساب الفصول غير المحضَّرة اليوم (يُستخدم في «تأخر وغياب الطلاب» وفي «المؤشرات») */
+async function computeNotPrepared(){
+  const uSnap = await usersCol().get();
+  const teachers = uSnap.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(u=>!u.migratedTo && u.schools && u.schools[CURRENT.schoolId])
+    /* [ADMIN-TOOLS:MOD] ORIG: .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[]}; }) */
+    .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:teacherDutyClasses(ctx)}; })
+    /* [ADMIN-TOOLS:MOD] ORIG: .filter(u=>u.role==='teacher' && u.assignedClasses.length); */
+    .filter(u=>u.assignedClasses.length);
+  // لا خروج مبكر لو لا معلمين — الفصول بلا معلم تُعرض كغير محضَّرة
+  const roster = await rosterDoc(CURRENT.schoolId).get();
+  const classesMeta = {};
+  if(roster.exists){ try{ (JSON.parse(roster.data().value||'{}').classes||[]).forEach(cl=>{ classesMeta[cl.code]=cl.name; }); }catch(e){} }
+  const allCodes = Object.keys(classesMeta);
+  teachers.forEach(t=>{ if(t.assignedClasses.includes('__all__')) t.assignedClasses=allCodes.slice(); });
+  const today = todayStrIndex();
+  // فصل يُعدّ "غير محضَّر" فقط لو لم يحضّره أي معلم من معلميه — التجميع حسب الفصل لا حسب المعلم
+  const clsState = {}; // code -> {name, anyPrepared}
+  // كل فصول الروستر تدخل الحسبة — حتى ما ليس له معلم مُسنَد (فصل بلا معلم = غير محضَّر حتمًا)
+  Object.keys(classesMeta).forEach(code=>{
+    clsState[String(code)] = { name: classesMeta[code]||code, anyPrepared:false };
+  });
+  for(const t of teachers){
+    const ns = '_'+CURRENT.schoolId+'_'+SESSION.period+'_'+t.id;
+    let prepared = new Set();
+    try{
+      const wSnap = await db.collection('results').doc('worklog'+ns).get();
+      if(wSnap.exists){
+        const wl = JSON.parse(wSnap.data().value||'{}');
+        Object.keys(wl).forEach(vkey=>{
+          const classCode = vkey.indexOf('::')!==-1 ? vkey.slice(0,vkey.indexOf('::')) : vkey;
+          const perClass = wl[vkey];
+          const hasToday = Object.values(perClass).some(entry=>(entry.events||[]).some(ev=>ev.date===today));
+          if(hasToday) prepared.add(String(classCode));
+        });
+      }
+    }catch(e){}
+    const _tCls = (t.assignedClasses||[]).includes('__all__') ? Object.keys(classesMeta) : (t.assignedClasses||[]);
+    _tCls.forEach(code=>{
+      const key = String(code);
+      if(!clsState[key]) clsState[key] = { name: classesMeta[code]||code, anyPrepared:false };
+      if(prepared.has(key)) clsState[key].anyPrepared = true;
+    });
+  }
+  // تأكيدات "تم التحضير" اليدوية لليوم
+  const overrides = {};
+  try{
+    const oSnap = await db.collection('prepOverrides').where('schoolId','==',CURRENT.schoolId).where('date','==',today).get();
+    oSnap.docs.forEach(d=>{ const o=d.data(); overrides[String(o.classCode)] = o; });
+  }catch(e){}
+  const notPrepared = Object.keys(clsState).filter(k=>!clsState[k].anyPrepared && !overrides[k])
+    .map(k=>({ code:k, className: clsState[k].name }));
+  const confirmed = Object.keys(overrides).map(k=>({ className: (clsState[k]&&clsState[k].name)||k, by: overrides[k].byName||'' }));
+  return { notPrepared, confirmed, today };
+}
 async function renderNotPreparedClasses(){
   const host = document.getElementById('notPreparedCard');
   if(!host) return;
@@ -1920,57 +2214,7 @@ async function renderNotPreparedClasses(){
   if(nowMin < toH*60+toM){ host.innerHTML=''; return; }   // النافذة لم تنتهِ بعد
   host.innerHTML = '<div class="card"><div class="empty"><span class="spin"></span> جارٍ فحص الفصول…</div></div>';
   try{
-    const uSnap = await usersCol().get();
-    const teachers = uSnap.docs.map(d=>({id:d.id,...d.data()}))
-      .filter(u=>!u.migratedTo && u.schools && u.schools[CURRENT.schoolId])
-      /* [ADMIN-TOOLS:MOD] ORIG: .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[]}; }) */
-      .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:teacherDutyClasses(ctx)}; })
-      /* [ADMIN-TOOLS:MOD] ORIG: .filter(u=>u.role==='teacher' && u.assignedClasses.length); */
-      .filter(u=>u.assignedClasses.length);
-    // لا خروج مبكر لو لا معلمين — الفصول بلا معلم تُعرض كغير محضَّرة
-    const roster = await rosterDoc(CURRENT.schoolId).get();
-    const classesMeta = {};
-    if(roster.exists){ try{ (JSON.parse(roster.data().value||'{}').classes||[]).forEach(cl=>{ classesMeta[cl.code]=cl.name; }); }catch(e){} }
-    const allCodes = Object.keys(classesMeta);
-    teachers.forEach(t=>{ if(t.assignedClasses.includes('__all__')) t.assignedClasses=allCodes.slice(); });
-    const today = todayStrIndex();
-    // فصل يُعدّ "غير محضَّر" فقط لو لم يحضّره أي معلم من معلميه — التجميع حسب الفصل لا حسب المعلم
-    const clsState = {}; // code -> {name, anyPrepared}
-    // كل فصول الروستر تدخل الحسبة — حتى ما ليس له معلم مُسنَد (فصل بلا معلم = غير محضَّر حتمًا)
-    Object.keys(classesMeta).forEach(code=>{
-      clsState[String(code)] = { name: classesMeta[code]||code, anyPrepared:false };
-    });
-    for(const t of teachers){
-      const ns = '_'+CURRENT.schoolId+'_'+SESSION.period+'_'+t.id;
-      let prepared = new Set();
-      try{
-        const wSnap = await db.collection('results').doc('worklog'+ns).get();
-        if(wSnap.exists){
-          const wl = JSON.parse(wSnap.data().value||'{}');
-          Object.keys(wl).forEach(vkey=>{
-            const classCode = vkey.indexOf('::')!==-1 ? vkey.slice(0,vkey.indexOf('::')) : vkey;
-            const perClass = wl[vkey];
-            const hasToday = Object.values(perClass).some(entry=>(entry.events||[]).some(ev=>ev.date===today));
-            if(hasToday) prepared.add(String(classCode));
-          });
-        }
-      }catch(e){}
-      const _tCls = (t.assignedClasses||[]).includes('__all__') ? Object.keys(classesMeta) : (t.assignedClasses||[]);
-      _tCls.forEach(code=>{
-        const key = String(code);
-        if(!clsState[key]) clsState[key] = { name: classesMeta[code]||code, anyPrepared:false };
-        if(prepared.has(key)) clsState[key].anyPrepared = true;
-      });
-    }
-    // تأكيدات "تم التحضير" اليدوية لليوم
-    const overrides = {};
-    try{
-      const oSnap = await db.collection('prepOverrides').where('schoolId','==',CURRENT.schoolId).where('date','==',today).get();
-      oSnap.docs.forEach(d=>{ const o=d.data(); overrides[String(o.classCode)] = o; });
-    }catch(e){}
-    const notPrepared = Object.keys(clsState).filter(k=>!clsState[k].anyPrepared && !overrides[k])
-      .map(k=>({ code:k, className: clsState[k].name }));
-    const confirmed = Object.keys(overrides).map(k=>({ className: (clsState[k]&&clsState[k].name)||k, by: overrides[k].byName||'' }));
+    const { notPrepared, confirmed, today } = await computeNotPrepared();
     const canConfirm = can('index.absence','edit');
     const confirmedHtml = confirmed.length
       ? '<div style="margin-top:10px;font-size:12.5px;color:var(--muted)">تم تأكيد تحضيرها يدويًا: '+confirmed.map(c=>'<b>'+esc(c.className)+'</b> ('+esc(c.by)+')').join('، ')+'</div>' : '';
@@ -2029,6 +2273,666 @@ async function resolveAttAlert(id, decision){
   }catch(e){ toast('خطأ: '+e.message); }
 }
 function todayStrIndex(){ const d=new Date(); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; }
+/* ===================== الإرشاد الطلابي (قائمة المتابعة، الحالات، المواعيد) =====================
+   ميزة دائمة بالنظام. البيانات: guidanceCases (رأس الحالة)، guidanceSessions (تفاصيل الجلسات — للموجه فقط)،
+   guidanceAppointments (مواعيد أولياء الأمور — لصاحبها فقط)، guidanceSettings/{sid} (الحدود وقائمة التجاهل).
+   الموجه (الدور أو صلاحية «الإرشاد الطلابي» تعديل) = كامل. المدير/أدمن النظام/صلاحية وصول = اطلاع على وجود الحالة ونوعها فقط.
+   الوكيل: لا يرى التبويب؛ يحوّل للموجه من «تأخر وغياب الطلاب»، ومواعيده في «لوحتي ← مواعيدي». */
+const gCases = ()=>db.collection('guidanceCases');
+const gSess  = ()=>db.collection('guidanceSessions');
+const gAppts = ()=>db.collection('guidanceAppointments');
+const gSet   = ()=>db.collection('guidanceSettings');
+const G_TYPES = ['سلوكية','دراسية','صحية','اجتماعية','نفسية','أخرى'];
+const G_ACTIONS = ['توجيه فردي','تواصل مع ولي الأمر','خطة علاجية','إحالة لجهة مختصة','متابعة','أخرى'];
+const G_CLOSE = ['تحسّن','انتقل من المدرسة','أُحيل لجهة مختصة','أخرى'];
+const G_REF_REASONS = ['غياب متكرر','تأخر متكرر','استئذان متكرر','سلوك','أخرى'];
+const G_STATUS = { open:'مفتوحة', watch:'تحت المتابعة', closed:'مغلقة' };
+const G_DEF_THR = { notes:3, abs:5, leave:3 };
+let GUIDE = { sub:'list', filter:'all', cls:'', caseFilter:'open', selCase:null, data:null, sessions:{} };
+
+function guideFull(){ return CURRENT.role!=='admin' && CURRENT.role!=='schoolAdmin' && (CURRENT.role==='counselor' || can('index.guidance','edit')); }
+function guideView(){ return guideFull() || CURRENT.role==='admin' || CURRENT.role==='schoolAdmin' || can('index.guidance','access'); }
+function canAppts(){ return !!CURRENT.schoolId && CURRENT.role!=='admin' && CURRENT.role!=='schoolAdmin'
+  && (CURRENT.role==='agent' || CURRENT.role==='counselor' || can('index.appointments','edit')); }
+const gChip = (txt,bg,fg)=>'<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;background:'+bg+';color:'+fg+'">'+txt+'</span>';
+const gBtn = (label,onclick,kind)=>'<button class="btn sm '+(kind||'secondary')+'" style="width:auto" onclick="'+onclick+'">'+label+'</button>';
+function gDateLabel(dk){ if(!dk) return ''; try{ return new Date(dk+'T00:00:00').toLocaleDateString('ar',{weekday:'long',day:'numeric',month:'long'}); }catch(e){ return dk; } }
+
+/* ---------- تحميل البيانات ---------- */
+async function loadGuideData(){
+  const sid = CURRENT.schoolId, P = SESSION.period, full = guideFull();
+  const safe = p=>p.then(s=>s.docs.map(d=>({id:d.id,...d.data()}))).catch(()=>[]);
+  const [rosterSnap, notes, att, leaves, cases, setSnap] = await Promise.all([
+    rosterDoc(sid).get().catch(()=>null),
+    safe(notesCol().where('schoolId','==',sid).get()),
+    safe(attCol().where('schoolId','==',sid).get()),
+    safe(leavesCol().where('schoolId','==',sid).get()),
+    safe(gCases().where('schoolId','==',sid).get()),
+    gSet().doc(sid).get().catch(()=>null)
+  ]);
+  let classes=[], students=[];
+  if(rosterSnap && rosterSnap.exists){ try{ const d=JSON.parse(rosterSnap.data().value||'{}'); classes=d.classes||[]; students=(d.students||[]).filter(x=>!x.deleted); }catch(e){} }
+  const st = setSnap && setSnap.exists ? setSnap.data() : {};
+  GUIDE.data = { classes, students,
+    notes: notes.filter(n=>n.period===P), att: att.filter(a=>a.period===P), leaves: leaves.filter(l=>l.period===P),
+    cases: cases.filter(c=>c.period===P), thr: Object.assign({}, G_DEF_THR, st.thr||{}), ignored: ((st.ignored||{})[P])||{}, full };
+}
+// قائمة المتابعة: أسباب كل طالب من البيانات الموجودة — أيام الغياب أيام مميزة لكل طالب
+function guideListRows(){
+  const D = GUIDE.data; if(!D) return [];
+  const by = {};
+  const S = seat=>by[seat] = by[seat] || { seat, notes:0, abs:new Set(), leaves:0, refs:[] };
+  D.notes.forEach(n=>{ noteSeats(n).forEach(seat=>{ const r=S(seat); r.notes++; if(n.guidanceReferral) r.refs.push(n); }); });
+  D.att.forEach(a=>{ if(a.status==='absent') S(String(a.seat)).abs.add(a.date); });
+  D.leaves.forEach(l=>{ S(String(l.seat)).leaves++; });
+  D.students.forEach(s=>{ if((s.social||'').trim() || (s.health||'').trim()) S(String(s.seat)); });
+  const openCase = {}; D.cases.forEach(c=>{ if(c.status!=='closed') openCase[String(c.seat)] = c; });
+  const rows = [];
+  Object.values(by).forEach(r=>{
+    const stu = D.students.find(s=>String(s.seat)===String(r.seat)); if(!stu) return;
+    const cl = D.classes.find(c=>String(c.code)===String(stu.classCode)) || {};
+    const tags = [];
+    if(r.notes >= D.thr.notes) tags.push({ k:'n', html: gChip('🔀 '+r.notes+' تحويلات','#e9f1fd','#1e5aaa') });
+    if(r.abs.size >= D.thr.abs) tags.push({ k:'a', html: gChip('📅 '+r.abs.size+' أيام غياب','#fdecec','#b42318') });
+    if(r.leaves >= D.thr.leave) tags.push({ k:'l', html: gChip('🚪 '+r.leaves+' استئذانات','#f3ecfd','#6d3fc0') });
+    if((stu.health||'').trim()) tags.push({ k:'h', html: gChip('🩺 حالة صحية','#e7f6ee','#197a44') });
+    if((stu.social||'').trim()) tags.push({ k:'h', html: gChip('🩺 حالة اجتماعية','#e7f6ee','#197a44') });
+    const lastRef = r.refs.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))[0];
+    if(lastRef) tags.push({ k:'r', html: gChip('↗ محوَّل من '+esc(lastRef.fromName||'الوكيل')+(lastRef.referralReason?(': '+esc(lastRef.referralReason)):''),'#fff1e0','#b45309'), at:lastRef.createdAt||0 });
+    if(!tags.length) return;
+    const ig = D.ignored[String(r.seat)];
+    if(ig && !(lastRef && (lastRef.createdAt||0) > (ig.at||0))) return;   // متجاهَل هذه الفترة (إلا لو جاء تحويل أحدث)
+    rows.push({ seat:String(r.seat), name:stu.name||'', classCode:String(stu.classCode||''), className:cl.name||String(stu.classCode||''), tags, caseObj: openCase[String(r.seat)]||null });
+  });
+  rows.sort((a,b)=>b.tags.length-a.tags.length || a.name.localeCompare(b.name,'ar'));
+  return rows;
+}
+
+/* ---------- التبويب ---------- */
+async function renderGuidance(c){
+  if(!CURRENT.schoolId){ c.innerHTML='<div class="empty">اختر مدرسة أولًا.</div>'; return; }
+  const full = guideFull();
+  if(!full && GUIDE.sub==='appts') GUIDE.sub='list';
+  const subs = full ? [['list','قائمة المتابعة'],['cases','الحالات'],['appts','المواعيد']] : [['list','قائمة المتابعة'],['cases','الحالات']];
+  c.innerHTML = '<div class="panel-head"><h2>الإرشاد الطلابي</h2></div>'+
+    (full ? '' : '<div class="sub-note">اطّلاع فقط: وجود الحالات ونوعها. تفاصيل الجلسات خاصة بالموجه الطلابي.</div>')+
+    '<div id="gSubs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+subs.map(([k,l])=>
+      '<button class="btn sm '+(GUIDE.sub===k?'':'secondary')+'" style="width:auto" onclick="GUIDE.sub=\''+k+'\';renderGuidance($(\'#content\'))">'+l+'</button>').join('')+'</div>'+
+    '<div id="gBody"><div class="empty"><span class="spin"></span></div></div>';
+  if(GUIDE.sub==='appts'){ renderApptsInto($('#gBody')); return; }
+  try{ await loadGuideData(); }catch(e){ $('#gBody').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; return; }
+  if(GUIDE.sub==='cases') paintGuideCases(); else paintGuideList();
+}
+function paintGuideList(){
+  const host=$('#gBody'); if(!host || !GUIDE.data) return;
+  const D=GUIDE.data, full=D.full;
+  let rows = guideListRows();
+  const total = rows.length;
+  if(GUIDE.cls) rows = rows.filter(r=>r.classCode===GUIDE.cls);
+  if(GUIDE.filter!=='all') rows = rows.filter(r=>r.tags.some(t=>t.k===GUIDE.filter));
+  const chipF = (k,l)=>'<button class="btn sm '+(GUIDE.filter===k?'':'secondary')+'" style="width:auto;padding:6px 12px;font-size:13px" onclick="GUIDE.filter=\''+k+'\';paintGuideList()">'+l+'</button>';
+  const recOk = can('index.studentRecord','access');
+  host.innerHTML =
+    '<div class="card" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+
+      '<b style="font-size:13.5px">حدود الظهور:</b>'+
+      gChip('تحويلات '+D.thr.notes+' فأكثر','#e9f1fd','#1e5aaa')+gChip('غياب '+D.thr.abs+' أيام فأكثر','#fdecec','#b42318')+
+      gChip('استئذان '+D.thr.leave+' فأكثر','#f3ecfd','#6d3fc0')+gChip('حالة صحية أو اجتماعية','#e7f6ee','#197a44')+gChip('محوَّل من الوكيل','#fff1e0','#b45309')+
+      '<span style="flex:1"></span>'+(full?gBtn('تعديل الحدود','openGuideThresholds()','ghost'):'')+
+    '</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'+
+      '<select id="gCls" style="width:auto;padding:7px 10px;border-radius:9px;border:1px solid var(--line);font:inherit" onchange="GUIDE.cls=this.value;paintGuideList()"><option value="">كل الفصول</option>'+
+        D.classes.map(c=>'<option value="'+esc(c.code)+'" '+(GUIDE.cls===String(c.code)?'selected':'')+'>'+esc(c.name||c.code)+'</option>').join('')+'</select>'+
+      chipF('all','الكل ('+total+')')+chipF('n','تحويلات')+chipF('a','غياب')+chipF('l','استئذان')+chipF('h','صحية/اجتماعية')+chipF('r','محوَّل')+
+    '</div>'+
+    (rows.length ? rows.map(r=>
+      '<div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding:12px 14px">'+
+        '<div style="flex:1 1 280px;min-width:0">'+
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">'+esc(r.name)+'</b><span class="umeta" style="color:var(--muted);font-size:12.5px">'+esc(r.className)+' · '+esc(r.seat)+'</span>'+
+            (r.caseObj?gChip('حالة '+G_STATUS[r.caseObj.status],'#0f766e','#fff'):'')+'</div>'+
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+r.tags.map(t=>t.html).join('')+'</div>'+
+        '</div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+          (recOk?gBtn('سجل الطالب','openStudentRecordIndex(\''+esc(r.seat)+'\',\''+esc(r.classCode)+'\')','ghost'):'')+
+          (r.caseObj ? gBtn('عرض الحالة','GUIDE.sub=\'cases\';GUIDE.selCase=\''+esc(r.caseObj.id)+'\';GUIDE.caseFilter=\''+r.caseObj.status+'\';renderGuidance($(\'#content\'))','secondary')
+                     : (full?gBtn('فتح حالة','openCaseForm(\''+esc(r.seat)+'\')',''):''))+
+          (full?gBtn('تجاهل لهذه الفترة','guideIgnore(\''+esc(r.seat)+'\')','ghost'):'')+
+        '</div></div>').join('')
+      : '<div class="empty"><span class="e-emoji">✅</span>لا يوجد طلاب في قائمة المتابعة'+(GUIDE.filter!=='all'||GUIDE.cls?' بهذا الفلتر':'')+'.</div>')+
+    '<div class="sub-note" style="margin-top:8px">مرتّبة بعدد الأسباب. تُحسب من التحويلات والغياب والاستئذان وحالات الطلاب في الفترة الحالية.</div>';
+}
+function openGuideThresholds(){
+  const t = GUIDE.data.thr;
+  const num = (id,l,v)=>'<div class="field"><label>'+l+'</label><input id="'+id+'" type="number" min="1" max="99" value="'+v+'"></div>';
+  modal('<h2>حدود الظهور في قائمة المتابعة</h2>'+num('gtN','عدد التحويلات (فأكثر)',t.notes)+num('gtA','أيام الغياب (فأكثر)',t.abs)+num('gtL','عدد الاستئذانات (فأكثر)',t.leave)+
+    '<div id="gtAlert"></div><div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="gtOk">حفظ</button></div>');
+  $('#gtOk').onclick = async()=>{
+    const v = id=>Math.max(1, Math.min(99, parseInt(normalizeDigits($('#'+id).value),10)||0));
+    const thr = { notes:v('gtN'), abs:v('gtA'), leave:v('gtL') };
+    try{ await gSet().doc(CURRENT.schoolId).set({ thr, updatedAt:Date.now(), updatedBy:CURRENT.id }, {merge:true}); closeModal(); toast('تم الحفظ'); renderGuidance($('#content')); }
+    catch(e){ alertBox('gtAlert','err',e.message||String(e)); }
+  };
+}
+async function guideIgnore(seat){
+  if(!confirm('إخفاء الطالب من قائمة المتابعة لهذه الفترة؟ يعود إن وصل تحويل جديد من الوكيل.')) return;
+  try{
+    await gSet().doc(CURRENT.schoolId).set({ ignored: { [SESSION.period]: { [seat]: { at:Date.now(), by:CURRENT.id } } }, updatedAt:Date.now() }, {merge:true});
+    toast('أُخفي من القائمة'); renderGuidance($('#content'));
+  }catch(e){ toast('خطأ: '+e.message); }
+}
+
+/* ---------- الحالات ---------- */
+function openCaseForm(seat){
+  const D = GUIDE.data; if(!D) return;
+  const pre = seat ? D.students.find(s=>String(s.seat)===String(seat)) : null;
+  const row = seat ? guideListRows().find(r=>r.seat===String(seat)) : null;
+  const fromRef = row && row.tags.some(t=>t.k==='r');
+  modal('<h2>فتح حالة إرشادية</h2>'+
+    (pre ? '<div class="sub-note">'+esc(pre.name)+' — '+esc((D.classes.find(c=>String(c.code)===String(pre.classCode))||{}).name||pre.classCode)+'</div>'
+         : '<div class="field"><label>الفصل</label><select id="gcCls"><option value="">— اختر —</option>'+D.classes.map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name||c.code)+'</option>').join('')+'</select></div>'+
+           '<div class="field"><label>الطالب</label><select id="gcStu"><option value="">— اختر الفصل أولًا —</option></select></div>')+
+    '<div class="field"><label>نوع الحالة</label><select id="gcType">'+G_TYPES.map(t=>'<option>'+t+'</option>').join('')+'</select></div>'+
+    '<div class="field"><label>ملاحظة الافتتاح (اختياري)</label><input id="gcNote" maxlength="300"></div>'+
+    '<div id="gcAlert"></div><div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="gcOk">فتح الحالة</button></div>');
+  if(!pre) $('#gcCls').onchange = ()=>{ const code=$('#gcCls').value;
+    $('#gcStu').innerHTML='<option value="">— اختر —</option>'+D.students.filter(s=>String(s.classCode)===String(code)).map(s=>'<option value="'+esc(s.seat)+'">'+esc(s.name)+'</option>').join(''); };
+  $('#gcOk').onclick = async()=>{
+    const stu = pre || D.students.find(s=>String(s.seat)===String($('#gcStu').value));
+    if(!stu){ alertBox('gcAlert','err','اختر الطالب.'); return; }
+    if(D.cases.some(c=>String(c.seat)===String(stu.seat) && c.status!=='closed')){ alertBox('gcAlert','err','للطالب حالة مفتوحة بالفعل.'); return; }
+    const cl = D.classes.find(c=>String(c.code)===String(stu.classCode)) || {};
+    const rec = { schoolId:CURRENT.schoolId, period:SESSION.period, seat:String(stu.seat), name:stu.name||'', classCode:String(stu.classCode||''), className:cl.name||'',
+      type:$('#gcType').value, status:'open', source: fromRef ? 'referral' : (seat ? 'list' : 'manual'), note:($('#gcNote').value||'').trim(),
+      openedAt:Date.now(), openedBy:CURRENT.id, openedByName:CURRENT.username||'', nextFollowUp:'', sessionsCount:0, lastSessionAt:0, closedAt:0, closeReason:'' };
+    $('#gcOk').disabled = true;
+    try{ const ref = await gCases().add(rec); closeModal(); toast('فُتحت الحالة'); GUIDE.sub='cases'; GUIDE.caseFilter='open'; GUIDE.selCase=ref.id; renderGuidance($('#content')); }
+    catch(e){ $('#gcOk').disabled=false; alertBox('gcAlert','err',e.message||String(e)); }
+  };
+}
+function paintGuideCases(){
+  const host=$('#gBody'); if(!host || !GUIDE.data) return;
+  const D=GUIDE.data, full=D.full;
+  const cnt = s=>D.cases.filter(c=>c.status===s).length;
+  const list = D.cases.filter(c=>c.status===GUIDE.caseFilter).sort((a,b)=>(b.openedAt||0)-(a.openedAt||0));
+  if(!list.some(c=>c.id===GUIDE.selCase)) GUIDE.selCase = list[0] ? list[0].id : null;
+  const today = attDateKey();
+  host.innerHTML = '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">'+
+    '<div class="card" style="flex:1 1 260px;max-width:340px;min-width:0;padding:12px">'+
+      '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">'+['open','watch','closed'].map(s=>
+        '<button class="btn sm '+(GUIDE.caseFilter===s?'':'secondary')+'" style="width:auto;padding:6px 10px;font-size:12.5px" onclick="GUIDE.caseFilter=\''+s+'\';GUIDE.selCase=null;paintGuideCases()">'+G_STATUS[s]+' ('+cnt(s)+')</button>').join('')+'</div>'+
+      (list.length ? list.map(c=>{
+        const due = c.nextFollowUp && c.status!=='closed' && c.nextFollowUp<=today;
+        return '<div onclick="GUIDE.selCase=\''+esc(c.id)+'\';paintGuideCases()" style="cursor:pointer;border:'+(c.id===GUIDE.selCase?'2px solid #0f766e;background:#f2f9f8':'1px solid var(--line)')+';border-radius:12px;padding:9px 10px;margin-bottom:8px">'+
+          '<b style="font-size:14px">'+esc(c.name)+'</b><div class="umeta" style="color:var(--muted);font-size:12px">'+esc(c.className||c.classCode)+' · '+esc(c.type)+'</div>'+
+          (full && c.nextFollowUp && c.status!=='closed'?'<div style="font-size:12px;font-weight:700;color:'+(due?'#b42318':'#b45309')+'">متابعة: '+esc(gDateLabel(c.nextFollowUp))+(due?' (مستحقة)':'')+'</div>':'')+
+        '</div>'; }).join('') : '<div class="umeta" style="color:var(--muted);padding:6px">لا حالات.</div>')+
+      (full?'<button class="btn" style="margin-top:6px" onclick="openCaseForm(null)">+ حالة جديدة</button>':'')+
+    '</div>'+
+    '<div id="gCaseDetail" style="flex:999 1 480px;min-width:0"></div></div>';
+  paintCaseDetail();
+}
+async function paintCaseDetail(){
+  const host=$('#gCaseDetail'); if(!host) return;
+  const D=GUIDE.data, full=D.full;
+  const c = D.cases.find(x=>x.id===GUIDE.selCase);
+  if(!c){ host.innerHTML='<div class="card empty">اختر حالة لعرضها.</div>'; return; }
+  const srcTxt = { referral:'تحويل من الوكيل', list:'قائمة المتابعة', manual:'فتح يدوي' }[c.source] || '';
+  let h = '<div class="card" style="margin-bottom:12px">'+
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;font-size:18px">'+esc(c.name)+'</h3><span style="color:var(--muted);font-size:13px">'+esc(c.className||c.classCode)+'</span>'+
+      gChip(esc(c.type),'#fff1e0','#b45309')+gChip(G_STATUS[c.status], c.status==='closed'?'#eef2f1':'#0f766e', c.status==='closed'?'#5b6f76':'#fff')+'</div>'+
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px">'+
+      '<span>فُتحت: '+esc(c.openedAt?new Date(c.openedAt).toLocaleDateString('ar'):'')+'</span><span>المصدر: '+esc(srcTxt)+'</span><span>الجلسات: '+(c.sessionsCount||0)+'</span>'+
+      (c.status==='closed'?'<span>أُغلقت: '+esc(c.closeReason||'')+'</span>':'')+'</div>';
+  if(!full){
+    host.innerHTML = h + '<div style="margin-top:10px;background:#eef4fb;color:#1e5aaa;border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:700">🔒 تفاصيل الجلسات خاصة بالموجه الطلابي</div></div>';
+    return;
+  }
+  h += (c.note?'<div style="margin-top:8px;font-size:13px">ملاحظة الافتتاح: '+esc(c.note)+'</div>':'')+
+    '<div style="margin-top:10px;background:#eef4fb;color:#1e5aaa;border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:700">🔒 ملاحظات الجلسات للموجه فقط — المدير يرى وجود الحالة ونوعها دون التفاصيل</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'+
+      (c.status!=='closed'?gBtn('+ جلسة جديدة','openSessionForm(\''+esc(c.id)+'\')',''):'')+
+      gBtn('🖨️ تقرير الحالة','printCaseReport(\''+esc(c.id)+'\')','secondary')+
+      (c.status==='open'?gBtn('تحت المتابعة','setCaseStatus(\''+esc(c.id)+'\',\'watch\')','ghost'):'')+
+      (c.status==='watch'?gBtn('إعادة فتح','setCaseStatus(\''+esc(c.id)+'\',\'open\')','ghost'):'')+
+      '<span style="flex:1"></span>'+
+      (c.status!=='closed'?'<button class="btn sm" style="width:auto;background:#fff;color:#b42318;border:1.5px solid #b42318" onclick="openCloseCase(\''+esc(c.id)+'\')">إغلاق الحالة</button>'
+                          :gBtn('إعادة فتح الحالة','setCaseStatus(\''+esc(c.id)+'\',\'open\')','ghost'))+
+    '</div></div>'+
+    '<div class="card"><h3 style="margin:0 0 8px;font-size:16px">الجلسات</h3><div id="gSessList"><div class="empty"><span class="spin"></span></div></div></div>';
+  host.innerHTML = h;
+  const list = await loadSessions(c.id);
+  const sh = $('#gSessList'); if(!sh || GUIDE.selCase!==c.id) return;
+  sh.innerHTML = list.length ? list.map((s,i)=>
+    '<div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line)">'+
+      '<div style="flex:0 0 30px;height:30px;border-radius:50%;background:#e7f6f3;color:#0f766e;font-weight:800;display:flex;align-items:center;justify-content:center">'+(list.length-i)+'</div>'+
+      '<div style="flex:1;min-width:0"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">'+esc(gDateLabel(s.date))+'</b>'+gChip(esc(s.action),'#e9f1fd','#1e5aaa')+
+        '<span class="umeta" style="color:var(--muted);font-size:12px">'+esc(s.byName||'')+'</span></div>'+
+        '<div style="font-size:13.5px;line-height:1.7;white-space:pre-wrap;margin-top:4px">'+esc(s.summary)+'</div>'+
+        (s.nextFollowUp?'<div style="font-size:12.5px;color:#b45309;font-weight:700;margin-top:2px">المتابعة القادمة: '+esc(gDateLabel(s.nextFollowUp))+'</div>':'')+
+      '</div></div>').join('') : '<div class="umeta" style="color:var(--muted)">لا جلسات بعد. سجّل أول جلسة بزر «+ جلسة جديدة».</div>';
+}
+async function loadSessions(caseId){
+  try{
+    const snap = await gSess().where('schoolId','==',CURRENT.schoolId).where('caseId','==',caseId).get();
+    const arr = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.date).localeCompare(String(a.date)) || (b.ts||0)-(a.ts||0));
+    GUIDE.sessions[caseId] = arr; return arr;
+  }catch(e){ return []; }
+}
+async function addSessionTo(c, sess){
+  await gSess().add(Object.assign({ schoolId:CURRENT.schoolId, caseId:c.id, seat:c.seat, byUserId:CURRENT.id, byName:CURRENT.username||'', ts:Date.now() }, sess));
+  const upd = { sessionsCount:(c.sessionsCount||0)+1, lastSessionAt:Date.now(), nextFollowUp: sess.nextFollowUp||'' };
+  await gCases().doc(c.id).update(upd); Object.assign(c, upd);
+}
+function openSessionForm(caseId){
+  const c = GUIDE.data.cases.find(x=>x.id===caseId); if(!c) return;
+  modal('<h2>جلسة جديدة — '+esc(c.name)+'</h2>'+
+    '<div class="field"><label>التاريخ</label><input id="gsDate" type="date" value="'+attDateKey()+'"></div>'+
+    '<div class="field"><label>الإجراء</label><select id="gsAct">'+G_ACTIONS.map(a=>'<option>'+a+'</option>').join('')+'</select></div>'+
+    '<div class="field"><label>ملخص الجلسة</label><textarea id="gsSum" rows="5" maxlength="2000" style="width:100%;font:inherit;padding:9px;border-radius:10px;border:1px solid var(--line);box-sizing:border-box"></textarea></div>'+
+    '<div class="field"><label>موعد المتابعة القادم (اختياري)</label><input id="gsNext" type="date"></div>'+
+    '<div id="gsAlert"></div><div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="gsOk">حفظ الجلسة</button></div>');
+  $('#gsOk').onclick = async()=>{
+    const date=$('#gsDate').value, summary=($('#gsSum').value||'').trim(), next=$('#gsNext').value||'';
+    if(!date){ alertBox('gsAlert','err','حدّد التاريخ.'); return; }
+    if(!summary){ alertBox('gsAlert','err','اكتب ملخص الجلسة.'); return; }
+    if(next && next < date){ alertBox('gsAlert','err','موعد المتابعة يجب أن يكون بعد تاريخ الجلسة.'); return; }
+    $('#gsOk').disabled=true;
+    try{ await addSessionTo(c, { date, action:$('#gsAct').value, summary, nextFollowUp:next }); closeModal(); toast('حُفظت الجلسة'); paintGuideCases(); }
+    catch(e){ $('#gsOk').disabled=false; alertBox('gsAlert','err',e.message||String(e)); }
+  };
+}
+async function setCaseStatus(id, status){
+  const c = GUIDE.data.cases.find(x=>x.id===id); if(!c) return;
+  const upd = status==='closed' ? {} : { status, closedAt:0, closeReason:'' };
+  try{ await gCases().doc(id).update(upd); Object.assign(c, upd); GUIDE.caseFilter=status; GUIDE.selCase=id; paintGuideCases(); toast('تم'); }
+  catch(e){ toast('خطأ: '+e.message); }
+}
+function openCloseCase(id){
+  const c = GUIDE.data.cases.find(x=>x.id===id); if(!c) return;
+  modal('<h2>إغلاق الحالة — '+esc(c.name)+'</h2><div class="field"><label>سبب الإغلاق</label><select id="gxR">'+G_CLOSE.map(r=>'<option>'+r+'</option>').join('')+'</select></div>'+
+    '<div class="sub-note">تبقى الحالة وجلساتها محفوظة في «مغلقة» للرجوع إليها.</div>'+
+    '<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn danger" id="gxOk">إغلاق</button></div>');
+  $('#gxOk').onclick = async()=>{
+    const upd = { status:'closed', closedAt:Date.now(), closeReason:$('#gxR').value, nextFollowUp:'' };
+    try{ await gCases().doc(id).update(upd); Object.assign(c, upd); closeModal(); GUIDE.caseFilter='closed'; GUIDE.selCase=id; paintGuideCases(); toast('أُغلقت الحالة'); }
+    catch(e){ toast('خطأ: '+e.message); }
+  };
+}
+async function printCaseReport(id){
+  const c = GUIDE.data.cases.find(x=>x.id===id); if(!c) return;
+  const ss = GUIDE.sessions[id] || await loadSessions(id);
+  const school = (SCHOOLS[CURRENT.schoolId]||{}).name || '';
+  const rows = ss.slice().reverse().map((s,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(s.date)+'</td><td>'+esc(s.action)+'</td><td style="text-align:right;white-space:pre-wrap">'+esc(s.summary)+'</td><td>'+esc(s.nextFollowUp||'—')+'</td></tr>').join('');
+  const w=window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
+  w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير حالة — '+esc(c.name)+'</title>'+
+    '<style>body{font-family:Tahoma,Arial;padding:24px}h1{text-align:center;font-size:20px;margin:4px 0}.sch{text-align:center;color:#444}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #999;padding:8px;font-size:13px;text-align:center;vertical-align:top}th{background:#eee}.meta td{text-align:right}.meta th{width:22%}</style></head><body>'+
+    (school?'<div class="sch">'+esc(school)+'</div>':'')+'<h1>تقرير حالة إرشادية</h1>'+
+    '<table class="meta"><tr><th>الطالب</th><td>'+esc(c.name)+' — '+esc(c.seat)+'</td></tr><tr><th>الفصل</th><td>'+esc(c.className||c.classCode)+'</td></tr><tr><th>نوع الحالة</th><td>'+esc(c.type)+'</td></tr>'+
+      '<tr><th>الحالة</th><td>'+esc(G_STATUS[c.status])+(c.closeReason?' — '+esc(c.closeReason):'')+'</td></tr><tr><th>تاريخ الفتح</th><td>'+esc(c.openedAt?new Date(c.openedAt).toLocaleDateString('ar'):'')+'</td></tr>'+(c.note?'<tr><th>ملاحظة الافتتاح</th><td>'+esc(c.note)+'</td></tr>':'')+'</table>'+
+    '<table><thead><tr><th>#</th><th>التاريخ</th><th>الإجراء</th><th>الملخص</th><th>المتابعة</th></tr></thead><tbody>'+(rows||'<tr><td colspan="5">لا جلسات.</td></tr>')+'</tbody></table>'+
+    '<p style="margin-top:40px">الموجه الطلابي: '+esc(CURRENT.username||'')+' &nbsp;&nbsp;&nbsp; التوقيع: ....................</p>'+
+    '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
+  w.document.close();
+}
+
+/* ---------- تحويل الوكيل للموجه (عبر نظام التحويلات القائم) ---------- */
+function openGuideReferral(seat){
+  const a = ((ABS_CACHE&&ABS_CACHE.arr)||[]).find(x=>String(x.seat)===String(seat)) || {};
+  modal('<h2>تحويل للموجه الطلابي</h2><div class="sub-note">'+esc(a.name||seat)+' — '+esc(a.className||a.classCode||'')+'</div>'+
+    '<div class="field"><label>السبب</label><select id="grR">'+G_REF_REASONS.map(r=>'<option>'+r+'</option>').join('')+'</select></div>'+
+    '<div class="field"><label>ملاحظة للموجه</label><textarea id="grT" rows="3" maxlength="600" style="width:100%;font:inherit;padding:9px;border-radius:10px;border:1px solid var(--line);box-sizing:border-box"></textarea></div>'+
+    '<div id="grAlert"></div><div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="grOk">تحويل</button></div>');
+  $('#grOk').onclick = async()=>{
+    const reason = $('#grR').value, text = ($('#grT').value||'').trim() || ('تحويل للموجه الطلابي: '+reason);
+    $('#grOk').disabled = true;
+    try{
+      await createNote({ kind:'toPeers', fromRole:'agent', scope:'student', schoolId:CURRENT.schoolId, text, referralReason:reason, guidanceReferral:true,
+        studentSeat:String(seat), studentName:a.name||'', classCode:String(a.classCode||''), className:a.className||'' });
+      closeModal(); toast('تم التحويل للموجه');
+    }catch(e){ $('#grOk').disabled=false; alertBox('grAlert','err',e.message||String(e)); }
+  };
+}
+
+/* ---------- مواعيد أولياء الأمور (لصاحبها فقط: الوكيل والموجه) ---------- */
+let APPTS = { list:[], host:null };
+async function renderApptsInto(host){
+  APPTS.host = host; if(!host) return;
+  host.innerHTML = '<div class="empty"><span class="spin"></span></div>';
+  try{
+    const snap = await gAppts().where('byUserId','==',CURRENT.id).get();
+    APPTS.list = snap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.schoolId===CURRENT.schoolId && a.period===SESSION.period);
+  }catch(e){ host.innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; return; }
+  paintAppts();
+}
+function paintAppts(){
+  const host = APPTS.host; if(!host) return;
+  const today = attDateKey();
+  const key = a=>(a.date||'')+' '+(a.time||'');
+  const todayL = APPTS.list.filter(a=>a.date===today).sort((a,b)=>key(a).localeCompare(key(b)));
+  const upc = APPTS.list.filter(a=>a.date>today).sort((a,b)=>key(a).localeCompare(key(b)));
+  const past = APPTS.list.filter(a=>a.date<today).sort((a,b)=>key(b).localeCompare(key(a)));
+  const card = a=>{
+    const done = a.status==='attended' || a.status==='absent';
+    return '<div class="card" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:10px;padding:12px 14px">'+
+      '<div style="flex:0 0 78px;text-align:center;background:var(--surface-2);border-radius:10px;padding:6px 4px"><div style="font-size:11.5px;color:var(--muted)">'+esc(a.date===today?'اليوم':gDateLabel(a.date))+'</div><div style="font-weight:800;font-size:16px">'+esc(a.time||'')+'</div></div>'+
+      '<div style="flex:1 1 220px;min-width:0">'+
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>'+esc(a.name)+'</b><span style="font-size:12.5px;color:var(--muted)">'+esc(a.className||a.classCode||'')+'</span>'+(a.caseId?gChip('مرتبط بحالة','#0f766e','#fff'):'')+'</div>'+
+        '<div style="font-size:13px;color:var(--muted)">ولي الأمر: <b style="color:var(--text,#15242b)">'+esc(a.guardianName||'')+'</b>'+(a.guardianPhone?' · '+esc(a.guardianPhone):'')+'</div>'+
+        '<div style="font-size:13px">السبب: '+esc(a.reason||'')+' <span style="color:var(--muted)">· طلبه: '+(a.requestedBy==='guardian'?'ولي الأمر':'المدرسة')+'</span></div>'+
+        (done?'<div style="margin-top:6px;border-radius:10px;padding:7px 10px;font-size:13px;background:'+(a.status==='attended'?'#e7f6ee':'#fdecec')+'"><b style="color:'+(a.status==='attended'?'#197a44':'#b42318')+'">'+(a.status==='attended'?'حضر':'لم يحضر')+'</b>'+(a.result?' — '+esc(a.result):'')+'</div>':'')+
+      '</div>'+
+      (done ? '' : '<div style="display:flex;flex-direction:column;gap:6px">'+
+        gBtn('📋 نسخ نص الدعوة','copyApptInvite(\''+esc(a.id)+'\')','secondary')+
+        '<div style="display:flex;gap:6px">'+gBtn('حضر','openApptResult(\''+esc(a.id)+'\',\'attended\')','')+gBtn('لم يحضر','openApptResult(\''+esc(a.id)+'\',\'absent\')','ghost')+'</div>'+
+        gBtn('🗑️ حذف','delAppt(\''+esc(a.id)+'\')','ghost')+'</div>')+
+    '</div>';
+  };
+  const sec = (t,arr,col)=> '<h3 style="margin:12px 2px 8px;font-size:15px;color:'+col+'">'+t+' ('+arr.length+')</h3>'+(arr.length?arr.map(card).join(''):'<div class="umeta" style="color:var(--muted);padding:2px 4px 6px">لا يوجد.</div>');
+  host.innerHTML = '<div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn sm" style="width:auto" onclick="openApptForm()">+ موعد جديد</button></div>'+
+    sec('اليوم',todayL,'#0f766e')+sec('القادمة',upc,'#15242b')+sec('السابقة',past,'#5b6f76');
+}
+async function openApptForm(){
+  let classes=[], students=[];
+  try{ const sp=await rosterDoc(CURRENT.schoolId).get(); if(sp.exists){ const d=JSON.parse(sp.data().value||'{}'); classes=d.classes||[]; students=(d.students||[]).filter(x=>!x.deleted); } }catch(e){}
+  modal('<h2>موعد ولي أمر جديد</h2>'+
+    '<div class="field"><label>الفصل</label><select id="gaCls"><option value="">— اختر —</option>'+classes.map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name||c.code)+'</option>').join('')+'</select></div>'+
+    '<div class="field"><label>الطالب</label><select id="gaStu"><option value="">— اختر الفصل أولًا —</option></select></div>'+
+    '<div class="field"><label>اسم ولي الأمر</label><input id="gaG" maxlength="80"></div>'+
+    '<div class="field"><label>جوال ولي الأمر (اختياري)</label><input id="gaP" inputmode="tel" maxlength="20"></div>'+
+    '<div style="display:flex;gap:8px"><div class="field" style="flex:1"><label>التاريخ</label><input id="gaD" type="date" value="'+attDateKey()+'"></div><div class="field" style="flex:1"><label>الوقت</label><input id="gaT" type="time" value="09:00"></div></div>'+
+    '<div class="field"><label>السبب</label><input id="gaR" maxlength="200"></div>'+
+    '<div class="field"><label>طلبه</label><select id="gaBy"><option value="school">المدرسة</option><option value="guardian">ولي الأمر</option></select></div>'+
+    '<div id="gaAlert"></div><div class="modal-row"><button class="btn secondary" id="gaCancel">إلغاء</button><button class="btn" id="gaOk">حفظ الموعد</button></div>');
+  $('#gaCancel').onclick = ()=>{ closeModal(); apptAfterModal(); };
+  $('#gaCls').onchange = ()=>{ const code=$('#gaCls').value;
+    $('#gaStu').innerHTML='<option value="">— اختر —</option>'+students.filter(s=>String(s.classCode)===String(code)).map(s=>'<option value="'+esc(s.seat)+'">'+esc(s.name)+'</option>').join(''); };
+  $('#gaOk').onclick = async()=>{
+    const stu = students.find(s=>String(s.seat)===String($('#gaStu').value));
+    const g=($('#gaG').value||'').trim(), d=$('#gaD').value, t=$('#gaT').value, r=($('#gaR').value||'').trim();
+    if(!stu){ alertBox('gaAlert','err','اختر الطالب.'); return; }
+    if(!g){ alertBox('gaAlert','err','اكتب اسم ولي الأمر.'); return; }
+    if(!d || !t){ alertBox('gaAlert','err','حدّد التاريخ والوقت.'); return; }
+    if(!r){ alertBox('gaAlert','err','اكتب سبب الموعد.'); return; }
+    const cl = classes.find(c=>String(c.code)===String(stu.classCode)) || {};
+    // موعد الموجه لطالب له حالة مفتوحة يُربط بها (وتُضاف نتيجته لجلساتها)
+    let caseId = '';
+    if(guideFull()){ try{ const cs=await gCases().where('schoolId','==',CURRENT.schoolId).where('seat','==',String(stu.seat)).get();
+      const open = cs.docs.map(x=>({id:x.id,...x.data()})).find(x=>x.period===SESSION.period && x.status!=='closed'); if(open) caseId=open.id; }catch(e){} }
+    const rec = { schoolId:CURRENT.schoolId, period:SESSION.period, seat:String(stu.seat), name:stu.name||'', classCode:String(stu.classCode||''), className:cl.name||'',
+      guardianName:g, guardianPhone:($('#gaP').value||'').trim(), date:d, time:t, reason:r, requestedBy:$('#gaBy').value, status:'scheduled', result:'', caseId,
+      byUserId:CURRENT.id, byName:CURRENT.username||'', byRole:CURRENT.role||'', ts:Date.now() };
+    $('#gaOk').disabled = true;
+    try{ await gAppts().add(rec); closeModal(); toast('حُفظ الموعد'); apptAfterModal(true); }
+    catch(e){ $('#gaOk').disabled=false; alertBox('gaAlert','err',e.message||String(e)); }
+  };
+}
+// بعد نافذة فرعية: الموجه يعود للتبويب، الوكيل يعود لنافذة «مواعيدي»
+function apptAfterModal(reload){
+  if(activeTab==='guidance' && guideFull() && $('#content')){ if(reload){ GUIDE.sub='appts'; renderGuidance($('#content')); } return; }
+  openMyAppointments();
+}
+function apptInviteText(a){
+  const school = (SCHOOLS[CURRENT.schoolId]||{}).name || '';
+  const who = (a.byRole==='counselor' || guideFull()) ? 'الموجه الطلابي' : 'وكيل المدرسة';
+  let dayName='', dateTxt=a.date;
+  try{ const d=new Date(a.date+'T00:00:00'); dayName=d.toLocaleDateString('ar',{weekday:'long'}); dateTxt=d.toLocaleDateString('ar-SA-u-ca-islamic',{day:'numeric',month:'long',year:'numeric'}); }catch(e){}
+  return 'السلام عليكم ورحمة الله وبركاته\nولي أمر الطالب: '+(a.name||'')+'\nنأمل التكرم بزيارة المدرسة يوم '+dayName+' الموافق '+dateTxt+' الساعة '+(a.time||'')+'، لمقابلة '+who+' بخصوص: '+(a.reason||'')+'.\nشاكرين تعاونكم.'+(school?'\n'+school:'');
+}
+async function copyApptInvite(id){
+  const a = APPTS.list.find(x=>x.id===id); if(!a) return;
+  const txt = apptInviteText(a);
+  try{ await navigator.clipboard.writeText(txt); toast('نُسخ نص الدعوة'); }
+  catch(e){ modal('<h2>نص الدعوة</h2><textarea style="width:100%;height:180px;font:inherit;box-sizing:border-box" readonly>'+esc(txt)+'</textarea><div class="modal-row"><button class="btn" onclick="closeModal();apptAfterModal()">إغلاق</button></div>'); }
+}
+function openApptResult(id, status){
+  const a = APPTS.list.find(x=>x.id===id); if(!a) return;
+  modal('<h2>'+(status==='attended'?'حضر ولي الأمر':'لم يحضر ولي الأمر')+'</h2><div class="sub-note">'+esc(a.name)+' — '+esc(a.guardianName||'')+'</div>'+
+    '<div class="field"><label>'+(status==='attended'?'النتيجة وما تم الاتفاق عليه':'ملاحظة (اختياري)')+'</label><textarea id="gaRes" rows="4" maxlength="1500" style="width:100%;font:inherit;padding:9px;border-radius:10px;border:1px solid var(--line);box-sizing:border-box"></textarea></div>'+
+    '<div id="garAlert"></div><div class="modal-row"><button class="btn secondary" id="garCancel">إلغاء</button><button class="btn" id="garOk">حفظ</button></div>');
+  $('#garCancel').onclick = ()=>{ closeModal(); apptAfterModal(); };
+  $('#garOk').onclick = async()=>{
+    const result = ($('#gaRes').value||'').trim();
+    if(status==='attended' && !result){ alertBox('garAlert','err','اكتب نتيجة الموعد.'); return; }
+    $('#garOk').disabled = true;
+    try{
+      await gAppts().doc(id).update({ status, result, doneAt:Date.now() });
+      if(a.caseId && guideFull()){
+        try{ const cs = await gCases().doc(a.caseId).get(); if(cs.exists){ const c={id:cs.id,...cs.data()};
+          await addSessionTo(c, { date:a.date, action:'تواصل مع ولي الأمر', summary:'موعد ولي الأمر ('+(status==='attended'?'حضر':'لم يحضر')+'): '+(a.reason||'')+(result?'\n'+result:''), nextFollowUp:c.nextFollowUp||'' }); } }catch(e){}
+      }
+      closeModal(); toast('تم الحفظ'); apptAfterModal(true);
+    }catch(e){ $('#garOk').disabled=false; alertBox('garAlert','err',e.message||String(e)); }
+  };
+}
+async function delAppt(id){
+  if(!confirm('حذف الموعد؟')) return;
+  try{ await gAppts().doc(id).delete(); APPTS.list = APPTS.list.filter(x=>x.id!==id); paintAppts(); toast('حُذف'); }catch(e){ toast('خطأ: '+e.message); }
+}
+// «لوحتي ← مواعيدي»: للوكيل نافذة مستقلة، وللموجه قسم المواعيد في تبويبه
+function openMyAppointments(){
+  if(guideFull()){ activeTab='guidance'; GUIDE.sub='appts'; if(typeof renderTabs==='function') renderTabs(); renderPanel(); return; }
+  modal('<h2>مواعيدي مع أولياء الأمور</h2><div id="myApptHost"></div><div class="modal-row"><button class="btn secondary" onclick="closeModal()">إغلاق</button></div>');
+  renderApptsInto($('#myApptHost'));
+}
+
+/* ===================== تنبيه تراكم الغياب (ص-٤) =====================
+   ميزة دائمة بالنظام (ليست من «الأدوات الإدارية»). مستوى واحد: حد أيام غياب تحدده المدرسة (افتراضيًا ٥).
+   يُحتسب «غائب» فقط — أيام مميزة لكل طالب في الفترة الحالية (المتأخر والمستأذن لا يُحتسبان).
+   تظهر البطاقة أعلى «تأخر وغياب الطلاب» لصاحب تعديل الغياب فقط. «تم الإشعار» يوثّق من أشعر ومتى، ويُخفي
+   الطالب من البطاقة لهذه الفترة (يبقى في قائمة «تم إشعارهم» مع إمكانية التراجع).
+   البيانات: absNotices — settings_{sid} (الحد) ومستند لكل إشعار {sid}_{period}_{seat}. */
+const absNoticesCol = ()=>db.collection('absNotices');
+const ABS_ACC_DEF = 5;
+let ABS_ACC = { sid:'', threshold:ABS_ACC_DEF, notices:{}, loaded:false };
+async function loadAbsAcc(){
+  const sid = CURRENT.schoolId;
+  ABS_ACC = { sid, threshold:ABS_ACC_DEF, notices:{}, loaded:false };
+  try{ const s = await absNoticesCol().doc('settings_'+sid).get(); if(s.exists && +s.data().threshold>0) ABS_ACC.threshold = +s.data().threshold; }catch(e){}
+  try{
+    const q = await absNoticesCol().where('schoolId','==',sid).get();
+    q.docs.forEach(d=>{ const n=d.data(); if(n.kind==='notice' && n.period===SESSION.period) ABS_ACC.notices[String(n.seat)] = {id:d.id,...n}; });
+  }catch(e){}
+  ABS_ACC.loaded = true;
+}
+// كل طالب: أيام غيابه المميزة في الفترة وآخر يوم غياب
+function absAccAll(){
+  const by = {};
+  ((ABS_CACHE&&ABS_CACHE.arr)||[]).forEach(a=>{
+    if(a.status!=='absent') return;
+    const k = String(a.seat);
+    const s = by[k] = by[k] || { seat:k, name:a.name||'', classCode:String(a.classCode||''), className:a.className||a.classCode||'', dates:new Set() };
+    s.dates.add(a.date);
+  });
+  return Object.values(by).map(s=>{ const ds=[...s.dates].sort(); return { seat:s.seat, name:s.name, classCode:s.classCode, className:s.className, days:ds.length, last:ds[ds.length-1]||'' }; });
+}
+function absDaysTxt(n){ n=+n||0; return n===1?'يومًا واحدًا':n===2?'يومين':(n>=3&&n<=10)?n+' أيام':n+' يومًا'; }
+function absNoticeText(s){
+  const school = (SCHOOLS[CURRENT.schoolId]||{}).name || '';
+  let last = s.last; try{ last = new Date(s.last+'T00:00:00').toLocaleDateString('ar-SA',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }catch(e){}
+  return 'السلام عليكم ورحمة الله وبركاته\nولي أمر الطالب: '+(s.name||'')+' — '+(s.className||'')+
+    '\nنفيدكم بأن ابنكم تغيّب '+absDaysTxt(s.days)+' خلال الفترة الحالية، آخرها يوم '+last+'.\nنأمل متابعته والتواصل مع المدرسة.'+(school?'\n'+school:'');
+}
+function paintAbsAcc(){
+  const host = document.getElementById('absAccCard'); if(!host) return;
+  if(!(ABS_CACHE && ABS_CACHE.canEdit && CURRENT.schoolId && ABS_ACC.loaded && ABS_ACC.sid===CURRENT.schoolId)){ host.innerHTML=''; return; }
+  const all = absAccAll(), bySeat = {}; all.forEach(s=>bySeat[s.seat]=s);
+  const thr = ABS_ACC.threshold;
+  const pending = all.filter(s=>s.days>=thr && !ABS_ACC.notices[s.seat])
+    .sort((a,b)=>b.days-a.days || _normN(a.className).localeCompare(_normN(b.className),undefined,{numeric:true}) || String(a.name).localeCompare(String(b.name)));
+  const done = Object.values(ABS_ACC.notices).sort((a,b)=>(b.at||0)-(a.at||0));
+  const refOk = !guideFull();
+  const rows = pending.map(s=>
+    '<div style="border:1px solid #f6d6d2;background:#fff8f7;border-radius:12px;padding:10px 12px;margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'+
+      '<div style="flex:0 0 58px;text-align:center"><div style="font-size:22px;font-weight:900;color:#b42318;line-height:1">'+s.days+'</div><div style="font-size:11px;color:var(--muted)">يوم غياب</div></div>'+
+      '<div style="flex:1 1 200px;min-width:0"><div style="font-weight:800">'+esc(s.name)+'</div><div class="umeta">'+esc(s.className)+' · آخر غياب: '+esc(gDateLabel(s.last))+'</div></div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<button class="btn ghost sm" style="width:auto" onclick="copyAbsNotice(\''+esc(s.seat)+'\')">📋 نسخ نص الإشعار</button>'+
+        '<button class="btn sm" style="width:auto" onclick="markAbsNotified(\''+esc(s.seat)+'\')">✓ تم الإشعار</button>'+
+        (refOk?'<button class="btn ghost sm" style="width:auto;color:#0f766e;border:1px solid #0f766e" onclick="openGuideReferral(\''+esc(s.seat)+'\')">↗ تحويل للموجه</button>':'')+
+      '</div></div>').join('');
+  const doneHtml = done.length ? '<details style="margin-top:10px;font-size:13px"><summary style="cursor:pointer;font-weight:700;color:var(--muted)">تم إشعارهم ('+done.length+')</summary>'+
+    done.map(n=>{ const cur = bySeat[String(n.seat)]; const d = cur ? cur.days : n.days;
+      let at=''; try{ at=new Date(n.at).toLocaleDateString('ar-SA',{day:'numeric',month:'long'}); }catch(e){}
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-top:1px solid var(--line);flex-wrap:wrap">'+
+        '<span style="flex:1;min-width:0"><b>'+esc(n.name||n.seat)+'</b> <span class="umeta">'+esc(n.className||'')+' · '+absDaysTxt(d)+' · أشعره: '+esc(n.byName||'')+(at?' · '+esc(at):'')+'</span></span>'+
+        '<button class="btn ghost sm" style="width:auto" onclick="undoAbsNotified(\''+esc(n.seat)+'\')">تراجع</button></div>'; }).join('')+'</details>' : '';
+  const head = '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+    '<h3 style="margin:0;font-size:16px;color:'+(pending.length?'#b42318':'var(--ok,#1a7a4f)')+'">'+(pending.length?'⚠️ طلاب تجاوزوا حد الغياب ('+pending.length+')':'✔ لا يوجد طلاب تجاوزوا حد الغياب')+'</h3>'+
+    '<span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:#fdecec;color:#b42318">الحد: '+absDaysTxt(thr)+'</span>'+
+    '<span style="flex:1"></span><button class="btn ghost sm" style="width:auto" onclick="openAbsAccThreshold()">تعديل الحد</button></div>'+
+    (pending.length?'<div class="umeta" style="margin-top:6px">يُحتسب «غائب» فقط. بعد إشعار ولي الأمر اضغط «تم الإشعار» فيختفي الطالب من البطاقة ويبقى الإشعار مسجّلًا.</div>':'');
+  host.innerHTML = '<div class="card" style="margin-bottom:14px;border:1.5px solid '+(pending.length?'#f3c5c0':'var(--line)')+'">'+head+rows+doneHtml+'</div>';
+}
+async function copyAbsNotice(seat){
+  const s = absAccAll().find(x=>x.seat===String(seat)); if(!s) return;
+  const txt = absNoticeText(s);
+  try{ await navigator.clipboard.writeText(txt); toast('نُسخ نص الإشعار'); }
+  catch(e){ modal('<h2>نص الإشعار</h2><textarea style="width:100%;height:190px;font:inherit;box-sizing:border-box" readonly>'+esc(txt)+'</textarea><div class="modal-row"><button class="btn" onclick="closeModal()">إغلاق</button></div>'); }
+}
+async function markAbsNotified(seat){
+  const s = absAccAll().find(x=>x.seat===String(seat)); if(!s) return;
+  const id = CURRENT.schoolId+'_'+SESSION.period+'_'+s.seat;
+  const n = { kind:'notice', schoolId:CURRENT.schoolId, period:SESSION.period, seat:s.seat, name:s.name, classCode:s.classCode, className:s.className,
+    days:s.days, lastDate:s.last, threshold:ABS_ACC.threshold, byUserId:CURRENT.id, byName:CURRENT.username||'', at:Date.now() };
+  try{ await absNoticesCol().doc(id).set(n); ABS_ACC.notices[s.seat] = {id,...n}; paintAbsAcc(); toast('تم توثيق الإشعار'); }
+  catch(e){ toast('خطأ: '+(e.message||e)); }
+}
+async function undoAbsNotified(seat){
+  const n = ABS_ACC.notices[String(seat)]; if(!n) return;
+  if(!confirm('إلغاء توثيق إشعار هذا الطالب؟ سيعود للبطاقة إن كان فوق الحد.')) return;
+  try{ await absNoticesCol().doc(n.id).delete(); delete ABS_ACC.notices[String(seat)]; paintAbsAcc(); }
+  catch(e){ toast('خطأ: '+(e.message||e)); }
+}
+function openAbsAccThreshold(){
+  modal('<h2>حد تنبيه الغياب</h2><div class="sub-note">يظهر الطالب في البطاقة عند بلوغ هذا العدد من أيام الغياب في الفترة الحالية.</div>'+
+    '<div class="field"><label>عدد أيام الغياب</label><input id="aaThr" type="number" min="1" max="60" inputmode="numeric" value="'+ABS_ACC.threshold+'"></div>'+
+    '<div id="aaAlert"></div><div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="aaOk">حفظ</button></div>');
+  $('#aaOk').onclick = async()=>{
+    const v = Math.round(+$('#aaThr').value);
+    if(!(v>=1 && v<=60)){ alertBox('aaAlert','err','أدخل عددًا بين ١ و٦٠.'); return; }
+    $('#aaOk').disabled = true;
+    try{
+      await absNoticesCol().doc('settings_'+CURRENT.schoolId).set({ kind:'settings', schoolId:CURRENT.schoolId, threshold:v, byUserId:CURRENT.id, updatedAt:Date.now() });
+      ABS_ACC.threshold = v; closeModal(); paintAbsAcc(); toast('تم حفظ الحد');
+    }catch(e){ $('#aaOk').disabled=false; alertBox('aaAlert','err',e.message||String(e)); }
+  };
+}
+
+/* ===================== «المؤشرات» — لوحة مؤشرات لمدير المدرسة فقط (ص-٩) =====================
+   ميزة دائمة بالنظام. قراءة فقط، بلا طباعة. مصادرها: سجل الغياب، الاستئذان، التحويلات (notes)، الفصول غير المحضَّرة،
+   الحالات الإرشادية (العدد والنوع فقط — بلا تفاصيل الجلسات)، والتعاميم (من «الأدوات الإدارية» — تُزال مع إزالتها). */
+let DASH = { range:'6w', data:null };
+function dashVisible(){ return !!CURRENT && CURRENT.role==='schoolAdmin' && !!CURRENT.schoolId; }
+function dashWeekKey(dk){ const d=new Date(dk+'T00:00:00'); d.setDate(d.getDate()-d.getDay()); return attDateKey(d); }
+async function renderDashboard(c){
+  if(!dashVisible()){ c.innerHTML='<div class="empty">هذا التبويب لمدير المدرسة فقط.</div>'; return; }
+  c.innerHTML = '<div class="panel-head"><h2>المؤشرات</h2></div><div class="sub-note">ملخص الفترة الحالية لمدرستك — يُحدَّث عند فتح التبويب.</div><div id="dashRoot"><div class="empty"><span class="spin"></span></div></div>';
+  const sid = CURRENT.schoolId, P = SESSION.period;
+  const safe = p=>p.then(s=>s.docs.map(d=>({id:d.id,...d.data()}))).catch(()=>[]);
+  const [att, leaves, notes, cases, rosterSnap] = await Promise.all([
+    safe(attCol().where('schoolId','==',sid).get()),
+    safe(leavesCol().where('schoolId','==',sid).get()),
+    safe(notesCol().where('schoolId','==',sid).get()),
+    safe(gCases().where('schoolId','==',sid).get()),
+    rosterDoc(sid).get().catch(()=>null)
+  ]);
+  let classes=[], students=[];
+  try{ if(rosterSnap && rosterSnap.exists){ const d=JSON.parse(rosterSnap.data().value||'{}'); classes=Array.isArray(d.classes)?d.classes:[]; students=(Array.isArray(d.students)?d.students:[]).filter(x=>!x.deleted); } }catch(e){}
+  // الفصول غير المحضَّرة: بعد انتهاء نافذة التغيب فقط
+  let notPrep = null;
+  const sc = SCHOOLS[sid]||{}, attTo = sc.attTo||'10:00';
+  const [toH,toM] = attTo.split(':').map(Number);
+  if(new Date().getHours()*60+new Date().getMinutes() >= toH*60+toM){ try{ notPrep = (await computeNotPrepared()).notPrepared.length; }catch(e){} }
+  let circs = [];
+/* [ADMIN-TOOLS:BEGIN] */
+  try{
+    const items = await db.collection('circulars').doc(sid).collection('items').get();
+    const list = items.docs.map(d=>({id:d.id,...d.data()})).filter(x=>(x.recipients||[]).length).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,5);
+    circs = await Promise.all(list.map(async x=>{
+      let signed = 0; try{ signed = (await db.collection('circulars').doc(sid).collection('items').doc(x.id).collection('signatures').get()).size; }catch(e){}
+      return { label:'تعميم رقم '+(x.number||'')+(x.title?' — '+x.title:''), signed, total:(x.recipients||[]).length };
+    }));
+  }catch(e){}
+/* [ADMIN-TOOLS:END] */
+  DASH.data = { attTo, notPrep, classes, students, circs,
+    att: att.filter(a=>a.period===P && a.status && a.status!=='present'),
+    leaves: leaves.filter(l=>l.period===P),
+    notes: notes.filter(n=>n.period===P),
+    cases: cases.filter(x=>x.period===P) };
+  paintDashboard();
+}
+function paintDashboard(){
+  const root = document.getElementById('dashRoot'); if(!root || !DASH.data) return;
+  const D = DASH.data, today = attDateKey(), wk0 = dashWeekKey(today);
+  const absent = D.att.filter(a=>a.status==='absent');
+  const absToday = absent.filter(a=>a.date===today).length;
+  const lateToday = D.att.filter(a=>a.status==='late' && a.date===today).length;
+  const leavesToday = D.leaves.filter(l=>l.date===today).length;
+  const total = Math.max(D.students.length, new Set(D.att.map(a=>String(a.seat))).size);
+  const pct = (a,b)=> b ? (Math.round(a/b*1000)/10)+'٪' : '—';
+  const card = (label,val,sub,color)=>'<div class="card" style="margin:0;padding:14px;display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13px;color:var(--muted);font-weight:700">'+label+'</span><span style="font-size:30px;font-weight:900;line-height:1.15;color:'+color+'">'+val+'</span><span style="font-size:12px;color:var(--muted)">'+(sub||'&nbsp;')+'</span></div>';
+  const kpis = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">'+
+    card('غياب اليوم', absToday, total?pct(absToday,total)+' من الطلاب':'', '#b42318')+
+    card('متأخرون اليوم', lateToday, '', '#b45309')+
+    card('مستأذنون اليوم', leavesToday, '', '#6d3fc0')+
+    card('فصول لم تُحضَّر', D.notPrep==null?'—':D.notPrep, D.notPrep==null?'تظهر بعد انتهاء نافذة التغيب ('+esc(D.attTo)+')':'بعد انتهاء النافذة', 'var(--ink)')+
+  '</div>';
+  // الغياب أسبوعيًا (الأسبوع يبدأ الأحد)
+  const byWeek = {}; absent.forEach(a=>{ const k=dashWeekKey(a.date); byWeek[k]=(byWeek[k]||0)+1; });
+  let weeks = [];
+  if(DASH.range==='6w'){ for(let i=5;i>=0;i--){ const d=new Date(wk0+'T00:00:00'); d.setDate(d.getDate()-7*i); weeks.push(attDateKey(d)); } }
+  else { const ks=Object.keys(byWeek).sort(); if(ks.length){ const d=new Date(ks[0]+'T00:00:00'); while(attDateKey(d)<=wk0){ weeks.push(attDateKey(d)); d.setDate(d.getDate()+7); } } else weeks=[wk0]; }
+  const maxW = Math.max(1, ...weeks.map(k=>byWeek[k]||0));
+  const wLabel = k=>{ try{ return new Date(k+'T00:00:00').toLocaleDateString('ar-SA',{day:'numeric',month:'short'}); }catch(e){ return k; } };
+  const bars = '<div style="display:flex;align-items:flex-end;gap:8px;height:170px;padding:6px 2px 0;border-bottom:1px solid var(--line);overflow-x:auto">'+
+    weeks.map(k=>{ const v=byWeek[k]||0; return '<div style="flex:1 0 34px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px"><span style="font-size:12px;font-weight:700;color:var(--muted)">'+v+'</span><div title="'+esc(wLabel(k))+'" style="width:100%;max-width:44px;height:'+Math.round(v/maxW*130)+'px;min-height:'+(v?3:0)+'px;background:'+(k===wk0?'#0f766e':'#5fb3aa')+';border-radius:6px 6px 0 0"></div></div>'; }).join('')+'</div>'+
+    '<div style="display:flex;gap:8px;padding:4px 2px 0;overflow-x:hidden">'+weeks.map(k=>'<span style="flex:1 0 34px;text-align:center;font-size:11px;color:var(--muted)">'+esc(wLabel(k))+'</span>').join('')+'</div>';
+  const weekCard = '<div class="card" style="margin:0;flex:1 1 440px;min-width:0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><h3 style="margin:0;font-size:15.5px;flex:1">الغياب أسبوعيًا</h3>'+
+    '<select id="dashRange" style="width:auto;padding:5px 8px;font:inherit;font-size:13px;border-radius:9px;border:1px solid var(--line)"><option value="6w"'+(DASH.range==='6w'?' selected':'')+'>آخر ٦ أسابيع</option><option value="all"'+(DASH.range==='all'?' selected':'')+'>الفترة كاملة</option></select></div>'+bars+
+    '<div class="umeta" style="margin-top:6px">عدد أيام الغياب المسجّلة لكل أسبوع (يبدأ الأحد).</div></div>';
+  // الفصول الأعلى غيابًا: أيام الغياب ÷ (عدد طلاب الفصل × أيام الدوام المسجّلة)
+  const schoolDays = new Set(D.att.map(a=>a.date)).size || 1;
+  const size = {}; D.students.forEach(st=>{ const k=String(st.classCode); size[k]=(size[k]||0)+1; });
+  const clsName = {}; D.classes.forEach(cl=>clsName[String(cl.code)]=cl.name||cl.code);
+  const absCls = {}; absent.forEach(a=>{ const k=String(a.classCode||''); absCls[k]=(absCls[k]||0)+1; if(!clsName[k]) clsName[k]=a.className||k; });
+  // احتياط: لا يقل عدد طلاب الفصل عمّن ظهروا فعلًا بسجل غيابه (روستر ناقص)
+  const seenSeats = {}; D.att.forEach(a=>{ const k=String(a.classCode||''); (seenSeats[k]=seenSeats[k]||new Set()).add(String(a.seat)); });
+  Object.keys(seenSeats).forEach(k=>{ size[k] = Math.max(size[k]||0, seenSeats[k].size); });
+  const topCls = Object.keys(absCls).map(k=>({ n:clsName[k]||k, p: size[k] ? absCls[k]/(size[k]*schoolDays)*100 : 0, v:absCls[k] }))
+    .sort((a,b)=>b.p-a.p || b.v-a.v).slice(0,5);
+  const maxP = Math.max(1, ...topCls.map(x=>x.p));
+  const clsCard = '<div class="card" style="margin:0;flex:1 1 300px;min-width:0"><h3 style="margin:0 0 8px;font-size:15.5px">الفصول الأعلى غيابًا</h3>'+
+    (topCls.length ? topCls.map(x=>'<div style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin:7px 0"><span style="flex:0 0 38%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.n)+'</span>'+
+      '<div style="flex:1;height:10px;background:var(--surface-2);border-radius:6px;overflow:hidden"><div style="height:100%;width:'+Math.round(x.p/maxP*100)+'%;background:#b42318"></div></div>'+
+      '<b style="flex:0 0 48px;text-align:left">'+(Math.round(x.p*10)/10)+'٪</b></div>').join('') : '<div class="umeta">لا غياب مسجَّل في هذه الفترة.</div>')+
+    '<div class="umeta" style="margin-top:6px">النسبة = أيام الغياب ÷ (طلاب الفصل × أيام الدوام المسجّلة: '+schoolDays+').</div></div>';
+  // التحويلات
+  const wkStartMs = new Date(wk0+'T00:00:00').getTime();
+  const refWeek = D.notes.filter(n=>(n.createdAt||0)>=wkStartMs).length;
+  const rc = {}; D.notes.forEach(n=>{ const r=n.referralReason||'بدون سبب محدد'; rc[r]=(rc[r]||0)+1; });
+  const reasons = Object.keys(rc).map(k=>({k,v:rc[k]})).sort((a,b)=>b.v-a.v).slice(0,5);
+  const refCard = '<div class="card" style="margin:0;flex:1 1 280px;min-width:0"><h3 style="margin:0 0 8px;font-size:15.5px">التحويلات</h3>'+
+    '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><span style="font-size:30px;font-weight:900;color:#1e5aaa">'+D.notes.length+'</span><span class="umeta">تحويل هذه الفترة · '+refWeek+' هذا الأسبوع</span></div>'+
+    (reasons.length?'<div style="font-weight:700;font-size:13px;margin-top:8px">أكثر الأسباب</div>'+reasons.map(r=>'<div style="display:flex;justify-content:space-between;font-size:13.5px;border-top:1px solid var(--line);padding:6px 0 0;margin-top:6px"><span>'+esc(r.k)+'</span><b>'+r.v+'</b></div>').join(''):'')+'</div>';
+  // التعاميم
+  const circCard = D.circs.length ? '<div class="card" style="margin:0;flex:1 1 280px;min-width:0"><h3 style="margin:0 0 8px;font-size:15.5px">توقيع التعاميم</h3>'+
+    D.circs.map(x=>{ const p=x.total?Math.round(x.signed/x.total*100):0; return '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px;font-size:13.5px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.label)+'</span><b>'+p+'٪</b></div>'+
+      '<div style="height:9px;background:var(--surface-2);border-radius:6px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+p+'%;background:#197a44"></div></div><div class="umeta">'+x.signed+' من '+x.total+'</div></div>'; }).join('')+'</div>' : '';
+  // الإرشاد (العدد والنوع فقط) والاستئذان
+  const open = D.cases.filter(x=>x.status!=='closed');
+  const tc = {}; open.forEach(x=>{ const t=x.type||'أخرى'; tc[t]=(tc[t]||0)+1; });
+  const leavesWeek = D.leaves.filter(l=>l.date && l.date>=wk0).length;
+  const gCard = '<div class="card" style="margin:0;flex:1 1 240px;min-width:0"><h3 style="margin:0 0 8px;font-size:15.5px">الإرشاد والاستئذان</h3>'+
+    '<div style="display:flex;justify-content:space-between;font-size:13.5px"><span>حالات إرشادية مفتوحة</span><b>'+open.length+'</b></div>'+
+    (open.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+Object.keys(tc).map(t=>gChip(esc(t)+' '+tc[t],'#e9f1fd','#1e5aaa')).join('')+'</div>':'')+
+    '<div class="umeta" style="margin-top:4px">العدد والنوع فقط — بلا تفاصيل الجلسات</div>'+
+    '<div style="display:flex;justify-content:space-between;font-size:13.5px;border-top:1px solid var(--line);padding-top:8px;margin-top:8px"><span>استئذانات هذا الأسبوع</span><b>'+leavesWeek+'</b></div>'+
+    '<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:4px"><span>استئذانات الفترة</span><b>'+D.leaves.length+'</b></div></div>';
+  root.innerHTML = kpis+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">'+weekCard+clsCard+'</div>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap">'+refCard+circCard+gCard+'</div>';
+  const sel = document.getElementById('dashRange'); if(sel) sel.onchange = ()=>{ DASH.range = sel.value; paintDashboard(); };
+}
+
 async function renderAbsence(c){
   // التعديل صلاحية إشرافية: مدير النظام/المدرسة أو مَن فُوِّض صراحةً بتعديل الغياب
   const canEdit = (CURRENT.role==='admin' || CURRENT.role==='schoolAdmin'
@@ -2050,7 +2954,7 @@ async function renderAbsence(c){
       <div id="awAlert"></div>
     </div>` : '';
   c.innerHTML='<div class="panel-head"><h2>تأخر وغياب الطلاب</h2></div><div class="sub-note">يُعتمد التغيب من المعلم بين 7:40 و10:00 صباحاً، أو يدوياً من «الفصول والطلاب». اضغط اليوم لطيّ/فتح بطاقته.</div>'
-    + windowBlock + '<div id="attAlertsCard"></div><div id="notPreparedCard"></div><div id="absRoot"><div class="empty"><span class="spin"></span></div></div>';
+    + '<div id="absAccCard"></div>' + windowBlock + '<div id="attAlertsCard"></div><div id="notPreparedCard"></div><div id="absRoot"><div class="empty"><span class="spin"></span></div></div>';
   const canSeeNotPrepared = CURRENT.role==='admin' || CURRENT.role==='schoolAdmin' || CURRENT.role==='agent'
     || !!((CURRENT.permissions||{})['index.absence']||{}).edit;
   if(canSeeNotPrepared && CURRENT.schoolId) renderNotPreparedClasses();
@@ -2079,7 +2983,14 @@ async function renderAbsence(c){
     let q=attCol(); if(CURRENT.schoolId) q=q.where('schoolId','==',CURRENT.schoolId);
     const snap=await q.get();
     const arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period && n.status && n.status!=='present');
-    ABS_CACHE={arr,canEdit}; paintAbsence();
+    // سجل الاستئذان (مجموعة مستقلة) — يُعرض قسمًا ثالثًا في بطاقة اليوم
+    let leaves=[];
+    try{ let lq=leavesCol(); if(CURRENT.schoolId) lq=lq.where('schoolId','==',CURRENT.schoolId);
+      leaves=(await lq.get()).docs.map(d=>({id:d.id,...d.data()})).filter(l=>l.period===SESSION.period); }catch(e){}
+    leaves.forEach(l=>{ LEAVE_BY_ID[l.id]=l; });
+    ABS_CACHE={arr,canEdit,leaves};
+    if(canEdit && CURRENT.schoolId) await loadAbsAcc();
+    paintAbsence();
     liveAttachAbsence(canEdit);
   }catch(e){ $('#absRoot').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
@@ -2094,8 +3005,11 @@ function hijriMonthLabel(dt){
 function paintAbsence(){
   if(!ABS_CACHE){ return; }
   const {arr,canEdit}=ABS_CACHE;
-  const days={}; arr.forEach(a=>{ if(a.status==='absent') days[a.seat+'|'+(a.markedBy||'')]=(days[a.seat+'|'+(a.markedBy||'')]||0)+1; });
+  paintAbsAcc();
+  // أيام الغياب لكل طالب (سجل مركزي واحد لكل طالب/يوم) — كان يُقسَّم حسب المسجِّل (seat|markedBy) فيظهر أقل من الحقيقة
+  const days={}; arr.forEach(a=>{ if(a.status==='absent') days[a.seat]=(days[a.seat]||0)+1; });
   const byDate={}; arr.forEach(a=>{ (byDate[a.date]=byDate[a.date]||[]).push(a); });
+  const lvBy={}; (ABS_CACHE.leaves||[]).forEach(l=>{ (lvBy[l.date]=lvBy[l.date]||[]).push(l); if(!byDate[l.date]) byDate[l.date]=[]; });
   const dates=Object.keys(byDate).sort((a,b)=>String(b).localeCompare(String(a)));
   const root=$('#absRoot'); if(!root) return;
   if(!dates.length){ root.innerHTML='<div class="empty"><span class="e-emoji">✅</span>لا غيابات حالياً.</div>'; return; }
@@ -2107,10 +3021,11 @@ function paintAbsence(){
   function dayCardHtml(dt){
     const open = ABS_OPEN[dt]===true;
     const list=byDate[dt].slice();
+    const lvList=(lvBy[dt]||[]).slice().sort((a,b)=>String(a.time||'').localeCompare(String(b.time||'')));
     let title=dt; try{ title=new Date(dt+'T00:00:00').toLocaleDateString('ar',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }catch(e){}
     return '<div class="card" style="padding:0;overflow:hidden;margin:8px 0">'+
       '<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer" onclick="toggleAbsDay(\''+dt+'\')">'+
-        '<div class="uname" style="flex:1;text-align:right;font-size:14.5px">📅 '+esc(title)+' <span class="umeta">('+list.length+')</span></div>'+
+        '<div class="uname" style="flex:1;text-align:right;font-size:14.5px">📅 '+esc(title)+' <span class="umeta">('+(list.length+lvList.length)+')</span></div>'+
         '<span style="color:var(--muted);font-size:18px">'+(open?'▴':'▾')+'</span>'+
         '<button class="btn ghost sm" onclick="event.stopPropagation();printAbsDay(\''+dt+'\')" title="طباعة PDF">🖨️ PDF</button>'+
       '</div>'+
@@ -2122,12 +3037,20 @@ function paintAbsence(){
           const g={}; arr2.forEach(a=>{ const k=String(a.className||a.classCode||'—'); (g[k]=g[k]||[]).push(a); });
           return Object.keys(g).sort((a,b)=>norm(a).localeCompare(norm(b),undefined,{numeric:true}))
             .map(k=>'<div style="margin:10px 0 4px;padding:5px 10px;background:var(--surface-2);border-radius:8px;font-weight:800;font-size:12.5px;color:var(--brand)">'+esc(k)+' ('+g[k].length+')</div>'+
-              g[k].map(a=>absRow(a,days[a.seat+'|'+(a.markedBy||'')]||0,canEdit)).join('')).join('');
+              g[k].map(a=>absRow(a,days[a.seat]||0,canEdit)).join('')).join('');
         };
         const sec=(t,arr2)=> arr2.length
           ? '<div class="umeta" style="font-weight:800;margin:8px 2px 2px;color:var(--brand)">'+t+' ('+arr2.length+')</div>'+byClass(arr2)
           : '';
-        const body = sec('الغياب',absList) + sec('التأخر',lateList);
+        // الاستئذان: مفروز حسب الفصل بنفس طريقة الغياب
+        const lvSec = lvList.length ? (function(){
+          const g={}; lvList.forEach(l=>{ const k=String(l.className||l.classCode||'—'); (g[k]=g[k]||[]).push(l); });
+          return '<div class="umeta" style="font-weight:800;margin:8px 2px 2px;color:#6d3fc0">الاستئذان ('+lvList.length+')</div>'+
+            Object.keys(g).sort((a,b)=>norm(a).localeCompare(norm(b),undefined,{numeric:true}))
+              .map(k=>'<div style="margin:10px 0 4px;padding:5px 10px;background:var(--surface-2);border-radius:8px;font-weight:800;font-size:12.5px;color:var(--brand)">'+esc(k)+' ('+g[k].length+')</div>'+
+                g[k].map(l=>leaveRow(l,canEdit)).join('')).join('');
+        })() : '';
+        const body = sec('الغياب',absList) + sec('التأخر',lateList) + lvSec;
         return '<div style="padding:0 12px 12px">'+(body||'<div class="umeta" style="padding:6px 2px">لا توجد سجلات.</div>')+'</div>';
       })():'')+
     '</div>';
@@ -2135,7 +3058,7 @@ function paintAbsence(){
   root.innerHTML=months.map(mk=>{
     const isCurrent = mk===nowKey;
     const mOpen = ABS_OPEN['m:'+mk]!==undefined ? ABS_OPEN['m:'+mk] : isCurrent;
-    const total = byMonth[mk].reduce((a,dt)=>a+byDate[dt].length,0);
+    const total = byMonth[mk].reduce((a,dt)=>a+byDate[dt].length+(lvBy[dt]||[]).length,0);
     return '<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;border-color:var(--accent)">'+
       '<div style="display:flex;align-items:center;gap:8px;padding:13px 14px;cursor:pointer;background:var(--surface-2)" onclick="toggleAbsMonth(\''+mk+'\')">'+
         '<div class="uname" style="flex:1;text-align:right;font-size:15px">🗓️ '+esc(hijriMonthLabel(byMonth[mk][0]))+' <span class="umeta">('+byMonth[mk].length+' يوم · '+total+' سجل)</span></div>'+
@@ -2155,36 +3078,42 @@ function printAbsDay(dt){
   if(!ABS_CACHE) return;
   const norm=x=>_normN(x);
   const list=ABS_CACHE.arr.filter(a=>a.date===dt);
-  const days={}; ABS_CACHE.arr.forEach(a=>{ if(a.status==='absent'){ const k=a.seat+'|'+(a.markedBy||''); days[k]=(days[k]||0)+1; } });
+  const days={}; ABS_CACHE.arr.forEach(a=>{ if(a.status==='absent'){ days[a.seat]=(days[a.seat]||0)+1; } });
   let title=dt; try{ title=new Date(dt+'T00:00:00').toLocaleDateString('ar',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }catch(e){}
   // جدول منفصل لكل صف
   const g={}; list.forEach(a=>{ const k=String(a.className||a.classCode||'—'); (g[k]=g[k]||[]).push(a); });
   const classKeys=Object.keys(g).sort((a,b)=>norm(a).localeCompare(norm(b),undefined,{numeric:true}));
   const tables = classKeys.map(k=>{
     const rows=g[k].map((a,i)=>{ const st=a.status==='excused'?('مستأذن'+(a.excuseTime?(' '+a.excuseTime):'')):a.status==='late'?('متأخر'+(a.entryTime?(' '+a.entryTime):'')):'غائب';
-      return '<tr><td>'+(i+1)+'</td><td>'+esc(a.seat)+'</td><td>'+esc(a.name)+'</td><td>'+st+'</td><td>'+(days[a.seat+'|'+(a.markedBy||'')]||0)+'</td></tr>'; }).join('');
+      return '<tr><td>'+(i+1)+'</td><td>'+esc(a.seat)+'</td><td>'+esc(a.name)+'</td><td>'+st+'</td><td>'+(days[a.seat]||0)+'</td></tr>'; }).join('');
     return '<div class="cls-block"><h3>'+esc(k)+' — عدد السجلات: '+g[k].length+'</h3>'+
       '<table><thead><tr><th>#</th><th>الهوية</th><th>الاسم</th><th>الحالة</th><th>أيام الغياب</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }).join('');
+  const lvs=(ABS_CACHE.leaves||[]).filter(l=>l.date===dt).sort((a,b)=>String(a.time||'').localeCompare(String(b.time||'')));
+  const lvTable = lvs.length ? '<div class="cls-block"><h3>الاستئذان — العدد: '+lvs.length+'</h3><table><thead><tr><th>#</th><th>الهوية</th><th>الاسم</th><th>الفصل</th><th>وقت الخروج</th><th>السبب</th><th>المستلِم</th><th>أذن له</th></tr></thead><tbody>'+
+    lvs.map((l,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(l.seat)+'</td><td>'+esc(l.name)+'</td><td>'+esc(l.className||l.classCode||'')+'</td><td>'+esc(l.time||'')+'</td><td>'+esc(leaveReasonText(l))+'</td><td>'+esc(l.receiverName||'')+' ('+esc(l.receiverRel||'')+')</td><td>'+esc(l.byName||'')+'</td></tr>').join('')+'</tbody></table></div>' : '';
   const w=window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
   w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>غياب '+esc(title)+'</title>'+
     '<style>body{font-family:Tahoma,Arial;padding:20px}h2{text-align:center}h3{margin:18px 0 6px;font-size:15px;background:#eef4f3;padding:7px 10px;border-radius:6px}'+
     'table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #999;padding:8px;text-align:center;font-size:13px}th{background:#eee}'+
     '.cls-block{page-break-inside:avoid}</style></head><body>'+
     '<h2>سجل غياب الطلاب — '+esc(title)+'</h2>'+
-    (tables||'<p style="text-align:center">لا توجد سجلات.</p>')+
+    ((tables+lvTable)||'<p style="text-align:center">لا توجد سجلات.</p>')+
     '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
   w.document.close();
 }
 function absRow(a,dayCount,canEdit){
   const bg = a.status==='excused'?'#FFF7E6':a.status==='late'?'#FFF1E0':'#FDECEC';
   const stLbl = a.status==='excused'?('🟡 مستأذن'+(a.excuseTime?(' · '+esc(a.excuseTime)):'')):a.status==='late'?('🟠 متأخر'+(a.entryTime?(' · دخول '+esc(a.entryTime)):'')):'🔴 غائب';
+  const refBtn = (canEdit && CURRENT.schoolId && !guideFull())
+    ? '<button class="btn ghost sm" style="color:#0f766e;border:1px solid #0f766e" onclick="openGuideReferral(\''+esc(a.seat)+'\')">↗ تحويل للموجه</button>' : '';
   const ctrl = canEdit ? '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)">'+
       '<div class="umeta" style="margin-bottom:6px;font-weight:700">تعديل حالة الغياب إلى</div>'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
         '<button class="btn ghost sm" onclick="absSet(\''+a.id+'\',\'present\')">✅ حاضر</button>'+
         '<button class="btn ghost sm" onclick="absSet(\''+a.id+'\',\'late\')">🟠 متأخر</button>'+
         '<button class="btn ghost sm" onclick="absSet(\''+a.id+'\',\'excused\')">🟡 مستأذن</button>'+
+        refBtn+
       '</div></div>' : '';
   return '<div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px;background:'+bg+'">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'+
@@ -2323,6 +3252,15 @@ function liveAttachAbsence(canEdit){
     ABS_CACHE.arr = ABS_CACHE.arr.filter(a=>a.date!==today).concat(todayArr);
     liveRepaint(()=>paintAbsence());
   });
+  let firstL=true;
+  liveOn('leavesToday', leavesCol().where('schoolId','==',sid).where('date','==',today), snap=>{
+    if(firstL){ firstL=false; return; }
+    const todayL=snap.docs.map(d=>({id:d.id,...d.data()})).filter(l=>l.period===SESSION.period);
+    if(!ABS_CACHE) return;
+    todayL.forEach(l=>{ LEAVE_BY_ID[l.id]=l; });
+    ABS_CACHE.leaves = (ABS_CACHE.leaves||[]).filter(l=>l.date!==today).concat(todayL);
+    liveRepaint(()=>paintAbsence());
+  });
   if(canEdit){
     let firstA=true;
     liveOn('alerts', db.collection('attAlerts').where('schoolId','==',sid).where('resolved','==',false), snap=>{
@@ -2358,6 +3296,8 @@ function renderPanel(){
   if(activeTab==='sent')       return renderSent(c);
   if(activeTab==='received')   return renderReceived(c);
   if(activeTab==='absence')    return renderAbsence(c);
+  if(activeTab==='guidance')   return renderGuidance(c);
+  if(activeTab==='dashboard')  return renderDashboard(c);
   if(activeTab==='studentStatus') return renderStudentStatus(c);
   const labels={classes:'الفصول والطلاب',sent:'التحويلات المرسلة',received:'التحويلات الواردة',absence:'غياب الطلاب'};
   c.innerHTML=`<div class="panel-head"><h2>${esc(labels[activeTab]||'')}</h2></div>
@@ -3518,6 +4458,7 @@ function groupStages(){
 }
 function studentRowR(s,canDel,canEdit){
   const canAbs = can('index.absence','edit');
+  const canLv = canLeave();
   const days = (RABS && RABS[s.seat]) || 0;
   const notesN = (RNOTES && RNOTES[s.seat]) || 0;
   // الحالة الاجتماعية/الصحة مرتبطة بصلاحية "حالات الطلاب (وصول)"
@@ -3530,6 +4471,7 @@ function studentRowR(s,canDel,canEdit){
       '<span onclick="'+openRec+'" style="flex:1;font-size:14px;cursor:pointer" title="عرض سجل الطالب">'+esc(s.name)+'</span>'+
       (canAbs?'<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:var(--bad);border-color:var(--bad)" onclick="markAbsentFromClasses(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\',\'absent\')" title="تسجيل غياب اليوم">غائب</button>'+
        '<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:#c07a00;border-color:#c07a00" onclick="markAbsentFromClasses(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\',\'late\')" title="تسجيل تأخّر اليوم">متأخر</button>':'')+
+      (canLv?'<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:#6d3fc0;border-color:#6d3fc0" onclick="openLeaveForm(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')" title="تسجيل استئذان (خروج مبكر)">استئذان</button>':'')+
       (canEdit?'<button class="icon-btn" onclick="moveStudent(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')" title="نقل">↔️</button>':'')+
       (canDel?'<button class="icon-btn del" onclick="delStudent(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')" title="حذف">✕</button>':'')+
     '</div>'+meta+
@@ -3550,10 +4492,19 @@ async function openStudentRecordIndex(seat, classCode){
   const host = $('#srIdxBody'); if(!host) return;
   try{
     const sid = RSchoolId || CURRENT.schoolId;
-    const [attSnap, noteSnap] = await Promise.all([
+    const [attSnap, noteSnap, lvSnap] = await Promise.all([
       attCol().where('schoolId','==',sid).get(),
-      notesCol().where('schoolId','==',sid).get()
+      notesCol().where('schoolId','==',sid).get(),
+      leavesCol().where('schoolId','==',sid).get().catch(()=>({docs:[]}))
     ]);
+    const lvs = lvSnap.docs.map(d=>d.data()).filter(l=>l.period===SESSION.period && String(l.seat)===String(seat))
+      .sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const lvHtml = lvs.length
+      ? '<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+        '<tr style="background:var(--surface-2)"><th style="padding:6px;text-align:right">التاريخ</th><th style="padding:6px;text-align:right">الخروج</th><th style="padding:6px;text-align:right">السبب</th><th style="padding:6px;text-align:right">المستلِم</th></tr>'+
+        lvs.map(l=>'<tr style="border-top:1px solid var(--line)"><td style="padding:6px;font-family:monospace">'+esc(l.date||'')+'</td><td style="padding:6px">'+esc(l.time||'')+'</td><td style="padding:6px">'+esc(leaveReasonText(l))+'</td><td style="padding:6px">'+esc(l.receiverName||'')+' ('+esc(l.receiverRel||'')+')</td></tr>').join('')+
+        '</table>'
+      : '<div class="sub-note" style="margin:0">لا استئذانات.</div>';
     const atts = attSnap.docs.map(d=>d.data())
       .filter(a=>a.period===SESSION.period && String(a.seat)===String(seat))
       .sort((a,b)=>(b.ts||0)-(a.ts||0));
@@ -3589,6 +4540,7 @@ async function openStudentRecordIndex(seat, classCode){
       : '';
     host.innerHTML = ssBlock +
       '<div style="font-weight:800;margin:4px 0 8px">📅 الغياب والتأخّر (الإجمالي: '+atts.filter(a=>a.status==='absent').length+')</div>'+absHtml+
+      '<div style="font-weight:800;margin:16px 0 8px">🚪 الاستئذان (العدد: '+lvs.length+')</div>'+lvHtml+
       '<div style="font-weight:800;margin:16px 0 8px">🔀 التحويلات (العدد: '+notes.length+')</div>'+notesHtml;
   }catch(e){ host.innerHTML='<div class="alert err">تعذّر تحميل السجل: '+esc(e.message)+'</div>'; }
 }
@@ -3705,7 +4657,7 @@ async function createNote(n){
     recipients:info.map(r=>r.userId), recipientsInfo:info,
     scope:n.scope, studentSeat:n.studentSeat||'', studentName:n.studentName||'',
     classCode:n.classCode||'', className:n.className||'', text:n.text,
-    referralReason:n.referralReason||'',
+    referralReason:n.referralReason||'', guidanceReferral:!!n.guidanceReferral,
     createdAt:Date.now(), replies:[], readAt:{}, closed:false });
 }
 function noteLastActivity(n){

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-02.1 -->
+<!-- إصدار: 2026-10-04.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -160,6 +160,9 @@
   .flov-head .flx{appearance:none;border:1px solid var(--line);background:#fff;border-radius:9px;width:38px;height:38px;font-size:15px;cursor:pointer;flex:0 0 auto}
   .flov-head select{flex:1;min-width:0;padding:9px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff}
   .flov-body{flex:1;overflow:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
+  /* الثيم البديل: الشريط السفلي الثابت يغطي آخر طالب في قائمة المتابعة — مسافة سفلية بقدره */
+  body.alt-theme .flov-body{ padding-bottom:110px; }
+  @media (max-width:767px){ body.alt-theme .flov-body{ padding-bottom:126px; } }
   .flstu{border:1px solid var(--line);border-radius:12px;padding:11px;margin-bottom:8px;background:#fff}
   .flstu .nm{font-weight:800;color:var(--ink)}
   .flstu .mt{font-size:12px;color:var(--muted);margin-top:2px}
@@ -3062,6 +3065,7 @@ function attSummaryBar(list){
 }
 function renderStudents(){
   const host = document.getElementById('studentsHost'); if(!host) return;
+  if(Date.now() - CLS_LEAVES_AT > 120000) omrLoadLeavesToday();   // تحديث الاستئذانات كل دقيقتين على الأكثر
   const filter = document.getElementById('stViewClass') ? document.getElementById('stViewClass').value : '';
   const filterCode = parseVKey(filter).classCode;
   const cnt = document.getElementById('stCount');
@@ -3092,6 +3096,9 @@ function renderStudents(){
       try{ noteDate = ' <span style="color:var(--muted);font-size:11px">· '+new Date(att.noteAt).toLocaleDateString('ar',{day:'numeric',month:'long'})+'</span>'; }catch(e){}
     }
     const noteLine = (att && att.note) ? `<div class="sub" style="color:#555">📝 ${escapeHtml(att.note)}${noteDate}</div>` : '';
+    // استئذان مسجَّل اليوم من الصفحة الرئيسية (خرج مبكرًا) — تنبيه للمعلم حتى لا يغيّبه بالخطأ في الحصص اللاحقة
+    const lv = CLS_LEAVES_TODAY[String(s.seat)];
+    const leaveChip = lv ? ` · <span class="stat" style="background:#f3ecfd;color:#6d3fc0;border:1px solid #6d3fc0" title="خرج مع ${escapeHtml(lv.receiverName||'')}">مستأذن ${escapeHtml(lv.time||'')}</span>` : '';
 
     const attRow = `<div class="attbtns" style="margin-top:8px;">` +
       attStatuses.map(st=>{
@@ -3113,7 +3120,7 @@ function renderStudents(){
           <label style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;margin-left:6px;cursor:pointer">
             <input type="checkbox" ${state.selectedStudents[s.seat]?'checked':''} onchange="toggleSelStudent('${escapeHtml(s.seat)}',this.checked)" style="width:17px;height:17px;accent-color:var(--teal-d,#0b5a54);cursor:pointer">
           </label><span class="nm" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${toArabic(i+1)}. ${escapeHtml(s.name)}</span>${CLS_ACTIVATED_SEATS[String(s.seat)]?' <span class="stat" style="background:#e6f6ee;color:#1a7a4f;border:1px solid #1a7a4f">مفعّل</span>':''}
-          <div class="sub" style="overflow-wrap:anywhere;margin-top:3px"><span class="idlink" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${escapeHtml(s.seat)}</span> · ${escapeHtml(classNameByCode(s.classCode)||s.classCode||'—')}${statChip}</div>
+          <div class="sub" style="overflow-wrap:anywhere;margin-top:3px"><span class="idlink" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${escapeHtml(s.seat)}</span> · ${escapeHtml(classNameByCode(s.classCode)||s.classCode||'—')}${statChip}${leaveChip}</div>
           ${noteLine}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;flex:0 0 auto">
@@ -3166,6 +3173,20 @@ function closeAttMenu(){
     }).catch(e=>{ alert('تعذّر حفظ الملاحظة: '+(e.message||e)); });
   }
   state.attMenuSeat = null; const y=window.scrollY; renderStudents(); window.scrollTo(0,y);
+}
+/* استئذانات اليوم (سجل الاستئذان المسجَّل من الصفحة الرئيسية — مجموعة leaves) — للعرض فقط بجانب اسم الطالب */
+let CLS_LEAVES_TODAY = {}, CLS_LEAVES_AT = 0;
+async function omrLoadLeavesToday(){
+  CLS_LEAVES_AT = Date.now();
+  try{
+    if(!cloudReady || !CLS_SESSION || !CLS_SESSION.schoolId) return;
+    const snap = await db.collection('leaves').where('schoolId','==',CLS_SESSION.schoolId).where('date','==',omrAttDateKey()).get();
+    const map = {};
+    snap.docs.forEach(d=>{ const l=d.data(); if(l.period===CLS_SESSION.period){ const k=String(l.seat); if(!map[k] || String(l.time||'')<String(map[k].time||'')) map[k]=l; } });
+    const changed = JSON.stringify(Object.keys(map).sort())!==JSON.stringify(Object.keys(CLS_LEAVES_TODAY).sort());
+    CLS_LEAVES_TODAY = map;
+    if(changed && document.getElementById('studentsHost')) renderStudents();
+  }catch(e){}
 }
 /* نافذة اعتماد التغيب — تُقرأ من إعدادات المدرسة (افتراضي 7:40–10:00 صباحاً) */
 let CLS_ATT_WINDOW = { from:'07:40', to:'10:00' };
@@ -5674,6 +5695,7 @@ function initFirebaseData(){
   clsWatchActive();
   clsLoadPerms();
   loadAttWindow();
+  omrLoadLeavesToday();
   loadExamsFromCloud();
   loadResultsFromCloud();
   loadStudentsFromCloud();

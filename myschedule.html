@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-04.1 -->
+<!-- إصدار: 2026-10-04.2 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -50,6 +50,8 @@ table.tt td.cell.lesson{background:#f7fbfa}
 table.tt td.cell .c{display:block;font-weight:800;font-size:12.5px}
 table.tt td.cell .s{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
 table.tt td.cell.off{background:#f3f3f3}
+table.tt td.cell.wait{background:#fff7e6}
+table.tt td.cell.wait .c{color:#8a4a00}
 .empty{color:var(--muted);text-align:center;padding:40px 10px}
 .empty .e-emoji{display:block;font-size:34px;margin-bottom:10px}
 </style>
@@ -146,6 +148,12 @@ async function loadMySchedule(){
   const mine = (data.byUser||{})[MS.me.id];
   if(mine){ res.sig = mine.sig || ''; res.lessons = mine.lessons || []; }
   res.layouts = data.layouts || {};
+  // حصص الانتظار المنشورة (تبويب «حصص الانتظار» بأداة الجدول): تظهر «انتظار» فقط بلا رقمها
+  res.waits = [];
+  try{
+    const ws = await db.collection('timetables').doc(MS.sid).collection('data').doc(MS.period+'_waitpub').get();
+    if(ws.exists){ const wd = JSON.parse(ws.data().value||'null'); res.waits = (wd && wd.byUser && wd.byUser[MS.me.id]) || []; }
+  }catch(e){}
   return res;
 }
 // ما شاهده المستخدم آخر مرة: في مستنده (schools.{sid}.schedSeenSig.{period})، ولمدير المدرسة في المتصفح
@@ -165,22 +173,24 @@ async function renderSchedule(){
   let sched; try{ sched = await loadMySchedule(); }catch(e){ sched = { published:false, lessons:[], sig:'' }; }
   if(sched.published) await markSeen(sched.sig);   // تسجيل الاطّلاع فورًا فيختفي الإشعار
 
-  if(!sched.lessons.length){
+  if(!sched.lessons.length && !(sched.waits||[]).length){
     $('#main').innerHTML = `<div class="empty"><span class="e-emoji">📅</span>${sched.published?'لا توجد لك حصص في الجدول المنشور لهذه الفترة.':'لم يُنشر الجدول بعد لهذه الفترة.'}</div>`;
     return;
   }
   // شبكة لكل مرحلة يدرّس فيها (المعلم المشترك: جدول لكل مرحلة بأوقاتها)
-  const stages = [...new Set(sched.lessons.map(l=>l.st))];
+  const stages = [...new Set(sched.lessons.map(l=>l.st).concat((sched.waits||[]).map(w=>w.st)))];
   const multi = stages.length > 1;
   $('#main').innerHTML = (sched.publishedAt ? `<div class="sub" style="margin-bottom:10px">آخر نشر: ${esc(new Date(sched.publishedAt).toLocaleString('ar-SA'))}</div>` : '')
-    + stages.map(sk=>gridHTML(sk, sched.lessons.filter(l=>l.st===sk), sched.layouts[sk], multi)).join('');
+    + stages.map(sk=>gridHTML(sk, sched.lessons.filter(l=>l.st===sk), sched.layouts[sk], multi, (sched.waits||[]).filter(w=>w.st===sk))).join('');
 }
 const arN = n=>String(n).replace(/\d/g, d=>'٠١٢٣٤٥٦٧٨٩'[d]);
-function gridHTML(sk, L, lay, multi){
+function gridHTML(sk, L, lay, multi, WT){
+  WT = WT || [];
+  const wset = new Set(WT.map(w=>w.d+'|'+w.p));
   // نسخة نُشرت قبل حفظ شكل الشبكة: تُشتق الأيام والحصص من الحصص نفسها (بلا فسح) حتى يُعاد النشر
   if(!lay){
     const days = [...new Set([0,1,2,3,4].concat(L.map(l=>l.d)))].sort((a,b)=>a-b);
-    const mp = Math.max(1, ...L.map(l=>l.p + (l.n||1)));
+    const mp = Math.max(1, ...L.map(l=>l.p + (l.n||1)), ...WT.map(w=>w.p+1));
     const ppd = {}; days.forEach(w=>ppd[w]=mp);
     lay = { label: (L[0]||{}).sl || '', days, ppd, cols: Array.from({length:mp}, (_,p)=>({ k:'p', p, t:'' })) };
   }
@@ -198,7 +208,8 @@ function gridHTML(sk, L, lay, multi){
       if(c.k!=='p'){ h += '<td class="brk"></td>'; return; }
       if(c.p >= (+lay.ppd[w]||0)){ h += '<td class="cell off"></td>'; return; }
       const l = at[w+'|'+c.p];
-      h += l ? `<td class="cell lesson"><span class="c">${esc(l.s)}</span><span class="s">${esc(l.cl||l.c)}</span></td>` : '<td class="cell"></td>';
+      h += l ? `<td class="cell lesson"><span class="c">${esc(l.s)}</span><span class="s">${esc(l.cl||l.c)}</span></td>`
+        : wset.has(w+'|'+c.p) ? '<td class="cell wait"><span class="c">انتظار</span></td>' : '<td class="cell"></td>';
     });
     h += '</tr>';
   });

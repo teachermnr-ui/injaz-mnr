@@ -1,4 +1,4 @@
-// إصدار: 2026-09-26.1
+// إصدار: 2026-10-04.1
 /* =========================================================================
    محرك الجدول المدرسي — [ADMIN-TOOLS] ملف مستقل بالكامل (يُحذف عند إزالة الأدوات الإدارية)
    يعمل في ثلاث بيئات:
@@ -460,7 +460,12 @@ function swapOptions(pr, st, unitId, opts){
       if(v===-1) v=occ; else if(v!==occ){ ok=false; break; }
     }
     if(!ok) continue;
-    if(v!==-1){ const vu=pr.units[v]; if(vu.len!==u.len || st.pos[v]!==s1) continue; }
+    if(v!==-1){
+      const vu=pr.units[v];
+      if(vu.len!==u.len || st.pos[v]!==s1) continue;
+      // نفس المادة لنفس الشعبة (ولو لنفس المعلم) تبديلها لا يُحدث أي تغيير فعلي — تُستبعد من نطاق التبديل أصلًا
+      if(vu.subj===u.subj) continue;
+    }
     const tkey = v!==-1 ? 'u'+v : 's'+s1;
     if(seenTargets.has(tkey)) continue; seenTargets.add(tkey);
     const target = { day: pr.days[Math.floor(s1/pr.P)], p: s1%pr.P, unitId: v!==-1 ? pr.units[v].id : null };
@@ -531,7 +536,9 @@ function chainSearch(pr, st, moves, extraLeft, budget, sols, maxSol){
       if(w===-1) w=occ; else if(w!==occ){ ok=false; break; }
     }
     if(!ok) continue;
-    if(w!==-1){ const wu=pr.units[w]; if(movedSet.has(w) || wu.pin>=0 || wu.len!==mu.len || st.pos[w]!==s) continue; }
+    if(w!==-1){ const wu=pr.units[w]; if(movedSet.has(w) || wu.pin>=0 || wu.len!==mu.len || st.pos[w]!==s) continue;
+      // نفس قاعدة الخيار الأساسي: تبديل حصتين بنفس المادة لنفس الشعبة لا يغيّر شيئًا — لا يُجرَّب داخل السلسلة أيضًا
+      if(wu.subj===mu.subj) continue; }
     const next = moves.concat([[m,s]]);
     if(w!==-1) next.push([w,sm]);
     chainSearch(pr, st, next, extraLeft-1, budget, sols, maxSol);

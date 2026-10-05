@@ -1,4 +1,4 @@
-// إصدار: 2026-10-05.1
+// إصدار: 2026-10-05.2
 /* =========================================================================
    تطبيق إنجاز (PWA) والإشعارات الفورية — ص-١٢
    مشترك بين index.html و myday.html:
@@ -96,15 +96,15 @@
     if(cssDone) return; cssDone = true;
     const st = document.createElement('style');
     st.textContent = `
-.ipwa-bar{position:fixed;left:12px;right:12px;bottom:12px;z-index:9990;max-width:520px;margin:0 auto;background:#fff;border:1px solid #d8e2e0;border-radius:16px;box-shadow:0 12px 34px rgba(10,40,40,.22);padding:14px 16px;font-family:'Tajawal',"Segoe UI",Tahoma,sans-serif;color:#15242b;direction:rtl;animation:ipwaUp .25s ease}
+.ipwa-bar{position:fixed;left:12px;right:12px;bottom:12px;z-index:9990;max-width:520px;margin:0 auto;background:var(--surface,#fff);border:1px solid var(--line,#d8e2e0);border-radius:16px;box-shadow:0 12px 34px rgba(10,40,40,.22);padding:14px 16px;font-family:'Tajawal',"Segoe UI",Tahoma,sans-serif;color:var(--ink,#15242b);direction:rtl;animation:ipwaUp .25s ease}
 .ipwa-bar h4{margin:0 0 4px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:8px}
 .ipwa-bar h4 img{width:28px;height:28px;border-radius:7px}
-.ipwa-bar p{margin:0 0 10px;font-size:13.5px;color:#5b6f76;line-height:1.6}
+.ipwa-bar p{margin:0 0 10px;font-size:13.5px;color:var(--muted,#5b6f76);line-height:1.6}
 .ipwa-bar .ipwa-row{display:flex;gap:8px;flex-wrap:wrap}
-.ipwa-bar button{font-family:inherit;font-weight:700;font-size:14px;border-radius:10px;padding:9px 16px;min-height:42px;cursor:pointer;border:1.5px solid #0f766e;background:#fff;color:#0f766e}
-.ipwa-bar button.pri{background:#0f766e;color:#fff}
-.ipwa-bar button.gh{border-color:#d8e2e0;color:#5b6f76}
-.ipwa-bar .ipwa-err{color:#a32020;font-size:12.5px;margin-top:6px}
+.ipwa-bar button{font-family:inherit;font-weight:700;font-size:14px;border-radius:10px;padding:9px 16px;min-height:42px;cursor:pointer;border:1.5px solid var(--brand,#0f766e);background:transparent;color:var(--brand-2,#0f766e)}
+.ipwa-bar button.pri{background:var(--brand,#0f766e);color:#fff}
+.ipwa-bar button.gh{border-color:var(--line,#d8e2e0);color:var(--muted,#5b6f76)}
+.ipwa-bar .ipwa-err{color:var(--danger,#a32020);font-size:12.5px;margin-top:6px}
 .ipwa-note{position:fixed;top:12px;left:12px;right:12px;z-index:9995;max-width:480px;margin:0 auto;background:#15242b;color:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.3);font-family:'Tajawal',"Segoe UI",Tahoma,sans-serif;direction:rtl;cursor:pointer;display:flex;flex-direction:column;gap:2px;animation:ipwaUp .25s ease}
 .ipwa-note b{font-size:14.5px}.ipwa-note span{font-size:13px;opacity:.9}
 @keyframes ipwaUp{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}

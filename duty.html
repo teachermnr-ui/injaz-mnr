@@ -1,11 +1,14 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-05.2 -->
+<!-- إصدار: 2026-10-05.3 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>المناوبة والإشراف</title>
+<meta name="theme-color" content="#3f6659">
+<link rel="stylesheet" href="theme.css?v=2026-10-05.1">
+<script src="theme.js?v=2026-10-05.1"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -20,27 +23,27 @@
 html,body{margin:0;padding:0}
 body{font-family:'Tajawal',"Segoe UI",Tahoma,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14.5px;line-height:1.55;min-height:100vh}
 button{font-family:inherit;cursor:pointer;border:none}
-input,select{font-family:inherit;font-size:14px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:#fff}
+input,select{font-family:inherit;font-size:14px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:var(--bg-ffffff,#fff)}
 .hidden{display:none !important}
 .boot{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted);text-align:center;padding:20px}
 .spin{display:inline-block;width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-.topbar{position:sticky;top:0;z-index:40;background:var(--brand);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.topbar{position:sticky;top:0;z-index:40;background:var(--brand);color:var(--fg-ffffff,#fff);padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .topbar h1{margin:0;font-size:17px;font-weight:800;white-space:nowrap}
 .tb-badge{background:rgba(255,255,255,.15);padding:5px 12px;border-radius:20px;font-size:13px;font-weight:600;white-space:nowrap}
-.tb-btn{background:rgba(255,255,255,.17);color:#fff;padding:7px 14px;border-radius:10px;font-weight:700;font-size:13px;white-space:nowrap}
+.tb-btn{background:rgba(255,255,255,.17);color:var(--fg-ffffff,#fff);padding:7px 14px;border-radius:10px;font-weight:700;font-size:13px;white-space:nowrap}
 main{max-width:1240px;margin:0 auto;padding:16px 16px 60px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
 .card h3{margin:0 0 8px;font-size:15.5px}
 .sub{color:var(--muted);font-size:12.5px}
-.btn{font-weight:700;font-size:13.5px;padding:8px 14px;border-radius:10px;border:1.5px solid var(--brand);background:#fff;color:var(--brand);min-height:38px;white-space:nowrap}
-.btn.pri{background:var(--brand);color:#fff}
-.btn.blue{border-color:#1e5aaa;color:#1e5aaa}
+.btn{font-weight:700;font-size:13.5px;padding:8px 14px;border-radius:10px;border:1.5px solid var(--brand);background:var(--bg-ffffff,#fff);color:var(--brand);min-height:38px;white-space:nowrap}
+.btn.pri{background:var(--brand);color:var(--fg-ffffff,#fff)}
+.btn.blue{border-color:var(--bd-1e5aaa,#1e5aaa);color:var(--fg-1e5aaa,#1e5aaa)}
 .btn.ghost{border-color:var(--line);color:var(--muted)}
 .btn.sm{min-height:32px;padding:4px 10px;font-size:12.5px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.pill{font-weight:700;font-size:13.5px;padding:6px 14px;border-radius:20px;border:1.5px solid var(--brand);background:#fff;color:var(--brand);min-height:36px}
-.pill.on{background:var(--brand);color:#fff}
+.pill{font-weight:700;font-size:13.5px;padding:6px 14px;border-radius:20px;border:1.5px solid var(--brand);background:var(--bg-ffffff,#fff);color:var(--brand);min-height:36px}
+.pill.on{background:var(--brand);color:var(--fg-ffffff,#fff)}
 .tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:14px}
 .tabs button{font-weight:700;font-size:14px;padding:10px 16px;background:transparent;color:var(--muted);border-bottom:3px solid transparent;min-height:44px}
 .tabs button.on{color:var(--brand);border-bottom-color:var(--brand)}
@@ -51,21 +54,21 @@ main{max-width:1240px;margin:0 auto;padding:16px 16px 60px}
 .field{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:700;color:var(--muted)}
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 table.t{border-collapse:collapse;width:100%;font-size:13px}
-table.t th,table.t td{border:1px solid #cfdcd9;padding:7px 6px;text-align:center;vertical-align:middle}
-table.t thead th{background:#0d9488;color:#fff;font-weight:700}
-table.t thead tr.s th{background:#2f6fb3}
+table.t th,table.t td{border:1px solid var(--bd-cfdcd9,#cfdcd9);padding:7px 6px;text-align:center;vertical-align:middle}
+table.t thead th{background:var(--bg-0d9488,#0d9488);color:var(--fg-ffffff,#fff);font-weight:700}
+table.t thead tr.s th{background:var(--bg-2f6fb3,#2f6fb3)}
 table.t td.cl{cursor:pointer}
-table.t td.cl:hover{background:#e6f3f1}
-table.t td.miss{background:#fdecec}
-.ppl label{display:flex;align-items:center;gap:10px;padding:7px 4px;border-top:1px solid #eef2f1;font-size:14px;min-height:40px}
+table.t td.cl:hover{background:var(--bg-e6f3f1,#e6f3f1)}
+table.t td.miss{background:var(--bg-fdecec,#fdecec)}
+.ppl label{display:flex;align-items:center;gap:10px;padding:7px 4px;border-top:1px solid var(--bd-eef2f1,#eef2f1);font-size:14px;min-height:40px}
 .ppl input{width:18px;height:18px}
-.warn{background:#fff7e6;color:#8a4a00;border-radius:10px;padding:9px 12px;font-size:13px;margin-bottom:10px}
+.warn{background:var(--bg-fff7e6,#fff7e6);color:var(--fg-8a4a00,#8a4a00);border-radius:10px;padding:9px 12px;font-size:13px;margin-bottom:10px}
 .overlay{position:fixed;inset:0;background:rgba(10,30,30,.45);z-index:80;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto}
-.modal{background:#fff;border-radius:16px;width:100%;max-width:520px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.2)}
+.modal{background:var(--bg-ffffff,#fff);border-radius:16px;width:100%;max-width:520px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.2)}
 .modal h2{margin:0 0 6px;font-size:18px}
-.alert{padding:9px 12px;border-radius:10px;font-size:13px;margin:8px 0;background:#fdecec;color:#a32020}
+.alert{padding:9px 12px;border-radius:10px;font-size:13px;margin:8px 0;background:var(--bg-fdecec,#fdecec);color:var(--fg-a32020,#a32020)}
 .empty{color:var(--muted);text-align:center;padding:40px 10px}
-.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#15242b;color:#fff;padding:10px 18px;border-radius:12px;z-index:99;font-size:14px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--bg-15242b,#15242b);color:var(--fg-ffffff,#fff);padding:10px 18px;border-radius:12px;z-index:99;font-size:14px}
 </style>
 </head>
 <body>
@@ -115,7 +118,7 @@ const periodLabel = p=> p==='second'?'الفترة الثانية':'الفترة
 function toast(m){ const t=document.createElement('div'); t.className='toast'; t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
 function fatal(msg){
   $('#bootView').innerHTML = `<div class="card" style="max-width:460px;text-align:center"><h3>${esc(msg)}</h3>
-    <button class="tb-btn" style="background:var(--brand);color:#fff" onclick="location.href='index.html'">العودة للرئيسية</button></div>`;
+    <button class="tb-btn" style="background:var(--brand);color:var(--fg-ffffff,#fff)" onclick="location.href='index.html'">العودة للرئيسية</button></div>`;
 }
 const dk = d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const wdOf = k=>new Date(k+'T12:00:00').getDay();
@@ -334,7 +337,7 @@ function render(){
       <button class="btn" id="btnPrint">طباعة السجل</button>
       <button class="btn blue" id="btnPub" ${DS.canPublish?'':'disabled'}>اعتماد ورفع كتعميم</button>
     </div>
-    <div class="sub" style="margin-bottom:12px">الحالة: <b>${esc(pubTxt)}</b>${DS.canPublish?'':' · «اعتماد ورفع كتعميم» لمدير المدرسة أو صاحب صلاحية التعاميم — الوكيل يجهّز التوزيع.'}${p.pub&&p.updatedAt>p.pub.at?' · <b style="color:#8a4a00">عُدِّل بعد الاعتماد — أعد الاعتماد ليصل التعديل للمعلمين.</b>':''}</div>
+    <div class="sub" style="margin-bottom:12px">الحالة: <b>${esc(pubTxt)}</b>${DS.canPublish?'':' · «اعتماد ورفع كتعميم» لمدير المدرسة أو صاحب صلاحية التعاميم — الوكيل يجهّز التوزيع.'}${p.pub&&p.updatedAt>p.pub.at?' · <b style="color:var(--fg-8a4a00,#8a4a00)">عُدِّل بعد الاعتماد — أعد الاعتماد ليصل التعديل للمعلمين.</b>':''}</div>
     <div class="tabs">${[['setup','الإعداد'],['duty','المناوبة'],['sup','الإشراف'],['recv','الاستلام']].map(([k,l])=>`<button data-tab="${k}" class="${DS.tab===k?'on':''}">${l}</button>`).join('')}</div>
     <div id="tabBody"></div>`;
   document.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ DS.stage=b.dataset.st; render(); });
@@ -382,7 +385,7 @@ function renderSetup(body){
           </div>
           <div class="sub" style="margin:8px 0">أيام الدوام فقط (${s.days.map(w=>WEEKDAYS[w]).join('، ')}). الأولوية لمن عنده الحصة الأخيرة ذلك اليوم، ثم قبل الأخيرة، وهكذا. عدد أيام المناوبة: <b>${arN(dutyDates().length)}</b></div>
           <div class="row"><b style="font-size:13px">الإجازات:</b>
-            ${DS.holidayList.slice().sort((a,b)=>String(a.from).localeCompare(String(b.from))).map(h=>`<span class="chip" style="background:#eef2f1;color:#15242b">${h.label?esc(h.label)+': ':''}${esc(hijri(h.from))}${h.to&&h.to!==h.from?' – '+esc(hijri(h.to)):''}</span>`).join('')||'<span class="sub">لا يوجد</span>'}
+            ${DS.holidayList.slice().sort((a,b)=>String(a.from).localeCompare(String(b.from))).map(h=>`<span class="chip" style="background:var(--bg-eef2f1,#eef2f1);color:var(--fg-15242b,#15242b)">${h.label?esc(h.label)+': ':''}${esc(hijri(h.from))}${h.to&&h.to!==h.from?' – '+esc(hijri(h.to)):''}</span>`).join('')||'<span class="sub">لا يوجد</span>'}
           </div>
           <div class="sub" style="margin-top:6px">تُستبعد تلقائيًا. تُضاف وتُعدَّل من بند «الإجازات» في الأدوات الإدارية (مصدر واحد للمدرسة).</div>
         </section>
@@ -425,11 +428,11 @@ function renderDuty(body){
     const chips = ids.map(id=>{ const r=dutyRank(id,w); const c = r===0?['#e7f6ee','#197a44']:r===99?['#fdecec','#a32020']:['#fff1e0','#8a4a00'];
       return `<span class="chip" style="background:${c[0]};color:${c[1]}">${esc(uName(id))} · ${esc(dutyRankLabel(r))}</span>`; }).join(' ');
     const miss = ids.length < need;
-    return `<tr><td><b>${esc(WEEKDAYS[w])}</b></td><td>${esc(hijri(k))}<div class="sub">${esc(k)}</div></td><td class="${DS.canEdit?'cl':''} ${miss?'miss':''}" data-dd="${k}" style="text-align:right">${chips}${miss?` <span class="chip" style="background:#fdecec;color:#a32020">ناقص ${arN(need-ids.length)}</span>`:''}</td></tr>`;
+    return `<tr><td><b>${esc(WEEKDAYS[w])}</b></td><td>${esc(hijri(k))}<div class="sub">${esc(k)}</div></td><td class="${DS.canEdit?'cl':''} ${miss?'miss':''}" data-dd="${k}" style="text-align:right">${chips}${miss?` <span class="chip" style="background:var(--bg-fdecec,#fdecec);color:var(--fg-a32020,#a32020)">ناقص ${arN(need-ids.length)}</span>`:''}</td></tr>`;
   }).join('');
   body.innerHTML = warnHtml()+`<div class="card"><div class="row" style="margin-bottom:8px"><h3 style="margin:0">جدول المناوبة بالتواريخ</h3><span style="flex:1"></span>${DS.canEdit?'<span class="sub">اضغط خانة المناوبين لتعديلها يدويًا</span>':''}</div>
     <div class="tbl-wrap"><table class="t" style="min-width:600px"><thead><tr><th style="width:90px">اليوم</th><th style="width:130px">التاريخ</th><th>المناوبون (عدد اليوم: ${arN(need)})</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="row sub" style="margin-top:8px"><span><b style="color:#197a44">الحصة الأخيرة</b> = الشرط متحقق</span><span><b style="color:#8a4a00">قبل الأخيرة</b> = لم يكفِ من عندهم الأخيرة</span><span><b style="color:#a32020">ناقص</b> = يكمله صاحب الصلاحية</span></div></div>`;
+    <div class="row sub" style="margin-top:8px"><span><b style="color:var(--fg-197a44,#197a44)">الحصة الأخيرة</b> = الشرط متحقق</span><span><b style="color:var(--fg-8a4a00,#8a4a00)">قبل الأخيرة</b> = لم يكفِ من عندهم الأخيرة</span><span><b style="color:var(--fg-a32020,#a32020)">ناقص</b> = يكمله صاحب الصلاحية</span></div></div>`;
   if(DS.canEdit) body.querySelectorAll('[data-dd]').forEach(td=>td.onclick=()=>editDutyDay(td.dataset.dd));
 }
 function editDutyDay(k){
@@ -446,11 +449,11 @@ function renderSup(body){
   if(!cols.length){ body.innerHTML = '<div class="empty">أضف أماكن الإشراف وعدد المشرفين من «الإعداد».</div>'; return; }
   const evGroups = s.events.map(ev=>({ ev, span: cols.filter(c=>c.ev.key===ev.key).length })).filter(g=>g.span);
   const rows = s.days.map(w=>`<tr><td><b>${esc(WEEKDAYS[w])}</b></td>${cols.map(c=>{
-      if(!evOnDay(c.ev,w)) return '<td style="background:#f3f3f3"></td>';
+      if(!evOnDay(c.ev,w)) return '<td style="background:var(--bg-f3f3f3,#f3f3f3)"></td>';
       const ids = ((((p.sup||{})[w]||{})[c.ev.key]||{})[c.pl.id])||[];
       const chips = ids.map(id=>{ const t=supTier(id,w,c.ev).t; return `<div style="margin:2px 0"><span class="chip" style="background:${t.bg};color:${t.fg}">(${t.k}) ${esc(uName(id))}</span></div>`; }).join('');
       const miss = ids.length < c.n;
-      return `<td class="${DS.canEdit?'cl':''} ${miss?'miss':''}" data-sw="${w}" data-se="${esc(c.ev.key)}" data-sp="${esc(c.pl.id)}">${chips}${miss?`<span class="chip" style="background:#fdecec;color:#a32020">ناقص ${arN(c.n-ids.length)}</span>`:''}</td>`;
+      return `<td class="${DS.canEdit?'cl':''} ${miss?'miss':''}" data-sw="${w}" data-se="${esc(c.ev.key)}" data-sp="${esc(c.pl.id)}">${chips}${miss?`<span class="chip" style="background:var(--bg-fdecec,#fdecec);color:var(--fg-a32020,#a32020)">ناقص ${arN(c.n-ids.length)}</span>`:''}</td>`;
     }).join('')}</tr>`).join('');
   body.innerHTML = warnHtml()+`<div class="card"><div class="row" style="margin-bottom:8px"><h3 style="margin:0">جدول الإشراف — ثابت أسبوعيًا</h3><span style="flex:1"></span>${DS.canEdit?'<span class="sub">اضغط الخانة لتعديلها يدويًا</span>':''}</div>
     <div class="tbl-wrap"><table class="t" style="min-width:${200+cols.length*130}px"><thead>
@@ -485,15 +488,15 @@ async function renderRecv(body){
   if(!p.pub){ body.innerHTML = '<div class="empty">لم يُعتمد التوزيع بعد. بعد «اعتماد ورفع كتعميم» يصل كل معلم تنبيه في «لوحتي ← مناوبتي»، وتظهر هنا حالة توقيع التعميم.</div>'; return; }
   const c = p.pub.circular;
   const members = p.pub.members||[];
-  body.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">الاستلام — توقيع التعميم</h3>${c?`<span class="chip" style="background:#e9f1fd;color:#1e5aaa">تعميم رقم ${arN(c.number)}</span>`:''}<span style="flex:1"></span><b id="rcvSum"></b></div><div id="rcvList" style="margin-top:10px"><span class="spin"></span></div></div>`;
+  body.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">الاستلام — توقيع التعميم</h3>${c?`<span class="chip" style="background:var(--bg-e9f1fd,#e9f1fd);color:var(--fg-1e5aaa,#1e5aaa)">تعميم رقم ${arN(c.number)}</span>`:''}<span style="flex:1"></span><b id="rcvSum"></b></div><div id="rcvList" style="margin-top:10px"><span class="spin"></span></div></div>`;
   let sigs = null;
   if(c && DS.canPublish){
     try{ const s = await db.collection('circulars').doc(DS.sid).collection('items').doc(c.id).collection('signatures').get(); sigs = {}; s.docs.forEach(d=>sigs[d.id]=d.data()); }catch(e){ sigs = null; }
   }
-  if(!sigs){ $('#rcvList').innerHTML = '<div class="sub">'+(c?'حالة التوقيع تظهر لمدير المدرسة أو صاحب صلاحية التعاميم (ومن صفحة التعاميم نفسها).':'لم يُنشأ تعميم.')+'</div>'+members.map(id=>`<div style="padding:7px 2px;border-top:1px solid #eef2f1">${esc(uName(id))}</div>`).join(''); return; }
+  if(!sigs){ $('#rcvList').innerHTML = '<div class="sub">'+(c?'حالة التوقيع تظهر لمدير المدرسة أو صاحب صلاحية التعاميم (ومن صفحة التعاميم نفسها).':'لم يُنشأ تعميم.')+'</div>'+members.map(id=>`<div style="padding:7px 2px;border-top:1px solid var(--bd-eef2f1,#eef2f1)">${esc(uName(id))}</div>`).join(''); return; }
   const done = members.filter(id=>sigs[id]).length;
   $('#rcvSum').textContent = 'وقّع '+arN(done)+' من '+arN(members.length);
-  $('#rcvList').innerHTML = members.map(id=>{ const s=sigs[id]; return `<div class="row" style="padding:7px 2px;border-top:1px solid #eef2f1"><span style="flex:1;font-weight:700">${esc(uName(id))}</span>${s?`<span class="chip" style="background:#e7f6ee;color:#197a44">وقّع</span><span class="sub">${s.at?esc(new Date(s.at).toLocaleString('ar-SA')):''}</span>`:'<span class="chip" style="background:#fdecec;color:#a32020">لم يوقّع</span>'}</div>`; }).join('');
+  $('#rcvList').innerHTML = members.map(id=>{ const s=sigs[id]; return `<div class="row" style="padding:7px 2px;border-top:1px solid var(--bd-eef2f1,#eef2f1)"><span style="flex:1;font-weight:700">${esc(uName(id))}</span>${s?`<span class="chip" style="background:var(--bg-e7f6ee,#e7f6ee);color:var(--fg-197a44,#197a44)">وقّع</span><span class="sub">${s.at?esc(new Date(s.at).toLocaleString('ar-SA')):''}</span>`:'<span class="chip" style="background:var(--bg-fdecec,#fdecec);color:var(--fg-a32020,#a32020)">لم يوقّع</span>'}</div>`; }).join('');
 }
 
 /* ---------- السجل الأسبوعي (للطباعة وصفحات التعميم) ---------- */
@@ -527,10 +530,10 @@ function printRecord(){
   };
   const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
   w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سجل المناوبة والإشراف اليومي</title>'+
-    '<style>@page{size:A4 portrait;margin:10mm}body{font-family:Tahoma,Arial;color:#111;margin:0}.pg{page-break-after:always}.pg:last-child{page-break-after:auto}'+
-    '.hd{border:1px dashed #999;border-radius:8px;padding:14px;text-align:center;color:#555;font-size:12px}h1{text-align:center;font-size:20px;margin:10px 0 6px;color:#0c2d48}'+
+    '<style>@page{size:A4 portrait;margin:10mm}body{font-family:Tahoma,Arial;color:var(--fg-111111,#111);margin:0}.pg{page-break-after:always}.pg:last-child{page-break-after:auto}'+
+    '.hd{border:1px dashed var(--bd-999999,#999);border-radius:8px;padding:14px;text-align:center;color:var(--fg-555555,#555);font-size:12px}h1{text-align:center;font-size:20px;margin:10px 0 6px;color:var(--fg-0c2d48,#0c2d48)}'+
     '.meta{display:flex;justify-content:space-between;font-weight:700;font-size:12.5px;margin:4px 6px 8px}table{width:100%;border-collapse:collapse}'+
-    'th,td{border:1px solid #222;padding:5px 4px;text-align:center;font-size:11.5px;height:20px}th{background:#eef4f3}td.wk{font-weight:800}td.b{font-weight:700}'+
+    'th,td{border:1px solid var(--bd-222222,#222);padding:5px 4px;text-align:center;font-size:11.5px;height:20px}th{background:var(--bg-eef4f3,#eef4f3)}td.wk{font-weight:800}td.b{font-weight:700}'+
     'tr{page-break-inside:avoid}.sig{display:flex;justify-content:space-between;margin-top:18px;font-weight:700;font-size:13px}</style></head><body>'+
     weeks.map(page).join('')+
     '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');

@@ -1,10 +1,16 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-04.2 -->
+<!-- إصدار: 2026-10-05.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>نظام التصحيح الآلي — بطاقات الإجابة</title>
+<meta name="theme-color" content="#3f6659">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=2026-10-05.1">
+<script src="theme.js?v=2026-10-05.1"></script>
 <style>
   :root{
     --teal:#0f766e; --teal-d:#0b5a54; --teal-l:#e6f2f0;
@@ -23,16 +29,16 @@
   /* ---- top bar ---- */
   header.app{
     background:linear-gradient(180deg,var(--teal),var(--teal-d));
-    color:#fff; padding:8px 12px; position:sticky; top:0; z-index:30;
+    color:var(--fg-ffffff,#fff); padding:8px 12px; position:sticky; top:0; z-index:30;
     box-shadow:var(--shadow);
   }
   nav.tabs{display:flex;gap:6px;margin-top:0}
   nav.tabs button{
     flex:1;min-width:0;border:0;border-radius:9px;padding:6px 3px;font-size:10.5px;font-weight:600;line-height:1.25;
-    background:rgba(255,255,255,.14);color:#fff;cursor:pointer;transition:.15s;
+    background:rgba(255,255,255,.14);color:var(--fg-ffffff,#fff);cursor:pointer;transition:.15s;
     white-space:normal;
   }
-  nav.tabs button.active{background:#fff;color:var(--teal-d)}
+  nav.tabs button.active{background:var(--bg-ffffff,#fff);color:var(--teal-d)}
   @media (min-width:768px){
     nav.tabs button{ padding:12px 18px; font-size:15px; border-radius:11px; }
     header.app{ padding:12px 18px; }
@@ -46,11 +52,11 @@
   .card{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
   .card h2{margin:0 0 12px;font-size:15px;color:var(--teal-d)}
   .card h2 .sub{font-weight:400;color:var(--muted);font-size:12px;margin-right:6px}
-  .collapseBtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--line);background:#f0f5f4;color:var(--teal-d);border-radius:7px;font-size:18px;font-weight:700;cursor:pointer;line-height:1;vertical-align:middle;margin-left:6px}
-  .collapseBtn:active{background:#e2eeec}
+  .collapseBtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--line);background:var(--bg-f0f5f4,#f0f5f4);color:var(--teal-d);border-radius:7px;font-size:18px;font-weight:700;cursor:pointer;line-height:1;vertical-align:middle;margin-left:6px}
+  .collapseBtn:active{background:var(--bg-e2eeec,#e2eeec)}
   .seccard{padding:0;overflow:hidden}
   .secheader{display:flex;align-items:center;gap:12px;padding:16px;cursor:pointer;user-select:none}
-  .secheader:active{background:#f7faf9}
+  .secheader:active{background:var(--bg-f7faf9,#f7faf9)}
   .secicon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;flex:0 0 auto}
   .sectext{flex:1;text-align:right}
   .sectitle{font-weight:800;font-size:16px;color:var(--ink)}
@@ -58,194 +64,130 @@
   .secarrow{font-size:22px;color:var(--muted);transition:transform .2s;flex:0 0 auto}
   .secarrow.open{transform:rotate(-90deg)}
   .seccontent{padding:0 16px 16px}
-  .subcard{background:#fafcfb;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .subcard{background:var(--bg-fafcfb,#fafcfb);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
   .subcard:last-child{margin-bottom:0}
   .subtitle{font-weight:800;color:var(--teal-d);margin-bottom:10px}
   .subtitle .sub{font-weight:500;color:var(--muted);font-size:12px}
-  .stcard{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:#fff;transition:background .15s;max-width:100%;overflow:hidden}
+  .stcard{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:var(--bg-ffffff,#fff);transition:background .15s;max-width:100%;overflow:hidden}
   .stcard .top{display:flex;align-items:center;gap:10px}
-  .stcard .nm{color:#1f5fb0;font-weight:800;font-size:16px;cursor:pointer;line-height:1.4;word-break:break-word}
+  .stcard .nm{color:var(--fg-1f5fb0,#1f5fb0);font-weight:800;font-size:16px;cursor:pointer;line-height:1.4;word-break:break-word}
   .stcard .sub{font-size:12px;color:var(--muted);margin-top:2px}
   .stcard .sub .idlink{color:var(--teal-d);font-weight:700;cursor:pointer;border-bottom:1px dotted var(--teal-d)}
   .stcard .stat{font-size:12px;font-weight:700;padding:1px 8px;border-radius:20px}
   .attbtns{display:flex;gap:6px;margin-top:10px}
-  .attbtns button{flex:1;padding:11px 6px;font-size:14px;font-weight:800;border-radius:10px;border:2px solid;cursor:pointer;background:#fff}
+  .attbtns button{flex:1;padding:11px 6px;font-size:14px;font-weight:800;border-radius:10px;border:2px solid;cursor:pointer;background:var(--bg-ffffff,#fff)}
   .stchk{width:20px;height:20px;flex:0 0 auto}
   label.field{display:block;margin-bottom:12px;font-size:13px;font-weight:600;color:var(--muted)}
   label.field input,label.field select{
     width:100%;margin-top:6px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
-    font:inherit;font-weight:600;color:var(--ink);background:#fcfdfd;
+    font:inherit;font-weight:600;color:var(--ink);background:var(--bg-fcfdfd,#fcfdfd);
   }
   label.field input:focus,label.field select:focus{outline:2px solid var(--teal-l);border-color:var(--teal)}
   .row{display:flex;gap:10px;flex-wrap:wrap}
   .row>*{flex:1;min-width:120px}
   button.primary{
-    width:100%;border:0;background:var(--teal);color:#fff;font:inherit;font-weight:700;
+    width:100%;border:0;background:var(--teal);color:var(--fg-ffffff,#fff);font:inherit;font-weight:700;
     padding:13px;border-radius:11px;cursor:pointer;transition:.15s;font-size:14px;
   }
   button.primary:active{transform:translateY(1px)}
   button.ghost{
-    border:1px solid var(--line);background:#fff;color:var(--teal-d);font:inherit;font-weight:700;
+    border:1px solid var(--line);background:var(--bg-ffffff,#fff);color:var(--teal-d);font:inherit;font-weight:700;
     padding:11px;border-radius:11px;cursor:pointer;width:100%;font-size:14px;
   }
   .hint{font-size:12px;color:var(--muted);margin:6px 2px 0;line-height:1.6}
   .pill{display:inline-block;background:var(--teal-l);color:var(--teal-d);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700}
   /* ---- answer key grid ---- */
   .keygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
-  .keyq{border:1px solid var(--line);border-radius:10px;padding:7px 8px;background:#fcfdfd}
+  .keyq{border:1px solid var(--line);border-radius:10px;padding:7px 8px;background:var(--bg-fcfdfd,#fcfdfd)}
   .keyq .qn{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px}
   .choices{display:flex;gap:5px}
   .choices button{
-    flex:1;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 0;
+    flex:1;border:1px solid var(--line);background:var(--bg-ffffff,#fff);border-radius:8px;padding:6px 0;
     font:inherit;font-weight:700;font-size:13px;color:var(--ink);cursor:pointer;
   }
-  .choices button.sel{background:var(--teal);color:#fff;border-color:var(--teal)}
+  .choices button.sel{background:var(--teal);color:var(--fg-ffffff,#fff);border-color:var(--teal)}
   /* ---- results table ---- */
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{padding:9px 8px;text-align:center;border-bottom:1px solid var(--line)}
-  th{color:var(--muted);font-weight:700;font-size:12px;background:#fafcfb}
+  th{color:var(--muted);font-weight:700;font-size:12px;background:var(--bg-fafcfb,#fafcfb)}
   td .nameinput{width:100%;border:1px solid var(--line);border-radius:7px;padding:6px;font:inherit;text-align:center}
   .score-good{color:var(--ok);font-weight:800}
   .score-mid{color:var(--warn);font-weight:800}
   .score-bad{color:var(--bad);font-weight:800}
   /* ---- canvas / grading ---- */
-  .canvas-wrap{position:relative;width:100%;background:#0d1416;border-radius:12px;overflow:hidden;touch-action:none}
+  .canvas-wrap{position:relative;width:100%;background:var(--bg-0d1416,#0d1416);border-radius:12px;overflow:hidden;touch-action:none}
   .canvas-wrap canvas{display:block;width:100%;height:auto}
   .corner-dot{position:absolute;width:26px;height:26px;margin:-13px;border-radius:50%;
-    background:rgba(15,118,110,.9);border:2px solid #fff;color:#fff;font-size:12px;font-weight:800;
+    background:rgba(15,118,110,.9);border:2px solid var(--bd-ffffff,#fff);color:var(--fg-ffffff,#fff);font-size:12px;font-weight:800;
     display:flex;align-items:center;justify-content:center;pointer-events:none}
   .status{font-size:13px;font-weight:700;padding:10px 12px;border-radius:10px;margin-top:10px}
   .status.info{background:var(--teal-l);color:var(--teal-d)}
-  .status.warn{background:#fff4e0;color:var(--warn)}
-  .status.err{background:#fdecec;color:var(--bad)}
-  .status.ok{background:#e7f7ee;color:var(--ok)}
+  .status.warn{background:var(--bg-fff4e0,#fff4e0);color:var(--warn)}
+  .status.err{background:var(--bg-fdecec,#fdecec);color:var(--bad)}
+  .status.ok{background:var(--bg-e7f7ee,#e7f7ee);color:var(--ok)}
   .resultbox{display:flex;gap:10px;text-align:center;margin-top:12px}
-  .resultbox div{flex:1;background:#fcfdfd;border:1px solid var(--line);border-radius:11px;padding:10px 4px}
+  .resultbox div{flex:1;background:var(--bg-fcfdfd,#fcfdfd);border:1px solid var(--line);border-radius:11px;padding:10px 4px}
   .resultbox b{display:block;font-size:22px}
   .resultbox span{font-size:11px;color:var(--muted)}
   /* ---- printable sheet ---- */
-  #sheetHost{overflow-x:auto;background:#eef2f1;border-radius:12px;padding:14px;text-align:center}
-  #sheetHost svg{background:#fff;box-shadow:var(--shadow);max-width:100%;height:auto}
+  #sheetHost{overflow-x:auto;background:var(--bg-eef2f1,#eef2f1);border-radius:12px;padding:14px;text-align:center}
+  #sheetHost svg{background:var(--bg-ffffff,#fff);box-shadow:var(--shadow);max-width:100%;height:auto}
   .slider{display:flex;align-items:center;gap:10px;margin-top:8px}
   .slider input[type=range]{flex:1}
   .slider b{min-width:42px;text-align:left;color:var(--teal-d)}
   .empty{text-align:center;color:var(--muted);padding:30px 10px;font-size:13px}
   .secrow{display:flex;gap:7px;align-items:center;margin-bottom:8px}
-  .secrow select,.secrow input{padding:9px 8px;border:1px solid var(--line);border-radius:9px;font:inherit;font-weight:600;background:#fcfdfd;color:var(--ink);min-width:0}
+  .secrow select,.secrow input{padding:9px 8px;border:1px solid var(--line);border-radius:9px;font:inherit;font-weight:600;background:var(--bg-fcfdfd,#fcfdfd);color:var(--ink);min-width:0}
   .secrow select{flex:1.4}
   .secrow input{flex:1;text-align:center}
-  .secrow .del{flex:0 0 auto;border:1px solid var(--line);background:#fff;color:var(--bad);border-radius:9px;width:38px;height:38px;font-size:18px;cursor:pointer}
+  .secrow .del{flex:0 0 auto;border:1px solid var(--line);background:var(--bg-ffffff,#fff);color:var(--bad);border-radius:9px;width:38px;height:38px;font-size:18px;cursor:pointer}
   .secrow .lab{font-size:11px;color:var(--muted);text-align:center}
   @media print{
     header.app,nav.tabs,.no-print{display:none!important}
-    body{background:#fff}
+    body{background:var(--bg-ffffff,#fff)}
     main{padding:0;max-width:none}
     .card{border:0;box-shadow:none;margin:0;padding:0}
-    #sheetHost{background:#fff;padding:0;overflow:visible}
+    #sheetHost{background:var(--bg-ffffff,#fff);padding:0;overflow:visible}
     #sheetHost svg{box-shadow:none;width:100%}
   }
   /* ===== المرحلة 2: البطاقة العائمة (الحضور/المتابعة/سجل المتابعة) ===== */
   .flcard{position:fixed;top:50%;left:8px;transform:translateY(-50%);z-index:1100;display:none;flex-direction:column;gap:6px;background:rgba(255,255,255,.18);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);border:1px solid rgba(255,255,255,.4);border-radius:16px;box-shadow:0 6px 22px rgba(16,40,40,.13);padding:6px}
   .flcard.show{display:flex}
-  .fl-toggle{width:54px;appearance:none;border:none;background:linear-gradient(135deg,#1fc3a6,#0f766e);border-radius:10px;padding:6px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;line-height:1;box-shadow:0 2px 9px rgba(15,118,110,.45)}
+  .fl-toggle{width:54px;appearance:none;border:none;background:linear-gradient(135deg,var(--bg-1fc3a6,#1fc3a6),var(--bg-0f766e,#0f766e));border-radius:10px;padding:6px;font-size:15px;font-weight:800;color:var(--fg-ffffff,#fff);cursor:pointer;line-height:1;box-shadow:0 2px 9px rgba(15,118,110,.45)}
   .fl-btns{display:flex;flex-direction:column;gap:6px}
   .flcard.collapsed .fl-btns{display:none}
   .flcard button.fl-nav{width:54px;appearance:none;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.42);border-radius:10px;padding:8px 3px;font:inherit;color:var(--teal-d);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1.12}
   .flcard button.fl-nav .fl-ic{font-size:17px}
   .flcard button.fl-nav .fl-tx{font-size:9.5px;font-weight:800;text-align:center}
-  .flcard button.fl-nav.active{background:rgba(15,118,110,.92);color:#fff;border-color:transparent}
+  .flcard button.fl-nav.active{background:rgba(15,118,110,.92);color:var(--fg-ffffff,#fff);border-color:transparent}
   .flov{position:fixed;inset:0;z-index:1000;background:var(--paper);display:none;flex-direction:column}
   .flov.show{display:flex}
-  .flov-head{display:flex;align-items:center;gap:10px;padding:11px 14px;background:#fff;border-bottom:1px solid var(--line)}
-  .flov-head .flx{appearance:none;border:1px solid var(--line);background:#fff;border-radius:9px;width:38px;height:38px;font-size:15px;cursor:pointer;flex:0 0 auto}
-  .flov-head select{flex:1;min-width:0;padding:9px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff}
+  .flov-head{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--bg-ffffff,#fff);border-bottom:1px solid var(--line)}
+  .flov-head .flx{appearance:none;border:1px solid var(--line);background:var(--bg-ffffff,#fff);border-radius:9px;width:38px;height:38px;font-size:15px;cursor:pointer;flex:0 0 auto}
+  .flov-head select{flex:1;min-width:0;padding:9px;border:1px solid var(--line);border-radius:9px;font:inherit;background:var(--bg-ffffff,#fff)}
   .flov-body{flex:1;overflow:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
   /* الثيم البديل: الشريط السفلي الثابت يغطي آخر طالب في قائمة المتابعة — مسافة سفلية بقدره */
   body.alt-theme .flov-body{ padding-bottom:110px; }
   @media (max-width:767px){ body.alt-theme .flov-body{ padding-bottom:126px; } }
-  .flstu{border:1px solid var(--line);border-radius:12px;padding:11px;margin-bottom:8px;background:#fff}
+  .flstu{border:1px solid var(--line);border-radius:12px;padding:11px;margin-bottom:8px;background:var(--bg-ffffff,#fff)}
   .flstu .nm{font-weight:800;color:var(--ink)}
   .flstu .mt{font-size:12px;color:var(--muted);margin-top:2px}
   .fucircs{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
-  .fucirc{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#f3f8f7;font-size:19px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1}
-  .fucirc.add{border-style:dashed;border-color:var(--teal);color:var(--teal-d);background:#fff;font-size:16px}
+  .fucirc{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--bg-f3f8f7,#f3f8f7);font-size:19px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1}
+  .fucirc.add{border-style:dashed;border-color:var(--teal);color:var(--teal-d);background:var(--bg-ffffff,#fff);font-size:16px}
 </style>
 <style>
-/* ============================================================
-   أربعة تصاميم — الأساسي (بلا تغيير) + ثلاثة بدائل
-   تُطبَّق عبر صنف على body، وتغطي متغيرات الجذر + أبرز الألوان
-   الحرفية المكرَّرة في هذا الملف (عبر محدِّدات السمة الجزئية).
-   الألوان الدلالية (نجاح/خطر/تحذير) تبقى ثابتة عمدًا في الجميع.
-   ============================================================ */
-
-/* ---- محوّل التصاميم العائم ---- */
-
-/* ============================================================
-   ١) الفجر — أزرق ليلي هادئ + ذهبي نادر، وحي الاصطفاف الصباحي
-   ============================================================ */
-body.theme-dawn{
-  --teal:#1B3A5C; --teal-d:#14293F; --teal-l:#F3ECDE;
-  --ink:#22303C; --muted:#7A6F5E; --line:#E8DCC4; --paper:#FAF6EF; --white:#FFFFFF;
-}
-body.theme-dawn header.app{background:linear-gradient(135deg,#F6DFC5 0%,#1B3A5C 55%,#14293F 100%)}
-body.theme-dawn .card{border:1px solid #E8DCC4;box-shadow:none;border-radius:10px}
-body.theme-dawn .secicon{border-radius:10px}
-body.theme-dawn nav.tabs button.active{color:#1B3A5C}
-body.theme-dawn button[style*="#0b7a63"],
-body.theme-dawn button[style*="0b7a63"],
-body.theme-dawn .primary{background:#1B3A5C !important}
-body.theme-dawn button.primary:not([style]){background:#1B3A5C}
-
-/* ============================================================
-   ٢) الياسمين — أخضر عميق + خردلي، بطاقات مقوَّسة الأعلى
-   ============================================================ */
-body.theme-jasmine{
-  --teal:#3F6659; --teal-d:#325145; --teal-l:#EFF3E9;
-  --ink:#23312B; --muted:#6E7C71; --line:#E1E9DA; --paper:#F7F9F4; --white:#FFFFFF;
-}
-body.theme-jasmine header.app{background:linear-gradient(180deg,#3F6659,#325145);border-top:3px solid #C99A3B}
-body.theme-jasmine .card{border-radius:22px 22px 8px 8px;box-shadow:0 10px 22px rgba(63,102,89,.08)}
-body.theme-jasmine .secicon{border-radius:16px}
-body.theme-jasmine nav.tabs button{border-radius:999px}
-body.theme-jasmine nav.tabs button.active{color:#3F6659}
-body.theme-jasmine button[style*="#0b7a63"],
-body.theme-jasmine button[style*="0b7a63"],
-body.theme-jasmine .primary{background:#3F6659 !important;border-radius:14px}
-body.theme-jasmine .collapseBtn{border-radius:999px}
-
-/* ============================================================
-   ٣) المسطرة — ورق مسطَّر + حبر أحمر داكن، وحي دفتر الرصد الورقي
-   ============================================================ */
-body.theme-ledger{
-  --teal:#8B3A3A; --teal-d:#6E2C2C; --teal-l:#F5F2EA;
-  --ink:#1F2937; --muted:#6B7280; --line:#DCDCD2; --paper:#FBFBF7; --white:#FFFFFF;
-}
-body.theme-ledger{background-image:repeating-linear-gradient(#FBFBF7 0 31px, rgba(70,110,160,.14) 31px 32px)}
-body.theme-ledger main{border-inline-end:2px solid rgba(139,58,58,.4);padding-inline-end:20px}
-body.theme-ledger header.app{background:#fff;color:#1F2937;border-bottom:3px solid #8B3A3A}
-body.theme-ledger header.app *{color:#1F2937 !important}
-body.theme-ledger nav.tabs button{background:#F1E9E9;color:#6E2C2C;border-radius:4px}
-body.theme-ledger nav.tabs button.active{background:#8B3A3A;color:#fff}
-body.theme-ledger .card{border-radius:4px;box-shadow:none;border:1px solid #DCDCD2}
-body.theme-ledger .card h2{color:#8B3A3A}
-body.theme-ledger .secicon{border-radius:4px}
-body.theme-ledger button[style*="#0b7a63"],
-body.theme-ledger button[style*="0b7a63"],
-body.theme-ledger .primary{background:#8B3A3A !important;border-radius:4px}
+/* المظاهر: الياسمين (افتراضي) والأساسي — ألوانها وأشكالها في theme.css */
 </style>
 
 <script>
+/* المظهر العام يُقرأ من الإعدادات ويُطبَّق عبر theme.js (الياسمين افتراضيًا، ومعه الشريط السفلي) */
 (function(){
-  function apply(t){
-    document.body.classList.remove('theme-dawn','theme-jasmine','theme-ledger','theme-night','theme-glass','nav-open');
-    if(t) document.body.classList.add(t);
-    document.body.classList.toggle('alt-theme', !!t);   // شريط سفلي ثابت لكل تصميم بديل، لا للأساسي
-  }
   function waitForDb(tries){
     try{
       if(typeof db !== 'undefined' && db){
         db.collection('settings').doc('appearance').onSnapshot(function(s){
-          apply(s.exists ? (s.data().theme||'') : '');
+          if(window.InjazTheme) InjazTheme.applyRemote(s.exists ? (s.data().theme||'') : '');
         }, function(){});
         return;
       }
@@ -258,104 +200,8 @@ body.theme-ledger .primary{background:#8B3A3A !important;border-radius:4px}
 </script>
 
 <style>
-/* ================================
-   ٤) الليل — تبويبات علوية داكنة
-================================ */
-body.theme-night {
-  --teal: #8c7cf5; --teal-d: #6553d2; --teal-l: #252443;
-  --ink: #f1efff; --muted: #a9a6c7; --line: #37345d;
-  --paper: #121326; --white: #1c1a38; --shadow: 0 20px 55px rgba(0,0,0,.26);
-  background: radial-gradient(circle at 50% -10%, #35305e 0, transparent 32rem), var(--paper);
-  color: var(--ink);
-}
-body.theme-night header.app{position:sticky;top:0;z-index:30;padding:18px 24px;
-  background:rgba(18,19,38,.88);border-bottom:1px solid #37345d;backdrop-filter:blur(15px)}
-body.theme-night nav.tabs{display:flex;gap:8px;margin:0;overflow-x:auto}
-body.theme-night nav.tabs button{flex:0 0 auto;min-width:max-content;padding:11px 17px;
-  border-radius:999px;background:#211f40;color:#aaa6cc;font-size:13px;transition:.2s ease}
-body.theme-night nav.tabs button:hover{background:#302d54;color:#fff;transform:translateY(-2px)}
-body.theme-night nav.tabs button.active{background:var(--teal);color:#fff;box-shadow:0 8px 18px rgba(140,124,245,.25)}
-body.theme-night main{max-width:1080px;padding:36px 28px 90px}
-body.theme-night .card{background:rgba(28,26,56,.88);border-color:#37345d;border-radius:24px;
-  box-shadow:var(--shadow);color:var(--ink)}
-body.theme-night .subcard,body.theme-night .stcard,body.theme-night .keyq{background:#211f40;border-color:#37345d}
-body.theme-night .secicon{background:#29264d !important;border-radius:18px}
-body.theme-night input,body.theme-night select,body.theme-night textarea{
-  background:#211f40 !important;color:var(--ink) !important;border-color:#37345d !important}
-body.theme-night .flcard{background:rgba(28,26,56,.86);border-color:#514c7a}
-body.theme-night button[style*="#0b7a63"],
-body.theme-night button[style*="0b7a63"],
-body.theme-night .primary{background:#6553d2 !important;color:#fff !important;border-radius:14px}
-
-/* ================================
-   ٥) الزجاج — قائمة منبثقة بزر همبرغر
-================================ */
-body.theme-glass {
-  --teal: #229fbb; --teal-d: #146c89; --teal-l: #e4f7fb;
-  --ink: #163448; --muted: #718596; --line: #d6e7ee;
-  --paper: #f3f9fb; --white: #fff; --shadow: 0 20px 55px rgba(25,91,119,.13);
-  background: linear-gradient(135deg,#f5fbff,#eaf6fa 45%,#fdf8f1);
-  color: var(--ink);
-}
-body.theme-glass header.app{display:flex;align-items:center;position:sticky;top:0;z-index:50;
-  padding:13px 18px;background:linear-gradient(120deg,#176b91,#35b6bd);box-shadow:0 12px 35px rgba(26,112,143,.22)}
-body.theme-glass #navToggle{display:flex}
-body.theme-glass nav.tabs{position:fixed;right:18px;top:76px;width:250px;z-index:100;
-  display:flex;flex-direction:column;gap:7px;margin:0;padding:12px;
-  background:rgba(255,255,255,.91);border:1px solid rgba(255,255,255,.75);border-radius:22px;
-  box-shadow:0 24px 60px rgba(28,83,112,.22);backdrop-filter:blur(18px);
-  opacity:0;transform:translateY(-18px) scale(.97);transform-origin:top right;pointer-events:none;
-  transition:opacity .2s ease,transform .2s ease}
-body.theme-glass.nav-open nav.tabs{opacity:1;transform:none;pointer-events:auto}
-body.theme-glass nav.tabs button{flex:0 0 auto;width:100%;padding:12px 13px;text-align:right;
-  background:transparent;color:var(--ink);border-radius:14px;font-size:13px;transition:.2s ease}
-body.theme-glass nav.tabs button:hover{background:var(--teal-l);color:var(--teal-d);transform:translateX(-3px)}
-body.theme-glass nav.tabs button.active{background:var(--teal);color:#fff}
-body.theme-glass main{max-width:1080px;padding:34px 28px 90px}
-body.theme-glass .card{border-radius:30px;border-color:#d8edf3;background:rgba(255,255,255,.78);
-  box-shadow:var(--shadow);backdrop-filter:blur(12px)}
-body.theme-glass .secicon{background:#dff5fb !important;border-radius:22px;box-shadow:0 8px 18px rgba(34,159,187,.12)}
-body.theme-glass .flcard{left:10px}
-body.theme-glass button[style*="#0b7a63"],
-body.theme-glass button[style*="0b7a63"],
-body.theme-glass .primary{background:#146c89 !important;border-radius:14px}
-
-/* زر فتح قائمة الزجاج */
-#navToggle{display:none;align-items:center;justify-content:center;gap:7px;
-  padding:9px 13px;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.25);
-  border-radius:12px;font:inherit;font-weight:800;cursor:pointer}
-/* بند ٣: RTL flex-row يضع أول عنصر باتجاه اليمين افتراضيًا — margin-right:auto كانت تدفعه لليسار خطأً */
-body.theme-glass header.app{ justify-content:flex-start; }
-
-@media (max-width:767px){
-  body.theme-night header.app{padding:10px}
-  body.theme-night nav.tabs{overflow-x:auto}
-  body.theme-night nav.tabs button{flex:0 0 112px;min-width:112px;padding:9px 7px;font-size:11px;text-align:center}
-  body.theme-night main{padding:22px 14px 110px}
-  body.theme-glass header.app{padding:11px 13px}
-  body.theme-glass nav.tabs{right:10px;top:68px;width:calc(100% - 20px);max-height:calc(100vh - 150px);overflow:auto}
-  body.theme-glass main{padding:22px 14px 110px}
-  body{overflow-x:hidden}
-}
+@media (max-width:767px){ body{overflow-x:hidden} }
 </style>
-<script>
-(function(){
-  document.addEventListener('DOMContentLoaded', function(){
-    var toggle = document.getElementById('navToggle');
-    if(!toggle) return;
-    toggle.addEventListener('click', function(){
-      document.body.classList.toggle('nav-open');
-      toggle.setAttribute('aria-expanded', document.body.classList.contains('nav-open') ? 'true' : 'false');
-    });
-    document.querySelectorAll('nav.tabs button').forEach(function(button){
-      button.addEventListener('click', function(){
-        if(document.body.classList.contains('theme-glass')) document.body.classList.remove('nav-open');
-      });
-    });
-  });
-})();
-</script>
-
 <style>
 /* ================================
    القائمة العائمة → شريط سفلي ثابت
@@ -385,7 +231,7 @@ body.alt-theme #flb-record{ order:4; }
 body.alt-theme #flb-worklog{ order:5; }
 body.alt-theme #flb-add{
   display:flex !important; flex:0 0 auto; width:58px; height:58px; margin-top:-30px;
-  border-radius:50%; background:linear-gradient(135deg,#1fc3a6,var(--teal)); color:#fff;
+  border-radius:50%; background:linear-gradient(135deg,var(--bg-1fc3a6,#1fc3a6),var(--teal)); color:var(--fg-ffffff,#fff);
   font-size:28px; align-items:center; justify-content:center; line-height:1;
   box-shadow:0 8px 18px rgba(15,118,110,.4); border:4px solid var(--white); cursor:pointer;
 }
@@ -416,14 +262,13 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 </style>
 </head>
 <body class="cls-perm-pending cls-panels-pending">
-<div id="soloLinkBanner" style="display:none;background:#fff7e6;border-bottom:2px solid #e0a716;padding:10px 14px;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px">
+<div id="soloLinkBanner" style="display:none;background:var(--bg-fff7e6,#fff7e6);border-bottom:2px solid var(--bd-e0a716,#e0a716);padding:10px 14px;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px">
   <span style="flex:1;min-width:200px">اربط رقم هويتك لتقدر تتنقّل لاحقًا بسهولة بين حسابك الفردي وأي مدرسة تشتغل فيها.</span>
-  <input id="soloLinkIdInput" placeholder="رقم الهوية" inputmode="numeric" style="padding:6px 8px;border:1px solid #e0a716;border-radius:6px;width:140px">
-  <button id="soloLinkIdBtn" style="padding:6px 12px;border:none;border-radius:6px;background:#e0a716;color:#fff;cursor:pointer">ربط</button>
-  <button id="soloLinkDismissBtn" style="padding:6px 10px;border:none;background:transparent;color:#8a6d1a;cursor:pointer">لاحقًا ×</button>
+  <input id="soloLinkIdInput" placeholder="رقم الهوية" inputmode="numeric" style="padding:6px 8px;border:1px solid var(--bd-e0a716,#e0a716);border-radius:6px;width:140px">
+  <button id="soloLinkIdBtn" style="padding:6px 12px;border:none;border-radius:6px;background:var(--bg-e0a716,#e0a716);color:var(--fg-ffffff,#fff);cursor:pointer">ربط</button>
+  <button id="soloLinkDismissBtn" style="padding:6px 10px;border:none;background:transparent;color:var(--fg-8a6d1a,#8a6d1a);cursor:pointer">لاحقًا ×</button>
 </div>
 <header class="app">
-  <button id="navToggle" type="button" aria-label="فتح القوائم">☰ القوائم</button>
   <nav class="tabs">
     <button id="tab-students" class="active" onclick="showTab('students')">👥 الطلاب والفصول</button>
     <button id="tab-design" onclick="showTab('design')">تصميم الاختبار</button>
@@ -494,7 +339,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
       <div style="margin-bottom:8px;font-size:13px;font-weight:700;color:var(--teal-d)">📝 أقسام الأسئلة</div>
       <div id="sectionsHost"></div>
       <button id="addSectionBtn" class="ghost" style="margin-bottom:8px" onclick="addSection()">+ إضافة قسم</button>
-      <p id="qaCapHint" class="hint" style="display:none;color:#d32f2f;font-weight:600"></p>
+      <p id="qaCapHint" class="hint" style="display:none;color:var(--fg-d32f2f,#d32f2f);font-weight:600"></p>
 
       <input id="cfgIdEnabled" type="checkbox" checked style="display:none">
       <input id="cfgSeatDigits" type="number" value="10" style="display:none">
@@ -512,7 +357,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
     <div class="card">
       <h2 class="no-print">معاينة البطاقة</h2>
       <div id="sheetHost"></div>
-      <button id="saveExamBtn" class="primary no-print" style="margin-top:12px;display:none;background:#0b7a63" onclick="saveCurrentExam()">💾 حفظ الاختبار</button>
+      <button id="saveExamBtn" class="primary no-print" style="margin-top:12px;display:none;background:var(--bg-0b7a63,#0b7a63)" onclick="saveCurrentExam()">💾 حفظ الاختبار</button>
       <button class="ghost no-print" style="margin-top:10px" onclick="window.print()">🖨️ طباعة البطاقة (نموذج فارغ)</button>
       <button id="printPerStudentBtn" class="primary no-print" style="margin-top:10px;display:none" onclick="printAllStudents()">🖨️ طباعة نسخة لكل طالب (بالباركود)</button>
       <div id="examLogWrap" class="no-print" style="display:none;margin-top:16px">
@@ -524,14 +369,14 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 
   <!-- محرّر الأسئلة (نافذة منبثقة) -->
   <div id="qEditorOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,30,28,.55);z-index:9999;overflow-y:auto;padding:16px">
-    <div style="max-width:760px;margin:20px auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="max-width:760px;margin:20px auto;background:var(--bg-ffffff,#fff);border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <h2 style="margin:0">✍️ كتابة الأسئلة</h2>
         <button class="ghost" style="padding:6px 12px" onclick="closeQEditor()">✕ إغلاق</button>
       </div>
       <p class="hint" style="margin-top:0">اكتب نص كل سؤال وخياراته حسب الأقسام المحدّدة. تُطبع على بطاقة الأسئلة وتُحفظ مع الاختبار.</p>
       <div id="qEditorBody"></div>
-      <div class="row" style="margin-top:14px;position:sticky;bottom:0;background:#fff;padding-top:10px">
+      <div class="row" style="margin-top:14px;position:sticky;bottom:0;background:var(--bg-ffffff,#fff);padding-top:10px">
         <button class="primary" style="flex:2" onclick="applyQEditor()">✅ حفظ ومعاينة</button>
         <button class="ghost" onclick="clearQData()">🗑️ تفريغ الأسئلة</button>
       </div>
@@ -543,7 +388,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
     <!-- ===== بيانات الفصول (عرض الرموز) ===== -->
     <div class="card seccard" id="classInfoSecCard">
       <div class="secheader" onclick="openClassInfoModal()">
-        <div class="secicon" style="background:#e6f6f2">🏫</div>
+        <div class="secicon" style="background:var(--bg-e6f6f2,#e6f6f2)">🏫</div>
         <div class="sectext"><div class="sectitle">بيانات الفصول</div><div class="secdesc">أسماء الفصول ورموز دخول الطلاب وأعدادهم</div></div>
         <div class="secarrow">‹</div>
       </div>
@@ -552,7 +397,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
     <!-- ===== إضافة الفصول والمواد (موحّدة) ===== -->
     <div class="card seccard" id="addClassesSecCard">
       <div class="secheader" onclick="openAddClassesModal()">
-        <div class="secicon" style="background:#eef0ff">➕</div>
+        <div class="secicon" style="background:var(--bg-eef0ff,#eef0ff)">➕</div>
         <div class="sectext"><div class="sectitle">إضافة الفصول والمواد</div><div class="secdesc">إضافة يدوية، استيراد من نور أو ملف جاهز، وإسناد المواد</div></div>
         <div class="secarrow">‹</div>
       </div>
@@ -599,13 +444,13 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
         <div id="secExcelImport">
         <div class="subcard">
           <div class="subtitle">📊 من ملف أو ورقة (Excel من نور) <span class="sub">الأسماء ورقم الهوية بدقّة</span></div>
-          <div class="hint" style="background:#eef6f4;border:1px solid var(--teal-l);border-radius:10px;padding:10px;margin-top:4px;line-height:1.9">
+          <div class="hint" style="background:var(--bg-eef6f4,#eef6f4);border:1px solid var(--teal-l);border-radius:10px;padding:10px;margin-top:4px;line-height:1.9">
             <b>طريقة تصدير الأسماء من نور:</b><br>
             افتح <b>نور</b> ← <b>التقارير</b> ← <b>تقارير أخرى</b> ← <b>كشف بأسماء الطلاب</b> ← <b>تصدير الأسماء بالصف</b> (اختر صيغة Excel).<br>
             ثم ارفع الملف هنا — يكتشف النظام <b>الصف والفصل والأسماء ورقم الهوية</b> تلقائياً.
           </div>
           <input id="xlsxFile" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="onXlsxChosen(event)">
-          <button class="primary" style="margin-top:10px;background:#0b7a63" onclick="document.getElementById('xlsxFile').click()">📂 اختيار ملف Excel من نور</button>
+          <button class="primary" style="margin-top:10px;background:var(--bg-0b7a63,#0b7a63)" onclick="document.getElementById('xlsxFile').click()">📂 اختيار ملف Excel من نور</button>
         </div>
         </div>
 
@@ -613,7 +458,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
         <div class="subcard">
           <div class="subtitle">📋 إضافة طلاب متعددين <span class="sub">لصق قائمة أسماء</span></div>
           <div style="margin:4px 0 6px;font-size:12px;color:var(--muted)">الصق الصفوف يدوياً (رقم الهوية ثم الاسم، سطر لكل طالب):</div>
-          <textarea id="stBulk" rows="4" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;font-weight:600;color:var(--ink);background:#fcfdfd" placeholder="1061532883&#9;محمد نجيب حكمي&#10;1061532884&#9;أحمد علي"></textarea>
+          <textarea id="stBulk" rows="4" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;font-weight:600;color:var(--ink);background:var(--bg-fcfdfd,#fcfdfd)" placeholder="1061532883&#9;محمد نجيب حكمي&#10;1061532884&#9;أحمد علي"></textarea>
           <label class="field" style="margin-top:10px">الصف الذي ستُضاف إليه الدفعة الملصقة
             <select id="stImportClass"><option value="">— اختر الصف —</option></select>
           </label>
@@ -649,7 +494,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
     <!-- ===== طلاب الصف ===== -->
     <div class="card seccard" id="studentsSecCard">
       <div class="secheader" onclick="toggleSec('secStudents',this)">
-        <div class="secicon" style="background:#e7eefb">👥</div>
+        <div class="secicon" style="background:var(--bg-e7eefb,#e7eefb)">👥</div>
         <div class="sectext"><div class="sectitle">أسماء الطلاب <span class="sub" id="stCount">٠ طالب</span></div><div class="secdesc">بيانات الطلاب وتسجيل الانضباط والملاحظات</div></div>
         <div class="secarrow">‹</div>
       </div>
@@ -658,7 +503,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
           <select id="stViewClass" onchange="onVClassChange(this);renderStudents()"><option value="">— اختر الصف —</option></select>
         </label>
         <div id="studentsHost"><div class="empty">اختر الصف لعرض طلابه.</div></div>
-        <div id="bulkActionsBar" style="display:none;position:sticky;bottom:56px;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px;box-shadow:0 4px 14px rgba(0,0,0,.10);z-index:19">
+        <div id="bulkActionsBar" style="display:none;position:sticky;bottom:56px;background:var(--bg-ffffff,#fff);border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px;box-shadow:0 4px 14px rgba(0,0,0,.10);z-index:19">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span id="selCount" style="font-weight:800;color:var(--teal-d);font-size:13px"></span>
             <span id="bulkNoteBtns" style="display:flex;gap:6px;flex-wrap:wrap">
@@ -668,7 +513,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
           </div>
         </div>
         <p class="hint" style="margin:10px 0 0;line-height:1.9">📌 <b>عرض سجل الطالب:</b> اضغط رقم الهوية.<br>📌 <b>تسجيل الحضور والغياب والتأخّر:</b> استخدم الأزرار الظاهرة تحت اسم الطالب مباشرة.<br>📌 <b>نقل الطالب أو حذفه:</b> من الزرّين بجانب بطاقته. <b>إرسال ملاحظة عن طالب:</b> من تبويب «تحويلات الطلاب».</p>
-        <button class="primary" style="position:sticky;bottom:8px;margin-top:12px;width:100%;background:#0b7a63;box-shadow:0 4px 14px rgba(11,122,99,.35);z-index:20" onclick="commitAttendance()">💾 حفظ</button>
+        <button class="primary" style="position:sticky;bottom:8px;margin-top:12px;width:100%;background:var(--bg-0b7a63,#0b7a63);box-shadow:0 4px 14px rgba(11,122,99,.35);z-index:20" onclick="commitAttendance()">💾 حفظ</button>
       </div>
     </div>
   </section>
@@ -698,7 +543,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
       <input id="batchInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="onBatchPicked(event)">
       <input id="imagesInput" type="file" accept="image/*" multiple style="display:none" onchange="onImagesPicked(event)">
       <input id="pdfInput" type="file" accept="application/pdf" style="display:none" onchange="onPdfPicked(event)">
-      <div id="batchPanel" style="display:none;margin-top:12px;padding:12px;background:#f4faf8;border:1px solid var(--teal-l);border-radius:12px">
+      <div id="batchPanel" style="display:none;margin-top:12px;padding:12px;background:var(--bg-f4faf8,#f4faf8);border:1px solid var(--teal-l);border-radius:12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <strong style="color:var(--teal-d)">📚 دفعة التصوير</strong>
           <span id="batchCount" style="font-weight:700;color:var(--muted)">٠ ورقة</span>
@@ -706,7 +551,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
         <div id="batchStrip" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0"></div>
         <div id="batchHint" class="hint" style="margin:0 0 10px"></div>
         <button id="btnBatchNext" class="ghost" style="width:100%;margin-bottom:8px" onclick="document.getElementById('batchInput').click()">📷 التقاط ورقة</button>
-        <button id="btnBatchGrade" class="primary" style="width:100%;background:#0b7a63;margin-bottom:8px" onclick="gradeBatch()">✅ صحّح الكل</button>
+        <button id="btnBatchGrade" class="primary" style="width:100%;background:var(--bg-0b7a63,#0b7a63);margin-bottom:8px" onclick="gradeBatch()">✅ صحّح الكل</button>
         <button class="ghost" style="width:100%;color:var(--bad);border-color:var(--bad)" onclick="cancelBatch()">✖ إلغاء الدفعة</button>
       </div>
       <div id="opencvStatus" class="status info" style="margin-top:10px">جارٍ تحميل محرّك المعالجة…</div>
@@ -717,7 +562,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
           <canvas id="liveOverlay" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
         </div>
         <div id="liveStatus" class="status info">وجّه الكاميرا نحو البطاقة كاملةً مع ظهور المربعات الأربعة.</div>
-        <button id="btnSnapCapture" style="display:none;width:100%;margin-top:8px;padding:16px;font-size:17px;font-weight:800;background:var(--ok);color:#fff;border:none;border-radius:12px;cursor:pointer" onclick="snapGrade()">📸 التقاط وتصحيح هذه الورقة</button>
+        <button id="btnSnapCapture" style="display:none;width:100%;margin-top:8px;padding:16px;font-size:17px;font-weight:800;background:var(--ok);color:var(--fg-ffffff,#fff);border:none;border-radius:12px;cursor:pointer" onclick="snapGrade()">📸 التقاط وتصحيح هذه الورقة</button>
         <div class="resultbox" style="margin-top:8px">
           <div><b id="liveCount" style="color:var(--teal-d)">٠</b><span>تم مسحها</span></div>
           <div><b id="liveLast" style="color:var(--ok)">—</b><span>آخر درجة</span></div>
@@ -753,7 +598,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
         <div><b id="rWrong" style="color:var(--bad)">0</b><span>خاطئة</span></div>
         <div><b id="rBlank" style="color:var(--blank)">0</b><span>متروكة</span></div>
       </div>
-      <div id="nameConfirmed" style="display:none;margin-top:12px;padding:11px;background:#e7f7ee;border:1px solid var(--ok);border-radius:10px">
+      <div id="nameConfirmed" style="display:none;margin-top:12px;padding:11px;background:var(--bg-e7f7ee,#e7f7ee);border:1px solid var(--ok);border-radius:10px">
         <span style="font-size:12px;color:var(--muted)">تم التعرّف على الطالب من الباركود:</span>
         <div id="nameConfirmedText" style="font-weight:800;color:var(--ok);font-size:16px;margin-top:2px">—</div>
       </div>
@@ -776,7 +621,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
       </div>
       <div class="row no-print" style="margin-top:8px">
         <button class="ghost" style="color:var(--bad);border-color:var(--bad)" onclick="clearAllResults()">🗑️ حذف النتائج</button>
-        <button class="primary" style="background:#0b7a63" onclick="saveGradesToRecord()">💾 حفظ الدرجات</button>
+        <button class="primary" style="background:var(--bg-0b7a63,#0b7a63)" onclick="saveGradesToRecord()">💾 حفظ الدرجات</button>
       </div>
       <p class="hint" style="margin-top:8px">«حفظ الدرجات» يرسل النتائج إلى سجل الأعمال ثم يفرّغ هذا السجل. «حذف النتائج» يمسح القائمة دون حفظ.</p>
     </div>
@@ -788,15 +633,15 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
       <h2><button class="collapseBtn" onclick="toggleCard('cardSetupAll',this)">+</button> إعداد السجل والملصقات <span class="sub">الترويسة وبنود السجل وملصقات التقييم</span></h2>
       <div id="cardSetupAll" style="display:none">
         <div style="border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden">
-          <h3 style="margin:0;padding:11px 12px;background:#f4f8f7;font-size:14px;cursor:pointer" onclick="toggleCard('cardWlHeader',this)"><span class="collapseBtn" style="display:inline-block">+</span> ترويسة السجل</h3>
+          <h3 style="margin:0;padding:11px 12px;background:var(--bg-f4f8f7,#f4f8f7);font-size:14px;cursor:pointer" onclick="toggleCard('cardWlHeader',this)"><span class="collapseBtn" style="display:inline-block">+</span> ترويسة السجل</h3>
           <div id="cardWlHeader" style="display:none;padding:12px"><div id="wlHeaderHost"></div></div>
         </div>
         <div style="border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden">
-          <h3 style="margin:0;padding:11px 12px;background:#f4f8f7;font-size:14px;cursor:pointer" onclick="toggleCard('cardWlSetup',this)"><span class="collapseBtn" style="display:inline-block">+</span> إعداد بنود السجل</h3>
+          <h3 style="margin:0;padding:11px 12px;background:var(--bg-f4f8f7,#f4f8f7);font-size:14px;cursor:pointer" onclick="toggleCard('cardWlSetup',this)"><span class="collapseBtn" style="display:inline-block">+</span> إعداد بنود السجل</h3>
           <div id="cardWlSetup" style="display:none;padding:12px"><div id="wlSetupHost"></div></div>
         </div>
         <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
-          <h3 style="margin:0;padding:11px 12px;background:#f4f8f7;font-size:14px;cursor:pointer" onclick="toggleCard('cardStickers',this)"><span class="collapseBtn" style="display:inline-block">+</span> إعداد ملصقات التقييم</h3>
+          <h3 style="margin:0;padding:11px 12px;background:var(--bg-f4f8f7,#f4f8f7);font-size:14px;cursor:pointer" onclick="toggleCard('cardStickers',this)"><span class="collapseBtn" style="display:inline-block">+</span> إعداد ملصقات التقييم</h3>
           <div id="cardStickers" style="display:none;padding:12px"><div id="stickerSetupHost"></div></div>
         </div>
       </div>
@@ -819,7 +664,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
       <div id="workLogHost"><div class="empty">اختر صفاً لعرض سجل أعماله.</div></div>
       <div class="row no-print" style="margin-top:10px">
         <button class="ghost" onclick="loadWorkLog(true)">🔄 تحديث السجل</button>
-        <button class="primary" style="background:#0b7a63" onclick="openExportDialog('full')">🖨️ تصدير السجل PDF</button>
+        <button class="primary" style="background:var(--bg-0b7a63,#0b7a63)" onclick="openExportDialog('full')">🖨️ تصدير السجل PDF</button>
       </div>
       <button class="ghost no-print" style="width:100%;margin-top:8px" onclick="openExportDialog('detailed')">📋 تصدير مفصّل (كل المحاولات — فترة واحدة)</button>
     </div>
@@ -833,7 +678,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 
 <!-- نافذة خيارات التصدير (اللون / الفترة) -->
 <div id="exportOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,30,28,.55);z-index:9999;overflow-y:auto;padding:16px">
-  <div style="max-width:460px;margin:50px auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  <div style="max-width:460px;margin:50px auto;background:var(--bg-ffffff,#fff);border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <h2 style="margin:0" id="exportTitle">تصدير السجل</h2>
       <button class="ghost" style="padding:6px 12px" onclick="closeExportDialog()">✕</button>
@@ -844,20 +689,20 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 
 <!-- نافذة معاينة الاستيراد (طلب رمز الصف) -->
 <div id="importReviewOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,30,28,.55);z-index:9999;overflow-y:auto;padding:16px">
-  <div style="max-width:520px;margin:30px auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  <div style="max-width:520px;margin:30px auto;background:var(--bg-ffffff,#fff);border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <h2 style="margin:0">📥 مراجعة الاستيراد</h2>
       <button class="ghost" style="padding:6px 12px" onclick="closeImportReview()">✕</button>
     </div>
     <p class="hint" style="margin:0 0 12px">اكتب رمز الصف لكل صف مكتشف، ثم أكّد. سيُنشأ الفصل ويُضاف إليه طلابه.</p>
     <div id="importReviewBody"></div>
-    <button class="primary" style="width:100%;margin-top:8px;background:#0b7a63" onclick="confirmImport()">✅ تأكيد الاستيراد وإنشاء الفصول</button>
+    <button class="primary" style="width:100%;margin-top:8px;background:var(--bg-0b7a63,#0b7a63)" onclick="confirmImport()">✅ تأكيد الاستيراد وإنشاء الفصول</button>
   </div>
 </div>
 
 <!-- نافذة سجل الطالب -->
 <div id="stRecordOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,30,28,.55);z-index:9999;overflow-y:auto;padding:16px">
-  <div style="max-width:560px;margin:24px auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  <div style="max-width:560px;margin:24px auto;background:var(--bg-ffffff,#fff);border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <h2 style="margin:0">📋 سجل الطالب</h2>
       <button class="ghost" style="padding:6px 12px" onclick="closeStudentRecord()">✕ إغلاق</button>
@@ -868,7 +713,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 
 <!-- نافذة نوع الدرجة عند حفظ الدرجات -->
 <div id="gradeTypeOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,30,28,.55);z-index:9999;overflow-y:auto;padding:16px">
-  <div style="max-width:480px;margin:40px auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  <div style="max-width:480px;margin:40px auto;background:var(--bg-ffffff,#fff);border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <h2 style="margin:0">💾 حفظ الدرجات</h2>
       <button class="ghost" style="padding:6px 12px" onclick="closeGradeType()">✕ إغلاق</button>
@@ -1930,7 +1775,7 @@ function renderSubjectSelect(){
   /* [ADMIN-TOOLS:BEGIN] */
   const bn = document.getElementById('subjTtBanner');
   if(bn) bn.innerHTML = clsTtManaged()
-    ? `<div class="hint" style="background:#fff4e5;border:1px solid #f0c08a;border-radius:10px;padding:10px;margin-bottom:12px;font-size:13px;color:#8a5a00">🔒 ${escapeHtml(CLS_TT_LOCK_MSG)}</div>` : '';
+    ? `<div class="hint" style="background:var(--bg-fff4e5,#fff4e5);border:1px solid var(--bd-f0c08a,#f0c08a);border-radius:10px;padding:10px;margin-bottom:12px;font-size:13px;color:var(--fg-8a5a00,#8a5a00)">🔒 ${escapeHtml(CLS_TT_LOCK_MSG)}</div>` : '';
   /* [ADMIN-TOOLS:END] */
 }
 async function addCustomSubject(){
@@ -2134,7 +1979,7 @@ function renderClasses(){
     const trackOpts = clsTrackOptsFor(c.stage, c.name);
     const trackCell = !trackOpts.length ? '—'
       : ((CLS_CAN_ADD_MANAGE || ciCanEdit())
-          ? `<select style="padding:4px 6px;font-size:12px" onchange="clsSetTrack('${escapeHtml(c.code)}', this.value)">${trackOpts.map(t=>`<option value="${t.name}" ${clsTrackOf(c)===t.name?'selected':''}>${t.name}</option>`).join('')}</select>${c.track?'':'<div style="font-size:10.5px;color:var(--warn,#b7791f)">افتراضي — لم يُحفظ</div>'}`
+          ? `<select style="padding:4px 6px;font-size:12px" onchange="clsSetTrack('${escapeHtml(c.code)}', this.value)">${trackOpts.map(t=>`<option value="${t.name}" ${clsTrackOf(c)===t.name?'selected':''}>${t.name}</option>`).join('')}</select>${c.track?'':'<div style="font-size:10.5px;color:var(--warn,var(--fg-b7791f,#b7791f))">افتراضي — لم يُحفظ</div>'}`
           : escapeHtml(clsTrackOf(c)));
     /* [ADMIN-TOOLS:END] */
     /* [ADMIN-TOOLS:MOD] ORIG: html+=`<tr><td style="text-align:right;font-weight:600">${escapeHtml(c.name)}</td><td style="font-weight:700">${escapeHtml(c.code)}</td><td>${loginCell}</td><td>${toArabic(cnt)}</td><td><button class="ghost" style="padding:6px 8px;color:var(--bad)" onclick="delClass('${escapeHtml(c.code)}')">حذف</button></td></tr>`; */
@@ -2397,7 +2242,7 @@ function openImportReview(){
   let html = '';
   const note = pendingImport.groups.some(g=>g.ocrNote);
   if(note){
-    html += `<div style="background:#fff4e5;border:1px solid #f0c08a;border-radius:10px;padding:10px;margin-bottom:12px;font-size:13px;color:#8a5a00">
+    html += `<div style="background:var(--bg-fff4e5,#fff4e5);border:1px solid var(--bd-f0c08a,#f0c08a);border-radius:10px;padding:10px;margin-bottom:12px;font-size:13px;color:var(--fg-8a5a00,#8a5a00)">
       ℹ️ الهويات قُرئت بدقّة، لكن تعذّرت قراءة بعض الأسماء ضوئياً. يمكنك الاستيراد الآن بالهويات (يعمل التصحيح بالباركود فوراً) وتعديل الأسماء وقت ما تشاء.
       <button class="ghost" style="margin-top:8px;width:100%;font-size:12px" onclick="showOcrDiag()">🔍 عرض ما قرأته القراءة الضوئية (لتشخيص المشكلة)</button>
     </div>`;
@@ -2416,14 +2261,14 @@ function openImportReview(){
       <label class="field" style="margin-bottom:6px">رمز الصف لهذا الصف ${g.code?'<span style="color:var(--ok);font-weight:700">(اقتُرح تلقائياً)</span>':''}
         <input id="impCode${gi}" inputmode="numeric" value="${escapeHtml(g.code||'')}" placeholder="مثال: 108" oninput="setImportCode(${gi},this.value)">
       </label>
-      <div class="hint" style="background:#eef6f4;padding:8px;border-radius:8px;line-height:1.9">صيغة الرمز: <b>الأول ثانوي = ١٠٠</b> · <b>الثاني = ٢٠٠</b> · <b>الثالث = ٣٠٠</b> + رقم الفصل.<br>مثال: «الأول الثانوي ٨» ← الرمز <b>١٠٨</b>. (يُستخدم لتعريف الفصل وتجميع طلابه.)</div>
+      <div class="hint" style="background:var(--bg-eef6f4,#eef6f4);padding:8px;border-radius:8px;line-height:1.9">صيغة الرمز: <b>الأول ثانوي = ١٠٠</b> · <b>الثاني = ٢٠٠</b> · <b>الثالث = ٣٠٠</b> + رقم الفصل.<br>مثال: «الأول الثانوي ٨» ← الرمز <b>١٠٨</b>. (يُستخدم لتعريف الفصل وتجميع طلابه.)</div>
       <details style="margin-top:8px" open><summary style="cursor:pointer;color:var(--teal-d);font-size:13px">مراجعة الأسماء والهويات (${toArabic(g.students.length)}) — يمكنك تعديل أي اسم</summary>
         <div style="max-height:240px;overflow-y:auto;margin-top:6px;font-size:12px">
-        ${g.students.map((s,i)=>`<div style="display:flex;gap:6px;align-items:center;padding:3px 0;border-bottom:1px solid #eef2f1">
+        ${g.students.map((s,i)=>`<div style="display:flex;gap:6px;align-items:center;padding:3px 0;border-bottom:1px solid var(--bd-eef2f1,#eef2f1)">
           <span style="color:var(--muted);min-width:22px">${toArabic(i+1)}</span>
-          <span style="font-weight:700;min-width:90px;direction:ltr">${s.seat?escapeHtml(s.seat):'<span style=\'color:#aaa;font-size:11px\'>تلقائي</span>'}</span>
+          <span style="font-weight:700;min-width:90px;direction:ltr">${s.seat?escapeHtml(s.seat):'<span style=\'color:var(--fg-aaaaaa,#aaa);font-size:11px\'>تلقائي</span>'}</span>
           <input value="${escapeHtml(s.name)}" oninput="setImportName(${gi},${i},this.value)" style="flex:1;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px">
-          <button onclick="removeImportStudent(${gi},${i})" title="حذف هذا الطالب من الاستيراد" style="border:1px solid var(--bad);background:#fff;color:var(--bad);border-radius:6px;padding:4px 7px;font-size:12px;cursor:pointer">🗑</button>
+          <button onclick="removeImportStudent(${gi},${i})" title="حذف هذا الطالب من الاستيراد" style="border:1px solid var(--bad);background:var(--bg-ffffff,#fff);color:var(--bad);border-radius:6px;padding:4px 7px;font-size:12px;cursor:pointer">🗑</button>
         </div>`).join('')}
         </div>
       </details>
@@ -2525,7 +2370,7 @@ function toggleCard(id, btn){
 // طيّ/فتح البطاقات الرئيسية في تبويب الطلاب (مع تدوير السهم)
 /* ---- نافذة "إضافة الفصول والمواد" المنبثقة (بنفس أسلوب نافذة سجل الطالب) ---- */
 function _modalRow(icon,label,onclick){
-  return `<button style="width:100%;display:flex;justify-content:space-between;align-items:center;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;font:inherit;font-size:14.5px;font-weight:600;cursor:pointer;" onclick="${onclick}">
+  return `<button style="width:100%;display:flex;justify-content:space-between;align-items:center;background:var(--bg-ffffff,#fff);border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;font:inherit;font-size:14.5px;font-weight:600;cursor:pointer;" onclick="${onclick}">
     <span>${icon} ${label}</span><span style="color:var(--muted)">‹</span>
   </button>`;
 }
@@ -2533,7 +2378,7 @@ function _modalRow(icon,label,onclick){
    • العرض (بلا تعديل/حذف) لكل من يملك الوصول لـ«الفصول والطلاب» — فصوله الظاهرة له.
    • صلاحية «بيانات الفصول» (تعديل): زرّا تعديل (اسم الصف ورمز دخول الطلاب) وحذف.
    • الحذف من المفوَّض يُسجَّل معلَّقًا ولا يُنفَّذ حتى يوافق مدير المدرسة؛ المدير/الأدمن/الفردي يحذفون ويوافقون مباشرة. */
-const CI_BTN = 'padding:2px 5px;margin:0 1px;font-size:12px;line-height:1.2;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;width:auto;min-width:0';
+const CI_BTN = 'padding:2px 5px;margin:0 1px;font-size:12px;line-height:1.2;border:1px solid var(--line);border-radius:6px;background:var(--bg-ffffff,#fff);cursor:pointer;width:auto;min-width:0';
 function ciIsApprover(){ return CLS_USER_ROLE==='admin' || CLS_USER_ROLE==='schoolAdmin' || CLS_USER_ROLE==='soloTeacher'; }
 function ciCanEdit(){ return ciIsApprover() || clsHasPerm('omr.classes.info','edit'); }
 async function openClassInfoModal(){
@@ -2543,14 +2388,14 @@ async function openClassInfoModal(){
     const cnt = state.students.filter(s=>String(s.classCode)===String(c.code)).length;
     const code = escapeHtml(c.code);
     const codeCell = c.loginCode
-      ? '<span id="ciCode-'+code+'" style="font-weight:800;color:var(--ok,#1a7a4f);letter-spacing:1px">…</span>'
+      ? '<span id="ciCode-'+code+'" style="font-weight:800;color:var(--ok,var(--fg-1a7a4f,#1a7a4f));letter-spacing:1px">…</span>'
       : (canGenCode
           ? '<button class="ghost" style="padding:4px 8px;font-size:12px" onclick="assignClassStage(\''+code+'\')">توليد رمز</button>'
           : '<span style="color:var(--muted);font-size:12px">—</span>');
     const pd = c.pendingDelete;
     let actions = '';
     if(pd){
-      actions = '<div style="font-size:10.5px;color:#b7791f;font-weight:700;margin-bottom:2px" title="'+escapeHtml(pd.byName||'')+'">⏳ معلَّق</div>'+
+      actions = '<div style="font-size:10.5px;color:var(--fg-b7791f,#b7791f);font-weight:700;margin-bottom:2px" title="'+escapeHtml(pd.byName||'')+'">⏳ معلَّق</div>'+
         (approver
           ? '<button style="'+CI_BTN+';color:var(--bad)" title="موافقة على الحذف" onclick="ciApproveDelete(\''+code+'\')">✔</button>'+
             '<button style="'+CI_BTN+'" title="رفض الحذف" onclick="ciRejectDelete(\''+code+'\')">✖</button>'
@@ -2559,7 +2404,7 @@ async function openClassInfoModal(){
       actions = '<button style="'+CI_BTN+'" title="تعديل" onclick="ciEditClass(\''+code+'\')">✏️</button>'+
         '<button style="'+CI_BTN+';color:var(--bad)" title="حذف" onclick="ciRequestDelete(\''+code+'\')">🗑</button>';
     }
-    return '<tr'+(pd?' style="background:#fff8e6"':'')+'>'+
+    return '<tr'+(pd?' style="background:var(--bg-fff8e6,#fff8e6)"':'')+'>'+
       '<td style="text-align:right;font-weight:600">'+escapeHtml(c.name)+'</td>'+
       '<td style="font-weight:700">'+code+'</td>'+
       '<td>'+codeCell+'</td>'+
@@ -2572,7 +2417,7 @@ async function openClassInfoModal(){
   omrModal(
     '<div style="text-align:center;font-weight:800;font-size:17px;margin-bottom:6px;">بيانات الفصول</div>'+
     '<div class="hint" style="text-align:center;margin-bottom:14px">رمز دخول الطلاب يُسلَّم لطلاب الفصل لتفعيل حساباتهم مرة واحدة.</div>'+
-    (approver && pendingN ? '<div style="background:#fff8e6;border:1px solid #f0d58c;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:13px;font-weight:700;color:#b7791f">⏳ '+toArabic(pendingN)+' طلب حذف بانتظار موافقتك</div>' : '')+
+    (approver && pendingN ? '<div style="background:var(--bg-fff8e6,#fff8e6);border:1px solid var(--bd-f0d58c,#f0d58c);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:13px;font-weight:700;color:var(--fg-b7791f,#b7791f)">⏳ '+toArabic(pendingN)+' طلب حذف بانتظار موافقتك</div>' : '')+
     (state.classes.length
       ? '<div style="overflow-x:auto"><table><thead><tr><th>الصف</th><th>الرمز</th><th>رمز دخول الطلاب</th><th>الطلاب</th>'+(showActCol?'<th></th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'
       : '<div class="empty">لا توجد فصول متاحة لك.</div>')
@@ -2818,12 +2663,12 @@ async function openMyAccountsPanel(){
     // زر "تعطيل" لا يظهر إطلاقًا لو ما عنده إلا سياق واحد (وإلا أقفل على نفسه الدخول بلا بديل)
     const activeCtxCount = schoolIds.filter(k=>u.schools[k].active!==false).length + ((u.solo && u.solo.active!==false)?1:0);
     const canDisableCtx = activeCtxCount > 1;
-    let rows = '<div style="padding:8px 0 14px;border-bottom:1px solid #eee">البريد: <b style="direction:ltr;display:inline-block">'+escapeHtml(u.email||u.googleEmail||'—')+'</b></div>';
+    let rows = '<div style="padding:8px 0 14px;border-bottom:1px solid var(--bd-eeeeee,#eee)">البريد: <b style="direction:ltr;display:inline-block">'+escapeHtml(u.email||u.googleEmail||'—')+'</b></div>';
     if(u.solo){
       const isActive = u.solo.active!==false, isCur = curKey==='solo';
-      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee">'+
-        '<div><b>حساب مستقل (فردي)</b>'+(isCur?' <span style="font-size:11px;color:var(--teal,#0f766e)">— الحالي</span>':'')+(isActive?'':'<div style="font-size:11.5px;color:#888">معطَّل</div>')+'</div>'+
-        (isCur ? '' : (isActive ? '<button data-key="solo" class="myAcctGoBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : ''))+
+      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd-eeeeee,#eee)">'+
+        '<div><b>حساب مستقل (فردي)</b>'+(isCur?' <span style="font-size:11px;color:var(--teal,var(--fg-0f766e,#0f766e))">— الحالي</span>':'')+(isActive?'':'<div style="font-size:11.5px;color:var(--fg-888888,#888)">معطَّل</div>')+'</div>'+
+        (isCur ? '' : (isActive ? '<button data-key="solo" class="myAcctGoBtn" style="border:1px solid var(--teal,var(--bd-0f766e,#0f766e));background:var(--bg-ffffff,#fff);color:var(--teal,var(--fg-0f766e,#0f766e));border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : ''))+
         '</div>';
     }
     if(!schoolIds.length && !u.solo && !(u.blockedSchools||[]).length){ host.innerHTML = rows + '<div class="empty">لا يوجد لديك سياقات مدارس أخرى حاليًا.</div>'; return; }
@@ -2832,20 +2677,20 @@ async function openMyAccountsPanel(){
       let name = sid;
       try{ const sSnap = await db.collection('schoolData').doc(sid).get(); if(sSnap.exists && sSnap.data().name) name = sSnap.data().name; }catch(e){}
       const isActive = ctx.active!==false, isCur = curKey===('school:'+sid);
-      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee">'+
-        '<div><b>'+escapeHtml(name)+'</b>'+(isCur?' <span style="font-size:11px;color:var(--teal,#0f766e)">— الحالي</span>':'')+'<div style="font-size:11.5px;color:#888">'+escapeHtml(ctx.role||'')+(isActive?'':' — معطَّل')+'</div></div>'+
+      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd-eeeeee,#eee)">'+
+        '<div><b>'+escapeHtml(name)+'</b>'+(isCur?' <span style="font-size:11px;color:var(--teal,var(--fg-0f766e,#0f766e))">— الحالي</span>':'')+'<div style="font-size:11.5px;color:var(--fg-888888,#888)">'+escapeHtml(ctx.role||'')+(isActive?'':' — معطَّل')+'</div></div>'+
         '<div style="display:flex;gap:6px">'+
-        (!isCur && isActive ? '<button data-key="school:'+sid+'" class="myAcctGoBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : '')+
-        ((isActive && canDisableCtx) ? '<button data-sid="'+sid+'" class="myAcctDisableBtn" style="border:1px solid var(--bad,#c0392b);background:#fff;color:var(--bad,#c0392b);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">تعطيل</button>'
-          : (isActive ? '' : '<span style="font-size:11px;color:#aaa">تفعيله بيد مدير المدرسة فقط</span>')) +
+        (!isCur && isActive ? '<button data-key="school:'+sid+'" class="myAcctGoBtn" style="border:1px solid var(--teal,var(--bd-0f766e,#0f766e));background:var(--bg-ffffff,#fff);color:var(--teal,var(--fg-0f766e,#0f766e));border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">الانتقال إليها</button>' : '')+
+        ((isActive && canDisableCtx) ? '<button data-sid="'+sid+'" class="myAcctDisableBtn" style="border:1px solid var(--bad,var(--bd-c0392b,#c0392b));background:var(--bg-ffffff,#fff);color:var(--bad,var(--fg-c0392b,#c0392b));border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">تعطيل</button>'
+          : (isActive ? '' : '<span style="font-size:11px;color:var(--fg-aaaaaa,#aaa)">تفعيله بيد مدير المدرسة فقط</span>')) +
         '</div></div>';
     }
     for(const sid of (u.blockedSchools||[])){
       let name = sid;
       try{ const sSnap = await db.collection('schoolData').doc(sid).get(); if(sSnap.exists && sSnap.data().name) name = sSnap.data().name; }catch(e){}
-      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee">'+
-        '<div><b>'+escapeHtml(name)+'</b><div style="font-size:11.5px;color:var(--bad,#c0392b)">محظورة</div></div>'+
-        '<button data-sid="'+sid+'" class="myAcctUnblockBtn" style="border:1px solid var(--teal,#0f766e);background:#fff;color:var(--teal,#0f766e);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">رفع الحظر</button>'+
+      rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd-eeeeee,#eee)">'+
+        '<div><b>'+escapeHtml(name)+'</b><div style="font-size:11.5px;color:var(--bad,var(--fg-c0392b,#c0392b))">محظورة</div></div>'+
+        '<button data-sid="'+sid+'" class="myAcctUnblockBtn" style="border:1px solid var(--teal,var(--bd-0f766e,#0f766e));background:var(--bg-ffffff,#fff);color:var(--teal,var(--fg-0f766e,#0f766e));border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">رفع الحظر</button>'+
         '</div>';
     }
     host.innerHTML = rows;
@@ -2897,12 +2742,12 @@ function showOtherPendingChooser(list){
   omrModal('<h3>توجد مدرسة بها حسابك غير مفعَّل</h3>'+
     '<div style="padding:8px 0">'+
     '<p><b>'+escapeHtml(next.schoolId)+'</b> — الدور: '+escapeHtml(next.role||'')+'</p>'+
-    '<div class="field"><label>رقم الهوية</label><input id="opcSeat" value="'+escapeHtml(next.loginId||'')+'" style="width:100%;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;margin:4px 0 10px"></div>'+
-    '<div class="field"><label>كلمة المرور الأولية لهذه المدرسة</label><input id="opcTemp" type="password" style="width:100%;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;margin:4px 0 10px"></div>'+
+    '<div class="field"><label>رقم الهوية</label><input id="opcSeat" value="'+escapeHtml(next.loginId||'')+'" style="width:100%;padding:8px;border:1px solid var(--line,var(--bd-dddddd,#ddd));border-radius:8px;margin:4px 0 10px"></div>'+
+    '<div class="field"><label>كلمة المرور الأولية لهذه المدرسة</label><input id="opcTemp" type="password" style="width:100%;padding:8px;border:1px solid var(--line,var(--bd-dddddd,#ddd));border-radius:8px;margin:4px 0 10px"></div>'+
     '<div id="opcAlert"></div>'+
-    '<button id="opcActivateBtn" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--teal,#0f766e);color:#fff;margin-bottom:8px;cursor:pointer">تفعيل هذه المدرسة أيضًا</button>'+
-    '<button id="opcSkipBtn" style="width:100%;padding:10px;border:1px solid var(--line,#ddd);border-radius:8px;background:#fff;margin-bottom:8px;cursor:pointer">تخطّي</button>'+
-    (showBlock ? '<button id="opcBlockBtn" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--bad,#c0392b);color:#fff;cursor:pointer">حظر هذه المدرسة نهائيًا</button>' : '')+
+    '<button id="opcActivateBtn" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--teal,var(--bg-0f766e,#0f766e));color:var(--fg-ffffff,#fff);margin-bottom:8px;cursor:pointer">تفعيل هذه المدرسة أيضًا</button>'+
+    '<button id="opcSkipBtn" style="width:100%;padding:10px;border:1px solid var(--line,var(--bd-dddddd,#ddd));border-radius:8px;background:var(--bg-ffffff,#fff);margin-bottom:8px;cursor:pointer">تخطّي</button>'+
+    (showBlock ? '<button id="opcBlockBtn" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--bad,var(--bg-c0392b,#c0392b));color:var(--fg-ffffff,#fff);cursor:pointer">حظر هذه المدرسة نهائيًا</button>' : '')+
     '</div>');
   document.getElementById('opcActivateBtn').onclick = async function(){
     const temp = document.getElementById('opcTemp').value;
@@ -2942,7 +2787,7 @@ function omrModal(html){
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
   ov.onclick=(e)=>{ if(e.target===ov) closeOmrModal(); };
   const box=document.createElement('div');
-  box.style.cssText='background:#fff;width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.22)';
+  box.style.cssText='background:var(--bg-ffffff,#fff);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.22)';
   box.innerHTML=html; ov.appendChild(box); document.body.appendChild(ov);
 }
 function closeOmrModal(){ const o=document.getElementById('omrModalOv'); if(o) o.remove(); }
@@ -2970,7 +2815,7 @@ async function bulkNote(kind){
   if(!studs.length) return;
   if(!CLS_SESSION || !CLS_SESSION.schoolId){ alert('لا يمكن إرسال الملاحظات: حسابك غير مرتبط بمدرسة.'); return; }
   const roles = kind==='مرشد'?['counselor'] : kind==='وكيل'?['agent'] : ['counselor','agent'];
-  omrModal('<div style="text-align:center;color:#888;padding:26px">جارٍ التحميل…</div>');
+  omrModal('<div style="text-align:center;color:var(--fg-888888,#888);padding:26px">جارٍ التحميل…</div>');
   let cands=[];
   try{
     const snap=await db.collection('users').get();
@@ -2987,23 +2832,23 @@ async function bulkNote(kind){
   const counts={};
   await Promise.all(studs.map(async s=>{ counts[s.seat]=await omrStudentNoteCount(s.seat); }));
   const roleLabel = kind==='مرشد'?'المرشد الطلابي':kind==='وكيل'?'الوكيل':'المرشد / الوكيل';
-  const studList = studs.map(s=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid #eee;font-size:13px"><span>'+escapeHtml(s.name)+'</span><span style="color:#999;white-space:nowrap">📨 سبق '+toArabic(counts[s.seat]||0)+'</span></div>').join('');
+  const studList = studs.map(s=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--bd-eeeeee,#eee);font-size:13px"><span>'+escapeHtml(s.name)+'</span><span style="color:var(--fg-999999,#999);white-space:nowrap">📨 سبق '+toArabic(counts[s.seat]||0)+'</span></div>').join('');
   const recOptions = recips.map(u=>'<option value="'+escapeHtml(u.id)+'">'+escapeHtml(u.username)+' ('+(u.role==='counselor'?'موجه طلابي':'وكيل')+')</option>').join('');
   const noRec = !recips.length;
   omrModal(
-    '<div style="width:42px;height:4px;border-radius:9px;background:#ddd;margin:0 auto 14px"></div>'+
+    '<div style="width:42px;height:4px;border-radius:9px;background:var(--bg-dddddd,#ddd);margin:0 auto 14px"></div>'+
     '<h3 style="margin:0 0 4px">إرسال ملاحظة إلى '+roleLabel+'</h3>'+
-    '<div style="color:#888;font-size:13px;margin-bottom:10px">عن '+toArabic(studs.length)+' طالب — العدد بجانب كل طالب هو ما سبق إرساله عنه</div>'+
-    '<div style="background:#f6f8f8;border:1px solid #e5eaea;border-radius:10px;padding:6px 10px;margin-bottom:12px">'+studList+'</div>'+
+    '<div style="color:var(--fg-888888,#888);font-size:13px;margin-bottom:10px">عن '+toArabic(studs.length)+' طالب — العدد بجانب كل طالب هو ما سبق إرساله عنه</div>'+
+    '<div style="background:var(--bg-f6f8f8,#f6f8f8);border:1px solid var(--bd-e5eaea,#e5eaea);border-radius:10px;padding:6px 10px;margin-bottom:12px">'+studList+'</div>'+
     (noRec
-      ? '<div style="background:#fdecec;color:#c0392b;border-radius:10px;padding:12px;font-size:13.5px">لا يوجد '+roleLabel+' مُسنَد لهذا الفصل. يرجى إبلاغ الإدارة لإسناد مستخدم.</div>'
+      ? '<div style="background:var(--bg-fdecec,#fdecec);color:var(--fg-c0392b,#c0392b);border-radius:10px;padding:12px;font-size:13.5px">لا يوجد '+roleLabel+' مُسنَد لهذا الفصل. يرجى إبلاغ الإدارة لإسناد مستخدم.</div>'
       : '<label style="font-weight:700;font-size:14px;display:block;margin-bottom:6px">المستلِم</label>'+
-        '<select id="omrNoteRecip" style="width:100%;padding:11px;border:1px solid var(--line,#d7dede);border-radius:10px;font:inherit;text-align:right;margin-bottom:12px;background:#fff">'+recOptions+'</select>'+
+        '<select id="omrNoteRecip" style="width:100%;padding:11px;border:1px solid var(--line,var(--bd-d7dede,#d7dede));border-radius:10px;font:inherit;text-align:right;margin-bottom:12px;background:var(--bg-ffffff,#fff)">'+recOptions+'</select>'+
         '<label style="font-weight:700;font-size:14px;display:block;margin-bottom:6px">نص الملاحظة</label>'+
-        '<textarea id="omrNoteText" rows="4" style="width:100%;padding:11px;border:1px solid var(--line,#d7dede);border-radius:10px;font:inherit;text-align:right" placeholder="اكتب الملاحظة…"></textarea>')+
+        '<textarea id="omrNoteText" rows="4" style="width:100%;padding:11px;border:1px solid var(--line,var(--bd-d7dede,#d7dede));border-radius:10px;font:inherit;text-align:right" placeholder="اكتب الملاحظة…"></textarea>')+
     '<div style="display:flex;gap:8px;margin-top:14px">'+
       '<button class="ghost" style="flex:1;padding:11px" onclick="closeOmrModal()">إلغاء</button>'+
-      (noRec?'':'<button style="flex:2;padding:11px;background:var(--teal,#0f766e);color:#fff;border:none;border-radius:10px;font:inherit;font-weight:700" onclick="sendOmrNotes()">📨 إرسال</button>')+
+      (noRec?'':'<button style="flex:2;padding:11px;background:var(--teal,var(--bg-0f766e,#0f766e));color:var(--fg-ffffff,#fff);border:none;border-radius:10px;font:inherit;font-weight:700" onclick="sendOmrNotes()">📨 إرسال</button>')+
     '</div>'
   );
   _omrNoteCtx={ studs };
@@ -3055,7 +2900,7 @@ function attSummaryBar(list){
     { key:'late',    icon:'⏰', bg:'#f5a623' },
     { key:'runaway', icon:'🏃', bg:'#2c2c2c' }
   ];
-  return '<div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:8px;padding:10px 4px;margin-bottom:10px;background:#fff;border-radius:14px;border:1px solid var(--line)">' +
+  return '<div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:8px;padding:10px 4px;margin-bottom:10px;background:var(--bg-ffffff,#fff);border-radius:14px;border:1px solid var(--line)">' +
     items.map(it=>`
       <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
         <div style="width:38px;height:38px;border-radius:50%;background:${it.bg};display:flex;align-items:center;justify-content:center;font-size:16px;">${it.icon}</div>
@@ -3090,15 +2935,15 @@ function renderStudents(){
     const curStatus = att ? att.status : 'present';
     const cardBg = (att && attBg[att.status]) ? `background:${attBg[att.status]}` : '';
     const noteOpen = state.attMenuSeat===s.seat;
-    const statChip = att ? ` · <span class="stat" style="background:#fff;color:${statCol[att.status]||'#555'};border:1px solid ${statCol[att.status]||'#555'}">${attLbl[att.status]}</span>` : '';
+    const statChip = att ? ` · <span class="stat" style="background:var(--bg-ffffff,#fff);color:${statCol[att.status]||'#555'};border:1px solid ${statCol[att.status]||'#555'}">${attLbl[att.status]}</span>` : '';
     let noteDate = '';
     if(att && att.note && att.noteAt){
       try{ noteDate = ' <span style="color:var(--muted);font-size:11px">· '+new Date(att.noteAt).toLocaleDateString('ar',{day:'numeric',month:'long'})+'</span>'; }catch(e){}
     }
-    const noteLine = (att && att.note) ? `<div class="sub" style="color:#555">📝 ${escapeHtml(att.note)}${noteDate}</div>` : '';
+    const noteLine = (att && att.note) ? `<div class="sub" style="color:var(--fg-555555,#555)">📝 ${escapeHtml(att.note)}${noteDate}</div>` : '';
     // استئذان مسجَّل اليوم من الصفحة الرئيسية (خرج مبكرًا) — تنبيه للمعلم حتى لا يغيّبه بالخطأ في الحصص اللاحقة
     const lv = CLS_LEAVES_TODAY[String(s.seat)];
-    const leaveChip = lv ? ` · <span class="stat" style="background:#f3ecfd;color:#6d3fc0;border:1px solid #6d3fc0" title="خرج مع ${escapeHtml(lv.receiverName||'')}">مستأذن ${escapeHtml(lv.time||'')}</span>` : '';
+    const leaveChip = lv ? ` · <span class="stat" style="background:var(--bg-f3ecfd,#f3ecfd);color:var(--fg-6d3fc0,#6d3fc0);border:1px solid var(--bd-6d3fc0,#6d3fc0)" title="خرج مع ${escapeHtml(lv.receiverName||'')}">مستأذن ${escapeHtml(lv.time||'')}</span>` : '';
 
     const attRow = `<div class="attbtns" style="margin-top:8px;">` +
       attStatuses.map(st=>{
@@ -3119,15 +2964,15 @@ function renderStudents(){
         <div style="flex:1;min-width:0;text-align:right">
           <label style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;margin-left:6px;cursor:pointer">
             <input type="checkbox" ${state.selectedStudents[s.seat]?'checked':''} onchange="toggleSelStudent('${escapeHtml(s.seat)}',this.checked)" style="width:17px;height:17px;accent-color:var(--teal-d,#0b5a54);cursor:pointer">
-          </label><span class="nm" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${toArabic(i+1)}. ${escapeHtml(s.name)}</span>${CLS_ACTIVATED_SEATS[String(s.seat)]?' <span class="stat" style="background:#e6f6ee;color:#1a7a4f;border:1px solid #1a7a4f">مفعّل</span>':''}
+          </label><span class="nm" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${toArabic(i+1)}. ${escapeHtml(s.name)}</span>${CLS_ACTIVATED_SEATS[String(s.seat)]?' <span class="stat" style="background:var(--bg-e6f6ee,#e6f6ee);color:var(--fg-1a7a4f,#1a7a4f);border:1px solid var(--bd-1a7a4f,#1a7a4f)">مفعّل</span>':''}
           <div class="sub" style="overflow-wrap:anywhere;margin-top:3px"><span class="idlink" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${escapeHtml(s.seat)}</span> · ${escapeHtml(classNameByCode(s.classCode)||s.classCode||'—')}${statChip}${leaveChip}</div>
           ${noteLine}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;flex:0 0 auto">
-          <button onclick="openAttMenu('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--line);background:#fff;color:#555;border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">📝 ملاحظة</button>
+          <button onclick="openAttMenu('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--line);background:var(--bg-ffffff,#fff);color:var(--fg-555555,#555);border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">📝 ملاحظة</button>
           ${canManageStudents()?`
-          <button onclick="moveStudentOmr('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--teal-d,#0b5a54);background:#fff;color:var(--teal-d,#0b5a54);border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">↔️ نقل</button>
-          <button onclick="delStudent('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--bad);background:#fff;color:var(--bad);border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">🗑 حذف</button>`:''}
+          <button onclick="moveStudentOmr('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--teal-d,var(--bd-0b5a54,#0b5a54));background:var(--bg-ffffff,#fff);color:var(--teal-d,var(--fg-0b5a54,#0b5a54));border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">↔️ نقل</button>
+          <button onclick="delStudent('${escapeHtml(s.seat)}')" style="width:auto;padding:6px 10px;border:1px solid var(--bad);background:var(--bg-ffffff,#fff);color:var(--bad);border-radius:9px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">🗑 حذف</button>`:''}
         </div>
       </div>
       ${attRow}
@@ -3410,29 +3255,29 @@ function renderWorkLog(){
   cfg.periods.forEach(p=>{
     const vis = p.items.filter(it=>!it.hidden);
     const span = 1 + vis.length + (p.groups?p.groups.length:0) + 1; // غياب + بنود + مجمّعات + مجموع
-    head1 += `<th colspan="${span}" style="background:#0b7a63">${escapeHtml(p.name)}</th>`;
+    head1 += `<th colspan="${span}" style="background:var(--bg-0b7a63,#0b7a63)">${escapeHtml(p.name)}</th>`;
     head2 += `<th style="font-size:10px">أيام الغياب</th>`;
     vis.forEach(it=>{ head2 += `<th style="font-size:10px">${escapeHtml(it.name)}<br><span style="color:var(--muted)">(${toArabic(it.max)})</span></th>`; });
-    (p.groups||[]).forEach(g=>{ head2 += `<th style="font-size:10px;background:#efe3e8">${escapeHtml(g.name)}<br><span style="color:var(--muted)">(${toArabic(groupMax(p,g))})</span></th>`; });
-    head2 += `<th style="font-size:10px;background:#0b7a63">مجموع الفترة<br><span style="opacity:.85">(${toArabic(periodTotal(p))})</span></th>`;
+    (p.groups||[]).forEach(g=>{ head2 += `<th style="font-size:10px;background:var(--bg-efe3e8,#efe3e8)">${escapeHtml(g.name)}<br><span style="color:var(--muted)">(${toArabic(groupMax(p,g))})</span></th>`; });
+    head2 += `<th style="font-size:10px;background:var(--bg-0b7a63,#0b7a63)">مجموع الفترة<br><span style="opacity:.85">(${toArabic(periodTotal(p))})</span></th>`;
   });
   let html='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="min-width:900px"><thead><tr>'+head1+'</tr><tr>'+head2+'</tr></thead><tbody>';
   studs.forEach((s,idx)=>{
     const e = log[s.seat] || { events:[], scores:{} };
     let cells = `
-      <td style="color:#888">${toArabic(idx+1)}</td>
-      <td style="text-align:right"><span style="cursor:pointer;color:#1f5fb0;font-weight:600;text-decoration:underline" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${escapeHtml(s.name)}</span></td>`;
+      <td style="color:var(--fg-888888,#888)">${toArabic(idx+1)}</td>
+      <td style="text-align:right"><span style="cursor:pointer;color:var(--fg-1f5fb0,#1f5fb0);font-weight:600;text-decoration:underline" onclick="openStudentRecord('${escapeHtml(s.seat)}')">${escapeHtml(s.name)}</span></td>`;
     cfg.periods.forEach(p=>{
       const absD = absenceDays(e);
       cells += `<td style="color:${absD?'var(--bad)':'inherit'};font-weight:700">${toArabic(absD)}</td>`;
       p.items.filter(it=>!it.hidden).forEach(it=>{
         const v = itemValue(e, it);
-        const disp = v!=null ? `<span style="font-weight:700">${toArabic(v)}</span>` : '<span style="color:#bbb">—</span>';
+        const disp = v!=null ? `<span style="font-weight:700">${toArabic(v)}</span>` : '<span style="color:var(--fg-bbbbbb,#bbb)">—</span>';
         cells += `<td style="cursor:pointer" onclick="openBandEditor('${escapeHtml(s.seat)}','${it.id}')" title="اضغط لإدخال/تعديل الدرجة">${disp}</td>`;
       });
-      (p.groups||[]).forEach(g=>{ const gv=groupValue(e,p,g); cells += `<td style="background:#f6eef1;font-weight:800;color:#7a1f3d">${gv!=null?toArabic(gv):'—'}</td>`; });
+      (p.groups||[]).forEach(g=>{ const gv=groupValue(e,p,g); cells += `<td style="background:var(--bg-f6eef1,#f6eef1);font-weight:800;color:var(--fg-7a1f3d,#7a1f3d)">${gv!=null?toArabic(gv):'—'}</td>`; });
       const ps = periodSum(e,p);
-      cells += `<td style="background:#eef6f4;font-weight:800;color:var(--teal-d)">${ps!=null?toArabic(ps):'—'}</td>`;
+      cells += `<td style="background:var(--bg-eef6f4,#eef6f4);font-weight:800;color:var(--teal-d)">${ps!=null?toArabic(ps):'—'}</td>`;
     });
     html += `<tr>${cells}</tr>`;
   });
@@ -3453,12 +3298,12 @@ function openBandEditor(seat, itemId){
   body.innerHTML = `<div style="text-align:right;font-weight:800;font-size:16px">${escapeHtml(item.name)} <span style="color:var(--muted);font-size:13px">(الوزن ${toArabic(item.max)})</span></div>
     <div style="text-align:right;font-size:12px;color:var(--muted);margin-bottom:12px">${escapeHtml(period.name)}</div>
     <div style="text-align:right;font-weight:700;font-size:13px;color:var(--ink);margin-bottom:6px">— درجة الطالب: ${escapeHtml(s.name)} —</div>
-    <div style="padding:10px;background:#f6eef1;border-radius:8px;margin-bottom:12px;font-weight:700;color:var(--teal-d)">الدرجة الحالية: ${cur!=null?toArabic(cur):'—'} من ${toArabic(item.max)}</div>
+    <div style="padding:10px;background:var(--bg-f6eef1,#f6eef1);border-radius:8px;margin-bottom:12px;font-weight:700;color:var(--teal-d)">الدرجة الحالية: ${cur!=null?toArabic(cur):'—'} من ${toArabic(item.max)}</div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
       <input id="bandScore" type="number" min="0" max="${item.max}" step="0.5" value="${cur!=null?cur:''}" placeholder="درجة من ${item.max}" style="flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit">
       <button class="primary" style="padding:9px 14px" onclick="saveBandScore('${escapeHtml(seat)}','${itemId}')">حفظ</button>
     </div>
-    ${catKey?`<div style="background:#eef6f4;border:1px solid var(--teal-l);border-radius:10px;padding:10px;margin-bottom:12px">
+    ${catKey?`<div style="background:var(--bg-eef6f4,#eef6f4);border:1px solid var(--teal-l);border-radius:10px;padding:10px;margin-bottom:12px">
       <div style="font-weight:800;color:var(--teal-d);margin-bottom:6px">⬇️ استيراد من سجل المتابعة</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px">يجلب مجموع ملصقات «${escapeHtml(item.name)}» لهذا الطالب كدرجة قابلة للتعديل.</div>
       <div style="display:flex;gap:8px">
@@ -3466,12 +3311,12 @@ function openBandEditor(seat, itemId){
         <button class="ghost" style="flex:1;padding:9px" onclick="importFromFollow('${escapeHtml(seat)}','${itemId}','${catKey}',true)">لكل الصف</button>
       </div>
     </div>`:''}
-    <div style="background:#eef6f4;border:1px solid var(--teal-l);border-radius:10px;padding:10px">
+    <div style="background:var(--bg-eef6f4,#eef6f4);border:1px solid var(--teal-l);border-radius:10px;padding:10px">
       <div style="font-weight:800;color:var(--teal-d);margin-bottom:6px">⚡ إعطاء الدرجة لجميع طلاب الصف (${toArabic(classCount)})</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px">تُسجَّل الدرجة نفسها لكل طلاب «${escapeHtml(classNameByCode(s.classCode)||s.classCode)}».</div>
       <div style="display:flex;gap:8px;align-items:center">
         <input id="bandScoreAll" type="number" min="0" max="${item.max}" step="0.5" placeholder="درجة من ${item.max} للجميع" style="flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit">
-        <button class="primary" style="padding:9px 14px;background:#0b7a63" onclick="saveBandScoreAll('${escapeHtml(seat)}','${itemId}')">للجميع</button>
+        <button class="primary" style="padding:9px 14px;background:var(--bg-0b7a63,#0b7a63)" onclick="saveBandScoreAll('${escapeHtml(seat)}','${itemId}')">للجميع</button>
       </div>
     </div>`;
   closeOmrModal();
@@ -3547,7 +3392,7 @@ function renderWlSetup(){
     html += `</tbody></table>`;
     // البنود المجمّعة (عرض فقط)
     (p.groups||[]).forEach(g=>{
-      html += `<div style="margin-top:4px;padding:6px 10px;background:#f6eef1;border-radius:8px;font-size:12px;color:#7a1f3d">🔗 ${escapeHtml(g.name)} = مجموع تلقائي (${toArabic(groupMax(p,g))})</div>`;
+      html += `<div style="margin-top:4px;padding:6px 10px;background:var(--bg-f6eef1,#f6eef1);border-radius:8px;font-size:12px;color:var(--fg-7a1f3d,#7a1f3d)">🔗 ${escapeHtml(g.name)} = مجموع تلقائي (${toArabic(groupMax(p,g))})</div>`;
     });
   });
   html += `<button class="ghost" style="margin-top:14px;width:100%" onclick="saveWlCfg()">💾 حفظ إعداد السجل</button>`;
@@ -3657,7 +3502,7 @@ function renderStickerSetup(){
     html+='<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'+
       '<input value="'+escapeHtml(st.icon||'')+'" onchange="setStickerField('+i+',\'icon\',this.value)" maxlength="4" style="width:'+W.ic+'px;text-align:center;padding:7px 2px;border:1px solid var(--line);border-radius:8px;font-size:16px">'+
       '<input value="'+escapeHtml(st.name||'')+'" onchange="setStickerField('+i+',\'name\',this.value)" style="flex:1;min-width:70px;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit">'+
-      '<select onchange="setStickerField('+i+',\'cat\',this.value)" style="width:'+W.bnd+'px;padding:7px 3px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:11px;background:#fff">'+catOpts(st.cat)+'</select>'+
+      '<select onchange="setStickerField('+i+',\'cat\',this.value)" style="width:'+W.bnd+'px;padding:7px 3px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:11px;background:var(--bg-ffffff,#fff)">'+catOpts(st.cat)+'</select>'+
       '<button onclick="toggleStickerDiscount('+i+')" title="حسم" '+(isBoost?'disabled':'')+' style="width:'+W.hs+'px;padding:8px 0;border:1px solid '+(disc?'#f0d2d0':'var(--line)')+';border-radius:8px;background:'+(isBoost?'#f2f2f2':(disc?'#fbeceb':'#fff'))+';color:'+(isBoost?'#bbb':(disc?'#c0392b':'var(--muted)'))+';cursor:'+(isBoost?'not-allowed':'pointer')+';font-size:11px;font-weight:800">'+(disc?'حسم':'—')+'</button>'+
       '<button onclick="toggleStickerEnabled('+i+')" style="width:'+W.tg+'px;padding:8px 0;border:1px solid '+(st.enabled?'#bfe6cf':'var(--line)')+';border-radius:8px;background:'+(st.enabled?'#e7f6ee':'#fff')+';color:'+(st.enabled?'#197a44':'var(--muted)')+';cursor:pointer;font-size:15px">'+(st.enabled?'✅':'⛔')+'</button>'+
     '</div>';
@@ -3735,7 +3580,7 @@ function openStickerPalette(seat){
   ensureStickers();
   const en=enabledStickers();
   const head='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'+
-    '<button onclick="closeOmrModal()" style="appearance:none;border:1px solid var(--line);background:#fff;border-radius:50%;width:34px;height:34px;font-size:15px;cursor:pointer;flex:0 0 auto">✕</button>'+
+    '<button onclick="closeOmrModal()" style="appearance:none;border:1px solid var(--line);background:var(--bg-ffffff,#fff);border-radius:50%;width:34px;height:34px;font-size:15px;cursor:pointer;flex:0 0 auto">✕</button>'+
     '<b style="flex:1;min-width:0;font-size:15px;color:var(--ink)">'+escapeHtml(flStuName(seat))+'</b></div>';
   if(!en.length){ omrModal(head+'<div style="text-align:center;padding:6px 0 14px"><div style="font-size:30px">🏷️</div><p class="hint">لا ملصقات مفعّلة. فعّلها من «سجل الأعمال ← إعداد ملصقات التقييم».</p></div>'); return; }
   const card=(st)=>{
@@ -3743,7 +3588,7 @@ function openStickerPalette(seat){
     const bg=neg?'#fbeceb':'#eaf6ee', bd=neg?'#f0d2d0':'#cfe8d6', sc=neg?'#c0392b':'#197a44';
     return '<button onclick="pasteSticker(\''+escapeHtml(String(seat))+'\',\''+st.id+'\')" style="display:flex;align-items:center;gap:8px;background:'+bg+';border:1px solid '+bd+';border-radius:14px;padding:10px 11px;cursor:pointer;font:inherit;text-align:right">'+
       '<span style="font-size:21px;flex:0 0 auto">'+escapeHtml(st.icon||'•')+'</span>'+
-      '<span style="flex:1;min-width:0;font-size:12px;font-weight:800;color:#333;line-height:1.2">'+escapeHtml(st.name)+'</span>'+
+      '<span style="flex:1;min-width:0;font-size:12px;font-weight:800;color:var(--fg-333333,#333);line-height:1.2">'+escapeHtml(st.name)+'</span>'+
       '<span style="width:1px;height:22px;background:'+bd+';flex:0 0 auto"></span>'+
       '<span style="font-size:13px;font-weight:800;color:'+sc+';flex:0 0 auto;min-width:30px;text-align:center">'+fmtScore(st.score)+'</span></button>';
   };
@@ -3767,7 +3612,7 @@ function openScoreWindow(seat, st){
   const isDisc  = !!st.discount;
   const w = catWeight(isBoost ? boostRefCat() : st.cat);
   const head='<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'+
-    '<button onclick="closeOmrModal()" style="appearance:none;border:1px solid var(--line);background:#fff;border-radius:50%;width:32px;height:32px;font-size:14px;cursor:pointer;flex:0 0 auto">✕</button>'+
+    '<button onclick="closeOmrModal()" style="appearance:none;border:1px solid var(--line);background:var(--bg-ffffff,#fff);border-radius:50%;width:32px;height:32px;font-size:14px;cursor:pointer;flex:0 0 auto">✕</button>'+
     '<b style="flex:1;min-width:0;font-size:14px;color:var(--ink)">'+escapeHtml(st.icon||'')+' '+escapeHtml(st.name)+'</b></div>';
   let opts, title, disc=false;
   if(isDisc){
@@ -3786,7 +3631,7 @@ function openScoreWindow(seat, st){
   opts=earnOptions(w);
   const bandNm = isBoost ? 'التحفيز الإيجابي' : stickerCatName(st.cat);
   title='الدرجة المستحقة من '+toArabic(w)+' — '+bandNm;
-  const btns=opts.map(v=>'<button onclick="commitSticker(\''+escapeHtml(String(seat))+'\',\''+st.id+'\','+v+')" style="padding:14px 0;border:1px solid #cfe8d6;border-radius:12px;background:#eaf6ee;color:#197a44;font:inherit;font-weight:800;font-size:16px;cursor:pointer">'+toArabic(v)+'</button>').join('');
+  const btns=opts.map(v=>'<button onclick="commitSticker(\''+escapeHtml(String(seat))+'\',\''+st.id+'\','+v+')" style="padding:14px 0;border:1px solid var(--bd-cfe8d6,#cfe8d6);border-radius:12px;background:var(--bg-eaf6ee,#eaf6ee);color:var(--fg-197a44,#197a44);font:inherit;font-weight:800;font-size:16px;cursor:pointer">'+toArabic(v)+'</button>').join('');
   omrModal(head+'<p class="hint" style="margin:0 0 10px">'+escapeHtml(title)+'</p><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'+btns+'</div>');
 }
 // بند مرجعي لوزن التحفيز (لا يُستخدم في معادلة البنود، فقط لتوليد خيارات نافذته من وزن مرجعي)
@@ -3835,13 +3680,13 @@ function renderRecordView(){
     const boxes=cats.map(c=>{
       const v=r.sums[c.key]||0, n=r.cnt[c.key]||0;
       const col=v>0?'var(--teal-d)':'var(--muted)';
-      return '<div style="flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;background:#fafafa">'+
+      return '<div style="flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;background:var(--bg-fafafa,#fafafa)">'+
         '<div style="font-size:10.5px;color:var(--muted);line-height:1.25;min-height:28px">'+escapeHtml(c.name)+'</div>'+
         '<div style="font-weight:800;font-size:21px;color:'+col+';margin-top:3px">'+toArabic(round1(v))+'</div>'+
         '<div style="font-size:9.5px;color:var(--muted);margin-top:1px">'+toArabic(n)+' ملصق</div></div>';
     }).join('');
     const bt=boostTotal(s.seat);
-    const boostLine = bt>0 ? '<div style="margin-top:8px;text-align:center;font-size:12px;font-weight:800;color:#b97400;background:#fff7e6;border:1px solid #f0dfae;border-radius:9px;padding:6px">🎁 تحفيز إيجابي على المجموع العام: +'+toArabic(round1(bt))+'</div>' : '';
+    const boostLine = bt>0 ? '<div style="margin-top:8px;text-align:center;font-size:12px;font-weight:800;color:var(--fg-b97400,#b97400);background:var(--bg-fff7e6,#fff7e6);border:1px solid var(--bd-f0dfae,#f0dfae);border-radius:9px;padding:6px">🎁 تحفيز إيجابي على المجموع العام: +'+toArabic(round1(bt))+'</div>' : '';
     return '<div class="flstu">'+flStuLine(s,i)+'<div style="display:flex;gap:7px;margin-top:9px">'+boxes+'</div>'+boostLine+'</div>';
   }).join('');
 }
@@ -4022,17 +3867,17 @@ function buildExportHTML(o){
   <style>
     @page{ size:A4 ${o.landscape?'landscape':'portrait'}; margin:6mm; }
     *{box-sizing:border-box}
-    body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#222;margin:0;padding:10px}
+    body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:var(--fg-222222,#222);margin:0;padding:10px}
     .sheet{width:100%;max-width:${o.landscape?'1000px':'720px'};margin:0 auto}
     .bar{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid ${pal.line};padding-bottom:8px;margin-bottom:8px}
     .right{font-size:12px;line-height:1.7;text-align:right}
     .center{text-align:center}
     .center h1{margin:4px 0 0;font-size:18px;color:${pal.plain?'#000':pal.head}}
-    .center .sub{font-size:12px;color:#666}
+    .center .sub{font-size:12px;color:var(--fg-666666,#666)}
     .left{font-size:11px;line-height:1.8;text-align:right;min-width:220px}
     .left .row{display:flex;gap:6px}
     .left .lbl{color:${pal.plain?'#000':pal.head};font-weight:700;min-width:84px}
-    .left .val{flex:1;border-bottom:1px dotted #aaa;min-height:16px}
+    .left .val{flex:1;border-bottom:1px dotted var(--bd-aaaaaa,#aaa);min-height:16px}
     table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:${o.landscape?'10px':'9px'};margin-top:6px}
     thead{display:table-header-group}
     tbody tr{page-break-inside:avoid}
@@ -4042,13 +3887,13 @@ function buildExportHTML(o){
     th.it{font-size:8.5px;font-weight:600}
     th.tot,td.tot{background:${pal.soft2};font-weight:800}
     th.grp,td.grp{background:${pal.grp};color:${pal.grpTx};font-weight:700}
-    .mx{display:inline-block;margin-top:1px;background:#fff;color:${pal.plain?'#000':pal.head};border:1px solid ${pal.line};border-radius:50%;padding:0 4px;font-size:8px}
+    .mx{display:inline-block;margin-top:1px;background:var(--bg-ffffff,#fff);color:${pal.plain?'#000':pal.head};border:1px solid ${pal.line};border-radius:50%;padding:0 4px;font-size:8px}
     td.nm{text-align:right;font-weight:600;width:${o.landscape?'15%':'22%'};font-size:9px}
-    td.num{width:4%;color:#888}
-    td[contenteditable]:focus{outline:2px solid ${pal.line};background:#fffef7}
-    .toolbar{position:sticky;top:0;background:#fff;padding:8px 0;margin-bottom:6px;display:flex;gap:8px;border-bottom:1px solid #eee;flex-wrap:wrap}
-    .toolbar button{padding:9px 16px;border:none;border-radius:8px;font:inherit;font-weight:700;cursor:pointer;background:${pal.plain?'#444':pal.head};color:#fff}
-    .toolbar .hint{font-size:12px;color:#777;align-self:center}
+    td.num{width:4%;color:var(--fg-888888,#888)}
+    td[contenteditable]:focus{outline:2px solid ${pal.line};background:var(--bg-fffef7,#fffef7)}
+    .toolbar{position:sticky;top:0;background:var(--bg-ffffff,#fff);padding:8px 0;margin-bottom:6px;display:flex;gap:8px;border-bottom:1px solid var(--bd-eeeeee,#eee);flex-wrap:wrap}
+    .toolbar button{padding:9px 16px;border:none;border-radius:8px;font:inherit;font-weight:700;cursor:pointer;background:${pal.plain?'#444':pal.head};color:var(--fg-ffffff,#fff)}
+    .toolbar .hint{font-size:12px;color:var(--fg-777777,#777);align-self:center}
     @media print{ .toolbar{display:none} body{padding:0} .sheet{max-width:none} }
   </style></head><body>
   <div class="toolbar">
@@ -4108,21 +3953,21 @@ function openStudentRecord(seat){
   const nExcused=cnt('excused'), nAbsent=cnt('absent'), nLate=cnt('late'), nRunaway=cnt('runaway');
 
   // بطاقة تعريف
-  const idCard = '<div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
+  const idCard = '<div style="display:flex;align-items:center;gap:12px;background:var(--bg-ffffff,#fff);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
     '<div style="width:64px;height:64px;border-radius:50%;background:var(--teal-l);display:flex;align-items:center;justify-content:center;font-size:30px;flex:0 0 auto">👤</div>'+
     '<div style="flex:1;min-width:0;text-align:right"><div style="font-weight:800;font-size:17px;color:var(--ink)">'+escapeHtml(s.name)+'</div>'+
     '<div style="font-size:12.5px;color:var(--muted);margin-top:3px">'+escapeHtml(classNameByCode(s.classCode)||'—')+(CLS_ACTIVE_SUBJECT?(' · '+escapeHtml(CLS_ACTIVE_SUBJECT)):'')+' · '+escapeHtml(String(seat))+'</div>'+
     // عدّادات خاصة بالمستخدم ومادته: غيابي، تحويلاتي المرسلة (مع ردودها)، ملاحظاتي
     '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:12px;font-weight:700">'+
-      '<span style="background:#fdecec;color:#b5332e;border-radius:10px;padding:3px 9px">الغياب: '+toArabic(nAbsent)+'</span>'+
-      '<span style="background:#eef6f5;color:#0b5a54;border-radius:10px;padding:3px 9px">التحويلات: <span id="srCntT">…</span></span>'+
-      '<span style="background:#eef4fb;color:#2E73CC;border-radius:10px;padding:3px 9px">الملاحظات: <span id="srCntN">…</span></span>'+
+      '<span style="background:var(--bg-fdecec,#fdecec);color:var(--fg-b5332e,#b5332e);border-radius:10px;padding:3px 9px">الغياب: '+toArabic(nAbsent)+'</span>'+
+      '<span style="background:var(--bg-eef6f5,#eef6f5);color:var(--fg-0b5a54,#0b5a54);border-radius:10px;padding:3px 9px">التحويلات: <span id="srCntT">…</span></span>'+
+      '<span style="background:var(--bg-eef4fb,#eef4fb);color:var(--fg-2e73cc,#2E73CC);border-radius:10px;padding:3px 9px">الملاحظات: <span id="srCntN">…</span></span>'+
     '</div></div></div>';
 
   // المتابعة (دوائر الملصقات)
   const fu = fuList(seat);
   const circles = fu.length ? fu.map(e=>'<div class="fucirc" title="'+escapeHtml(e.name)+' ('+fmtScore(e.earned!=null?e.earned:e.score)+')" style="cursor:default">'+escapeHtml(e.icon||'•')+'</div>').join('') : '<div class="hint" style="width:100%">لا توجد ملصقات بعد.</div>';
-  const followCard = '<div style="background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
+  const followCard = '<div style="background:var(--bg-ffffff,#fff);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
     '<div style="text-align:right;font-weight:800;color:var(--ink);margin-bottom:10px">🎯 المتابعة</div>'+
     '<div class="fucircs" style="margin-top:0">'+circles+'</div></div>';
 
@@ -4130,7 +3975,7 @@ function openStudentRecord(seat){
   const behBox=(ic,val,lbl,bg,col,st)=>'<div onclick="showBehDates(\''+escapeHtml(String(seat))+'\',\''+st+'\',\''+escapeHtml(lbl)+'\')" style="flex:1;min-width:0;background:'+bg+';border-radius:12px;padding:12px 6px;text-align:center;cursor:'+(val>0?'pointer':'default')+'">'+
     '<div style="font-size:20px">'+ic+'</div><div style="font-weight:800;font-size:19px;color:'+col+';margin-top:4px">'+toArabic(val)+'</div>'+
     '<div style="font-size:11px;color:var(--muted);margin-top:2px">'+lbl+(val>0?' ⌄':'')+'</div></div>';
-  const behCard = '<div style="background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
+  const behCard = '<div style="background:var(--bg-ffffff,#fff);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
     '<div style="text-align:right;font-weight:800;color:var(--ink);margin-bottom:10px">👤 التواجد والسلوك</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
       behBox('🙋',nExcused,'عدد الاستئذانات','#eaf1fb','#2e73cc','excused')+
@@ -4141,10 +3986,10 @@ function openStudentRecord(seat){
 
   // أعمال السنة (٤ صناديق)
   const cats=stickerCats(); // part/hw/proj (بالأسماء الحالية)
-  const workBox=(nm,val,bg)=>'<div style="flex:1;min-width:0;background:'+bg+';border:1px solid #e5eaea;border-radius:12px;padding:10px 8px;text-align:center"><div style="font-size:11px;color:var(--muted);line-height:1.3;min-height:30px">'+escapeHtml(nm)+'</div><div style="font-weight:800;font-size:20px;color:var(--teal-d);margin-top:4px">'+toArabic(round1(val))+'</div></div>';
+  const workBox=(nm,val,bg)=>'<div style="flex:1;min-width:0;background:'+bg+';border:1px solid var(--bd-e5eaea,#e5eaea);border-radius:12px;padding:10px 8px;text-align:center"><div style="font-size:11px;color:var(--muted);line-height:1.3;min-height:30px">'+escapeHtml(nm)+'</div><div style="font-weight:800;font-size:20px;color:var(--teal-d);margin-top:4px">'+toArabic(round1(val))+'</div></div>';
   const b1=cats.find(c=>c.key==='part'), b2=cats.find(c=>c.key==='hw'), b3=cats.find(c=>c.key==='proj');
   const boostNm=(stickerCatsAll().find(c=>c.key==='boost')||{}).name||'التحفيز الإيجابي';
-  const workCard = '<div style="background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
+  const workCard = '<div style="background:var(--bg-ffffff,#fff);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
     '<div style="text-align:right;font-weight:800;color:var(--ink);margin-bottom:10px">📋 أعمال السنة</div>'+
     '<div style="display:flex;gap:7px">'+
       workBox(b1?b1.name:'المشاركة', bandGrade(seat,'part'), '#eef7f0')+
@@ -4154,7 +3999,7 @@ function openStudentRecord(seat){
     '</div></div>';
 
   // الملاحظات والتحويلات
-  const notesCard = '<div style="background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
+  const notesCard = '<div style="background:var(--bg-ffffff,#fff);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px">'+
     '<div style="text-align:right;font-weight:800;color:var(--ink);margin-bottom:10px">📝 الملاحظات والتحويلات</div>'+
     '<div id="srNotesList" style="text-align:right"><div class="hint">جارِ التحميل…</div></div></div>';
 
@@ -4198,7 +4043,7 @@ async function srLoadNotes(seat){
     host.innerHTML = list.map(n=>{
       const dateStr = n.createdAt ? new Date(n.createdAt).toLocaleDateString('ar',{day:'numeric',month:'long'}) : '';
       if(n.kind==='private'){
-        return '<div style="background:#f7faf9;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px">'+
+        return '<div style="background:var(--bg-f7faf9,#f7faf9);border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px">'+
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
           '<div style="font-size:13px;color:var(--ink);flex:1">'+escapeHtml(n.text||'')+'</div>'+
           '<button onclick="srDeleteNote(\''+n.id+'\',\''+String(seat)+'\')" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:14px;flex:0 0 auto">🗑</button></div>'+
@@ -4209,7 +4054,7 @@ async function srLoadNotes(seat){
       const reasonLine = n.referralReason ? ('<div style="font-size:11.5px;color:var(--muted);margin-top:2px">سبب الإحالة: '+escapeHtml(n.referralReason)+'</div>') : '';
       const repliesHtml = hasReplies ? ('<div id="srReplies_'+n.id+'" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">'+
         n.replies.map(r=>'<div style="font-size:12.5px;color:var(--ink);margin-bottom:5px"><b>'+escapeHtml(r.fromName||'')+':</b> '+escapeHtml(r.text||'')+'</div>').join('')+'</div>') : '';
-      return '<div style="background:#eef6f5;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px'+(hasReplies?';cursor:pointer':'')+'"'+(hasReplies?' onclick="srToggleReplies(\''+n.id+'\')"':'')+'>'+
+      return '<div style="background:var(--bg-eef6f5,#eef6f5);border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px'+(hasReplies?';cursor:pointer':'')+'"'+(hasReplies?' onclick="srToggleReplies(\''+n.id+'\')"':'')+'>'+
         '<div style="font-size:13px;color:var(--ink)">'+escapeHtml(n.text||'')+'</div>'+reasonLine+
         '<div style="font-size:11px;color:var(--muted);margin-top:4px">🔀 تحويل '+dir+' · '+escapeHtml(n.fromName||'')+' · '+dateStr+(hasReplies?' · اضغط لعرض الردود':'')+'</div>'+
         repliesHtml+'</div>';
@@ -4274,7 +4119,7 @@ function openQEditor(){
     html += `<div style="margin:14px 0 6px;font-weight:700;color:var(--teal-d);border-bottom:2px solid var(--teal-l);padding-bottom:4px">${secName} (${toArabic(s.count)} أسئلة)</div>`;
     for(let k=0;k<s.count;k++){
       const q = state.qData[gi] || {};
-      html += `<div style="background:#f7faf9;border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px">
+      html += `<div style="background:var(--bg-f7faf9,#f7faf9);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px">
         <div style="font-weight:700;font-size:12px;color:var(--muted);margin-bottom:5px">سؤال ${toArabic(k+1)}</div>
         <input data-qi="${gi}" data-f="text" value="${escapeHtml(q.text||'')}" placeholder="نص السؤال" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit;margin-bottom:6px">`;
       if(s.type!=='tf'){
@@ -4353,7 +4198,7 @@ function renderExamLog(){
       c.period ? `الفترة: ${escapeHtml(c.period)}` : '',
       c.className ? `الصف: ${escapeHtml(c.className)}` : ''
     ].filter(Boolean).join(' · ');
-    return `<div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;${editing?'background:#eef6f4;border-color:var(--teal-l)':''}">
+    return `<div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;${editing?'background:var(--bg-eef6f4,#eef6f4);border-color:var(--teal-l)':''}">
       <div style="font-weight:700;font-size:14px;text-align:right">${escapeHtml(e.name)} ${editing?'<span style=\"color:var(--teal-d);font-size:11px\">• قيد التعديل</span>':''}</div>
       <div style="font-size:12px;color:var(--muted);text-align:right;margin-top:4px">${meta||'—'}</div>
       <div style="font-size:11px;color:var(--muted);text-align:right;margin-top:2px">${escapeHtml(e.savedAt||'')} · ${toArabic((c.numQ)||0)} سؤال</div>
@@ -4764,8 +4609,8 @@ function renderBatchStrip(){
   strip.innerHTML = state.batch.map((b,i)=>`
     <div style="position:relative;width:64px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line)">
       <img src="${b.url}" style="width:100%;height:100%;object-fit:cover">
-      <button onclick="removeBatchItem(${i})" style="position:absolute;top:2px;left:2px;width:20px;height:20px;border:none;border-radius:50%;background:rgba(220,38,38,.92);color:#fff;font-size:12px;line-height:1;cursor:pointer">✕</button>
-      <span style="position:absolute;bottom:0;right:0;background:rgba(15,118,110,.9);color:#fff;font-size:11px;padding:1px 5px;border-radius:6px 0 0 0">${toArabic(i+1)}</span>
+      <button onclick="removeBatchItem(${i})" style="position:absolute;top:2px;left:2px;width:20px;height:20px;border:none;border-radius:50%;background:rgba(220,38,38,.92);color:var(--fg-ffffff,#fff);font-size:12px;line-height:1;cursor:pointer">✕</button>
+      <span style="position:absolute;bottom:0;right:0;background:rgba(15,118,110,.9);color:var(--fg-ffffff,#fff);font-size:11px;padding:1px 5px;border-radius:6px 0 0 0">${toArabic(i+1)}</span>
     </div>`).join('');
   hint.textContent = state.batch.length
     ? 'التقط بقية الأوراق ثم اضغط «صحّح الكل».'
@@ -5318,7 +5163,7 @@ function paintOmrInbox(){
   else {
     const g={}; closed.forEach(n=>{ const k=n.className||'بلا فصل'; (g[k]=g[k]||[]).push(n); });
     const keys=Object.keys(g).sort((a,b)=>String(a).localeCompare(String(b),'ar',{numeric:true}));
-    body = keys.length ? keys.map(k=>'<div style="margin:12px 0 6px;padding:6px 10px;background:#eef4f3;border-radius:8px;font-weight:800;font-size:13px;color:var(--teal-d,#0b5a54)">'+escapeHtml(k)+' ('+toArabic(g[k].length)+')</div>'+
+    body = keys.length ? keys.map(k=>'<div style="margin:12px 0 6px;padding:6px 10px;background:var(--bg-eef4f3,#eef4f3);border-radius:8px;font-weight:800;font-size:13px;color:var(--teal-d,var(--fg-0b5a54,#0b5a54))">'+escapeHtml(k)+' ('+toArabic(g[k].length)+')</div>'+
       g[k].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(n=>omrNoteCard(n,n.fromUserId===me)).join('')).join('')
       : '<div class="empty">لا تحويلات مغلقة.</div>';
   }
@@ -5346,9 +5191,9 @@ function omrNoteCard(n,mineSent){
     : (lockedForMe
         ? '<div class="sub" style="margin-top:4px">🔒 أغلقها '+escapeHtml(n.closedByName||'المستلم')+' — لا يمكن إعادة فتحها</div>'
         : '<button class="ghost" style="margin-top:4px" onclick="omrToggleNoteClosed(\''+n.id+'\',false)">↺ إعادة فتح</button>'));
-  const closedBadge = isClosed ? '<div style="display:inline-block;margin-bottom:4px;padding:2px 10px;border-radius:12px;background:#eee;color:#666;font-size:12px;font-weight:700">🔒 مغلقة</div>' : '';
+  const closedBadge = isClosed ? '<div style="display:inline-block;margin-bottom:4px;padding:2px 10px;border-radius:12px;background:var(--bg-eeeeee,#eee);color:var(--fg-666666,#666);font-size:12px;font-weight:700">🔒 مغلقة</div>' : '';
   return '<div class="subcard"'+(isClosed?' style="opacity:.75"':'')+'>'+closedBadge+'<div style="font-weight:700">'+who+'</div>'+stu+
-    '<div style="margin:8px 0;padding:9px 11px;background:#fff;border-right:3px solid var(--teal,#0f766e);border-radius:8px;font-weight:600;white-space:pre-wrap">'+escapeHtml(n.text)+'</div>'+(reps||'')+
+    '<div style="margin:8px 0;padding:9px 11px;background:var(--bg-ffffff,#fff);border-right:3px solid var(--teal,var(--bd-0f766e,#0f766e));border-radius:8px;font-weight:600;white-space:pre-wrap">'+escapeHtml(n.text)+'</div>'+(reps||'')+
     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+replyBtn+closeBtn+'</div></div>';
 }
 async function omrToggleNoteClosed(id, closed){
@@ -5395,14 +5240,14 @@ function moveStudentOmr(seat){
   const opts=state.classes.filter(c=>String(c.code)!==String(st.classCode)).map(c=>'<option value="'+escapeHtml(c.code)+'">'+escapeHtml(c.name)+'</option>').join('');
   if(!opts){ alert('لا يوجد فصل آخر للنقل إليه.'); return; }
   omrModal(
-    '<div style="width:42px;height:4px;border-radius:9px;background:#ddd;margin:0 auto 14px"></div>'+
+    '<div style="width:42px;height:4px;border-radius:9px;background:var(--bg-dddddd,#ddd);margin:0 auto 14px"></div>'+
     '<h3 style="margin:0 0 4px">نقل طالب بين الفصول</h3>'+
-    '<div style="color:#888;font-size:13px;margin-bottom:12px">'+escapeHtml(st.name)+' — '+escapeHtml(st.seat||'')+'</div>'+
+    '<div style="color:var(--fg-888888,#888);font-size:13px;margin-bottom:12px">'+escapeHtml(st.name)+' — '+escapeHtml(st.seat||'')+'</div>'+
     '<label style="font-weight:700;font-size:14px;display:block;margin-bottom:6px">نقل إلى الفصل</label>'+
-    '<select id="mvClsOmr" style="width:100%;padding:11px;border:1px solid var(--line,#d7dede);border-radius:10px;font:inherit;text-align:right;background:#fff">'+opts+'</select>'+
+    '<select id="mvClsOmr" style="width:100%;padding:11px;border:1px solid var(--line,var(--bd-d7dede,#d7dede));border-radius:10px;font:inherit;text-align:right;background:var(--bg-ffffff,#fff)">'+opts+'</select>'+
     '<div style="display:flex;gap:8px;margin-top:14px">'+
       '<button class="ghost" style="flex:1;padding:11px" onclick="closeOmrModal()">إلغاء</button>'+
-      '<button style="flex:2;padding:11px;background:var(--teal,#0f766e);color:#fff;border:none;border-radius:10px;font:inherit;font-weight:700" onclick="doMoveStudentOmr(\''+escapeHtml(seat)+'\')">نقل</button>'+
+      '<button style="flex:2;padding:11px;background:var(--teal,var(--bg-0f766e,#0f766e));color:var(--fg-ffffff,#fff);border:none;border-radius:10px;font:inherit;font-weight:700" onclick="doMoveStudentOmr(\''+escapeHtml(seat)+'\')">نقل</button>'+
     '</div>'
   );
 }
@@ -5423,7 +5268,7 @@ function oliveOff(){ Object.keys(OLIVE.subs).forEach(k=>{ try{ OLIVE.subs[k](); 
 function oliveSig(arr){ return arr.map(n=>n.id+':'+(n.createdAt||0)+':'+((n.replies||[]).length)+':'+(n.closed?1:0)).sort().join('|'); }
 function oliveNotice(show){
   const el=document.getElementById('omrLiveNotice'); if(!el) return;
-  el.innerHTML = show ? '<button style="width:100%;margin-bottom:10px;padding:10px;border:none;border-radius:10px;background:var(--teal,#0f766e);color:#fff;font:inherit;font-weight:700;cursor:pointer" onclick="oliveNotice(false);renderOmrNotes()">🔄 تحديثات جديدة — اضغط للعرض</button>' : '';
+  el.innerHTML = show ? '<button style="width:100%;margin-bottom:10px;padding:10px;border:none;border-radius:10px;background:var(--teal,var(--bg-0f766e,#0f766e));color:var(--fg-ffffff,#fff);font:inherit;font-weight:700;cursor:pointer" onclick="oliveNotice(false);renderOmrNotes()">🔄 تحديثات جديدة — اضغط للعرض</button>' : '';
 }
 function oliveAttach(){
   oliveOff();
@@ -5463,7 +5308,7 @@ async function renderOmrNotes(){
       Object.entries(REFERRAL_REASONS).map(([grp,items])=>'<optgroup label="'+escapeHtml(grp)+'">'+items.map(it=>'<option value="'+escapeHtml(it)+'">'+escapeHtml(it)+'</option>').join('')+'</optgroup>').join('')+
       '<option value="أخرى">أخرى</option></select></label>'+
     '<label class="field" style="margin-top:8px">المستلِم<select id="onRecip"><option value="">— اختر الطالب أولاً —</option></select></label>'+
-    '<label class="field" style="margin-top:8px">نص الملاحظة<textarea id="onText" rows="3" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fcfdfd"></textarea></label>'+
+    '<label class="field" style="margin-top:8px">نص الملاحظة<textarea id="onText" rows="3" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--bg-fcfdfd,#fcfdfd)"></textarea></label>'+
     '<button class="primary" style="margin-top:8px" onclick="omrComposeSend()">📨 إرسال</button></div>'+
     '<div id="omrLiveNotice" style="margin-top:12px"></div><div id="omrInbox" style="margin-top:12px"><div class="empty">جارٍ تحميل الملاحظات…</div></div>';
   const cs=document.getElementById('onClass');
@@ -5552,18 +5397,36 @@ let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_ALL_PERMS =
   }
   CLS_NS = '_' + (CLS_SESSION.schoolId||'admin') + '_' + (CLS_SESSION.period||'first') + '_' + CLS_SESSION.userId;
   document.addEventListener('DOMContentLoaded', function(){
+    /* الترويسة الموحّدة (نفس ترويسة الرئيسية) — تبقى أول div في body لأن الشارات الإضافية تُلحق بها */
+    var IT = window.InjazTheme;
+    var ic = function(n, sz, sw){ return IT ? IT.icon(n, sz, sw) : ''; };
+    var IJH_ROLE = { admin:'أدمن النظام', schoolAdmin:'مدير المدرسة', agent:'وكيل', counselor:'موجه طلابي', assistant:'مساعد إداري', teacher:'معلم', soloTeacher:'معلم (حساب مستقل)' };
+    var uname = CLS_SESSION.username || '';
     var bar = document.createElement('div');
-    bar.style.cssText = 'background:var(--teal-d);color:#fff;padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px';
-    bar.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
-        '<div style="font-weight:800;font-size:14.5px;line-height:1.35;word-break:break-word">'+ escapeHtml(CLS_SESSION.username||'') +'</div>'+
-        '<div style="font-size:10.5px;opacity:.85;white-space:nowrap;text-align:left">'+ headerDateStr() +'</div>'+
+    bar.className = 'ijh';
+    bar.innerHTML =
+      '<div class="ijh-row1">'+
+        '<div class="ijh-ava" aria-hidden="true">'+ escapeHtml(IT ? IT.initials(uname) : uname.charAt(0)) +'</div>'+
+        '<div class="ijh-id"><div class="ijh-name">'+ escapeHtml(uname) +'</div><div class="ijh-date">'+ (IT ? IT.dateHTML() : headerDateStr()) +'</div></div>'+
+        '<button class="ijh-acc" id="omrAccBtn" type="button" aria-label="قائمة الحساب">'+ ic('user',22) + ic('chev',14,2.4) +'</button>'+
       '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px">'+
-        '<a href="index.html" style="background:rgba(255,255,255,.18);color:#fff;text-decoration:none;padding:5px 13px;border-radius:9px;font-weight:700;font-size:12.5px;white-space:nowrap">🏠 الرئيسية</a>'+
-        '<span style="background:rgba(255,255,255,.14);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:500;white-space:nowrap">'+(CLS_SESSION.period==='second'?'الفترة الثانية':'الفترة الأولى')+'</span>'+
-        '<span id="ctxSwitchWrap" style="margin-inline-start:auto"></span>'+
-        '<button id="myAccountsBtn" style="background:rgba(255,255,255,.18);color:#fff;border:none;padding:5px 10px;border-radius:9px;font-size:11.5px;cursor:pointer;white-space:nowrap">⚙️ حساباتي</button>'+
-        '<button id="omrLogoutBtn" title="تسجيل الخروج" style="background:rgba(255,255,255,.18);color:#fff;border:none;padding:5px 9px;border-radius:9px;font-size:13px;cursor:pointer">⏻</button>'+
+      '<div class="ijh-row2">'+
+        '<nav class="ijh-seg" aria-label="الصفحات">'+
+          '<a href="index.html">'+ ic('home',17,1.9) +'الرئيسية</a>'+
+          '<a class="on" aria-current="page" href="omr.html">'+ ic('omr',17,1.9) +'إدارة الصف</a>'+
+        '</nav>'+
+        '<span id="ctxSwitchWrap"></span>'+
+        '<span class="ijh-spacer"></span>'+
+        '<span class="ijh-period">'+(CLS_SESSION.period==='second'?'الفترة الثانية':'الفترة الأولى')+'</span>'+
+      '</div>'+
+      '<div class="ijh-menu" id="omrAccMenu" role="menu" aria-label="قائمة الحساب" hidden>'+
+        '<div class="ijh-mhead"><b>'+ escapeHtml(uname) +'</b><span>'+ escapeHtml(IJH_ROLE[CLS_SESSION.role]||'') +'</span></div>'+
+        '<div class="ijh-mlist">'+
+          '<button type="button" class="ijh-mitem" role="menuitem" id="myAccountsBtn">'+ ic('accounts',20) +'حساباتي</button>'+
+          '<a class="ijh-mitem" role="menuitem" id="omrPwLink" href="index.html?home=1&pw=1">'+ ic('key',20) +'تغيير كلمة المرور</a>'+
+        '</div>'+
+        '<div class="ijh-mmode"><div class="ijh-mlabel">المظهر</div><div id="omrModeSlot"></div></div>'+
+        '<div class="ijh-mfoot"><button type="button" class="ijh-mitem danger" role="menuitem" id="omrLogoutBtn">'+ ic('out',20,2) +'تسجيل الخروج</button></div>'+
       '</div>';
     document.body.insertBefore(bar, document.body.firstChild);
     var loBtn = document.getElementById('omrLogoutBtn');
@@ -5576,6 +5439,11 @@ let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_ALL_PERMS =
       if(CLS_SESSION.role==='admin' || CLS_SESSION.role==='schoolAdmin') maBtn.style.display='none';
       else maBtn.onclick = openMyAccountsPanel;
     }
+    if(IT){
+      var ms = document.getElementById('omrModeSlot'); if(ms) ms.appendChild(IT.modePicker());
+      IT.bindMenu(document.getElementById('omrAccBtn'), document.getElementById('omrAccMenu'));
+    }
+    if(CLS_SESSION.role==='soloTeacher'){ var pwl = document.getElementById('omrPwLink'); if(pwl) pwl.style.display='none'; }
     buildCtxSwitcher();
     if(CLS_SESSION.role==='admin' && CLS_SESSION.schoolId) updateAdminSchoolBadge();
     clsApplySoloMode();
@@ -5707,9 +5575,9 @@ async function showAdminSchoolPicker(){
   const ov=document.createElement('div');
   ov.id='adminSchoolPickOv';
   ov.style.cssText='position:fixed;inset:0;background:rgba(11,90,84,.96);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
-  ov.innerHTML='<div style="background:#fff;border-radius:16px;padding:22px 18px;max-width:420px;width:100%;max-height:80vh;overflow:auto">'+
+  ov.innerHTML='<div style="background:var(--bg-ffffff,#fff);border-radius:16px;padding:22px 18px;max-width:420px;width:100%;max-height:80vh;overflow:auto">'+
     '<h3 style="margin:0 0 6px">اختر المدرسة</h3>'+
-    '<div style="color:#888;font-size:13px;margin-bottom:14px">حسابك (مدير النظام) غير مرتبط بمدرسة محددة — اختر أي مدرسة تريد العمل عليها الآن.</div>'+
+    '<div style="color:var(--fg-888888,#888);font-size:13px;margin-bottom:14px">حسابك (مدير النظام) غير مرتبط بمدرسة محددة — اختر أي مدرسة تريد العمل عليها الآن.</div>'+
     '<div id="adminSchoolPickList">جاري التحميل…</div>'+
     '</div>';
   document.body.appendChild(ov);
@@ -5720,9 +5588,9 @@ async function showAdminSchoolPicker(){
   }catch(e){}
   const listEl = document.getElementById('adminSchoolPickList');
   const ids = Object.keys(schools);
-  if(!ids.length){ listEl.innerHTML='<div style="color:var(--bad,#c0392b)">لا توجد مدارس مسجّلة بعد.</div>'; return; }
+  if(!ids.length){ listEl.innerHTML='<div style="color:var(--bad,var(--fg-c0392b,#c0392b))">لا توجد مدارس مسجّلة بعد.</div>'; return; }
   listEl.innerHTML = ids.map(sid=>
-    '<button style="width:100%;text-align:right;display:block;padding:12px 14px;margin-bottom:8px;border:1.5px solid var(--line,#d7dede);border-radius:10px;background:#fff;font:inherit;font-weight:700;font-size:14px;cursor:pointer" data-sid="'+escapeHtml(sid)+'">'+escapeHtml(schools[sid].name||sid)+(schools[sid].code?(' <span style="color:#888;font-weight:400;font-size:12px">('+escapeHtml(schools[sid].code)+')</span>'):'')+'</button>'
+    '<button style="width:100%;text-align:right;display:block;padding:12px 14px;margin-bottom:8px;border:1.5px solid var(--line,var(--bd-d7dede,#d7dede));border-radius:10px;background:var(--bg-ffffff,#fff);font:inherit;font-weight:700;font-size:14px;cursor:pointer" data-sid="'+escapeHtml(sid)+'">'+escapeHtml(schools[sid].name||sid)+(schools[sid].code?(' <span style="color:var(--fg-888888,#888);font-weight:400;font-size:12px">('+escapeHtml(schools[sid].code)+')</span>'):'')+'</button>'
   ).join('');
   listEl.querySelectorAll('button[data-sid]').forEach(btn=>{
     btn.onclick=()=>{
@@ -5747,7 +5615,7 @@ function updateAdminSchoolBadge(){
     if(headerBar) headerBar.appendChild(badge);
   }
   badge.innerHTML = '<span style="background:rgba(255,255,255,.14);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:600">🏫 '+escapeHtml(CLS_ADMIN_SCHOOL_NAME||CLS_SESSION.schoolId||'')+'</span>'+
-    '<button onclick="switchAdminSchool()" style="background:rgba(255,255,255,.18);border:none;color:#fff;padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:700;cursor:pointer">تغيير المدرسة</button>';
+    '<button onclick="switchAdminSchool()" style="background:rgba(255,255,255,.18);border:none;color:var(--fg-ffffff,#fff);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:700;cursor:pointer">تغيير المدرسة</button>';
 }
 function switchAdminSchool(){
   try{ sessionStorage.removeItem('cls_admin_school'); sessionStorage.removeItem('cls_admin_school_name'); }catch(e){}
@@ -5804,7 +5672,7 @@ function clsApplySoloMode(){
       const b = document.createElement('button');
       b.id='soloWipeBtn';
       b.textContent='🧹 تنظيف ملفي';
-      b.style.cssText='background:rgba(255,255,255,.18);border:none;color:#fff;padding:5px 13px;border-radius:9px;font:inherit;font-weight:700;font-size:12.5px;cursor:pointer;margin-top:4px;align-self:flex-start';
+      b.style.cssText='background:rgba(255,255,255,.18);border:none;color:var(--fg-ffffff,#fff);padding:5px 13px;border-radius:9px;font:inherit;font-weight:700;font-size:12.5px;cursor:pointer;margin-top:4px;align-self:flex-start';
       b.onclick = soloWipeMyData;
       headerBar.appendChild(b);
     }
@@ -5852,7 +5720,7 @@ document.addEventListener('DOMContentLoaded', function(){
       if(!other){
         omrModal('<h3>لا يوجد رقم سجل مطابق مرتبط بحساب آخر</h3>'+
           '<div style="padding:8px 0">'+
-          '<button id="mlCloseBtn" style="width:100%;padding:10px;border:1px solid var(--line,#ddd);border-radius:8px;background:#fff;cursor:pointer">إغلاق</button>'+
+          '<button id="mlCloseBtn" style="width:100%;padding:10px;border:1px solid var(--line,var(--bd-dddddd,#ddd));border-radius:8px;background:var(--bg-ffffff,#fff);cursor:pointer">إغلاق</button>'+
           '</div>');
         document.getElementById('mlCloseBtn').onclick = closeOmrModal;
         return;
@@ -5864,10 +5732,10 @@ document.addEventListener('DOMContentLoaded', function(){
         '<div style="padding:8px 0">'+
         '<p>البريد المُقنَّع: <b>'+escapeHtml(masked)+'</b></p>'+
         '<p class="sub" style="margin:4px 0 12px">لا يمكن دمج الحسابين تلقائيًا من هنا. لإتمام الدمج، أدخل البريد الإلكتروني الكامل لهذا الحساب للتأكيد.</p>'+
-        '<div class="field"><label>البريد الإلكتروني الكامل</label><input id="mlConfirmEmail" style="width:100%;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;margin:4px 0 10px"></div>'+
+        '<div class="field"><label>البريد الإلكتروني الكامل</label><input id="mlConfirmEmail" style="width:100%;padding:8px;border:1px solid var(--line,var(--bd-dddddd,#ddd));border-radius:8px;margin:4px 0 10px"></div>'+
         '<div id="mlAlert"></div>'+
-        '<button id="mlConfirmBtn" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--teal,#0f766e);color:#fff;margin-bottom:8px;cursor:pointer">إتمام عملية الربط</button>'+
-        '<button id="mlCancelBtn" style="width:100%;padding:10px;border:1px solid var(--line,#ddd);border-radius:8px;background:#fff;cursor:pointer">إلغاء عملية الربط</button>'+
+        '<button id="mlConfirmBtn" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--teal,var(--bg-0f766e,#0f766e));color:var(--fg-ffffff,#fff);margin-bottom:8px;cursor:pointer">إتمام عملية الربط</button>'+
+        '<button id="mlCancelBtn" style="width:100%;padding:10px;border:1px solid var(--line,var(--bd-dddddd,#ddd));border-radius:8px;background:var(--bg-ffffff,#fff);cursor:pointer">إلغاء عملية الربط</button>'+
         '</div>');
       document.getElementById('mlCancelBtn').onclick = closeOmrModal;
       document.getElementById('mlConfirmBtn').onclick = async function(){
@@ -6090,23 +5958,23 @@ function gradeTypeStep(step, data){
   if(step==='root'){
     const act = (typeof wlPeriodIndex==='function') ? wlPeriodIndex() : 0;
     body.innerHTML = `<p class="hint" style="margin-top:0">اختر فترة الرصد التي تُرحَّل إليها الدرجات:</p>`
-      + cfg.periods.map((p,pi)=>btn(`📅 ${escapeHtml(p.name)}${pi===act?' ✓':''}`, `gradeTypeStep('item',{pi:${pi}})`, pi===act?'background:#0b7a63':'')).join('');
+      + cfg.periods.map((p,pi)=>btn(`📅 ${escapeHtml(p.name)}${pi===act?' ✓':''}`, `gradeTypeStep('item',{pi:${pi}})`, pi===act?'background:var(--bg-0b7a63,#0b7a63)':'')).join('');
   } else if(step==='item'){
     const p = cfg.periods[data.pi];
     body.innerHTML = `<p class="hint" style="margin-top:0">اختر البند في «${escapeHtml(p.name)}»:</p>`
       + p.items.filter(it=>!it.hidden).map(it=>btn(`${escapeHtml(it.name)} (${toArabic(it.max)})`, `prepWeigh({pi:${data.pi},id:'${it.id}'})`)).join('')
-      + btn('↩︎ رجوع', `gradeTypeStep('root')`, 'background:#6b7280');
+      + btn('↩︎ رجوع', `gradeTypeStep('root')`, 'background:var(--bg-6b7280,#6b7280)');
   } else if(step==='weigh'){
     const it = pendingGrade.item, r0 = state.results[0];
     const ratio0 = r0.total ? r0.correct/r0.total : 0;
     body.innerHTML = `
-      <div style="padding:10px;background:#eef6f4;border-radius:10px;margin-bottom:10px">
+      <div style="padding:10px;background:var(--bg-eef6f4,#eef6f4);border-radius:10px;margin-bottom:10px">
         <div style="font-weight:800;color:var(--teal-d)">${escapeHtml(it.name)} — الوزن ${toArabic(it.max)}</div>
         <div class="hint" style="margin:6px 0 0">ستُضاف هذه الدرجات كـ<b>محاولة جديدة</b> (لا تُحذف السابقة). تُحسب درجة كل طالب بالوزن النسبي = متوسّط محاولاته × ${toArabic(it.max)}.<br>
         مثال (الطالب الأول): ${r0.correct}/${r0.total} → نسبة ${toArabic(Math.round(ratio0*100))}٪. والطالب الذي تُترك خانته فارغة يُعدّ غائباً فلا تُحسب له هذه المحاولة.</div>
       </div>`
       + btn('✅ إضافة هذه المحاولة', `commitBandGrades()`)
-      + btn('↩︎ رجوع', `gradeTypeStep('root')`, 'background:#9aa');
+      + btn('↩︎ رجوع', `gradeTypeStep('root')`, 'background:var(--bg-99aaaa,#9aa)');
   }
 }
 function prepWeigh(target){
@@ -6158,13 +6026,13 @@ function printResultsPDF(){
   win.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
     <title>سجل النتائج</title>
     <style>
-      body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;padding:24px;color:#13343b}
+      body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;padding:24px;color:var(--fg-13343b,#13343b)}
       h1{font-size:20px;margin:0 0 4px}
-      .meta{color:#667;font-size:13px;margin-bottom:14px}
+      .meta{color:var(--fg-666677,#667);font-size:13px;margin-bottom:14px}
       table{width:100%;border-collapse:collapse;font-size:13px}
-      th,td{border:1px solid #cbd5d3;padding:8px 6px;text-align:center}
-      th{background:#0f766e;color:#fff}
-      tr:nth-child(even){background:#f4faf8}
+      th,td{border:1px solid var(--bd-cbd5d3,#cbd5d3);padding:8px 6px;text-align:center}
+      th{background:var(--bg-0f766e,#0f766e);color:var(--fg-ffffff,#fff)}
+      tr:nth-child(even){background:var(--bg-f4faf8,#f4faf8)}
     </style></head><body>
     <h1>سجل النتائج</h1>
     <div class="meta">${escapeHtml(state.cfg.title||'')} · ${escapeHtml(state.cfg.subject||'')} · عدد البطاقات: ${toArabic(state.results.length)} · ${new Date().toLocaleDateString('ar-SA')}</div>

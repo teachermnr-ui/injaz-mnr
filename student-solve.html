@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-26.1 -->
+<!-- إصدار: 2026-10-05.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>حل الورقة</title>
+<meta name="theme-color" content="#3f6659">
+<link rel="stylesheet" href="theme.css?v=2026-10-05.1">
+<script src="theme.js?v=2026-10-05.1"></script>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -19,25 +22,25 @@
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:'Tajawal',sans-serif;background:var(--paper);color:var(--ink);direction:rtl;}
-  .app-header{background:linear-gradient(180deg,var(--teal),var(--teal-d));color:#fff;padding:14px 18px;position:sticky;top:0;}
+  .app-header{background:linear-gradient(180deg,var(--teal),var(--teal-d));color:var(--fg-ffffff,#fff);padding:14px 18px;position:sticky;top:0;}
   .app-header h1{font-size:17px;margin:0;}
   .container{max-width:640px;margin:0 auto;padding:16px;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px;}
   .btn{border:none;border-radius:10px;padding:12px 20px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;}
-  .btn-primary{background:var(--coral);color:#fff;}
+  .btn-primary{background:var(--coral);color:var(--fg-ffffff,#fff);}
   .btn-secondary{background:var(--teal-light);color:var(--teal);}
-  input[type=text],select,textarea{width:100%;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-family:'Tajawal',sans-serif;font-size:14px;background:#fff;color:var(--ink);}
-  .ex-block { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px; }
-  .ex-num { background:var(--coral); color:#fff; width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; margin-left:8px; }
-  .opt-btn { border:1.5px solid var(--line); border-radius:9px; padding:8px 16px; font-size:14px; cursor:pointer; background:#fff; margin-left:6px; margin-bottom:6px; display:inline-block; }
+  input[type=text],select,textarea{width:100%;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-family:'Tajawal',sans-serif;font-size:14px;background:var(--bg-ffffff,#fff);color:var(--ink);}
+  .ex-block { background:var(--bg-ffffff,#fff); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px; }
+  .ex-num { background:var(--coral); color:var(--fg-ffffff,#fff); width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; margin-left:8px; }
+  .opt-btn { border:1.5px solid var(--line); border-radius:9px; padding:8px 16px; font-size:14px; cursor:pointer; background:var(--bg-ffffff,#fff); margin-left:6px; margin-bottom:6px; display:inline-block; }
   .opt-btn.selected { background:var(--teal-light); border-color:var(--teal); font-weight:700; }
-  .opt-btn.correct { background:#EAF6F1; border-color:var(--ok); }
+  .opt-btn.correct { background:var(--bg-eaf6f1,#EAF6F1); border-color:var(--ok); }
   .opt-btn.wrong { background:var(--coral-light); border-color:var(--bad); }
   .tf-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); gap:10px; }
   .tf-row:last-child { border-bottom:none; }
-  .tf-btn { width:36px; height:32px; border-radius:8px; border:1.5px solid var(--line); background:#fff; font-weight:700; cursor:pointer; }
-  .tf-btn.active-true { background:var(--ok); color:#fff; border-color:var(--ok); }
-  .tf-btn.active-false { background:var(--bad); color:#fff; border-color:var(--bad); }
+  .tf-btn { width:36px; height:32px; border-radius:8px; border:1.5px solid var(--line); background:var(--bg-ffffff,#fff); font-weight:700; cursor:pointer; }
+  .tf-btn.active-true { background:var(--ok); color:var(--fg-ffffff,#fff); border-color:var(--ok); }
+  .tf-btn.active-false { background:var(--bad); color:var(--fg-ffffff,#fff); border-color:var(--bad); }
   .item-line { margin-bottom:10px; }
   select.answer-select { width:100%; }
   .field-check { font-size:12px; margin-top:4px; }
@@ -358,12 +361,12 @@
           if (cellData.type === "header") {
             const cell = document.createElement("div");
             cell.textContent = cellData.value || "";
-            cell.style.cssText = "background:#2f5aa8;color:#fff;border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
+            cell.style.cssText = "background:var(--bg-2f5aa8,#2f5aa8);color:var(--fg-ffffff,#fff);border-radius:6px;padding:8px;font-size:12px;text-align:center;font-weight:700;";
             grid.appendChild(cell);
           } else {
             const input = document.createElement("input");
             input.type = "text";
-            input.style.cssText = "width:100%;box-sizing:border-box;border:2px solid #d43d8f;border-radius:6px;padding:8px;font-size:12px;text-align:center;";
+            input.style.cssText = "width:100%;box-sizing:border-box;border:2px solid var(--bd-d43d8f,#d43d8f);border-radius:6px;padding:8px;font-size:12px;text-align:center;";
             input.addEventListener("input", (e) => {
               studentAnswers[`${exerciseId}:${r}:${c}`] = e.target.value;
             });

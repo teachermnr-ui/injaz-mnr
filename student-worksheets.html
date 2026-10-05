@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-09-26.1 -->
+<!-- إصدار: 2026-10-05.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>أوراقي</title>
+<meta name="theme-color" content="#3f6659">
+<link rel="stylesheet" href="theme.css?v=2026-10-05.1">
+<script src="theme.js?v=2026-10-05.1"></script>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -14,20 +17,20 @@
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:'Tajawal',sans-serif;background:var(--paper);color:var(--ink);direction:rtl;}
-  header{background:linear-gradient(180deg,var(--teal),var(--teal-d));color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;}
+  header{background:linear-gradient(180deg,var(--teal),var(--teal-d));color:var(--fg-ffffff,#fff);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;}
   header h1{font-size:17px;margin:0;}
   main{max-width:640px;margin:0 auto;padding:16px;}
   .card{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px;}
-  .btn{border:none;border-radius:10px;padding:12px 20px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;background:var(--teal);color:#fff;}
-  .ws-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+  .btn{border:none;border-radius:10px;padding:12px 20px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;background:var(--teal);color:var(--fg-ffffff,#fff);}
+  .ws-card{background:var(--bg-ffffff,#fff);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
   .ws-card:active{background:var(--paper);}
-  .ws-list-row{background:#fff;border-bottom:1px solid var(--line);padding:10px 4px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+  .ws-list-row{background:var(--bg-ffffff,#fff);border-bottom:1px solid var(--line);padding:10px 4px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
   .status-pill{display:inline-block;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;}
   .status-not-started{background:var(--line);color:var(--muted);}
-  .status-in-progress{background:#fdf1d8;color:#97650b;}
+  .status-in-progress{background:var(--bg-fdf1d8,#fdf1d8);color:var(--fg-97650b,#97650b);}
   .status-submitted{background:var(--teal-l);color:var(--teal);}
-  .status-corrected{background:#e1f5ee;color:var(--ok);}
-  .status-ended{background:#fdecec;color:var(--bad);}
+  .status-corrected{background:var(--bg-e1f5ee,#e1f5ee);color:var(--ok);}
+  .status-ended{background:var(--bg-fdecec,#fdecec);color:var(--bad);}
 </style>
 </head>
 <body>
@@ -35,7 +38,7 @@
     <h1>أوراقي</h1>
     <span style="display:flex;align-items:center;gap:10px;">
       <span id="studentNameLabel" style="font-size:13px;"></span>
-      <button id="stuLogoutBtn" style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">خروج</button>
+      <button id="stuLogoutBtn" style="display:none;background:rgba(255,255,255,.18);color:var(--fg-ffffff,#fff);border:none;padding:6px 12px;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">خروج</button>
     </span>
   </header>
 
@@ -143,7 +146,7 @@
           <p style="margin:0 0 8px;font-size:12px;color:var(--muted);">أدخل رمز الفصل الذي زوّدك به المعلم لعرض أنشطته.</p>
           <input class="inv-code" placeholder="مثال: T1H1" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:9px;font:inherit;text-align:center;letter-spacing:2px;text-transform:uppercase;">
           <button class="btn inv-btn" style="margin-top:8px;">تأكيد</button>
-          <p class="inv-msg" style="margin:8px 0 0;font-size:12px;color:var(--bad,#c0392b);"></p>
+          <p class="inv-msg" style="margin:8px 0 0;font-size:12px;color:var(--bad,var(--fg-c0392b,#c0392b));"></p>
         `;
         wrap.appendChild(box);
         box.querySelector(".inv-btn").addEventListener("click", async () => {
@@ -291,7 +294,7 @@
 
         const listContainer = viewMode === "list" ? document.createElement("div") : null;
         if (listContainer) {
-          listContainer.style.cssText = "background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 12px;";
+          listContainer.style.cssText = "background:var(--bg-ffffff,#fff);border:1px solid var(--line);border-radius:12px;padding:0 12px;";
           wrap.appendChild(listContainer);
         }
         groups[key].forEach((item) => {
@@ -309,7 +312,7 @@
 
         const listContainer = viewMode === "list" ? document.createElement("div") : null;
         if (listContainer) {
-          listContainer.style.cssText = "background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 12px;";
+          listContainer.style.cssText = "background:var(--bg-ffffff,#fff);border:1px solid var(--line);border-radius:12px;padding:0 12px;";
           wrap.appendChild(listContainer);
         }
         submitted.forEach((item) => {

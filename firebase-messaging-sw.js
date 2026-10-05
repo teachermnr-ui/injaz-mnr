@@ -1,4 +1,4 @@
-// إصدار: 2026-10-05.1
+// إصدار: 2026-10-05.2
 /* عامل الخدمة لتطبيق إنجاز (PWA) والإشعارات الفورية — ص-١٢
    - يجب أن يبقى في جذر الموقع وبهذا الاسم (تطلبه مكتبة Firebase Messaging).
    - الإشعار القادم من دوال Firebase يُعرض تلقائيًا، والضغط عليه يفتح الصفحة المعنية (fcmOptions.link).
@@ -36,9 +36,9 @@ self.addEventListener('notificationclick', e=>{
 self.addEventListener('install', ()=>self.skipWaiting());
 self.addEventListener('activate', e=>e.waitUntil(self.clients.claim()));
 const OFFLINE = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>لا يوجد اتصال</title>
-<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f4f7f6;font-family:Tahoma,system-ui,sans-serif;color:#15242b;text-align:center;padding:20px}
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7f9f4;font-family:Tahoma,system-ui,sans-serif;color:#23312b;text-align:center;padding:20px}
 .c{background:#fff;border:1px solid #d8e2e0;border-radius:16px;padding:26px 22px;max-width:380px}h1{font-size:19px;margin:10px 0}p{color:#5b6f76;font-size:14.5px}
-button{font:inherit;font-weight:700;background:#0f766e;color:#fff;border:none;border-radius:10px;padding:10px 22px;margin-top:8px}</style></head>
+button{font:inherit;font-weight:700;background:#3f6659;color:#fff;border:none;border-radius:10px;padding:10px 22px;margin-top:8px}</style></head>
 <body><div class="c"><div style="font-size:40px">📡</div><h1>لا يوجد اتصال بالإنترنت</h1><p>تحقّق من الاتصال ثم أعد المحاولة.</p><button onclick="location.reload()">إعادة المحاولة</button></div></body></html>`;
 self.addEventListener('fetch', e=>{
   if(e.request.mode !== 'navigate') return;

@@ -1,4 +1,4 @@
-// إصدار: 2026-10-05.1
+// إصدار: 2026-10-05.3
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -403,11 +403,9 @@ exports.reclaimTeacherContent = onCall(async (request) => {
    - ساعات الهدوء والإجازات: schoolCalendar/{sid} — بند «الإجازات» (المدير والوكيل).
      ما يقع في ساعات الهدوء يُحفظ في pushQueue ويُرسل عند انتهائها (flushPushQueue كل ١٠ دقائق).
    - الضغط على الإشعار يفتح الصفحة المعنية (fcmOptions.link).
-   ⚠️ TRIGGER_REGION: إن رفض النشر دوال Firestore بسبب المنطقة، ضع هنا موقع قاعدة Firestore
-      (يظهر في Firebase Console ← Firestore Database)، مثل "me-central2" أو "eur3" أو "nam5".
+   ملاحظة: محفّزات Firestore (onDocumentWritten) لا تعمل في me-central2 (خلل معروف عند Google)،
+   فالتغييرات تُراقَب بدالة مجدولة كل دقيقة (pushWatcher) — الإشعار يصل خلال دقيقة تقريبًا.
    ========================================================================= */
-const { onDocumentWritten, onDocumentCreated } = require("firebase-functions/v2/firestore");
-const TRIGGER_REGION = "us-central1";
 const SITE = "https://injaz.awraqai.com/";
 const P_ORD = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة", "التاسعة", "العاشرة"];
 const P_WD = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
@@ -506,111 +504,82 @@ async function notify(db, sid, uids, msg, cal) {
   try { await sendNow(db, list, msg); } catch (e) { console.error("push", sid, e); }
 }
 
+/* =========================================================================
+   مراقب التغييرات — دالة مجدولة كل دقيقة (بدل محفّزات Firestore التي لا تعمل في me-central2)
+   ما يتغير يصل إشعاره خلال دقيقة تقريبًا. الحالة السابقة في pushState/* (للخادم فقط).
+   أول تشغيل: يسجّل الوضع الحالي بصمت ولا يرسل شيئًا عن الماضي.
+   ========================================================================= */
+const OVERLAP = 3 * 60 * 1000;   // تداخل زمني آمن لفروق ساعة الأجهزة؛ التكرار يمنعه سجل المعرّفات المُشعَرة
+
 /* (هـ) تغيّر الجدول بعد النشر · (أ) انتظار حُدِّد له عند «اعتماد وإرسال» */
-exports.pushOnTimetable = onDocumentWritten({ document: "timetables/{sid}/data/{docId}", region: TRIGGER_REGION }, async (event) => {
-  const { sid, docId } = event.params;
-  const db = admin.firestore();
-  const before = parseVal(event.data.before), after = parseVal(event.data.after);
-  if (!after) return;
-  if (/^(first|second)_published$/.test(docId)) {
-    const bu = (before && before.byUser) || {}, au = after.byUser || {};
-    const changed = [], fresh = [];
-    Object.keys(au).forEach((uid) => {
-      const sa = (au[uid] || {}).sig || "";
-      if (!bu[uid]) fresh.push(uid);
-      else if (((bu[uid] || {}).sig || "") !== sa) changed.push(uid);
-    });
-    const cal = await getCalendar(db, sid);
-    await notify(db, sid, fresh, { title: "نُشر جدولك الدراسي", body: "اضغط للاطّلاع على جدولك", link: "myschedule.html", tag: "sched" }, cal);
-    await notify(db, sid, changed, { title: "تغيّر جدولك الدراسي", body: "عُدِّل جدولك بعد النشر — اضغط للاطّلاع على التعديل", link: "myschedule.html", tag: "sched" }, cal);
-    return;
-  }
-  const m = /^(first|second)_wday_(\d{4}-\d{2}-\d{2})$/.exec(docId);
-  if (m) {
-    const date = m[2];
-    if (!after.sent || date < riyadhNow().key) return;
-    if (before && before.sent && before.sentAt === after.sentAt) return;
-    const key = (i) => [i.subUid, i.st, i.p, i.cls].join("|");
-    const old = new Set(before && before.sent ? (before.items || []).filter((i) => i.subUid).map(key) : []);
-    const byU = {};
-    (after.items || []).filter((i) => i.subUid && !old.has(key(i))).forEach((i) => { (byU[i.subUid] = byU[i.subUid] || []).push(i); });
-    const cal = await getCalendar(db, sid);
-    for (const uid of Object.keys(byU)) {
-      const items = byU[uid].sort((a, b) => a.p - b.p);
-      await notify(db, sid, [uid], {
-        title: "حصة انتظار " + relDay(date),
-        body: items.map((i) => "الحصة " + ordP(i.p) + ": " + (i.clsLabel || i.cls || "") + (i.subj ? " (" + i.subj + ")" : "")).join(" · "),
-        link: "myday.html", tag: "wait-" + date,
-      }, cal);
-    }
-  }
-});
-
-/* (ب) تعميم جديد يحتاج توقيعه (تعميم المناوبة يُغني عنه إشعار الاعتماد أدناه) */
-exports.pushOnCircular = onDocumentWritten({ document: "circulars/{sid}/items/{cid}", region: TRIGGER_REGION }, async (event) => {
-  const { sid } = event.params;
-  const after = event.data.after && event.data.after.exists ? event.data.after.data() : null;
-  if (!after || !after.mandatory || after.source === "duty") return;
-  const before = event.data.before && event.data.before.exists ? event.data.before.data() : null;
-  const had = new Set((before && before.recipients) || []);
-  const fresh = (after.recipients || []).filter((u) => !had.has(u) && u !== after.createdBy);
-  await notify(admin.firestore(), sid, fresh, {
-    title: "تعميم جديد يحتاج توقيعك",
-    body: "رقم " + arNum(after.number || "") + (after.title ? ": " + after.title : ""),
-    link: "circulars.html", tag: "circ",
+async function hPublished(db, sid, before, after, cal) {
+  const bu = (before && before.byUser) || {}, au = (after && after.byUser) || {};
+  const changed = [], fresh = [];
+  Object.keys(au).forEach((uid) => {
+    const sa = (au[uid] || {}).sig || "";
+    if (!bu[uid]) fresh.push(uid);
+    else if (((bu[uid] || {}).sig || "") !== sa) changed.push(uid);
   });
-});
-
+  await notify(db, sid, fresh, { title: "نُشر جدولك الدراسي", body: "اضغط للاطّلاع على جدولك", link: "myschedule.html", tag: "sched" }, cal);
+  await notify(db, sid, changed, { title: "تغيّر جدولك الدراسي", body: "عُدِّل جدولك بعد النشر — اضغط للاطّلاع على التعديل", link: "myschedule.html", tag: "sched" }, cal);
+}
+async function hWaitDay(db, sid, date, before, after, cal) {
+  if (!after || !after.sent || date < riyadhNow().key) return;
+  if (before && before.sent && before.sentAt === after.sentAt) return;
+  const key = (i) => [i.subUid, i.st, i.p, i.cls].join("|");
+  const old = new Set(before && before.sent ? (before.items || []).filter((i) => i.subUid).map(key) : []);
+  const byU = {};
+  (after.items || []).filter((i) => i.subUid && !old.has(key(i))).forEach((i) => { (byU[i.subUid] = byU[i.subUid] || []).push(i); });
+  for (const uid of Object.keys(byU)) {
+    const items = byU[uid].sort((a, b) => a.p - b.p);
+    await notify(db, sid, [uid], {
+      title: "حصة انتظار " + relDay(date),
+      body: items.map((i) => "الحصة " + ordP(i.p) + ": " + (i.clsLabel || i.cls || "") + (i.subj ? " (" + i.subj + ")" : "")).join(" · "),
+      link: "myday.html", tag: "wait-" + date,
+    }, cal);
+  }
+}
+/* (ب) تعميم جديد يحتاج توقيعه (تعميم المناوبة يُغني عنه إشعار الاعتماد) */
+async function hCircular(db, sid, c, cal) {
+  if (!c || !c.mandatory || c.source === "duty") return;
+  const fresh = (c.recipients || []).filter((u) => u !== c.createdBy);
+  await notify(db, sid, fresh, { title: "تعميم جديد يحتاج توقيعك", body: "رقم " + arNum(c.number || "") + (c.title ? ": " + c.title : ""), link: "circulars.html", tag: "circ" }, cal);
+}
 /* (ج) اعتماد المناوبة والإشراف */
-exports.pushOnDuty = onDocumentWritten({ document: "dutyPlans/{docId}", region: TRIGGER_REGION }, async (event) => {
-  const after = event.data.after && event.data.after.exists ? event.data.after.data() : null;
-  if (!after || !after.pub || !after.schoolId) return;
-  const before = event.data.before && event.data.before.exists ? event.data.before.data() : null;
-  if (before && before.pub && before.pub.at === after.pub.at) return;
-  const pub = after.pub;
-  await notify(admin.firestore(), after.schoolId, pub.members || after.members || [], {
+async function hDuty(db, sid, d, cal) {
+  const pub = d.pub;
+  await notify(db, sid, pub.members || d.members || [], {
     title: "اعتُمدت مناوبتك وإشرافك",
     body: (pub.stageLabel ? pub.stageLabel + " — " : "") + (pub.circular ? "وقّع على التعميم رقم " + arNum(pub.circular.number) + " للاستلام" : "اضغط للاطّلاع"),
     link: "myday.html", tag: "duty",
-  });
-});
-
+  }, cal);
+}
 /* (د) زيارة صفية جُدولت له (أو عُدِّل موعدها) */
-exports.pushOnVisit = onDocumentWritten({ document: "classVisits/{docId}", region: TRIGGER_REGION }, async (event) => {
-  const after = event.data.after && event.data.after.exists ? event.data.after.data() : null;
-  if (!after || after.kind !== "plan" || !after.teacherId || !after.schoolId) return;
-  const before = event.data.before && event.data.before.exists ? event.data.before.data() : {};
+const visitSig = (v) => (v && v.date ? [v.date, v.p, v.cls].join("|") : "");
+async function hVisit(db, sid, v, prev, cal) {
   const today = riyadhNow().key;
-  const sig = (v) => (v && v.date ? [v.date, v.p, v.cls].join("|") : "");
   const lines = [];
   [["v1", "الأولى"], ["v2", "الثانية"]].forEach(([k, label]) => {
-    const v = after[k];
-    if (!sig(v) || sig(v) === sig(before[k]) || v.date < today) return;
-    lines.push("الزيارة " + label + ": " + relDay(v.date) + (v.p !== "" && v.p != null ? " — الحصة " + ordP(v.p) : ""));
+    const x = v[k];
+    if (!visitSig(x) || visitSig(x) === (prev || {})[k] || x.date < today) return;
+    lines.push("الزيارة " + label + ": " + relDay(x.date) + (x.p !== "" && x.p != null ? " — الحصة " + ordP(x.p) : ""));
   });
   if (!lines.length) return;
-  await notify(admin.firestore(), after.schoolId, [after.teacherId], { title: "زيارة صفية مجدولة", body: lines.join(" · "), link: "myday.html", tag: "visit" });
-});
-
+  await notify(db, sid, [v.teacherId], { title: "زيارة صفية مجدولة", body: lines.join(" · "), link: "myday.html", tag: "visit" }, cal);
+}
 /* (و) تحويل جديد وصله (للمعلم والمدير والوكيل وكل مستلم) */
-exports.pushOnNote = onDocumentCreated({ document: "notes/{id}", region: TRIGGER_REGION }, async (event) => {
-  const n = event.data && event.data.data();
-  if (!n || !n.schoolId) return;
+async function hNote(db, n, cal) {
   const to = (n.recipients || []).filter((u) => u !== n.fromUserId);
   const who = n.studentName ? n.studentName + (n.className ? " — " + n.className : "") : String(n.text || "").slice(0, 80);
-  await notify(admin.firestore(), n.schoolId, to, {
+  await notify(db, n.schoolId, to, {
     title: n.studentName ? "تحويل جديد" : "ملاحظة جديدة",
     body: (n.fromName ? "من " + n.fromName + ": " : "") + who,
     link: "index.html?tab=received", tag: "note",
-  });
-});
-
+  }, cal);
+}
 /* (ح) طالب حضّره معلم وهو مسجّل غائب — للمدير والوكيل */
-exports.pushOnAttAlert = onDocumentCreated({ document: "attAlerts/{id}", region: TRIGGER_REGION }, async (event) => {
-  const a = event.data && event.data.data();
-  if (!a || !a.schoolId) return;
-  const db = admin.firestore(), sid = a.schoolId;
-  const to = [];
+async function hAttAlert(db, a, cal) {
+  const sid = a.schoolId, to = [];
   const sa = await db.collection("users").where("adminSchools", "array-contains", sid).get();
   sa.docs.forEach((d) => { const u = d.data(); if (u.role === "schoolAdmin" && u.active !== false) to.push(d.id); });
   const ag = await db.collection("users").where(new admin.firestore.FieldPath("schools", sid, "role"), "==", "agent").get();
@@ -619,7 +588,126 @@ exports.pushOnAttAlert = onDocumentCreated({ document: "attAlerts/{id}", region:
     title: "طالب حضّره معلم وهو مسجّل غائب",
     body: (a.name || "") + (a.className ? " — " + a.className : "") + (a.byName ? " · المعلم: " + a.byName : ""),
     link: "index.html?tab=absence", tag: "att",
-  });
+  }, cal);
+}
+
+exports.pushWatcher = onSchedule({ schedule: "every 1 minutes", timeZone: "Asia/Riyadh", timeoutSeconds: 180 }, async () => {
+  const db = admin.firestore(), ST = db.collection("pushState");
+  const t0 = Date.now();
+  const wmRef = ST.doc("wm"), seenRef = ST.doc("seen");
+  const wmS = await wmRef.get();
+  if (!wmS.exists) {   // أول تشغيل: لا إشعارات عن الماضي
+    await wmRef.set({ at: t0 });
+    console.log("pushWatcher: baseline");
+  }
+  const wm = wmS.exists ? (wmS.data().at || t0) : t0;
+  const since = wm - OVERLAP;
+  const seenS = await seenRef.get();
+  const seen = new Set(seenS.exists ? (seenS.data().ids || []) : []);
+  const calMemo = {};
+  const calOf = async (sid) => (calMemo[sid] = calMemo[sid] || await getCalendar(db, sid));
+  const mark = (id) => { if (seen.has(id)) return false; seen.add(id); return true; };
+  const baselineOnly = !wmS.exists;
+  const { key: today } = riyadhNow();
+  const tomorrow = addDaysKey(today, 1);
+  const nowMs = Date.now();
+
+  // المدارس
+  const schools = await db.collection("schoolData").where("_isSchool", "==", true).get();
+  for (const s of schools.docs) {
+    const sid = s.id, sd = s.data();
+    if (sd.active === false) continue;
+    try {
+      const period = sd.activePeriod || "first";
+      const ttc = db.collection("timetables").doc(sid).collection("data");
+      const stRef = ST.doc("s_" + sid);
+      const stS = await stRef.get();
+      const state = stS.exists ? stS.data() : {};
+      const next = { docs: Object.assign({}, state.docs || {}), duty: Object.assign({}, state.duty || {}) };
+      let dirty = false;
+
+      // الجدول المنشور + تحديد الانتظار اليومي
+      const ids = [period + "_published", period + "_wday_" + today, period + "_wday_" + tomorrow];
+      for (const id of ids) {
+        const snap = await ttc.doc(id).get();
+        if (!snap.exists) continue;
+        const raw = snap.data(), rev = raw.rev || 0;
+        const prev = next.docs[id];
+        if (prev && prev.rev === rev) continue;
+        let after = null; try { after = JSON.parse(raw.value || "null"); } catch (e) {}
+        if (!after) continue;
+        const isPub = id === period + "_published";
+        const recent = nowMs - (raw.updatedAt || 0) < 10 * 60 * 1000;
+        if (!baselineOnly && (prev || recent)) {
+          const cal = await calOf(sid);
+          if (isPub) await hPublished(db, sid, prev ? { byUser: prev.sigs } : null, after, cal);
+          else await hWaitDay(db, sid, id.split("_wday_")[1], prev ? prev.wd : null, after, cal);
+        }
+        next.docs[id] = isPub
+          ? { rev, sigs: Object.fromEntries(Object.keys(after.byUser || {}).map((u) => [u, { sig: ((after.byUser[u] || {}).sig) || "" }])) }
+          : { rev, wd: { sent: !!after.sent, sentAt: after.sentAt || 0, items: (after.items || []).filter((i) => i.subUid).map((i) => ({ subUid: i.subUid, st: i.st, p: i.p, cls: i.cls })) } };
+        dirty = true;
+      }
+      // أيام مضت: نظّف حالتها
+      Object.keys(next.docs).forEach((k) => { const m = /_wday_(\d{4}-\d{2}-\d{2})$/.exec(k); if (m && m[1] < today) { delete next.docs[k]; dirty = true; } });
+
+      // التعاميم الجديدة
+      const cq = await db.collection("circulars").doc(sid).collection("items").where("createdAt", ">", since).get();
+      for (const d of cq.docs) {
+        if (!mark("c_" + sid + "_" + d.id)) continue;
+        if (!baselineOnly) await hCircular(db, sid, d.data(), await calOf(sid));
+      }
+
+      // اعتماد المناوبة
+      const dq = await db.collection("dutyPlans").where("schoolId", "==", sid).get();
+      for (const d of dq.docs) {
+        const v = d.data(); if (!v.pub) continue;
+        const at = v.pub.at || 0;
+        if (next.duty[d.id] === at) continue;
+        const had = next.duty[d.id] != null;
+        next.duty[d.id] = at; dirty = true;
+        if (!baselineOnly && (had || nowMs - at < 10 * 60 * 1000)) await hDuty(db, sid, v, await calOf(sid));
+      }
+      if (dirty) await stRef.set(next);
+    } catch (e) { console.error("pushWatcher school", sid, e); }
+  }
+
+  // الزيارات الصفية (تغيّرت مؤخرًا)
+  try {
+    const vq = await db.collection("classVisits").where("updatedAt", ">", since).get();
+    for (const d of vq.docs) {
+      const v = d.data();
+      if (v.kind !== "plan" || !v.teacherId || !v.schoolId) continue;
+      const vsRef = ST.doc("vs_" + v.schoolId), vsS = await vsRef.get();
+      const vs = vsS.exists ? vsS.data() : {};
+      const prev = vs[d.id] || null;
+      const cur = { v1: visitSig(v.v1), v2: visitSig(v.v2) };
+      if (prev && prev.v1 === cur.v1 && prev.v2 === cur.v2) continue;
+      await vsRef.set({ [d.id]: cur }, { merge: true });
+      if (!baselineOnly) await hVisit(db, v.schoolId, v, prev, await calOf(v.schoolId));
+    }
+  } catch (e) { console.error("pushWatcher visits", e); }
+
+  // التحويلات الجديدة
+  try {
+    const nq = await db.collection("notes").where("createdAt", ">", since).get();
+    for (const d of nq.docs) {
+      const n = d.data(); if (!n.schoolId || !mark("n_" + d.id)) continue;
+      if (!baselineOnly) await hNote(db, n, await calOf(n.schoolId));
+    }
+  } catch (e) { console.error("pushWatcher notes", e); }
+
+  // تنبيهات الغياب
+  try {
+    const aq = await db.collection("attAlerts").where("ts", ">", since).get();
+    for (const d of aq.docs) {
+      const a = d.data(); if (!a.schoolId || a.resolved === true || !mark("a_" + d.id)) continue;
+      if (!baselineOnly) await hAttAlert(db, a, await calOf(a.schoolId));
+    }
+  } catch (e) { console.error("pushWatcher alerts", e); }
+
+  await seenRef.set({ ids: [...seen].slice(-800) });
+  await wmRef.set({ at: t0 });
 });
 
 /* التذكير الصباحي ٦:٥٠ من الأحد إلى الخميس — ملخص يوم كل من فعّل الإشعارات، ولا يُرسل في أيام الإجازة.

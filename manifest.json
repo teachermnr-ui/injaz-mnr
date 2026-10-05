@@ -1,15 +1,15 @@
 {
   "id": "./myday.html",
-  "name": "إنجاز — المدرسة",
-  "short_name": "إنجاز",
-  "description": "جدولك اليومي وتنبيهات المدرسة والإشعارات الفورية",
+  "name": "منجز المدرسي",
+  "short_name": "منجز",
+  "description": "إدارة مدرسية رقمية بلا تعقيد: جدولك اليومي وتنبيهات المدرسة والإشعارات الفورية",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./myday.html?src=app",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#3f6659",
+  "background_color": "#1f2e27",
   "theme_color": "#3f6659",
   "icons": [
     {

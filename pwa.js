@@ -1,6 +1,6 @@
-// إصدار: 2026-10-05.2
+// إصدار: 2026-10-06.1
 /* =========================================================================
-   تطبيق إنجاز (PWA) والإشعارات الفورية — ص-١٢
+   تطبيق منجز المدرسي (PWA) والإشعارات الفورية — ص-١٢
    مشترك بين index.html و myday.html:
    - تسجيل عامل الخدمة (firebase-messaging-sw.js في الجذر) — يلزم للتثبيت وللإشعارات.
    - شريط «ثبّت التطبيق» بعد الدخول (أندرويد: زر تثبيت · آيفون: مشاركة ← إضافة إلى الشاشة الرئيسية).
@@ -78,7 +78,7 @@
     m.onMessage(payload=>{
       const n = payload.notification || {}, d = payload.data || {};
       const link = (payload.fcmOptions && payload.fcmOptions.link) || d.link || '';
-      inPageNote(n.title || d.title || 'إنجاز', n.body || d.body || '', link);
+      inPageNote(n.title || d.title || 'منجز المدرسي', n.body || d.body || '', link);
     });
   }
   function inPageNote(title, body, link){
@@ -130,7 +130,7 @@
     if(!P.ctx || document.getElementById('ipwaBar')) return;
     if(!isStandalone()){
       if(P.deferred && (force || !snoozed('install'))){
-        const b = bar('<h4>'+ICON+'ثبّت تطبيق إنجاز</h4><p>افتح جدولك وتنبيهاتك من شاشة جوالك مباشرة، وتصلك الإشعارات فورًا.</p>'+
+        const b = bar('<h4>'+ICON+'ثبّت تطبيق منجز المدرسي</h4><p>افتح جدولك وتنبيهاتك من شاشة جوالك مباشرة، وتصلك الإشعارات فورًا.</p>'+
           '<div class="ipwa-row"><button class="pri" data-a="go">تثبيت</button><button class="gh" data-a="later">لاحقًا</button></div>');
         b.querySelector('[data-a=go]').onclick = async()=>{
           const e = P.deferred; P.deferred = null; removeBanner();
@@ -140,14 +140,14 @@
         return;
       }
       if(isIOS() && (force || !snoozed('ios'))){
-        const b = bar('<h4>'+ICON+'ثبّت تطبيق إنجاز على الآيفون</h4><p>من متصفح Safari: اضغط زر <b>المشاركة</b> ⬆️ أسفل الشاشة، ثم اختر <b>«إضافة إلى الشاشة الرئيسية»</b>. افتح التطبيق من الأيقونة لتفعيل الإشعارات (يتطلب iOS 16.4 أو أحدث).</p>'+
+        const b = bar('<h4>'+ICON+'ثبّت تطبيق منجز المدرسي على الآيفون</h4><p>من متصفح Safari: اضغط زر <b>المشاركة</b> ⬆️ أسفل الشاشة، ثم اختر <b>«إضافة إلى الشاشة الرئيسية»</b>. افتح التطبيق من الأيقونة لتفعيل الإشعارات (يتطلب iOS 16.4 أو أحدث).</p>'+
           '<div class="ipwa-row"><button class="pri" data-a="ok">فهمت</button></div>');
         b.querySelector('[data-a=ok]').onclick = ()=>{ snooze('ios'); removeBanner(); };
         return;
       }
     }
     if(force && !isStandalone()){
-      const b = bar('<h4>'+ICON+'تثبيت تطبيق إنجاز</h4><p>افتح قائمة المتصفح <b>⋮</b> ثم اختر <b>«تثبيت التطبيق»</b> أو <b>«إضافة إلى الشاشة الرئيسية»</b>.</p>'+
+      const b = bar('<h4>'+ICON+'تثبيت تطبيق منجز المدرسي</h4><p>افتح قائمة المتصفح <b>⋮</b> ثم اختر <b>«تثبيت التطبيق»</b> أو <b>«إضافة إلى الشاشة الرئيسية»</b>.</p>'+
         '<div class="ipwa-row"><button class="pri" data-a="ok">فهمت</button></div>');
       b.querySelector('[data-a=ok]').onclick = ()=>removeBanner();
       return;

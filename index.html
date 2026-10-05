@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-05.3 -->
+<!-- إصدار: 2026-10-06.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>نظام الفصول الدراسية</title>
-<link rel="stylesheet" href="theme.css?v=2026-10-05.1">
-<script src="theme.js?v=2026-10-05.1"></script>
+<title>منجز المدرسي</title>
+<link rel="stylesheet" href="theme.css?v=2026-10-06.1">
+<script src="theme.js?v=2026-10-06.1"></script>
 <!-- تطبيق إنجاز (PWA) — ص-١٢ -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#3f6659">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="إنجاز">
+<meta name="apple-mobile-web-app-title" content="منجز المدرسي">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/favicon-48.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -223,16 +223,22 @@ input,select{font-family:inherit;font-size:15px}
 <body>
 
 <!-- ===== Loading ===== -->
-<div id="bootView" class="loading"><span class="spin"></span> جارٍ التحميل…</div>
+<div id="bootView" class="ijs" role="status" aria-live="polite">
+  <img class="ijs-logo" src="brand.png" alt="">
+  <div class="ijs-name">منجز المدرسي</div>
+  <div class="ijs-tag">إدارة مدرسية رقمية بلا تعقيد</div>
+  <div class="ijs-bar" aria-hidden="true"><i></i></div>
+</div>
 
 <!-- ===== Login ===== -->
 <div id="loginView" class="auth-wrap hidden">
 
   <!-- 0) اختيار البوابة -->
   <div class="auth-card" id="roleChoiceCard">
-    <div class="brand-mark">ف</div>
-    <h1>نظام الفصول الدراسية</h1>
-    <p class="auth-sub">اختر طريقة الدخول</p>
+    <img class="brand-logo" src="brand.png" alt="">
+    <h1 class="brand-name">منجز المدرسي</h1>
+    <p class="brand-tag">إدارة مدرسية رقمية بلا تعقيد</p>
+    <p class="auth-sub" style="margin-bottom:18px">اختر طريقة الدخول</p>
     <button class="btn" id="roleStaffBtn" style="margin-bottom:10px;">النسخة المدرسية</button>
     <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px;">لكامل أعضاء التدريس والإدارة داخل المدرسة</p>
     <button class="btn" id="roleSoloBtn" style="margin-bottom:10px;">النسخة الفردية</button>
@@ -243,7 +249,7 @@ input,select{font-family:inherit;font-size:15px}
 
   <!-- 1أ) دخول النظام المدرسي (Firebase Authentication) -->
   <div class="auth-card hidden" id="staffLoginCard">
-    <div class="brand-mark">ف</div>
+    <img class="brand-logo sm" src="brand.png" alt="">
     <h1>النسخة المدرسية</h1>
     <p class="auth-sub">سجّل الدخول بحسابك للمتابعة</p>
     <div id="loginAlert"></div>
@@ -292,7 +298,7 @@ input,select{font-family:inherit;font-size:15px}
 
   <!-- 1ب) دخول المعلم الفردي (النسخة الفردية) -->
   <div class="auth-card hidden" id="soloLoginCard">
-    <div class="brand-mark">ف</div>
+    <img class="brand-logo sm" src="brand.png" alt="">
     <h1>النسخة الفردية</h1>
     <p class="auth-sub">سجّل الدخول بحسابك، وستحصل على فترة تجريبية ٣٠ يوماً عند أول اشتراك</p>
     <div id="soloLoginAlert"></div>
@@ -309,7 +315,7 @@ input,select{font-family:inherit;font-size:15px}
 
   <!-- 1ج) دخول الطالب بالـ PIN -->
   <div class="auth-card hidden" id="studentLoginCard">
-    <div class="brand-mark">ف</div>
+    <img class="brand-logo sm" src="brand.png" alt="">
     <h1>أوراقي</h1>
     <p class="auth-sub">سجّل الدخول بحسابك، وستُطلب هويتك ورمز الفصل في المرة الأولى فقط</p>
     <div id="studentLoginAlert"></div>
@@ -347,7 +353,7 @@ input,select{font-family:inherit;font-size:15px}
     <div class="ijh-row1">
       <div class="ijh-ava" id="tbAva" aria-hidden="true"></div>
       <div class="ijh-id">
-        <div class="ijh-name tb-title" id="tbTitle">نظام الفصول</div>
+        <div class="ijh-name tb-title" id="tbTitle">منجز</div>
         <div class="ijh-date" id="tbDate"></div>
       </div>
       <button class="ijh-acc" id="tbAccBtn" type="button" aria-label="قائمة الحساب"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
@@ -4046,7 +4052,7 @@ async function shareCredsWhatsApp(id){
   if(!s.exists) return;
   const u = s.data();
   if(u.authUid || !u.loginId || !u.password){ toast('لا توجد بيانات دخول أولية لمشاركتها لهذا الحساب.'); return; }
-  const msg = `مرحباً ${u.username||''}،\nبيانات دخولك الأولية لنظام الفصول الدراسية:\nرقم الهوية: ${u.loginId}\nكلمة المرور الأولية: ${u.password}\nافتح الموقع ← النسخة المدرسية ← أدخل بريدك وكلمة مرور، ثم أكمل التفعيل بهذه البيانات.`;
+  const msg = `مرحباً ${u.username||''}،\nبيانات دخولك الأولية لمنجز المدرسي:\nرقم الهوية: ${u.loginId}\nكلمة المرور الأولية: ${u.password}\nافتح الموقع ← النسخة المدرسية ← أدخل بريدك وكلمة مرور، ثم أكمل التفعيل بهذه البيانات.`;
   window.open('https://wa.me/?text='+encodeURIComponent(msg), '_blank');
 }
 async function deleteUser(id,name){

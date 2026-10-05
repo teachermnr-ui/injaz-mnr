@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-04.5 -->
+<!-- إصدار: 2026-10-05.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -3328,7 +3328,45 @@ async function renderUsers(c){
   $('#uSchoolFilter').onchange=loadUsersList;
   $('#uIdSearch').oninput=loadUsersList;
   loadUsersList();
+/* [ADMIN-TOOLS:BEGIN] */
+  // طلبات تعميد معلمين جدد من استيراد الجدول (يرسلها غير المدير) — للمدير فقط
+  if(isSchoolScoped){ const h=document.createElement('div'); h.id='uReqHost'; $('#usersList').before(h); renderUserRequests(); }
+/* [ADMIN-TOOLS:END] */
 }
+/* [ADMIN-TOOLS:BEGIN] */
+/* طلبات التعميد: يضيفها الوكيل (أو المفوَّض بالجدول) عند استيراد جدول فيه معلمون غير مسجّلين؛ المدير يعمّد فيُنشأ الحساب */
+async function renderUserRequests(){
+  const host = $('#uReqHost'); if(!host || !CURRENT.schoolId) return;
+  let list = [];
+  try{ const q = await db.collection('userRequests').where('schoolId','==',CURRENT.schoolId).get(); list = q.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.status==='pending'); }catch(e){ host.innerHTML=''; return; }
+  if(!list.length){ host.innerHTML=''; return; }
+  host.innerHTML = '<div class="card" style="border-color:#f3d9a8"><h3 style="margin:0 0 6px">طلبات تعميد معلمين جدد ('+list.length+')</h3>'+
+    '<div class="sub-note" style="margin:0 0 8px">من استيراد الجدول المدرسي — يتوقف الاستيراد حتى تعمّدهم.</div>'+
+    list.map(r=>'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">'+
+      '<div style="flex:1;min-width:180px"><b>'+esc(r.name)+'</b> <span class="umeta">'+esc(r.loginId)+' · معلم · طلبه: '+esc(r.byName||'')+'</span></div>'+
+      '<button class="btn sm" style="width:auto" onclick="approveUserRequest(\''+r.id+'\')">✓ تعميد</button>'+
+      '<button class="btn sm secondary" style="width:auto" onclick="rejectUserRequest(\''+r.id+'\')">رفض</button></div>').join('')+'</div>';
+}
+async function approveUserRequest(id){
+  try{
+    const s = await db.collection('userRequests').doc(id).get(); if(!s.exists) return; const r = s.data();
+    const clash = await loginIdConflictAtSchool(r.loginId, CURRENT.schoolId, null);
+    let pass = '';
+    if(!clash){
+      pass = genTempPassword();
+      await usersCol().add({ loginId:r.loginId, username:r.name, role:'teacher', schoolId:CURRENT.schoolId, assignedClasses:[],
+        permissions:permsForNewUser('teacher'), active:true, password:pass, mustChangePassword:false, createdAt:Date.now(), updatedAt:Date.now() });
+    }
+    await db.collection('userRequests').doc(id).update({ status:'approved', approvedAt:Date.now(), approvedBy:CURRENT.id });
+    modal('<h2>تم التعميد</h2><div>'+esc(r.name)+' ('+esc(r.loginId)+')'+(pass?' — كلمة المرور الأولية: <b style="direction:ltr;display:inline-block">'+esc(pass)+'</b>':' — موجود مسبقًا بالمدرسة')+'</div><div class="modal-row"><button class="btn" onclick="closeModal()">حسنًا</button></div>');
+    renderUserRequests(); loadUsersList();
+  }catch(e){ toast('خطأ: '+e.message); }
+}
+async function rejectUserRequest(id){
+  if(!confirm('رفض الطلب؟ يتوقف الاستيراد المرتبط به.')) return;
+  try{ await db.collection('userRequests').doc(id).update({ status:'rejected', rejectedAt:Date.now(), rejectedBy:CURRENT.id }); renderUserRequests(); }catch(e){ toast('خطأ: '+e.message); }
+}
+/* [ADMIN-TOOLS:END] */
 async function loadUsersList(){
   const isSchoolScoped = CURRENT.role==='schoolAdmin';
   const wrap=$('#usersList'); const filter = isSchoolScoped ? CURRENT.schoolId : ($('#uSchoolFilter')?$('#uSchoolFilter').value:'');

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-04.2 -->
+<!-- إصدار: 2026-10-05.1 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -560,7 +560,8 @@ async function loadRoster(){
   TT.roster.customSubjects = Array.isArray(d.customSubjects) ? d.customSubjects : [];
 }
 async function loadAll(){
-  await Promise.all([ loadDoc(docIds.teachers()), loadDoc(docIds.meta()), loadDoc(docIds.config()), loadDoc(docIds.assign()), loadDoc(docIds.waiting()) ]);
+  await Promise.all([ loadDoc(docIds.teachers()), loadDoc(docIds.meta()), loadDoc(docIds.config()), loadDoc(docIds.assign()), loadDoc(docIds.waiting()),
+    loadDoc(docIds.manual()), loadDoc(docIds.impUndo()), loadDoc(docIds.impJob()), loadDoc(docIds.impMaps()) ]);
   const tasks = [];
   STAGES.forEach(s=>{ tasks.push(loadDoc(docIds.table(s.key,'draft'))); tasks.push(loadDoc(docIds.table(s.key,'approved'))); });
   await Promise.all(tasks);
@@ -1580,9 +1581,12 @@ const VTYPE_LABEL = { daily:'تجاوز الحد اليومي', emptyDay:'يوم
 TT.sel = null;       // { sk, unitId, options }
 TT.preview = null;   // { sk, moves, st }
 SECTIONS.table = function(main){
+  // ص-١٣: شاشة البداية عند بدء جدول الفترة (لا طريقة محددة ولا مسودة)، أو عند «تغيير طريقة البناء»
+  if(TT.canEdit && ((!buildMode() && !hasAnyDraft()) || TT._forceStart)){ TT._forceStart = false; impStartScreen(main); return; }
   const st = stageTabs(TT.ui.tableStage);
   TT.ui.tableStage = st.sk;
-  main.innerHTML = `<div class="sec-head"><h2>🗓️ الجدول</h2><span class="sub">${esc(PERIOD_LABEL[TT.period])}</span></div>${st.html}<div id="tbBody"></div>`;
+  main.innerHTML = `<div class="sec-head"><h2>🗓️ الجدول</h2><span class="sub">${esc(PERIOD_LABEL[TT.period])}</span></div>${impJobBanner()}${impModeBar()}${st.html}<div id="tbBody"></div>`;
+  impBindBar(); impBindJob();
   bindStageTabs(k=>{ TT.ui.tableStage=k; TT.sel=null; TT.preview=null; show('table'); });
   if(!st.sk) return;
   renderTableBody(st.sk);
@@ -2929,6 +2933,710 @@ async function wPrintDaily(asPdf){
       toast('نُزِّل الملف — أرفقه في واتساب');
     }
   }catch(e){ if(e && e.name==='AbortError') return; toast('تعذّر إنشاء PDF: '+(e.message||e)); }
+}
+
+/* =========================================================================
+   ص-١٣) طريقة بناء الجدول: «إعداد من الصفر» أو «جدول جاهز»
+   الجدول الجاهز بثلاث طرق تنتهي كلها بنفس الشيء: قائمة حصص موحّدة {sk,d,p,tid,code,subj}
+   ← فحص كامل (أخطاء تمنع، والرغبات تنبيه فقط) ← مسودة مثبّتة الحصص + «تراجع عن الاستيراد».
+     (أ) المستورد المرن لملفات البرامج الأخرى (Excel) + نافذة الربط (معلمون/شعب/مواد) + المعلم الجديد (تعميد المدير)
+     (ب) قالب النظام (Excel بقوائم منسدلة) — يُرفع فيملأ شاشة الإدخال اليدوي
+     (ج) الإدخال اليدوي داخل الموقع (الجدول العام: المعلمون صفوف، الخانة «الشعبة – المادة»)
+   ========================================================================= */
+docIds.manual    = (p)=>(p||TT.period)+'_manual';       // شبكة الإدخال اليدوي
+docIds.impUndo   = (p)=>(p||TT.period)+'_importUndo';   // ما قبل آخر استيراد (للتراجع)
+docIds.impJob    = (p)=>(p||TT.period)+'_importJob';    // استيراد معلّق بانتظار تعميد المدير
+docIds.impMaps   = ()=>'importMaps';                    // الربط المحفوظ وأشكال البرامج (للمدرسة)
+const IMP = { view:'hub', stage:null, flex:null, report:null };
+const nz = s=>normDigits(String(s==null?'':s)).replace(/[ـً-ْ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ').trim().toLowerCase();
+const nzw = s=>nz(s).split(' ').map(w=>w.replace(/^ال(?=\S\S)/,'')).join(' ');
+const nzc = s=>nz(s).replace(/[\s\/\\\-–_.|،,()]/g,'');
+function buildMode(){ return (cfg() && cfg().buildMode) || ''; }
+function hasAnyDraft(){ return enabledStages().some(s=>{ const d = tableDoc(s.key,'draft'); return d && (d.lessons||[]).length; }); }
+function impPrereqs(){
+  const miss = [];
+  if(!enabledStages().length) miss.push(['settings','فعّل مرحلة واحدة على الأقل وحدّد أوقات حصصها']);
+  else if(!enabledStages().some(s=>stageClasses(s.key).length)) miss.push(['classes','لا توجد شعب مسجّلة للمراحل المفعّلة']);
+  if(!teachers().length) miss.push(['teachers','أضف المعلمين إلى سجل معلمي الأداة']);
+  return miss;
+}
+// خيار المادة في خطة الشعبة بالاسم (معرّفات المواد خاصة بكل خطة)
+function planSubjByName(code, name){ const c = classByCode(code); if(!c) return null; const k = nzw(name); return planOf(planKeyOf(c)).find(s=>nzw(s.name)===k) || null; }
+function slotBusyTime(sk, d, p){ const b = bell(sk, d).periods[p]; return b ? { start:b.start, end:b.end } : null; }
+
+/* ---------- شريط طريقة البناء / شاشة البداية (أعلى قسم «الجدول») ---------- */
+function impModeBar(){
+  const m = buildMode() || 'scratch';
+  const undo = D(docIds.impUndo());
+  return `<div class="card" style="padding:10px 14px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+    <b>طريقة البناء:</b> <span class="chip ${m==='ready'?'info':''}">${m==='ready'?'جدول جاهز':'إعداد من الصفر'}</span>
+    ${m==='ready' && TT.canEdit?`<button class="btn sm" data-imp="manual">✍️ إدخال يدوي</button><button class="btn sm sec" data-imp="tplDown">⬇️ قالب Excel</button><button class="btn sm sec" data-imp="tplUp">⬆️ رفع القالب</button><button class="btn sm sec" data-imp="flex">📥 استيراد من برنامج آخر</button>`:''}
+    ${undo && undo.at && !undo.cleared && TT.canEdit?'<button class="btn sm ghost" data-imp="undo">↩️ تراجع عن الاستيراد</button>':''}
+    <span style="flex:1"></span>${TT.canEdit?'<button class="btn sm ghost" data-imp="change">تغيير طريقة البناء</button>':''}</div></div>`;
+}
+function impStartScreen(main){
+  const miss = impPrereqs();
+  main.innerHTML = `<div class="sec-head"><h2>🗓️ الجدول</h2><span class="sub">${esc(PERIOD_LABEL[TT.period])}</span></div>
+    <div class="card"><h3>كيف تبني جدول هذه الفترة؟</h3>
+      ${miss.length?`<div class="alert warn">قبل البدء: ${miss.map(([s,t])=>`<div>• ${esc(t)} <button class="btn sm sec" data-go="${s}">انتقال</button></div>`).join('')}</div>`:''}
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
+        <button class="card" data-mode="scratch" style="flex:1 1 260px;text-align:right;cursor:pointer;margin:0;border:2px solid var(--line)" ${miss.length?'disabled':''}>
+          <h3 style="margin:0 0 6px">⚙️ إعداد من الصفر</h3><div class="sub">الخطة ← الإسناد ← التوليد التلقائي للجدول.</div></button>
+        <button class="card" data-mode="ready" style="flex:1 1 260px;text-align:right;cursor:pointer;margin:0;border:2px solid var(--line)" ${miss.length?'disabled':''}>
+          <h3 style="margin:0 0 6px">📋 جدول جاهز</h3><div class="sub">عندك جدول مبني مسبقًا: رفع ملف من برنامج آخر، أو قالب النظام (Excel)، أو إدخال يدوي. الإسناد يُبنى تلقائيًا من الجدول.</div></button>
+      </div>
+      <div class="sub" style="margin-top:10px">الطريقة تُحفظ لهذه الفترة، ويمكن تغييرها لاحقًا من قسم «الجدول».</div></div>`;
+  $$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+  $$('[data-mode]').forEach(b=>b.onclick=()=>{ if(b.disabled) return; cfg().buildMode = b.dataset.mode; markDirty(docIds.config()); if(b.dataset.mode==='ready'){ IMP.view='manual'; show('imp'); } else show('table'); });
+}
+function impBindBar(){
+  $$('[data-imp]').forEach(b=>b.onclick=()=>{
+    const a = b.dataset.imp;
+    if(a==='manual'){ IMP.view='manual'; show('imp'); }
+    else if(a==='flex'){ IMP.view='flex'; IMP.flex=null; show('imp'); }
+    else if(a==='tplDown') impTemplateDownload();
+    else if(a==='tplUp') impTemplatePick();
+    else if(a==='undo') impUndo();
+    else if(a==='change') confirmBox('تغيير طريقة البناء', 'تعود إلى شاشة البداية لاختيار الطريقة. لا تُحذف المسودة الحالية إلا عند إنشاء مسودة جديدة (وتُحفظ السابقة للتراجع).', 'متابعة').then(ok=>{ if(!ok) return; cfg().buildMode=''; markDirty(docIds.config()); TT._forceStart = true; show('table'); });
+  });
+}
+
+/* ---------- الفحص الكامل ---------- */
+// entries: [{sk,d,p,tid,code,subj}] — يُرجع {errors:[{t,msg}], missingSubjects:[{code,pk,name,count}], plan}
+function impValidate(entries){
+  const errors = [], E = (t,msg)=>errors.push({ t, msg });
+  const stagesIn = [...new Set(entries.map(e=>e.sk))].filter(Boolean);
+  if(!entries.length){ E('empty','لا توجد حصص في الجدول.'); return { errors, missingSubjects:[], stagesIn }; }
+  // ١) الشعب: تطابق تام لكل مرحلة مستوردة
+  stagesIn.forEach(sk=>{
+    const reg = new Set(stageClasses(sk).map(c=>String(c.code)));
+    const got = new Set(entries.filter(e=>e.sk===sk).map(e=>String(e.code)));
+    const missing = [...reg].filter(x=>!got.has(x)), extra = [...got].filter(x=>!reg.has(x));
+    if(missing.length) E('classes', `${STAGE_BY_KEY[sk].label}: شعب مسجّلة غير موجودة في الجدول المستورد — ${missing.map(classLabel).join('، ')}`);
+    if(extra.length) E('classes', `${STAGE_BY_KEY[sk].label}: شعب في الجدول المستورد غير مسجّلة — ${extra.join('، ')}`);
+  });
+  if(errors.length) return { errors, missingSubjects:[], stagesIn, classStop:true };
+  // ٢) المواد: كل مادة في خطة شعبتها
+  const missingSubjects = []; const ms = {};
+  entries.forEach(e=>{ const s = planSubjByName(e.code, e.subj); if(s){ e.sid = s.id; return; }
+    const c = classByCode(e.code); const k = planKeyOf(c)+'|'+nzw(e.subj);
+    (ms[k] = ms[k] || { pk:planKeyOf(c), name:e.subj, codes:{}, count:0 }); ms[k].codes[e.code] = (ms[k].codes[e.code]||0)+1; });
+  Object.values(ms).forEach(m=>{ const counts = Object.values(m.codes); missingSubjects.push({ pk:m.pk, name:m.name, weekly:Math.max(...counts), classes:Object.keys(m.codes) }); });
+  if(missingSubjects.length){ missingSubjects.forEach(m=>E('subject', `المادة «${m.name}» غير موجودة في خطة ${planKeyLabel(m.pk)} (${m.classes.map(classLabel).join('، ')})`)); return { errors, missingSubjects, stagesIn, subjStop:true }; }
+  // ٣) أوقات موجودة، وتعارض الشعبة والمعلم، وعدم التوفر
+  const bySlotC = {}, bySlotT = {};
+  entries.forEach(e=>{
+    const sc = stageCfg(e.sk);
+    if(!sc.days.includes(e.d) || e.p<0 || e.p >= (+sc.ppd[e.d]||0)){ E('slot', `${classLabel(e.code)} «${e.subj}»: ${WEEKDAYS[e.d]||'?'} الحصة ${ar(e.p+1)} غير موجودة في إعدادات ${STAGE_BY_KEY[e.sk].label}`); return; }
+    const kc = e.sk+'|'+e.d+'|'+e.p+'|'+e.code; if(bySlotC[kc]) E('class2', `${classLabel(e.code)}: حصتان في ${WEEKDAYS[e.d]} الحصة ${ar(e.p+1)} («${bySlotC[kc].subj}» و«${e.subj}»)`); else bySlotC[kc] = e;
+    const t = teacherById(e.tid);
+    if(!t){ E('teacher', `معلم غير موجود لحصة ${classLabel(e.code)} «${e.subj}»`); return; }
+    const kt = e.sk+'|'+e.d+'|'+e.p+'|'+e.tid; if(bySlotT[kt]) E('teacher2', `${t.name}: في مكانين ${WEEKDAYS[e.d]} الحصة ${ar(e.p+1)} (${classLabel(bySlotT[kt].code)} و${classLabel(e.code)})`); else bySlotT[kt] = e;
+    if(((t.unavail||{})[e.sk]||[]).includes(e.d+'-'+e.p)) E('unavail', `${t.name}: غير متوفر ${WEEKDAYS[e.d]} الحصة ${ar(e.p+1)}`);
+  });
+  // تعارض المعلم بين مرحلتين (بالوقت)، ومع مراحل لم تُستورد
+  const byT = {}; entries.forEach(e=>{ (byT[e.tid] = byT[e.tid] || []).push(e); });
+  Object.entries(byT).forEach(([tid,list])=>{
+    const others = [];
+    STAGES.forEach(o=>{ if(stagesIn.includes(o.key) || !stageCfg(o.key) || !stageCfg(o.key).enabled) return;
+      const doc = tableDoc(o.key,'draft') || tableDoc(o.key,'approved');
+      (doc && doc.lessons || []).forEach(l=>{ if(l.d!=null && l.t===tid) for(let k=0;k<(l.n||1);k++) others.push({ sk:o.key, d:l.d, p:l.p+k, code:l.c }); }); });
+    const all = list.concat(others);
+    for(let i=0;i<all.length;i++) for(let j=i+1;j<all.length;j++){
+      const a = all[i], b = all[j]; if(a.sk===b.sk || a.d!==b.d) continue;
+      const ta = slotBusyTime(a.sk,a.d,a.p), tb = slotBusyTime(b.sk,b.d,b.p);
+      if(ta && tb && ta.start < tb.end && tb.start < ta.end) E('teacher2', `${teacherName(tid)}: تعارض بين ${STAGE_BY_KEY[a.sk].label} و${STAGE_BY_KEY[b.sk].label} ${WEEKDAYS[a.d]} (${classLabel(a.code)} و${classLabel(b.code)})`);
+    }
+  });
+  // ٤) مادة الشعبة لمعلم واحد
+  const asg = {};
+  entries.forEach(e=>{ const k = e.code+'|'+e.sid; (asg[k] = asg[k] || new Set()).add(e.tid); });
+  Object.entries(asg).forEach(([k,set])=>{ if(set.size>1){ const [code] = k.split('|'); const s = entries.find(e=>e.code+'|'+e.sid===k); E('assign', `${classLabel(code)} «${s.subj}»: مسندة لأكثر من معلم (${[...set].map(teacherName).join('، ')})`); } });
+  // ٥) عدد حصص كل مادة = الخطة، والمزدوجة متتالية
+  const cnt = {}; entries.forEach(e=>{ const k = e.code+'|'+e.sid; (cnt[k] = cnt[k] || []).push(e); });
+  stagesIn.forEach(sk=>stageClasses(sk).forEach(c=>{
+    planOf(planKeyOf(c)).forEach(s=>{
+      const w = +s.weekly||0, got = (cnt[c.code+'|'+s.id]||[]);
+      if(got.length !== w) E('count', `${classLabel(c.code)} «${s.name}»: ${ar(got.length)} حصة والخطة ${ar(w)}`);
+      else if(s.consec==='require' && w>=2 && !impPairDoubles(sk, got, w)) E('double', `${classLabel(c.code)} «${s.name}»: الحصص المزدوجة غير متتالية`);
+    });
+  }));
+  // ٦) النصاب: المستورد + مراحل لم تُستورد ≤ النصاب النظامي
+  const L = teacherLoads();
+  Object.entries(byT).forEach(([tid,list])=>{
+    const t = teacherById(tid); if(!t) return;
+    let total = list.length; STAGES.forEach(o=>{ if(!stagesIn.includes(o.key)) total += ((L[tid]||{})[o.key]||0); });
+    if(total > (+t.quota||0)) E('quota', `${t.name}: نصابه ${ar(total)} يتجاوز نصابه النظامي ${ar(+t.quota||0)}`);
+  });
+  return { errors, missingSubjects:[], stagesIn };
+}
+// تقسيم حصص مادة مزدوجة إلى أزواج متتالية (لا تعبر فسحة) + مفردة إن كان العدد فرديًا
+function impPairDoubles(sk, list, w){
+  const brk = new Set(breakAfterIdx(sk));
+  const byDay = {}; list.forEach(e=>{ (byDay[e.d] = byDay[e.d] || []).push(e.p); });
+  const pairs = [], singles = [];
+  Object.entries(byDay).forEach(([d,ps])=>{ ps.sort((a,b)=>a-b); for(let i=0;i<ps.length;i++){ if(i+1<ps.length && ps[i+1]===ps[i]+1 && !brk.has(ps[i])){ pairs.push({ d:+d, p:ps[i] }); i++; } else singles.push({ d:+d, p:ps[i] }); } });
+  const needPairs = Math.floor(w/2), needSingles = w%2;
+  if(pairs.length < needPairs) return null;
+  // أزواج زائدة تتحول لمفردتين
+  while(pairs.length > needPairs){ const x = pairs.pop(); singles.push({ d:x.d, p:x.p }, { d:x.d, p:x.p+1 }); }
+  if(singles.length !== needSingles) return null;
+  return { pairs, singles };
+}
+
+/* ---------- إنشاء المسودة ---------- */
+async function impBuild(entries, stagesIn, source){
+  if(pendingSaves.size) await flushSaves();
+  // ما قبل الاستيراد (للتراجع)
+  const undo = { at:Date.now(), by:TT.me.id, source, buildMode: buildMode(), assign: clone(amap()), plans: clone(cfg().plans), stages:{} };
+  stagesIn.forEach(sk=>{ const d = tableDoc(sk,'draft'); undo.stages[sk] = d ? clone(d) : null; });
+  TT.docs[docIds.impUndo()] = TT.docs[docIds.impUndo()] || { rev:0, data:null };
+  TT.docs[docIds.impUndo()].data = undo; markDirty(docIds.impUndo());
+  // الإسناد من الجدول: يُستبدل إسناد شعب المراحل المستوردة كاملًا
+  const m = amap();
+  stagesIn.forEach(sk=>stageClasses(sk).forEach(c=>{ m[c.code] = {}; }));
+  entries.forEach(e=>{ m[e.code][e.sid] = e.tid; });
+  markDirty(docIds.assign());
+  invalidateStage();
+  // المسودات: حصص مثبّتة بمعرّفات وحدات المحرك
+  stagesIn.forEach(sk=>{
+    const lessons = [];
+    const units = buildUnits(sk);
+    const byCS = {}; entries.filter(e=>e.sk===sk).forEach(e=>{ (byCS[e.code+'|'+e.sid] = byCS[e.code+'|'+e.sid] || []).push(e); });
+    Object.entries(byCS).forEach(([k,list])=>{
+      const [code, sid] = k.split('|');
+      const us = units.filter(u=>u.classCode===code && u.subjectId===sid);
+      const dbl = us.filter(u=>u.len===2), sgl = us.filter(u=>u.len===1);
+      let slotsD = [], slotsS = list.map(e=>({ d:e.d, p:e.p })).sort((a,b)=>a.d-b.d||a.p-b.p);
+      if(dbl.length){ const pr = impPairDoubles(sk, list, list.length); slotsD = pr.pairs; slotsS = pr.singles; }
+      dbl.forEach((u,i)=>{ const s = slotsD[i]; if(s) lessons.push({ id:u.id, c:code, s:sid, t:list[0].tid, d:s.d, p:s.p, n:2, pin:true }); });
+      sgl.forEach((u,i)=>{ const s = slotsS[i]; if(s) lessons.push({ id:u.id, c:code, s:sid, t:list[0].tid, d:s.d, p:s.p, n:1, pin:true }); });
+    });
+    const id = docIds.table(sk,'draft');
+    const prev = D(id) || {};
+    TT.docs[id] = TT.docs[id] || { rev:0, data:null };
+    TT.docs[id].data = Object.assign({}, prev, { lessons, generatedAt: Date.now(), importedAt: Date.now(), importSource: source, updatedAt: Date.now() });
+    markDirty(id);
+  });
+  cfg().buildMode = 'ready'; markDirty(docIds.config());
+  invalidateStage();
+  await flushSaves();
+}
+async function impUndo(){
+  const u = D(docIds.impUndo()); if(!u || !u.at || u.cleared) return;
+  const ok = await confirmBox('تراجع عن الاستيراد', 'تعود المسودة والإسناد والخطط إلى ما كانت عليه قبل آخر استيراد ('+new Date(u.at).toLocaleString('ar-SA')+'). الجدول المعتمد لا يتأثر.', 'تراجع', true);
+  if(!ok) return;
+  TT.docs[docIds.assign()].data = { map: clone(u.assign||{}) }; markDirty(docIds.assign());
+  cfg().plans = clone(u.plans||{}); cfg().buildMode = u.buildMode||'ready'; markDirty(docIds.config());
+  Object.entries(u.stages||{}).forEach(([sk,d])=>{ const id = docIds.table(sk,'draft'); TT.docs[id] = TT.docs[id] || { rev:0, data:null }; TT.docs[id].data = d ? clone(d) : { lessons:[] }; markDirty(id); });
+  TT.docs[docIds.impUndo()].data = { cleared:true, at:u.at }; markDirty(docIds.impUndo());
+  invalidateStage(); await flushSaves(); toast('تم التراجع عن الاستيراد'); show('table');
+}
+/* نافذة النتيجة: أخطاء تمنع (مع «إضافة كمادة») أو مسودة + تنبيهات الرغبات */
+async function impCheckAndBuild(entries, source){
+  const v = impValidate(entries);
+  if(v.errors.length){ impShowErrors(v, entries, source); return false; }
+  await impBuild(entries, v.stagesIn, source);
+  const warn = [];
+  v.stagesIn.forEach(sk=>{ const S = getStageState(sk,'draft'); const rep = TTEngine.evaluate(S.pr, S.st); rep.violations.forEach(x=>warn.push(STAGE_BY_KEY[sk].label+' — '+violationText(x, sk))); });
+  modal(`<h2>✔ أُنشئت المسودة</h2><div>${ar(entries.length)} حصة في ${v.stagesIn.map(sk=>STAGE_BY_KEY[sk].label).join(' و')}. الحصص مثبّتة، ويُبنى الإسناد منها. راجعها ثم اعتمدها من قسم «الجدول».</div>
+    ${warn.length?`<div class="alert warn" style="margin-top:10px"><b>تنبيهات (رغبات لم تتحقق — لا تمنع):</b> ${ar(warn.length)}<div style="max-height:30vh;overflow:auto;margin-top:6px">${warn.slice(0,200).map(x=>`<div>• ${esc(x)}</div>`).join('')}</div></div>`:'<div class="alert ok" style="margin-top:10px">لا أخطاء ولا تنبيهات.</div>'}
+    <div class="modal-actions"><button class="btn" id="impGoTable">عرض الجدول</button></div>`, 'wide');
+  $('#impGoTable').onclick = ()=>{ closeModal(); TT.ui.which='draft'; TT.ui.tableStage = v.stagesIn[0]; show('table'); };
+  return true;
+}
+function impShowErrors(v, entries, source){
+  const groups = {}; v.errors.forEach(e=>{ (groups[e.t] = groups[e.t] || []).push(e.msg); });
+  const TITLE = { empty:'الجدول فارغ', classes:'الشعب لا تطابق المسجّلة — توقف الاستيراد', subject:'مواد غير موجودة في الخطة — توقف الاستيراد', slot:'حصص في وقت غير موجود', class2:'تعارض الشعبة', teacher:'معلم غير موجود', teacher2:'تعارض المعلم', unavail:'عدم توفر المعلم', assign:'مادة الشعبة لأكثر من معلم', count:'عدد حصص المادة يخالف الخطة', double:'الحصص المزدوجة', quota:'تجاوز النصاب النظامي' };
+  modal(`<h2>⚠️ لم تُنشأ المسودة — ${ar(v.errors.length)} خطأ</h2><div class="sub">صحّح الأخطاء ثم أعد الفحص. الجدول الحالي لم يتغير.</div>
+    ${v.missingSubjects && v.missingSubjects.length && TT.canEdit?`<div class="alert info" style="margin-top:10px"><b>إضافة المواد الناقصة للخطة؟</b>${v.missingSubjects.map((m,i)=>`<div class="row" style="gap:8px;margin-top:6px"><span style="flex:1">«${esc(m.name)}» — ${esc(planKeyLabel(m.pk))} (${ar(m.weekly)} حصص أسبوعيًا)</span><button class="btn sm" data-addsub="${i}">إضافة كمادة</button></div>`).join('')}</div>`:''}
+    <div style="max-height:52vh;overflow:auto;margin-top:10px">${Object.entries(groups).map(([t,list])=>`<div style="margin-bottom:10px"><b>${esc(TITLE[t]||t)} (${ar(list.length)})</b>${list.slice(0,150).map(x=>`<div class="sub" style="color:var(--ink)">• ${esc(x)}</div>`).join('')}${list.length>150?`<div class="sub">… و${ar(list.length-150)} أخرى</div>`:''}</div>`).join('')}</div>
+    <div class="modal-actions"><button class="btn sec" onclick="closeModal()">إغلاق</button></div>`, 'wide');
+  $$('#modalRoot [data-addsub]').forEach(b=>b.onclick=async()=>{
+    const m = v.missingSubjects[+b.dataset.addsub];
+    const plan = cfg().plans[m.pk] = cfg().plans[m.pk] || [];
+    if(!plan.some(s=>nzw(s.name)===nzw(m.name))) plan.push({ id:uid('sb'), name:m.name, code:'', weekly:m.weekly, timing:'any', prefDays:[], consec:'no' });
+    markDirty(docIds.config()); invalidateStage();
+    b.disabled = true; b.textContent = '✓ أُضيفت';
+    if(v.missingSubjects.every((x,i)=>$(`#modalRoot [data-addsub="${i}"]`).disabled)){ closeModal(); impCheckAndBuild(entries, source); }
+  });
+}
+
+/* ---------- (ج) الإدخال اليدوي داخل الموقع ---------- */
+function manualDoc(){
+  const id = docIds.manual();
+  if(!D(id)) TT.docs[id] = { rev: TT.docs[id] ? TT.docs[id].rev : 0, data:{ grid:{} } };
+  D(id).grid = D(id).grid || {}; return D(id);
+}
+const impStages = ()=>enabledStages().filter(s=>stageClasses(s.key).length);
+function impStageTeachers(sk){ return teachers().filter(t=>(teacherStagesNow(t)||[]).includes(sk)).sort((a,b)=>a.name.localeCompare(b.name,'ar')); }
+function impOptions(sk){ const out = []; stageClasses(sk).forEach(c=>planOf(planKeyOf(c)).forEach(s=>{ if(+s.weekly>0) out.push({ code:String(c.code), subj:s.name, weekly:+s.weekly, label:c.code+' – '+s.name }); })); return out; }
+function manualEntries(){
+  const G = manualDoc().grid, out = [];
+  Object.entries(G).forEach(([sk,byT])=>Object.entries(byT||{}).forEach(([tid,cells])=>Object.entries(cells||{}).forEach(([k,v])=>{ if(!v || !v.c) return; const [d,p] = k.split('|').map(Number); out.push({ sk, d, p, tid, code:String(v.c), subj:v.s }); })));
+  return out;
+}
+SECTIONS.imp = function(main){
+  if(!TT.canEdit){ main.innerHTML = '<div class="empty">الاستيراد يحتاج صلاحية تعديل الجدول.</div>'; return; }
+  if(IMP.view==='flex') impRenderFlex(main); else impRenderManual(main);
+};
+function impRenderManual(main){
+  const stages = impStages(); if(!stages.length){ main.innerHTML = '<div class="empty">لا توجد مراحل مفعّلة بشعب مسجّلة.</div>'; return; }
+  if(!IMP.stage || !stages.find(s=>s.key===IMP.stage)) IMP.stage = stages[0].key;
+  const sk = IMP.stage, sc = stageCfg(sk), mp = maxP(sk), G = manualDoc().grid[sk] || {};
+  const T = impStageTeachers(sk), opts = impOptions(sk);
+  // العدّ: حصص كل مادة لكل شعبة، وحصص كل معلم (كل المراحل)، وتعارض الشعبة في نفس الوقت
+  const placed = {}, slotClass = {}, tCount = {};
+  Object.entries(manualDoc().grid).forEach(([s2,byT])=>Object.entries(byT||{}).forEach(([tid,cells])=>Object.entries(cells||{}).forEach(([k,v])=>{ if(!v||!v.c) return; tCount[tid]=(tCount[tid]||0)+1;
+    if(s2!==sk) return; placed[v.c+'|'+nzw(v.s)] = (placed[v.c+'|'+nzw(v.s)]||0)+1; const kk = k+'|'+v.c; (slotClass[kk] = slotClass[kk] || []).push(tid); })));
+  const cell = (t,d,p)=>{
+    if(p >= (+sc.ppd[d]||0)) return '<td style="background:#eee"></td>';
+    const v = (G[t.id]||{})[d+'|'+p]; const un = ((t.unavail||{})[sk]||[]).includes(d+'-'+p);
+    const clash = v && v.c && (slotClass[d+'|'+p+'|'+v.c]||[]).length>1;
+    return `<td data-mc="${t.id}|${d}|${p}" style="cursor:pointer;min-width:64px;height:38px;padding:2px;font-size:11px;line-height:1.25;${clash?'background:#fbe4e1;outline:2px solid var(--danger);outline-offset:-2px;':un?'background:repeating-linear-gradient(45deg,#f5f5f5,#f5f5f5 4px,#e9e9e9 4px,#e9e9e9 8px);':''}">${v&&v.c?`<b>${esc(v.c)}</b><br>${esc(shortSubj(v.s))}`:''}</td>`;
+  };
+  const rows = T.map(t=>{ const n = tCount[t.id]||0, q = +t.quota||0;
+    return `<tr><th class="r" style="white-space:nowrap;position:sticky;right:0;background:#fff;z-index:1">${esc(t.name)}<div class="sub">${ar(n)} / ${ar(q)}${n>q?' <span class="chip err">زائد</span>':''}</div></th>${sc.days.map(d=>Array.from({length:mp},(_,p)=>cell(t,d,p)).join('')).join('')}</tr>`; }).join('');
+  // ملخص الشعب: المواد غير المكتملة
+  const summary = stageClasses(sk).map(c=>{ const lack = planOf(planKeyOf(c)).filter(s=>+s.weekly>0).map(s=>({ s, n: placed[c.code+'|'+nzw(s.name)]||0 })).filter(x=>x.n!==+x.s.weekly);
+    return `<div style="padding:4px 0;border-bottom:1px solid var(--line)"><b>${esc(classLabel(c.code))}</b> ${lack.length?lack.map(x=>`<span class="chip ${x.n>+x.s.weekly?'err':'warn'}">${esc(shortSubj(x.s.name))} ${ar(x.n)}/${ar(+x.s.weekly)}</span>`).join(' '):'<span class="chip ok">مكتمل</span>'}</div>`; }).join('');
+  const clashes = Object.values(slotClass).filter(a=>a.length>1).length;
+  main.innerHTML = `<div class="sec-head"><h2>✍️ إدخال الجدول يدويًا</h2><span class="sub">${esc(PERIOD_LABEL[TT.period])} · الجدول العام: المعلمون صفوف، والخانة «الشعبة – المادة»</span></div>
+    <div class="card" style="padding:10px 14px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+      ${stages.map(s=>`<button class="btn sm ${s.key===sk?'':'sec'}" data-ist="${s.key}">${esc(s.label)}</button>`).join('')}
+      <span style="flex:1"></span>
+      <button class="btn sm sec" id="imTplDown">⬇️ تنزيل قالب Excel</button><button class="btn sm sec" id="imTplUp">⬆️ رفع القالب</button>
+      <button class="btn sm ghost" id="imClear">مسح هذه المرحلة</button>
+      <button class="btn" id="imCheck">✔ فحص وإنشاء المسودة</button>
+      <button class="btn sm ghost" id="imBack">→ الجدول</button></div>
+      <div class="sub" style="margin-top:6px">اضغط الخانة واختر «الشعبة – المادة». يُحفظ تلقائيًا ويمكن الإكمال لاحقًا. ${clashes?`<b style="color:var(--danger)">تعارضات: ${ar(clashes)}</b>`:''} الخانات المخططة = عدم توفر المعلم.</div></div>
+    ${T.length?`<div class="card" style="padding:6px;overflow:auto;max-height:70vh"><table class="tbl" style="font-size:12px">
+      <tr><th rowspan="2" style="position:sticky;right:0;background:var(--surface-2);z-index:2">المعلم<div class="sub">حصصه / نصابه</div></th>${sc.days.map(d=>`<th colspan="${mp}">${WEEKDAYS[d]}</th>`).join('')}</tr>
+      <tr>${sc.days.map(()=>Array.from({length:mp},(_,p)=>`<th>${ar(p+1)}</th>`).join('')).join('')}</tr>${rows}</table></div>`:'<div class="empty">لا يوجد معلمون لهذه المرحلة في سجل المعلمين.</div>'}
+    <div class="card"><h3>اكتمال الشعب</h3><div style="max-height:40vh;overflow:auto">${summary}</div></div>`;
+  $$('[data-ist]').forEach(b=>b.onclick=()=>{ IMP.stage=b.dataset.ist; show('imp'); });
+  $('#imBack').onclick = ()=>show('table');
+  $('#imTplDown').onclick = impTemplateDownload;
+  $('#imTplUp').onclick = impTemplatePick;
+  $('#imClear').onclick = async()=>{ if(!await confirmBox('مسح المرحلة','تُمسح كل خانات '+STAGE_BY_KEY[sk].label+' في شاشة الإدخال.','مسح',true)) return; manualDoc().grid[sk] = {}; markDirty(docIds.manual()); show('imp'); };
+  $('#imCheck').onclick = async()=>{ if(pendingSaves.size) await flushSaves(); impCheckAndBuild(manualEntries(), 'manual'); };
+  $$('[data-mc]').forEach(td=>td.onclick=()=>{ const [tid,d,p] = td.dataset.mc.split('|'); impPickCell(sk, tid, +d, +p, opts, placed, slotClass); });
+}
+function impPickCell(sk, tid, d, p, opts, placed, slotClass){
+  const G = manualDoc().grid; const cur = ((G[sk]||{})[tid]||{})[d+'|'+p];
+  const draw = q=>{
+    const qq = nz(q||'');
+    const list = opts.filter(o=>!qq || nz(o.label).includes(qq));
+    const busy = o=>(slotClass[d+'|'+p+'|'+o.code]||[]).some(x=>x!==tid);
+    $('#ipList').innerHTML = list.slice(0,300).map((o,i)=>{ const n = placed[o.code+'|'+nzw(o.subj)]||0, full = n>=o.weekly && !(cur && cur.c===o.code && nzw(cur.s)===nzw(o.subj));
+      return `<button class="btn sm ${cur&&cur.c===o.code&&nzw(cur.s)===nzw(o.subj)?'':'sec'}" data-op="${opts.indexOf(o)}" style="margin:3px">${esc(o.label)} <span class="sub">(${ar(n)}/${ar(o.weekly)})</span>${full?' <span class="chip warn">مكتملة</span>':''}${busy(o)?' <span class="chip err">الشعبة مشغولة</span>':''}</button>`; }).join('') || '<div class="sub">لا نتائج.</div>';
+    $$('#ipList [data-op]').forEach(b=>b.onclick=()=>{ const o = opts[+b.dataset.op]; G[sk] = G[sk]||{}; G[sk][tid] = G[sk][tid]||{}; G[sk][tid][d+'|'+p] = { c:o.code, s:o.subj }; markDirty(docIds.manual()); closeModal(); show('imp'); });
+  };
+  modal(`<h2>${esc(teacherName(tid))} — ${WEEKDAYS[d]} الحصة ${ar(p+1)}</h2>
+    <input id="ipQ" placeholder="بحث بالشعبة أو المادة…" style="width:100%;margin:8px 0">
+    <div id="ipList" style="max-height:52vh;overflow:auto"></div>
+    <div class="modal-actions">${cur&&cur.c?'<button class="btn danger" id="ipClr">مسح الخانة</button>':''}<button class="btn sec" onclick="closeModal()">إغلاق</button></div>`, 'wide');
+  draw(''); $('#ipQ').oninput = ()=>draw($('#ipQ').value); setTimeout(()=>{ const i=$('#ipQ'); if(i) i.focus(); },50);
+  if($('#ipClr')) $('#ipClr').onclick = ()=>{ delete G[sk][tid][d+'|'+p]; markDirty(docIds.manual()); closeModal(); show('imp'); };
+}
+
+/* ---------- (ب) قالب النظام: تنزيل (ExcelJS بقوائم منسدلة) ورفع (يملأ شاشة الإدخال) ---------- */
+function impLoadScript(src, test){ return new Promise((res,rej)=>{ if(test()) return res(); const s=document.createElement('script'); s.src=src; s.onload=()=>test()?res():rej(new Error('تعذّر تحميل المكتبة')); s.onerror=()=>rej(new Error('تعذّر تحميل المكتبة')); document.head.appendChild(s); }); }
+const TPL_FIRST_ROW = 4;   // أول صف للمعلمين (١-مبني)
+const tplSheetName = s=>s.label.slice(0,31);
+async function impTemplateDownload(){
+  try{
+    await impLoadScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js', ()=>!!window.ExcelJS);
+    const wb = new ExcelJS.Workbook(); wb.creator = 'إنجاز';
+    const info = wb.addWorksheet('التعليمات', { views:[{ rightToLeft:true }] });
+    info.getColumn(1).width = 110;
+    ['قالب إدخال الجدول — '+(TT.schoolName||'')+' — '+PERIOD_LABEL[TT.period], '',
+     '١) في كل ورقة مرحلة: المعلمون صفوف، والأيام والحصص أعمدة.',
+     '٢) اختر لكل خانة «الشعبة – المادة» من القائمة المنسدلة فقط (لا تكتب يدويًا).',
+     '٣) الخانات الرمادية حصص غير موجودة في ذلك اليوم — اتركها فارغة.',
+     '٤) لا تغيّر أسماء الأوراق ولا ترتيب الصفوف والأعمدة، ولا تحذف عمود رقم الهوية (مخفي).',
+     '٥) ارفع الملف من «رفع القالب» في أداة الجدول، ثم «فحص وإنشاء المسودة».'].forEach((t,i)=>{ const c = info.getCell(i+1,1); c.value = t; if(i===0) c.font = { bold:true, size:14 }; });
+    const lists = wb.addWorksheet('قوائم', { state:'veryHidden' });
+    impStages().forEach((s,si)=>{
+      const sc = stageCfg(s.key), mp = maxP(s.key), opts = impOptions(s.key);
+      opts.forEach((o,i)=>{ lists.getCell(i+1, si+1).value = o.label; });
+      const colL = lists.getColumn(si+1).letter;
+      const ws = wb.addWorksheet(tplSheetName(s), { views:[{ rightToLeft:true, state:'frozen', xSplit:2, ySplit:3 }] });
+      ws.getCell(1,1).value = 'الجدول العام — '+s.label; ws.getCell(1,1).font = { bold:true, size:13 };
+      ws.getCell(2,1).value = 'المعلم'; ws.getCell(2,2).value = 'رقم الهوية'; ws.mergeCells(2,1,3,1); ws.mergeCells(2,2,3,2);
+      ws.getColumn(1).width = 26; ws.getColumn(2).width = 14; ws.getColumn(2).hidden = true;
+      sc.days.forEach((d,di)=>{ const c0 = 3+di*mp; ws.mergeCells(2,c0,2,c0+mp-1); const h = ws.getCell(2,c0); h.value = WEEKDAYS[d]; h.alignment = { horizontal:'center' }; h.font = { bold:true };
+        for(let p=0;p<mp;p++){ const c = ws.getCell(3,c0+p); c.value = p+1; c.alignment = { horizontal:'center' }; ws.getColumn(c0+p).width = 15; } });
+      impStageTeachers(s.key).forEach((t,ti)=>{
+        const r = TPL_FIRST_ROW+ti; ws.getCell(r,1).value = t.name; ws.getCell(r,2).value = String(t.nid||'');
+        sc.days.forEach((d,di)=>{ for(let p=0;p<mp;p++){ const c = ws.getCell(r, 3+di*mp+p);
+          if(p >= (+sc.ppd[d]||0)){ c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFD9D9D9' } }; continue; }
+          const v = ((manualDoc().grid[s.key]||{})[t.id]||{})[d+'|'+p]; if(v && v.c) c.value = v.c+' – '+v.s;
+          if(opts.length) c.dataValidation = { type:'list', allowBlank:true, showErrorMessage:true, errorTitle:'قيمة غير صحيحة', error:'اختر من القائمة فقط', formulae:[`'قوائم'!$${colL}$1:$${colL}$${opts.length}`] };
+        } });
+      });
+    });
+    const buf = await wb.xlsx.writeBuffer();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    a.download = 'قالب-الجدول-'+TT.period+'.xlsx'; document.body.appendChild(a); a.click(); a.remove();
+    toast('نُزِّل القالب');
+  }catch(e){ toast('تعذّر إنشاء القالب: '+(e.message||e)); }
+}
+function impTemplatePick(){
+  const i = document.createElement('input'); i.type='file'; i.accept='.xlsx,.xls';
+  i.onchange = ()=>{ if(i.files[0]) impTemplateRead(i.files[0]); }; i.click();
+}
+async function impReadWorkbook(file){
+  if(!window.XLSX) await impLoadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', ()=>!!window.XLSX);
+  const buf = await file.arrayBuffer();
+  return XLSX.read(new Uint8Array(buf), { type:'array' });
+}
+async function impTemplateRead(file){
+  let wb; try{ wb = await impReadWorkbook(file); }catch(e){ toast('تعذّر قراءة الملف: '+(e.message||e)); return; }
+  impTemplateApply(wb);
+}
+function impTemplateApply(wb){
+  const errs = []; let filled = 0; const G = manualDoc().grid;
+  impStages().forEach(s=>{
+    const ws = wb.Sheets[tplSheetName(s)]; if(!ws){ errs.push('لا توجد ورقة «'+tplSheetName(s)+'» — هل الملف من قالب النظام؟'); return; }
+    const sc = stageCfg(s.key), mp = maxP(s.key);
+    const byLabel = {}; impOptions(s.key).forEach(o=>{ byLabel[nz(o.label)] = o; });
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+    const grid = {};
+    for(let r = TPL_FIRST_ROW-1; r < rows.length; r++){
+      const row = rows[r]; const name = String(row[0]||'').trim(), nid = normDigits(String(row[1]||'')).trim();
+      if(!name && !nid) continue;
+      const t = (nid && teachers().find(x=>normDigits(x.nid||'').trim()===nid)) || teachers().filter(x=>nz(x.name)===nz(name)).length===1 && teachers().find(x=>nz(x.name)===nz(name));
+      if(!t){ errs.push(`${s.label}: الصف ${r+1} — المعلم «${name}» غير موجود في سجل المعلمين`); continue; }
+      sc.days.forEach((d,di)=>{ for(let p=0;p<mp;p++){ const v = String(row[2+di*mp+p]||'').trim(); if(!v) continue;
+        if(p >= (+sc.ppd[d]||0)){ errs.push(`${s.label}: ${t.name} — ${WEEKDAYS[d]} الحصة ${ar(p+1)} غير موجودة`); continue; }
+        const o = byLabel[nz(v)]; if(!o){ errs.push(`${s.label}: ${t.name} — ${WEEKDAYS[d]} الحصة ${ar(p+1)}: «${v}» ليست من القائمة`); continue; }
+        (grid[t.id] = grid[t.id] || {})[d+'|'+p] = { c:o.code, s:o.subj }; filled++; } });
+    }
+    G[s.key] = grid;
+  });
+  markDirty(docIds.manual());
+  IMP.view = 'manual'; show('imp');
+  modal(`<h2>${errs.length?'⚠️':'✔'} رُفع القالب</h2><div>عُبّئت ${ar(filled)} خانة في شاشة الإدخال اليدوي. راجعها ثم «فحص وإنشاء المسودة».</div>
+    ${errs.length?`<div class="alert warn" style="margin-top:8px;max-height:40vh;overflow:auto">${errs.slice(0,200).map(x=>`<div>• ${esc(x)}</div>`).join('')}</div>`:''}
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">حسنًا</button></div>`, 'wide');
+}
+
+/* ---------- (أ) المستورد المرن: أي ملف Excel بأي شكل ---------- */
+function impMaps(){
+  const id = docIds.impMaps();
+  if(!D(id)) TT.docs[id] = { rev: TT.docs[id] ? TT.docs[id].rev : 0, data:{} };
+  const m = D(id); m.teachers = m.teachers||{}; m.classes = m.classes||{}; m.subjects = m.subjects||{}; m.profiles = m.profiles||[]; return m;
+}
+const DAY_KEYS = [['احد'],['اثنين','اتنين'],['ثلاثاء','ثلاثا'],['اربعاء','اربعا'],['خميس'],['جمعه'],['سبت']];
+function dayIdx(v){
+  const s = nzw(v).replace(/^يوم\s*/,''); if(!s) return null;
+  if(/^[1-7]$/.test(s)) return +s-1;
+  for(let i=0;i<DAY_KEYS.length;i++) if(DAY_KEYS[i].some(k=>s===k || s.indexOf(k)===0)) return i;
+  return null;
+}
+const ORD_KEYS = ['اول','ثاني','ثالث','رابع','خامس','سادس','سابع','ثامن','تاسع','عاشر'];
+function periodIdx(v){
+  let s = nzw(v).replace(/^حصه\s*/,'').replace(/\s+/g,''); if(!s) return null;
+  if(/^\d{1,2}$/.test(s)){ const n=+s; return n>=1 && n<=MAX_PERIODS ? n-1 : null; }
+  s = s.replace(/[هي]$/,'').replace(/ي$/,'');
+  const i = ORD_KEYS.findIndex(k=>s===k || s===k+'ي' || s===k.replace(/ي$/,''));
+  return i>=0 ? i : null;
+}
+function splitCell(v){
+  const t = String(v==null?'':v).trim(); if(!t) return [];
+  let parts = t.split(/\r?\n|\/|\||،|,|\s[-–]\s|–/).map(x=>x.trim()).filter(Boolean);
+  if(parts.length===1){ const m = /^(\S*\d\S*)\s+(.+)$/.exec(t) || /^(.+?)\s+(\S*\d\S*)$/.exec(t); if(m) parts = [m[1], m[2]]; }
+  return parts;
+}
+function sheetRows(ws){
+  const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false, blankrows:true });
+  (ws['!merges']||[]).forEach(mg=>{ const v = (rows[mg.s.r]||[])[mg.s.c]; for(let r=mg.s.r;r<=mg.e.r;r++){ rows[r] = rows[r]||[]; for(let c=mg.s.c;c<=mg.e.c;c++) if(rows[r][c]==='' || rows[r][c]==null) rows[r][c] = v; } });
+  return rows;
+}
+function classKeyMatch(str){
+  const k = nzc(str); if(!k) return '';
+  const cls = impStages().flatMap(s=>stageClasses(s.key));
+  const hit = cls.filter(c=>[c.code, classLabel(c.code), c.name, (c.name||'')+c.code].some(x=>nzc(x)===k));
+  return hit.length===1 ? String(hit[0].code) : '';
+}
+function teacherNameMatches(str){ const k = nzw(str); return teachers().filter(t=>nzw(t.name)===k); }
+// ترتيب جزأي الخانة: أيهما الشعبة (أو المعلم في جدول الشعبة)
+function pickParts(parts, kind){
+  if(parts.length<2) return null;
+  const [a,b] = parts.length>2 ? [parts[0], parts.slice(1).join(' ')] : parts;
+  if(kind==='class'){ if(classKeyMatch(a) || (/\d/.test(a) && !/\d/.test(b))) return { cls:a, other:b }; if(classKeyMatch(b) || /\d/.test(b)) return { cls:b, other:a }; return { cls:a, other:b }; }
+  if(kind==='teacher'){ if(teacherNameMatches(b).length) return { tch:b, other:a }; if(teacherNameMatches(a).length) return { tch:a, other:b }; return { tch:b, other:a }; }
+}
+function blockTitle(rows, r){
+  for(let k=r-1;k>=Math.max(0,r-3);k--){ const cell = (rows[k]||[]).find(x=>String(x).trim()); if(cell) return String(cell).replace(/^.*?(جدول\s*(المعلم|المعلمه|الفصل|الشعبه|الشعبة|الصف)?\s*[:：]?)/,'').replace(/^(المعلم|الفصل|الشعبة|الصف)\s*[:：]\s*/,'').trim(); }
+  return '';
+}
+// يحوّل ورقة إلى حصص خام {d,p,tStr,tId,cStr,sStr} حسب الشكل والخيارات
+function parseSheet(name, rows, layout, o){
+  const out = [], bad = { n:0 };
+  if(layout==='list'){
+    const h = (+o.headerRow||1)-1;
+    for(let r=h+1;r<rows.length;r++){ const row = rows[r]||[]; const g = c=>c===''||c==null ? '' : String(row[+c]||'').trim();
+      if(!row.some(x=>String(x).trim())) continue;
+      const d = dayIdx(g(o.colDay)), p = periodIdx(g(o.colPeriod));
+      const rec = { d, p, cStr:g(o.colClass), sStr:g(o.colSubject), tStr:g(o.colTeacher), tId: normDigits(g(o.colId)).trim() };
+      if(d==null || p==null || !rec.cStr || (!rec.tStr && !rec.tId)){ bad.n++; continue; } out.push(rec); }
+    return { out, bad:bad.n };
+  }
+  if(layout==='tgrid' || layout==='cgrid'){
+    for(let r=0;r<rows.length;r++){
+      const row = rows[r]||[];
+      const pcols = {}; row.forEach((v,c)=>{ const p = periodIdx(v); if(p!=null) pcols[c] = p; });
+      const dcols = {}; row.forEach((v,c)=>{ const d = dayIdx(v); if(d!=null) dcols[c] = d; });
+      const isP = Object.keys(pcols).length>=3, isD = Object.keys(dcols).length>=3;
+      if(!isP && !isD) continue;
+      const title = (o.titleFrom==='sheet' ? name : (blockTitle(rows, r) || name));
+      let rr = r+1;
+      for(; rr<rows.length; rr++){
+        const row2 = rows[rr]||[];
+        const lead = row2.slice(0,2).map(x=>String(x).trim()).find(Boolean) || '';
+        const k = isP ? dayIdx(lead) : periodIdx(lead);
+        if(k==null){ if(row2.some(x=>String(x).trim())) break; else continue; }
+        Object.entries(isP ? pcols : dcols).forEach(([c,idx])=>{
+          const v = String(row2[c]||'').trim(); if(!v) return;
+          const d = isP ? k : idx, p = isP ? idx : k;
+          const parts = splitCell(v);
+          if(layout==='tgrid'){ const pp = pickParts(parts,'class'); if(!pp){ bad.n++; return; } out.push({ d, p, tStr:title, cStr: o.swap ? pp.other : pp.cls, sStr: o.swap ? pp.cls : pp.other }); }
+          else { const pp = pickParts(parts,'teacher'); if(!pp){ bad.n++; return; } out.push({ d, p, cStr:title, tStr: o.swap ? pp.other : pp.tch, sStr: o.swap ? pp.tch : pp.other }); }
+        });
+      }
+      r = rr-1;
+    }
+    return { out, bad:bad.n };
+  }
+  if(layout==='master'){
+    let dr = -1; for(let r=0;r<Math.min(rows.length,15);r++){ if((rows[r]||[]).filter(v=>dayIdx(v)!=null).length>=3){ dr = r; break; } }
+    if(dr<0) return { out, bad:0, err:'لم يُعثر على صف الأيام' };
+    const pr = dr+1; const cols = [];
+    (rows[dr]||[]).forEach((v,c)=>{ const d = dayIdx(v), p = periodIdx((rows[pr]||[])[c]); if(d!=null && p!=null) cols.push({ c, d, p }); });
+    const nameCol = o.colTeacher!=='' && o.colTeacher!=null ? +o.colTeacher : (()=>{ for(let c=0;c<5;c++){ if(cols.some(x=>x.c===c)) continue; if(rows.slice(pr+1,pr+8).some(rw=>String((rw||[])[c]||'').trim() && !/^\d+$/.test(String((rw||[])[c]).trim()))) return c; } return 0; })();
+    const idCol = o.colId!=='' && o.colId!=null ? +o.colId : -1;
+    for(let r=pr+1;r<rows.length;r++){ const row = rows[r]||[]; const tStr = String(row[nameCol]||'').trim(); if(!tStr) continue;
+      const tId = idCol>=0 ? normDigits(String(row[idCol]||'')).trim() : '';
+      cols.forEach(x=>{ const v = String(row[x.c]||'').trim(); if(!v) return; const pp = pickParts(splitCell(v),'class'); if(!pp){ bad.n++; return; } out.push({ d:x.d, p:x.p, tStr, tId, cStr: o.swap ? pp.other : pp.cls, sStr: o.swap ? pp.cls : pp.other }); }); }
+    return { out, bad:bad.n };
+  }
+  return { out, bad:0 };
+}
+function guessLayout(wb, sheets){
+  const rows = sheetRows(wb.Sheets[sheets[0]]);
+  const kw = r=>(rows[r]||[]).map(nzw);
+  for(let r=0;r<Math.min(rows.length,10);r++){ const k = kw(r); if(k.some(x=>x.includes('يوم')) && k.some(x=>x.includes('حصه')) && k.some(x=>/فصل|شعبه|صف/.test(x))) return { layout:'list', headerRow:r+1, cols:k }; }
+  for(let r=0;r<Math.min(rows.length,15);r++){ if((rows[r]||[]).filter(v=>dayIdx(v)!=null).length>=3 && (rows[r+1]||[]).filter(v=>periodIdx(v)!=null).length>=3 && rows.length > r+4) return { layout:'master' }; }
+  return { layout:'tgrid' };
+}
+function fileSig(wb, sheets){ const rows = sheetRows(wb.Sheets[sheets[0]]); return nz(rows.slice(0,6).flat().filter(x=>String(x).trim()).slice(0,8).join('|')); }
+function impRenderFlex(main){
+  const F = IMP.flex;
+  main.innerHTML = `<div class="sec-head"><h2>📥 استيراد جدول من برنامج آخر</h2><span class="sub">${esc(PERIOD_LABEL[TT.period])}</span>
+    <span style="flex:1"></span><button class="btn sm ghost" id="flBack">→ الجدول</button></div><div id="flBody"></div>`;
+  $('#flBack').onclick = ()=>show('table');
+  const body = $('#flBody');
+  if(!F){
+    const job = D(docIds.impJob());
+    body.innerHTML = `<div class="card"><h3>١) اختر ملف Excel</h3><div class="sub">أي شكل: قائمة حصص، جدول لكل معلم، جدول لكل شعبة، أو جدول عام. ويمكن أن يحوي الملف أكثر من ورقة أو جدول.</div>
+      <input type="file" id="flFile" accept=".xlsx,.xls" style="margin-top:10px"></div>`;
+    $('#flFile').onchange = async e=>{ const f = e.target.files[0]; if(!f) return;
+      try{ const wb = await impReadWorkbook(f); impFlexStart(wb, f.name); }catch(err){ toast('تعذّر قراءة الملف: '+(err.message||err)); } };
+    return;
+  }
+  if(F.step==='setup') return impFlexSetup(body);
+  if(F.step==='map') return impFlexMap(body);
+  if(F.step==='newT') return impFlexNewTeachers(body);
+}
+function impFlexStart(wb, fname){
+  const sheets = wb.SheetNames.filter(n=>{ const r = sheetRows(wb.Sheets[n]); return r.some(row=>(row||[]).some(x=>String(x).trim())); });
+  if(!sheets.length){ toast('الملف فارغ'); return; }
+  const g = guessLayout(wb, sheets);
+  const F = IMP.flex = { step:'setup', wb, fname, sheets, sel: sheets.slice(), layout: g.layout, o:{ headerRow:g.headerRow||1, titleFrom:'block', swap:false, colDay:'', colPeriod:'', colClass:'', colSubject:'', colTeacher:'', colId:'' }, profile:'' };
+  if(g.layout==='list' && g.cols){ const find = re=>{ const i = g.cols.findIndex(x=>re.test(x)); return i>=0 ? String(i) : ''; };
+    Object.assign(F.o, { colDay:find(/يوم/), colPeriod:find(/حصه/), colClass:find(/فصل|شعبه|صف/), colSubject:find(/ماده/), colTeacher:find(/معلم|اسم/), colId:find(/هويه|سجل/) }); }
+  const sig = fileSig(wb, sheets);
+  const pf = impMaps().profiles.find(p=>p.sig===sig);
+  if(pf){ F.layout = pf.layout; F.o = Object.assign(F.o, pf.o); F.profile = pf.name; toast('تم التعرف على الشكل المحفوظ: '+pf.name); }
+  F.sig = sig;
+  show('imp');
+}
+function impFlexParse(){
+  const F = IMP.flex; let raw = [], bad = 0, err = '';
+  F.sel.forEach(n=>{ const r = parseSheet(n, sheetRows(F.wb.Sheets[n]), F.layout, F.o); raw = raw.concat(r.out); bad += r.bad; if(r.err) err = r.err; });
+  F.raw = raw; F.bad = bad; F.err = err; return raw;
+}
+function impFlexSetup(body){
+  const F = IMP.flex; const raw = impFlexParse();
+  const hdr = F.layout==='list' || F.layout==='master' ? (sheetRows(F.wb.Sheets[F.sel[0]||F.sheets[0]])[(+F.o.headerRow||1)-1]||[]) : [];
+  const colSel = (key, lbl, opt)=>`<label class="field" style="min-width:150px">${lbl}<select data-o="${key}"><option value="">${opt?'— لا يوجد —':'— اختر —'}</option>${hdr.map((h,i)=>`<option value="${i}" ${String(F.o[key])===String(i)?'selected':''}>${esc(String.fromCharCode(65+i%26))} — ${esc(String(h).slice(0,24))}</option>`).join('')}</select></label>`;
+  const L = { list:'قائمة: سطر لكل حصة', tgrid:'جدول لكل معلم', cgrid:'جدول لكل شعبة', master:'جدول عام: المعلمون صفوف' };
+  body.innerHTML = `<div class="card"><h3>٢) شكل الملف</h3><div class="sub">${esc(F.fname)}${F.profile?` · الشكل المحفوظ: <b>${esc(F.profile)}</b>`:''}</div>
+    <div style="margin:8px 0"><b>الأوراق:</b> ${F.sheets.map(n=>`<label class="chip" style="margin:3px;cursor:pointer"><input type="checkbox" data-sh="${esc(n)}" ${F.sel.includes(n)?'checked':''}> ${esc(n)}</label>`).join('')}</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap">${Object.entries(L).map(([k,v])=>`<button class="btn sm ${F.layout===k?'':'sec'}" data-ly="${k}">${v}</button>`).join('')}</div>
+    <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:10px">
+      ${F.layout==='list'?`<label class="field" style="width:110px">صف العناوين<input type="number" min="1" data-o="headerRow" value="${+F.o.headerRow||1}"></label>${colSel('colDay','اليوم')}${colSel('colPeriod','الحصة')}${colSel('colClass','الشعبة')}${colSel('colSubject','المادة')}${colSel('colTeacher','اسم المعلم')}${colSel('colId','رقم الهوية',true)}`:''}
+      ${F.layout==='master'?`<label class="field" style="width:110px">صف العناوين<input type="number" min="1" data-o="headerRow" value="${+F.o.headerRow||1}"></label>${colSel('colTeacher','عمود اسم المعلم',true)}${colSel('colId','عمود رقم الهوية',true)}`:''}
+      ${F.layout==='tgrid'||F.layout==='cgrid'?`<label class="field">اسم ${F.layout==='tgrid'?'المعلم':'الشعبة'} من<select data-o="titleFrom"><option value="block" ${F.o.titleFrom!=='sheet'?'selected':''}>العنوان فوق كل جدول</option><option value="sheet" ${F.o.titleFrom==='sheet'?'selected':''}>اسم الورقة</option></select></label>`:''}
+      ${F.layout!=='list'?`<label class="field" style="justify-content:flex-end"><span><input type="checkbox" data-o="swap" ${F.o.swap?'checked':''}> عكس جزأي الخانة (${F.layout==='cgrid'?'المعلم ↔ المادة':'الشعبة ↔ المادة'})</span></label>`:''}
+    </div></div>
+    <div class="card"><h3>٣) معاينة</h3>
+      ${F.err?`<div class="alert err">${esc(F.err)}</div>`:''}
+      <div class="sub">قُرئت <b>${ar(raw.length)}</b> حصة${F.bad?` · <span style="color:var(--warn)">${ar(F.bad)} خانة لم تُفهم</span>`:''}.</div>
+      <div style="overflow:auto;max-height:40vh;margin-top:8px"><table class="tbl"><tr><th>اليوم</th><th>الحصة</th><th>المعلم</th><th>الشعبة</th><th>المادة</th></tr>
+        ${raw.slice(0,25).map(r=>`<tr><td>${esc(WEEKDAYS[r.d]||'?')}</td><td>${ar(r.p+1)}</td><td>${esc(r.tStr||'')}${r.tId?` <span class="sub">${esc(r.tId)}</span>`:''}</td><td>${esc(r.cStr)}</td><td>${esc(r.sStr)}</td></tr>`).join('')}</table></div>
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><input id="flPfName" placeholder="اسم الشكل (مثل: برنامج كذا)" value="${esc(F.profile||'')}" style="max-width:240px"><button class="btn sm sec" id="flPfSave">حفظ الشكل</button>
+        <span style="flex:1"></span><button class="btn" id="flNext" ${raw.length?'':'disabled'}>التالي: الربط</button></div></div>`;
+  $$('[data-sh]').forEach(c=>c.onchange=()=>{ F.sel = F.sheets.filter(n=>$(`[data-sh="${CSS.escape(n)}"]`).checked); show('imp'); });
+  $$('[data-ly]').forEach(b=>b.onclick=()=>{ F.layout = b.dataset.ly; show('imp'); });
+  $$('[data-o]').forEach(i=>i.onchange=()=>{ F.o[i.dataset.o] = i.type==='checkbox' ? i.checked : i.value; show('imp'); });
+  $('#flPfSave').onclick = ()=>{ const nm = ($('#flPfName').value||'').trim(); if(!nm){ toast('اكتب اسم الشكل'); return; }
+    const M = impMaps(); M.profiles = M.profiles.filter(p=>p.name!==nm && p.sig!==F.sig).concat([{ name:nm, sig:F.sig, layout:F.layout, o:clone(F.o) }]); markDirty(docIds.impMaps()); F.profile = nm; toast('حُفظ الشكل'); };
+  $('#flNext').onclick = ()=>{ F.step='map'; impFlexInitMap(); show('imp'); };
+}
+function impFlexInitMap(){
+  const F = IMP.flex, M = impMaps();
+  const T = {}, C = {}, S = {};
+  F.raw.forEach(r=>{
+    const tk = r.tId ? 'id:'+r.tId : 'n:'+nzw(r.tStr);
+    const t = T[tk] = T[tk] || { key:tk, label:r.tStr||r.tId, tId:r.tId, ctx:{}, n:0 }; t.n++; t.ctx[r.cStr+' '+r.sStr] = 1;
+    const ck = nzc(r.cStr); (C[ck] = C[ck] || { key:ck, label:r.cStr, n:0 }).n++;
+    const sk = nzw(r.sStr); (S[sk] = S[sk] || { key:sk, label:r.sStr, n:0 }).n++;
+  });
+  Object.values(T).forEach(t=>{
+    let v = M.teachers[t.key] && teacherById(M.teachers[t.key]) ? M.teachers[t.key] : '';
+    if(!v && t.tId){ const hit = teachers().find(x=>normDigits(x.nid||'').trim()===t.tId); if(hit) v = hit.id; }
+    const nm = teacherNameMatches(t.label); t.dup = nm.length>1;
+    if(!v && nm.length===1) v = nm[0].id;
+    t.val = v;
+  });
+  Object.values(C).forEach(c=>{ c.val = (M.classes[c.key] && classByCode(M.classes[c.key])) ? M.classes[c.key] : classKeyMatch(c.label); });
+  const subjNames = [...new Set(impStages().flatMap(s=>stageClasses(s.key).flatMap(c=>planOf(planKeyOf(c)).map(x=>x.name))))];
+  Object.values(S).forEach(s=>{ const saved = M.subjects[s.key]; s.val = saved && subjNames.some(n=>nzw(n)===nzw(saved)) ? saved : (subjNames.find(n=>nzw(n)===s.key) || ''); });
+  F.mapT = T; F.mapC = C; F.mapS = S; F.subjNames = subjNames;
+}
+function impFlexMap(body){
+  const F = IMP.flex;
+  const allCls = impStages().flatMap(s=>stageClasses(s.key));
+  const tRows = Object.values(F.mapT).sort((a,b)=>(a.val?1:0)-(b.val?1:0) || a.label.localeCompare(b.label,'ar'));
+  body.innerHTML = `<div class="card"><h3>٤) الربط</h3><div class="sub">اربط كل معلم وشعبة ومادة مستوردة بما هو محفوظ في النظام. الاسم المطابق لأكثر من معلم لا يُختار تلقائيًا. الربط يُحفظ للمرات القادمة.</div></div>
+    <div class="card"><h3>المعلمون (${ar(tRows.length)})</h3><div style="overflow:auto;max-height:45vh"><table class="tbl"><tr><th>في الملف</th><th>يدرّس فيه</th><th>المعلم في النظام</th></tr>
+      ${tRows.map(t=>`<tr><td class="r">${esc(t.label)}${t.tId?`<div class="sub">${esc(t.tId)}</div>`:''}${t.dup && !t.val?' <span class="chip err">مكرر — اختر يدويًا</span>':''}</td>
+        <td class="r sub" style="max-width:260px">${esc(Object.keys(t.ctx).slice(0,6).join('، '))}${Object.keys(t.ctx).length>6?' …':''}</td>
+        <td><select data-mt="${esc(t.key)}"><option value="">— اختر —</option><option value="__new__" ${t.val==='__new__'?'selected':''}>➕ معلم جديد</option>${teachers().slice().sort((a,b)=>a.name.localeCompare(b.name,'ar')).map(x=>`<option value="${x.id}" ${t.val===x.id?'selected':''}>${esc(x.name)}${x.nid?' ('+esc(x.nid)+')':''}</option>`).join('')}</select></td></tr>`).join('')}</table></div></div>
+    <div class="card"><h3>الشعب (${ar(Object.keys(F.mapC).length)})</h3><div class="sub">يجب أن تطابق شعب الملف الشعب المسجّلة تمامًا، وإلا يتوقف الاستيراد.</div><div style="overflow:auto;max-height:40vh"><table class="tbl"><tr><th>في الملف</th><th>الشعبة في النظام</th></tr>
+      ${Object.values(F.mapC).map(c=>`<tr><td class="r">${esc(c.label)}</td><td><select data-mc2="${esc(c.key)}"><option value="">— اختر —</option>${allCls.map(x=>`<option value="${esc(x.code)}" ${String(c.val)===String(x.code)?'selected':''}>${esc(classLabel(x.code))}</option>`).join('')}</select></td></tr>`).join('')}</table></div></div>
+    <div class="card"><h3>المواد (${ar(Object.keys(F.mapS).length)})</h3><div style="overflow:auto;max-height:40vh"><table class="tbl"><tr><th>في الملف</th><th>المادة في النظام</th></tr>
+      ${Object.values(F.mapS).map(s=>`<tr><td class="r">${esc(s.label)}</td><td><select data-ms="${esc(s.key)}"><option value="">— كما هي (غير موجودة في الخطة) —</option>${F.subjNames.map(n=>`<option value="${esc(n)}" ${s.val===n?'selected':''}>${esc(n)}</option>`).join('')}</select></td></tr>`).join('')}</table></div></div>
+    <div class="card"><div class="row" style="gap:8px"><button class="btn sec" id="flPrev">→ رجوع</button><span style="flex:1"></span><span class="sub" id="flMissing"></span><button class="btn" id="flGo">متابعة</button></div></div>`;
+  const upd = ()=>{ const mt = Object.values(F.mapT).filter(t=>!t.val).length, mc = Object.values(F.mapC).filter(c=>!c.val).length; $('#flMissing').textContent = (mt||mc) ? `بلا ربط: ${ar(mt)} معلم، ${ar(mc)} شعبة` : ''; };
+  $$('[data-mt]').forEach(s=>s.onchange=()=>{ F.mapT[s.dataset.mt].val = s.value; upd(); });
+  $$('[data-mc2]').forEach(s=>s.onchange=()=>{ F.mapC[s.dataset.mc2].val = s.value; upd(); });
+  $$('[data-ms]').forEach(s=>s.onchange=()=>{ F.mapS[s.dataset.ms].val = s.value; });
+  upd();
+  $('#flPrev').onclick = ()=>{ F.step='setup'; show('imp'); };
+  $('#flGo').onclick = ()=>{
+    if(Object.values(F.mapT).some(t=>!t.val) || Object.values(F.mapC).some(c=>!c.val)){ toast('أكمل ربط كل المعلمين والشعب'); return; }
+    // حفظ الربط
+    const M = impMaps();
+    Object.values(F.mapT).forEach(t=>{ if(t.val && t.val!=='__new__') M.teachers[t.key] = t.val; });
+    Object.values(F.mapC).forEach(c=>{ M.classes[c.key] = c.val; });
+    Object.values(F.mapS).forEach(s=>{ if(s.val) M.subjects[s.key] = s.val; });
+    markDirty(docIds.impMaps());
+    if(Object.values(F.mapT).some(t=>t.val==='__new__')){ F.step='newT'; show('imp'); return; }
+    impFlexFinish();
+  };
+}
+function impFlexEntries(){
+  const F = IMP.flex;
+  return F.raw.map(r=>{
+    const t = F.mapT[r.tId ? 'id:'+r.tId : 'n:'+nzw(r.tStr)], c = F.mapC[nzc(r.cStr)], s = F.mapS[nzw(r.sStr)];
+    const code = c && c.val; const cl = classByCode(code);
+    return { sk: cl ? classStageKey(cl) : null, d:r.d, p:r.p, tid: t ? t.val : '', code: String(code||''), subj: (s && s.val) || r.sStr };
+  });
+}
+function impFlexFinish(){ const entries = impFlexEntries(); IMP.flex = null; impCheckAndBuild(entries, 'flex'); }
+
+/* ---------- المعلم الجديد: يُضاف مباشرة إن كان المستورد المدير، وإلا طلب تعميد للمدير ويتوقف الاستيراد ---------- */
+const isPrincipal = ()=>TT.me.role==='schoolAdmin' || TT.me.role==='admin';
+const TEACHER_DEFAULT_PERMS = (()=>{ const a = { access:true, edit:true, del:false }, f = { access:true, edit:true, del:true };
+  return { 'index.sent':a, 'index.received':a, 'omr.classes':f, 'omr.classes.info':f, 'omr.classes.names':f, 'omr.design':f, 'omr.grade':f, 'omr.results':f, 'omr.worklog':f, 'worksheets.enabled':a }; })();
+function genPass(){ const ch='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'; let s=''; for(let i=0;i<6;i++) s+=ch[Math.floor(Math.random()*ch.length)]; return s; }
+function impFlexNewTeachers(body){
+  const F = IMP.flex;
+  const list = Object.values(F.mapT).filter(t=>t.val==='__new__');
+  body.innerHTML = `<div class="card"><h3>٥) المعلمون الجدد (${ar(list.length)})</h3>
+    <div class="sub">${isPrincipal()?'يُضافون مباشرة إلى المستخدمين وإلى سجل معلمي الجدول، وتظهر لك كلمات المرور الأولية.':'تُرسل طلبات تعميد إلى مدير المدرسة، و<b>يتوقف الاستيراد حتى يعمّدهم</b>، ثم تكمله من زر «متابعة الاستيراد».'}</div>
+    <table class="tbl" style="margin-top:8px"><tr><th>الاسم</th><th>رقم الهوية</th><th>النصاب النظامي</th></tr>
+      ${list.map((t,i)=>`<tr><td><input data-nn="${i}" value="${esc(t.label)}"></td><td><input data-ni="${i}" inputmode="numeric" value="${esc(t.tId||'')}" placeholder="أرقام فقط"></td><td><input data-nq="${i}" type="number" min="0" max="40" value="24" style="width:80px"></td></tr>`).join('')}</table>
+    <div id="nwAlert"></div>
+    <div class="row" style="gap:8px;margin-top:10px"><button class="btn sec" id="nwPrev">→ رجوع</button><span style="flex:1"></span><button class="btn" id="nwOk">${isPrincipal()?'إضافة ومتابعة':'إرسال للتعميد'}</button></div></div>`;
+  $('#nwPrev').onclick = ()=>{ F.step='map'; show('imp'); };
+  $('#nwOk').onclick = async()=>{
+    const recs = list.map((t,i)=>({ t, name:($(`[data-nn="${i}"]`).value||'').trim(), nid:normDigits($(`[data-ni="${i}"]`).value||'').trim(), quota:Math.max(0,Math.min(40,+$(`[data-nq="${i}"]`).value||24)) }));
+    const bad = recs.find(r=>!r.name || !/^\d+$/.test(r.nid));
+    if(bad){ $('#nwAlert').innerHTML = '<div class="alert err">أدخل الاسم ورقم هوية صحيحًا (أرقام فقط) لكل معلم.</div>'; return; }
+    if(recs.some(r=>teachers().some(x=>normDigits(x.nid||'').trim()===r.nid))){ $('#nwAlert').innerHTML = '<div class="alert err">رقم هوية موجود مسبقًا في سجل المعلمين — اربطه بالمعلم الموجود بدل «معلم جديد».</div>'; return; }
+    $('#nwOk').disabled = true;
+    try{
+      const stagesOf = key=>[...new Set(F.raw.filter(r=>(r.tId?'id:'+r.tId:'n:'+nzw(r.tStr))===key).map(r=>{ const c = F.mapC[nzc(r.cStr)]; const cl = c && classByCode(c.val); return cl ? classStageKey(cl) : null; }).filter(Boolean))];
+      let tplPerms = TEACHER_DEFAULT_PERMS;
+      try{ const rt = await db.collection('schoolData').doc('roleTemplates').get(); const t = rt.exists && (rt.data().templates||{}).teacher; if(t && Object.keys(t).length) tplPerms = t; }catch(e){}
+      const created = [], reqIds = [];
+      for(const r of recs){
+        const tid = uid('t');
+        teachers().push({ id:tid, name:r.name, nid:r.nid, stages:stagesOf(r.t.key), quota:r.quota, unavail:{} });
+        r.t.val = tid;
+        if(isPrincipal()){
+          const q = await db.collection('users').where('loginId','==',r.nid).get();
+          const exists = q.docs.some(d=>{ const u = d.data(); return !u.migratedTo && ((!u.authUid && u.schoolId===TT.sid) || (u.schools && u.schools[TT.sid])); });
+          if(exists){ created.push(r.name+' ('+r.nid+'): مستخدم موجود مسبقًا — رُبط بالجدول'); continue; }
+          const pass = genPass();
+          await db.collection('users').add({ loginId:r.nid, username:r.name, role:'teacher', schoolId:TT.sid, assignedClasses:[], permissions:clone(tplPerms), active:true, password:pass, mustChangePassword:false, createdAt:Date.now(), updatedAt:Date.now() });
+          created.push(r.name+' ('+r.nid+') — كلمة المرور الأولية: '+pass);
+        } else {
+          const ref = await db.collection('userRequests').add({ schoolId:TT.sid, period:TT.period, name:r.name, loginId:r.nid, role:'teacher', quota:r.quota, byUserId:TT.me.id, byName:TT.me.name, status:'pending', source:'timetableImport', createdAt:Date.now() });
+          reqIds.push(ref.id);
+        }
+      }
+      markDirty(docIds.teachers());
+      const entries = impFlexEntries();
+      if(isPrincipal()){
+        await flushSaves();
+        IMP.flex = null;
+        modal(`<h2>✔ أُضيف المعلمون الجدد</h2><div class="sub">سلّم كل معلم رقم هويته وكلمة مروره الأولية للتفعيل.</div><div style="line-height:2;margin-top:8px">${created.map(x=>`<div>• ${esc(x)}</div>`).join('')}</div>
+          <div class="modal-actions"><button class="btn" id="nwCont">متابعة: الفحص وإنشاء المسودة</button></div>`, 'wide');
+        $('#nwCont').onclick = ()=>{ closeModal(); impCheckAndBuild(entries, 'flex'); };
+      } else {
+        TT.docs[docIds.impJob()] = TT.docs[docIds.impJob()] || { rev:0, data:null };
+        TT.docs[docIds.impJob()].data = { status:'awaiting', at:Date.now(), by:TT.me.id, byName:TT.me.name, requests:reqIds, entries };
+        markDirty(docIds.impJob()); await flushSaves();
+        IMP.flex = null;
+        modal(`<h2>⏳ أُرسلت طلبات التعميد</h2><div>أُرسل ${ar(reqIds.length)} طلب إلى مدير المدرسة (من «المستخدمون»). يتوقف الاستيراد حتى يعمّدهم، ثم اضغط «متابعة الاستيراد» في قسم «الجدول».</div>
+          <div class="modal-actions"><button class="btn" onclick="closeModal();show('table')">حسنًا</button></div>`);
+      }
+    }catch(e){ $('#nwOk').disabled = false; $('#nwAlert').innerHTML = '<div class="alert err">'+esc(e.message||String(e))+'</div>'; }
+  };
+}
+// استيراد معلّق بانتظار التعميد
+function impJobBanner(){
+  const j = D(docIds.impJob()); if(!j || j.status!=='awaiting') return '';
+  return `<div class="alert warn" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">⏳ استيراد معلّق بانتظار تعميد المدير لـ${ar((j.requests||[]).length)} معلم جديد (أرسله ${esc(j.byName||'')}).
+    <span style="flex:1"></span>${TT.canEdit?'<button class="btn sm" id="jobGo">متابعة الاستيراد</button><button class="btn sm ghost" id="jobCancel">إلغاء</button>':''}</div>`;
+}
+function impBindJob(){
+  if($('#jobCancel')) $('#jobCancel').onclick = async()=>{ if(!await confirmBox('إلغاء الاستيراد المعلّق','يُلغى الاستيراد المعلّق (طلبات التعميد تبقى عند المدير).','إلغاء الاستيراد',true)) return; D(docIds.impJob()).status='cancelled'; markDirty(docIds.impJob()); await flushSaves(); show('table'); };
+  if($('#jobGo')) $('#jobGo').onclick = async()=>{
+    const j = D(docIds.impJob());
+    const sts = await Promise.all((j.requests||[]).map(id=>db.collection('userRequests').doc(id).get().then(s=>s.exists ? s.data().status : 'missing').catch(()=>'unknown')));
+    const pend = sts.filter(s=>s==='pending').length, rej = sts.filter(s=>s==='rejected' || s==='missing').length;
+    if(rej){ modal(`<h2>رُفض طلب أو أكثر</h2><div>رفض المدير ${ar(rej)} طلبًا. أعد الاستيراد واربط هؤلاء بمعلمين موجودين.</div><div class="modal-actions"><button class="btn" onclick="closeModal()">حسنًا</button></div>`); return; }
+    if(pend){ toast('بانتظار تعميد '+ar(pend)+' من '+ar(sts.length)); return; }
+    j.status = 'done'; markDirty(docIds.impJob());
+    impCheckAndBuild(j.entries, 'flex');
+  };
 }
 </script>
 </body>

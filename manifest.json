@@ -1,0 +1,19 @@
+{
+  "id": "./myday.html",
+  "name": "إنجاز — المدرسة",
+  "short_name": "إنجاز",
+  "description": "جدولك اليومي وتنبيهات المدرسة والإشعارات الفورية",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./myday.html?src=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f7f6",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

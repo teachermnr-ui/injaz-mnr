@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<!-- إصدار: 2026-10-05.1 -->
+<!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>يومي</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="إنجاز">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/favicon-48.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f7f6; --surface:#ffffff; --surface-2:#eef4f3;
+  --brand:#0f766e; --brand-2:#0b5a54; --brand-l:#d5ece9;
+  --ink:#15242b; --muted:#5b6f76; --line:#d8e2e0;
+  --warn:#b45309; --warn-l:#fff4e5; --blue:#1e5aaa; --blue-l:#e9f1fd; --vio:#6b3fa0; --vio-l:#f2ebfa;
+  --r:16px; --shadow:0 1px 2px rgba(16,40,40,.06),0 8px 24px rgba(16,40,40,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Tajawal',"Segoe UI",Tahoma,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55;min-height:100vh}
+button,a.btn{font-family:inherit;cursor:pointer;border:none}
+.hidden{display:none !important}
+.boot{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted);text-align:center;padding:20px}
+.spin{display:inline-block;width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hero{background:linear-gradient(160deg,var(--brand),var(--brand-2));color:#fff;padding:calc(14px + env(safe-area-inset-top)) 16px 46px}
+.hero .top{display:flex;align-items:center;gap:8px;max-width:720px;margin:0 auto}
+.hero .top .sch{font-size:13px;opacity:.85;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hero .hb{background:rgba(255,255,255,.17);color:#fff;padding:7px 12px;border-radius:10px;font-weight:700;font-size:13px;white-space:nowrap;text-decoration:none}
+.hero h1{max-width:720px;margin:14px auto 2px;font-size:23px;font-weight:800}
+.hero .dt{max-width:720px;margin:0 auto;font-size:14px;opacity:.9}
+main{max-width:720px;margin:-30px auto 0;padding:0 14px 50px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 10px;font-size:16px;display:flex;align-items:center;gap:6px}
+.sub{color:var(--muted);font-size:13px}
+.quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.quick a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-decoration:none;color:var(--ink);background:var(--surface-2);border-radius:14px;padding:10px 4px;min-height:72px;font-size:12.5px;font-weight:700;text-align:center;position:relative}
+.quick a .i{font-size:22px}
+.quick a .dot{position:absolute;top:7px;left:10px;width:9px;height:9px;border-radius:50%;background:#e03131}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:flex;gap:12px;align-items:stretch;padding:9px 0;border-top:1px solid #eef2f1}
+.tl li:first-child{border-top:none}
+.tl .when{flex:0 0 64px;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.tl .when b{font-size:14px}
+.tl .when span{font-size:11px;color:var(--muted)}
+.tl .what{flex:1;min-width:0;border-right:4px solid var(--brand);background:#f7fbfa;border-radius:10px;padding:8px 10px}
+.tl .what b{display:block;font-size:15px}
+.tl .what span{display:block;font-size:12.5px;color:var(--muted)}
+.tl li.free .what{border-right-color:#cfdcd9;background:#fafbfb}
+.tl li.free .what b{color:var(--muted);font-weight:500;font-size:13.5px}
+.tl li.wait .what{border-right-color:var(--warn);background:var(--warn-l)}
+.tl li.wait .what b{color:#8a4a00}
+.tl li.sup .what{border-right-color:var(--blue);background:var(--blue-l)}
+.tl li.duty .what{border-right-color:var(--vio);background:var(--vio-l)}
+.tag{display:inline-block;font-size:11.5px;font-weight:800;padding:1px 8px;border-radius:20px;background:#fff;border:1px solid currentColor;margin-inline-start:6px;vertical-align:middle}
+.stage-h{font-size:13px;font-weight:800;color:var(--muted);margin:10px 0 2px}
+.al{display:flex;gap:10px;align-items:center;padding:10px 4px;border-top:1px solid #eef2f1;text-decoration:none;color:inherit}
+.al:first-of-type{border-top:none}
+.al .ai{font-size:22px;flex:0 0 30px;text-align:center}
+.al .at{flex:1;min-width:0}
+.al .at b{display:block;font-size:14.5px}
+.al .at span{display:block;font-size:12.5px;color:var(--muted)}
+.al .go{color:var(--brand);font-weight:800;font-size:18px}
+.banner{border-radius:14px;padding:12px 14px;margin-bottom:12px;font-weight:700}
+.banner.hol{background:#fff4e5;color:#8a4a00;border:1px solid #f3d9b1}
+.btn{display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;padding:9px 16px;border-radius:10px;border:1.5px solid var(--brand);background:#fff;color:var(--brand);min-height:42px;text-decoration:none}
+.btn.pri{background:var(--brand);color:#fff}
+.empty{color:var(--muted);text-align:center;padding:16px 6px;font-size:14px}
+@media (max-width:380px){ .quick{grid-template-columns:repeat(2,1fr)} }
+</style>
+</head>
+<body>
+<div id="bootView" class="boot"><span class="spin"></span><div id="bootMsg">جارٍ التحميل…</div></div>
+
+<div id="app" class="hidden">
+  <div class="hero">
+    <div class="top">
+      <span class="sch" id="tbSchool">—</span>
+      <a class="hb" href="index.html?home=1">الرئيسية</a>
+    </div>
+    <h1 id="hello">يومي</h1>
+    <div class="dt" id="today">—</div>
+  </div>
+  <main id="main"></main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script src="pwa.js"></script>
+<script>
+'use strict';
+/* =========================================================================
+   «يومي» — أول صفحة للمعلم في تطبيق إنجاز (ص-١٢). قراءة فقط.
+   جدول اليوم مرتبًا: حصصه (الجدول المنشور) + الانتظار المُرسَل له + المناوبة + الإشراف بمكانه،
+   وتحته تنبيهاته (تعاميم تحتاج توقيعه، زيارة صفية، مواعيد، تغيّر جدوله) + أزرار سريعة.
+   المدير والوكيل: يفتح لهم التطبيق الصفحة الرئيسية كاملة (التحويل عند ?src=app)، ويمكنهم فتح «يومي» من «لوحتي».
+   ========================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCEW-BTrfkqLUFXj7drtts7GkN6PXpbV4A",
+  authDomain: "injaz-classroom.firebaseapp.com",
+  projectId: "injaz-classroom",
+  storageBucket: "injaz-classroom.firebasestorage.app",
+  messagingSenderId: "640060389242",
+  appId: "1:640060389242:web:37e42c456d7b4e015e88c3"
+};
+let db = null;
+const WEEKDAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const ORD = ['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة','الثامنة','التاسعة','العاشرة'];
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const arN = n=>String(n).replace(/\d/g, d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+const dk = d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const wdOf = k=>new Date(k+'T12:00:00').getDay();
+const addDays = (k,n)=>{ const d=new Date(k+'T12:00:00'); d.setDate(d.getDate()+n); return dk(d); };
+const ordP = p=>ORD[p]||arN(p+1);
+function hijriLong(k){ try{ return new Date(k+'T12:00:00').toLocaleDateString('ar-SA-u-ca-islamic-umalqura',{year:'numeric',month:'long',day:'numeric'}); }catch(e){ return k; } }
+function hijriShort(k){ try{ return new Date(k+'T12:00:00').toLocaleDateString('ar-SA-u-ca-islamic-umalqura',{month:'long',day:'numeric'}); }catch(e){ return k; } }
+const fmtTime = t=>{ if(!t || !/^\d{1,2}:\d{2}$/.test(t)) return t||''; const [h,m]=t.split(':').map(Number); const hh=((h+11)%12)+1; return arN(hh)+':'+arN(String(m).padStart(2,'0'))+(h>=12?' م':' ص'); };
+function fatal(msg){
+  $('#bootView').innerHTML = `<div class="card" style="max-width:460px;text-align:center"><h3 style="justify-content:center">${esc(msg)}</h3>
+    <a class="btn pri" href="index.html?home=1">العودة للرئيسية</a></div>`;
+}
+
+const MD = { session:null, sid:null, me:null, role:'', ctx:null, period:'first', today:dk(new Date()) };
+(function start(){
+  let s=null; try{ s = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){}
+  if(!s || !s.userId){ location.replace('index.html'); return; }
+  if(s.role==='soloTeacher' || s.role==='admin' || !s.schoolId){ location.replace('index.html?home=1'); return; }
+  MD.session = s; MD.sid = s.schoolId; MD.period = s.period || 'first';
+  try{ firebase.initializeApp(firebaseConfig); db = firebase.firestore(); }
+  catch(e){ fatal('تعذّر الاتصال بقاعدة البيانات.'); return; }
+  firebase.auth().onAuthStateChanged(async au=>{
+    if(!au){ try{ localStorage.removeItem('cls_session'); }catch(e){} location.replace('index.html'); return; }
+    try{ await boot(au); }catch(e){ console.error(e); fatal('تعذّر تحميل يومك: '+(e.message||e)); }
+  });
+})();
+
+async function boot(au){
+  const us = await db.collection('users').doc(MD.session.userId).get();
+  if(!us.exists || us.data().authUid !== au.uid){ await firebase.auth().signOut(); location.replace('index.html'); return; }
+  const u = us.data();
+  if(u.active===false){ fatal('حسابك موقوف.'); return; }
+  MD.me = { id: us.id, name: u.username||MD.session.username||'' };
+  if(u.role==='schoolAdmin'){
+    if(!(u.adminSchools||[]).includes(MD.sid)){ fatal('لا يمكن الوصول لهذه المدرسة.'); return; }
+    MD.role = 'schoolAdmin';
+  } else {
+    const ctx = (u.schools||{})[MD.sid];
+    if(!ctx || ctx.active===false){ fatal('ليست لديك صلاحية الوصول لهذه المدرسة.'); return; }
+    MD.ctx = ctx; MD.role = ctx.role||'';
+  }
+  // التطبيق يبدأ من هنا: المدير والوكيل تُفتح لهم الصفحة الرئيسية كاملة
+  if(/[?&]src=app\b/.test(location.search) && (MD.role==='schoolAdmin' || MD.role==='agent')){ location.replace('index.html?home=1'); return; }
+  try{ const sd = await db.collection('schoolData').doc(MD.sid).get(); $('#tbSchool').textContent = sd.exists ? (sd.data().name||MD.sid) : MD.sid; }catch(e){ $('#tbSchool').textContent = MD.sid; }
+  const h = new Date().getHours();
+  $('#hello').textContent = (h<12?'صباح الخير':'مساء الخير')+'، '+(MD.me.name.split(' ')[0]||'');
+  $('#today').textContent = WEEKDAYS[wdOf(MD.today)]+' '+hijriLong(MD.today);
+  $('#bootView').classList.add('hidden'); $('#app').classList.remove('hidden');
+  $('#main').innerHTML = '<div class="card empty"><span class="spin"></span></div>';
+  if(window.InjazPWA) InjazPWA.init({ db, uid:MD.me.id, sid:MD.sid, role:MD.role });
+  const data = await loadAll();
+  render(data);
+}
+
+/* ---------- التحميل (كل مصدر مستقل؛ تعذّر أحدها لا يكسر الصفحة) ---------- */
+const ttDoc = id=>db.collection('timetables').doc(MD.sid).collection('data').doc(id).get()
+  .then(s=>{ if(!s.exists) return null; try{ return JSON.parse(s.data().value||'null'); }catch(e){ return null; } }).catch(()=>null);
+function expandHolidays(list){
+  const out = {};
+  (list||[]).forEach(h=>{ if(!h || !h.from) return; const end = h.to && h.to>=h.from ? h.to : h.from; let k = h.from, g=0;
+    while(k <= end && g++ < 400){ if(wdOf(k)<=4) out[k] = h.label||'إجازة'; k = addDays(k,1); } });
+  return out;
+}
+async function loadAll(){
+  const today = MD.today, tomorrow = addDays(today,1), me = MD.me.id;
+  const D = { lessons:[], layouts:{}, published:false, sig:'', waits:[], duty:[], visits:[], circ:0, appts:[], holidays:{} };
+  await Promise.all([
+    db.collection('schoolCalendar').doc(MD.sid).get().then(s=>{ D.holidays = expandHolidays(s.exists ? s.data().holidays : []); }).catch(()=>{}),
+    ttDoc(MD.period+'_published').then(p=>{
+      if(!p) return; D.published = true; D.layouts = p.layouts||{};
+      const mine = (p.byUser||{})[me]; if(mine){ D.lessons = mine.lessons||[]; D.sig = mine.sig||''; }
+    }),
+    Promise.all([today, tomorrow].map(k=>ttDoc(MD.period+'_wday_'+k).then(v=>{
+      if(!v || !v.sent) return;
+      (v.items||[]).filter(it=>it.subUid===me).forEach(it=>D.waits.push(Object.assign({ date:k }, it)));
+    }))),
+    db.collection('dutyPlans').where('members','array-contains',me).get().then(q=>{
+      D.duty = q.docs.map(d=>d.data()).filter(v=>v.schoolId===MD.sid && v.period===MD.period && v.pub);
+    }).catch(()=>{}),
+    db.collection('classVisits').where('teacherId','==',me).get().then(q=>{
+      const plan = q.docs.map(d=>d.data()).find(v=>v.kind==='plan' && v.schoolId===MD.sid && v.period===MD.period);
+      if(plan) D.visits = [['الأولى',plan.v1],['الثانية',plan.v2]].filter(x=>x[1] && x[1].date).map(x=>Object.assign({ label:x[0] }, x[1]));
+    }).catch(()=>{}),
+    db.collection('circulars').doc(MD.sid).collection('items').where('recipients','array-contains',me).get().then(async q=>{
+      let n = 0;
+      await Promise.all(q.docs.map(async d=>{
+        if(!d.data().mandatory) return;
+        try{ const s = await d.ref.collection('signatures').doc(me).get(); if(!s.exists) n++; }catch(e){}
+      }));
+      D.circ = n;
+    }).catch(()=>{}),
+    db.collection('guidanceAppointments').where('byUserId','==',me).get().then(q=>{
+      D.appts = q.docs.map(d=>d.data()).filter(a=>a.schoolId===MD.sid && a.date===today && a.status==='scheduled').sort((a,b)=>String(a.time).localeCompare(String(b.time)));
+    }).catch(()=>{}),
+  ]);
+  // تغيّر الجدول منذ آخر اطّلاع («جدولي»)
+  let seen = '';
+  if(MD.role==='schoolAdmin'){ try{ seen = localStorage.getItem('injaz_schedSeen_'+me+'_'+MD.sid+'_'+MD.period) || ''; }catch(e){} }
+  else seen = (((MD.ctx||{}).schedSeenSig)||{})[MD.period] || '';
+  D.schedChanged = D.published && !!D.sig && D.sig !== seen;
+  return D;
+}
+
+/* ---------- البناء ---------- */
+function dutyToday(D, k){
+  const w = wdOf(k), out = { morning:false, sup:[] };
+  D.duty.forEach(v=>{
+    const pub = v.pub;
+    if(((pub.dutyDays||{})[k]||[]).includes(MD.me.id)) out.morning = true;
+    const evL = {}; (pub.events||[]).forEach(e=>evL[e.key]=e.label);
+    const plL = {}; (pub.places||[]).forEach(p=>plL[p.id]=p.name);
+    const byEv = (pub.sup||{})[w] || {};
+    Object.keys(byEv).forEach(ev=>Object.keys(byEv[ev]||{}).forEach(pl=>{
+      if((byEv[ev][pl]||[]).includes(MD.me.id)) out.sup.push({ stage:v.stage, ev, evLabel:evL[ev]||'', place:plL[pl]||'' });
+    }));
+  });
+  return out;
+}
+function timeline(D){
+  const k = MD.today, w = wdOf(k);
+  const L = D.lessons.filter(l=>l.d===w);
+  const W = D.waits.filter(x=>x.date===k);
+  const dt = dutyToday(D, k);
+  const visitP = new Set(D.visits.filter(v=>v.date===k && v.p!=='' && v.p!=null).map(v=>+v.p));
+  const stages = [...new Set(L.map(l=>l.st).concat(W.map(x=>x.st)).concat(dt.sup.map(s=>s.stage)))];
+  const items = [];
+  if(dt.morning) items.push(`<li class="duty"><div class="when"><b>☀️</b><span>قبل الطابور</span></div><div class="what"><b>المناوبة الصباحية</b><span>استقبال الطلاب صباحًا</span></div></li>`);
+  stages.forEach(sk=>{
+    const lay = D.layouts[sk];
+    const SL = L.filter(l=>l.st===sk), SW = W.filter(x=>x.st===sk), SS = dt.sup.filter(s=>s.stage===sk);
+    if(stages.length>1) items.push(`<li style="border:none;padding:4px 0 0"><div class="stage-h">${esc((lay&&lay.label)||sk)}</div></li>`);
+    const at = {}; SL.forEach(l=>{ for(let i=0;i<(l.n||1);i++) at[l.p+i] = l; });
+    const wAt = {}; SW.forEach(x=>wAt[x.p] = x);
+    // الأعمدة بترتيب الجدول (حصص وفسح/صلاة)؛ نسخة قديمة بلا شكل: الحصص فقط
+    const cols = lay && lay.cols ? lay.cols : Array.from({ length: Math.max(0, ...SL.map(l=>l.p+(l.n||1)), ...SW.map(x=>x.p+1)) }, (_,p)=>({ k:'p', p, t:'' }));
+    const ppd = lay && lay.ppd ? (+lay.ppd[w]||0) : 99;
+    let after = 0;
+    const lastBusy = Math.max(-1, ...Object.keys(at).map(Number), ...Object.keys(wAt).map(Number));
+    cols.forEach(c=>{
+      if(c.k!=='p'){
+        const type = c.type==='prayer' ? 'prayer' : 'break';
+        const key = type+'_'+after;
+        SS.filter(s=>s.ev===key).forEach(s=>items.push(`<li class="sup"><div class="when"><b>${type==='prayer'?'🕌':'🍎'}</b><span>${esc(c.t?fmtTime(c.t):'')}</span></div><div class="what"><b>إشراف ${esc(s.evLabel||(type==='prayer'?'الصلاة':'الفسحة'))}</b><span>المكان: ${esc(s.place||'—')}</span></div></li>`));
+        return;
+      }
+      after = c.p+1;
+      if(c.p >= ppd) return;
+      const l = at[c.p], x = wAt[c.p];
+      const when = `<div class="when"><b>${esc(ordP(c.p))}</b><span>${esc(c.t?fmtTime(c.t):'')}</span></div>`;
+      if(l){
+        if(l.p !== c.p) return;   // الحصة المزدوجة تُعرض مرة واحدة
+        const dbl = (l.n||1) > 1 ? `<span class="tag" style="color:var(--brand)">مزدوجة</span>` : '';
+        const vis = visitP.has(c.p) ? `<span class="tag" style="color:var(--vio)">👁 زيارة صفية</span>` : '';
+        items.push(`<li>${when}<div class="what"><b>${esc(l.s||'')}${dbl}${vis}</b><span>${esc(l.cl||l.c||'')}</span></div></li>`);
+      } else if(x){
+        items.push(`<li class="wait">${when}<div class="what"><b>انتظار <span class="tag" style="color:var(--warn)">بدلًا من ${esc(x.absentName||'')}</span></b><span>${esc(x.clsLabel||x.cls||'')}${x.subj?' · '+esc(x.subj):''}</span></div></li>`);
+      } else if(c.p < lastBusy){
+        items.push(`<li class="free">${when}<div class="what"><b>فراغ</b></div></li>`);
+      }
+    });
+  });
+  if(dt.morning) items.push(`<li class="duty"><div class="when"><b>🔔</b><span>نهاية الدوام</span></div><div class="what"><b>المناوبة بعد الدوام</b><span>حتى خروج آخر طالب</span></div></li>`);
+  return { html: items.join(''), any: L.length || W.length || dt.morning || dt.sup.length };
+}
+function alerts(D){
+  const k = MD.today, out = [];
+  const row = (icon, title, sub, href)=> href
+    ? `<a class="al" href="${esc(href)}"><span class="ai">${icon}</span><span class="at"><b>${title}</b>${sub?`<span>${sub}</span>`:''}</span><span class="go">‹</span></a>`
+    : `<div class="al"><span class="ai">${icon}</span><span class="at"><b>${title}</b>${sub?`<span>${sub}</span>`:''}</span></div>`;
+  if(D.circ) out.push(row('📨', D.circ===1?'تعميم يحتاج توقيعك':arN(D.circ)+' تعاميم تحتاج توقيعك', 'اضغط للتوقيع', 'circulars.html'));
+  D.waits.filter(x=>x.date!==k).forEach(x=>out.push(row('⏳', 'انتظار غدًا — الحصة '+esc(ordP(x.p)), esc(x.clsLabel||x.cls||'')+(x.subj?' · '+esc(x.subj):'')+' · بدلًا من '+esc(x.absentName||''))));
+  D.visits.filter(v=>v.date>=k && v.date<=addDays(k,7)).forEach(v=>out.push(row('👁',
+    'الزيارة الصفية '+esc(v.label)+(v.date===k?' — اليوم':' — '+esc(WEEKDAYS[wdOf(v.date)])+' '+esc(hijriShort(v.date))),
+    (v.p!==''&&v.p!=null?'الحصة '+esc(ordP(+v.p))+' · ':'')+esc(v.cls||'')+' · الزائر: مدير المدرسة')));
+  // المناوبة القادمة خلال أسبوع (غير اليوم)
+  const nextDuty = [];
+  D.duty.forEach(v=>Object.keys(v.pub.dutyDays||{}).forEach(d=>{ if(d>k && d<=addDays(k,7) && (v.pub.dutyDays[d]||[]).includes(MD.me.id)) nextDuty.push(d); }));
+  nextDuty.sort().slice(0,2).forEach(d=>out.push(row('🛡️', 'مناوبتك القادمة: '+esc(WEEKDAYS[wdOf(d)])+(d===addDays(k,1)?' (غدًا)':''), esc(hijriLong(d))+' · صباحًا وبعد الدوام')));
+  if(D.appts.length) out.push(row('🗓️', D.appts.length===1?'موعد ولي أمر اليوم':arN(D.appts.length)+' مواعيد أولياء أمور اليوم',
+    D.appts.map(a=>esc(fmtTime(a.time))+' — '+esc(a.name||'')).join('، ')));
+  if(D.schedChanged) out.push(row('📅', 'تغيّر جدولك', 'اضغط للاطّلاع على الجدول الجديد', 'myschedule.html'));
+  return out.join('');
+}
+function render(D){
+  const k = MD.today, w = wdOf(k);
+  const hol = D.holidays[k];
+  let top = '';
+  if(hol) top = `<div class="banner hol">🏖️ اليوم إجازة${hol!=='إجازة'?' — '+esc(hol):''}</div>`;
+  else if(w>4) top = `<div class="banner hol">🌙 لا دوام اليوم — إجازة نهاية الأسبوع</div>`;
+  const T = (hol || w>4) ? { html:'', any:false } : timeline(D);
+  const al = alerts(D);
+  const quick = `<div class="card"><div class="quick">
+    <a href="omr.html"><span class="i">✍️</span>التحضير</a>
+    <a href="circulars.html"><span class="i">📨</span>التعاميم${D.circ?'<span class="dot"></span>':''}</a>
+    <a href="myschedule.html"><span class="i">📅</span>جدولي${D.schedChanged?'<span class="dot"></span>':''}</a>
+    <a href="index.html?home=1&board=1"><span class="i">🧭</span>لوحتي</a>
+  </div></div>`;
+  const tlCard = (hol || w>4) ? '' : `<div class="card"><h3>📋 جدول اليوم</h3>${T.any ? `<ul class="tl">${T.html}</ul>` :
+    `<div class="empty">${D.published?'لا حصص ولا تكليفات لك اليوم.':'لم يُنشر الجدول بعد لهذه الفترة.'}</div>`}</div>`;
+  const alCard = `<div class="card"><h3>🔔 تنبيهاتك</h3>${al || '<div class="empty">لا توجد تنبيهات جديدة.</div>'}</div>`;
+  $('#main').innerHTML = top + tlCard + alCard + quick + notifCard();
+  bindNotif();
+}
+window.addEventListener('injaz-push-changed', ()=>{ const c = document.getElementById('notifCard'); if(c){ c.outerHTML = notifCard() || '<div id="notifCard"></div>'; bindNotif(); } });
+function notifCard(){
+  if(!window.InjazPWA) return '';
+  const st = InjazPWA.notifState(), standalone = InjazPWA.isStandalone();
+  const btns = [];
+  if(st==='default') btns.push('<button class="btn pri" id="nOn">🔔 تفعيل الإشعارات</button>');
+  if(!standalone) btns.push('<button class="btn" id="nInstall">📲 تثبيت التطبيق</button>');
+  const s = InjazPWA.statusHTML();
+  if(!s && !btns.length) return '<div id="notifCard"></div>';
+  return `<div class="card" id="notifCard"><div class="sub" style="margin-bottom:${btns.length?'10px':'0'}">${s || 'فعّل الإشعارات ليصلك تنبيه فوري بحصص الانتظار والتعاميم والمناوبة والزيارات، وتذكير صباحي بيومك.'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${btns.join('')}</div><div id="nErr" class="sub" style="color:#a32020;margin-top:6px"></div></div>`;
+}
+function bindNotif(){
+  const on = $('#nOn');
+  if(on) on.onclick = async()=>{ on.disabled = true; const r = await InjazPWA.enable(); if(r.ok){ /* يُحدَّث عبر حدث injaz-push-changed */ } else { on.disabled = false; $('#nErr').textContent = r.msg; } };
+  const ins = $('#nInstall');
+  if(ins) ins.onclick = ()=>InjazPWA.showBanner();
+}
+</script>
+</body>
+</html>

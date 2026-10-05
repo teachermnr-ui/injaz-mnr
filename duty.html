@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-04.1 -->
+<!-- إصدار: 2026-10-05.2 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -132,7 +132,15 @@ function hijriYear(){ try{ const p=new Intl.DateTimeFormat('ar-SA-u-ca-islamic-u
 const DS = { sid:null, period:'first', me:null, canEdit:false, canPublish:false, schoolName:'', stages:{}, stage:'', users:[], plans:{}, tab:'setup' };
 const col = ()=>db.collection('dutyPlans');
 const planId = st=>DS.sid+'_'+DS.period+'_'+st;
-const emptyPlan = ()=>({ participants:[], places:[], dutyFrom:'', dutyTo:'', perDay:1, holidays:[], dutyDays:{}, sup:{}, agentName:'', principalName:'' });
+const emptyPlan = ()=>({ participants:[], places:[], dutyFrom:'', dutyTo:'', perDay:1, dutyDays:{}, sup:{}, agentName:'', principalName:'' });
+// الإجازات: مصدر واحد للمدرسة كلها — بند «الإجازات» في الأدوات الإدارية (schoolCalendar/{sid}) — ص-١٢
+DS.holidays = new Set(); DS.holidayList = [];
+function expandHolidays(list){
+  const out = new Set();
+  (list||[]).forEach(h=>{ if(!h || !h.from) return; const d = new Date(h.from+'T12:00:00'); const end = h.to && h.to>=h.from ? h.to : h.from; let g=0;
+    while(dk(d) <= end && g++ < 400){ if(d.getDay()<=4) out.add(dk(d)); d.setDate(d.getDate()+1); } });
+  return out;
+}
 
 (function start(){
   let s=null; try{ s = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){}
@@ -206,6 +214,11 @@ async function loadAll(){
       return { id:x.id, name:x.username||'', role:x.schools[DS.sid].role||'', busy, stagesTaught: Object.keys(busy) };
     })
     .sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  try{
+    const cs = await db.collection('schoolCalendar').doc(DS.sid).get();
+    DS.holidayList = cs.exists ? (cs.data().holidays||[]) : [];
+  }catch(e){ DS.holidayList = []; }
+  DS.holidays = expandHolidays(DS.holidayList);
   DS.plans = {};
   try{
     const q = await col().where('schoolId','==',DS.sid).get();
@@ -214,6 +227,8 @@ async function loadAll(){
   const keys = Object.keys(DS.stages);
   if(!DS.stage || !DS.stages[DS.stage]) DS.stage = keys[0] || '';
   keys.forEach(k=>{ if(!DS.plans[k]) DS.plans[k] = defaultPlan(k); });
+  // أيام صارت إجازة بعد التوزيع: تُستبعد من التوزيع (تُحفظ مع أول حفظ)
+  Object.values(DS.plans).forEach(p=>{ Object.keys(p.dutyDays||{}).forEach(k=>{ if(DS.holidays.has(k)) delete p.dutyDays[k]; }); });
 }
 // خطة جديدة: يُحدَّد مبدئيًا من يدرّس في هذه المرحلة وحدها؛ معلم المرحلتين يُحدَّد يدويًا في إحداهما
 function defaultPlan(st){
@@ -230,7 +245,7 @@ function otherStageOf(uid){ return Object.keys(DS.plans).find(k=>k!==DS.stage &&
 async function savePlan(silent){
   const p = P(); if(!p || !DS.canEdit) return;
   const doc = { kind:'plan', schoolId:DS.sid, period:DS.period, stage:DS.stage, stageLabel:S().label,
-    participants:p.participants, places:p.places, dutyFrom:p.dutyFrom, dutyTo:p.dutyTo, perDay:+p.perDay||1, holidays:p.holidays,
+    participants:p.participants, places:p.places, dutyFrom:p.dutyFrom, dutyTo:p.dutyTo, perDay:+p.perDay||1,
     dutyDays:p.dutyDays, sup:p.sup, agentName:p.agentName||'', principalName:p.principalName||'',
     updatedAt:Date.now(), updatedBy:DS.me.id, updatedByName:DS.me.name };
   try{ await col().doc(planId(DS.stage)).set(doc, { merge:true }); p.isNew = false; p.updatedAt = doc.updatedAt; if(!silent) toast('حُفظ'); }
@@ -241,7 +256,7 @@ async function savePlan(silent){
 function dutyDates(){
   const p = P(), s = S(); if(!p.dutyFrom || !p.dutyTo || p.dutyTo < p.dutyFrom) return [];
   const out = []; const d = new Date(p.dutyFrom+'T12:00:00'); const end = p.dutyTo; let guard = 0;
-  while(dk(d) <= end && guard++ < 400){ const k = dk(d); if(s.days.includes(d.getDay()) && !(p.holidays||[]).includes(k)) out.push(k); d.setDate(d.getDate()+1); }
+  while(dk(d) <= end && guard++ < 400){ const k = dk(d); if(s.days.includes(d.getDay()) && !DS.holidays.has(k)) out.push(k); d.setDate(d.getDate()+1); }
   return out;
 }
 // ترتيب المناوب في يوم: ٠ = عنده الحصة الأخيرة، ١ = قبل الأخيرة، … ، ٩٩ = لا حصص له ذلك اليوم
@@ -366,10 +381,10 @@ function renderSetup(body){
             <label class="field" style="flex:1 1 120px">المناوبون في اليوم<input type="number" id="dPer" min="1" max="10" value="${+p.perDay||1}" ${dis}></label>
           </div>
           <div class="sub" style="margin:8px 0">أيام الدوام فقط (${s.days.map(w=>WEEKDAYS[w]).join('، ')}). الأولوية لمن عنده الحصة الأخيرة ذلك اليوم، ثم قبل الأخيرة، وهكذا. عدد أيام المناوبة: <b>${arN(dutyDates().length)}</b></div>
-          <div class="row"><b style="font-size:13px">أيام الإجازة:</b>
-            ${(p.holidays||[]).slice().sort().map(h=>`<span class="chip" style="background:#eef2f1;color:#15242b">${esc(WEEKDAYS[wdOf(h)])} ${esc(hijri(h))}${DS.canEdit?` <button class="btn ghost sm" style="min-height:24px;padding:0 6px" data-hdel="${esc(h)}" aria-label="حذف">×</button>`:''}</span>`).join('')||'<span class="sub">لا يوجد</span>'}
-            ${DS.canEdit?'<input type="date" id="hNew" style="width:auto"><button class="btn sm" id="hAdd">+ إضافة إجازة</button>':''}
+          <div class="row"><b style="font-size:13px">الإجازات:</b>
+            ${DS.holidayList.slice().sort((a,b)=>String(a.from).localeCompare(String(b.from))).map(h=>`<span class="chip" style="background:#eef2f1;color:#15242b">${h.label?esc(h.label)+': ':''}${esc(hijri(h.from))}${h.to&&h.to!==h.from?' – '+esc(hijri(h.to)):''}</span>`).join('')||'<span class="sub">لا يوجد</span>'}
           </div>
+          <div class="sub" style="margin-top:6px">تُستبعد تلقائيًا. تُضاف وتُعدَّل من بند «الإجازات» في الأدوات الإدارية (مصدر واحد للمدرسة).</div>
         </section>
         <section class="card">
           <h3>الإشراف — الأماكن وعدد المشرفين</h3>
@@ -392,8 +407,6 @@ function renderSetup(body){
   $('#dFrom').onchange = ()=>{ p.dutyFrom=$('#dFrom').value; sv(); render(); };
   $('#dTo').onchange = ()=>{ p.dutyTo=$('#dTo').value; sv(); render(); };
   $('#dPer').onchange = ()=>{ p.perDay=Math.max(1,Math.min(10,+$('#dPer').value||1)); sv(); };
-  if($('#hAdd')) $('#hAdd').onclick = ()=>{ const v=$('#hNew').value; if(!v) return; if(!(p.holidays||[]).includes(v)) p.holidays=(p.holidays||[]).concat([v]); delete (p.dutyDays||{})[v]; sv(); render(); };
-  body.querySelectorAll('[data-hdel]').forEach(b=>b.onclick=()=>{ p.holidays=p.holidays.filter(x=>x!==b.dataset.hdel); sv(); render(); });
   if($('#plAdd')) $('#plAdd').onclick = ()=>{ p.places = p.places.concat([{ id:'pl'+Date.now().toString(36), name:'', counts:{} }]); sv(); render(); setTimeout(()=>{ const ins=body.querySelectorAll('[data-pn]'); if(ins.length) ins[ins.length-1].focus(); },0); };
   body.querySelectorAll('[data-pn]').forEach(i=>i.onchange=()=>{ p.places[+i.dataset.pn].name=i.value.trim(); sv(); });
   body.querySelectorAll('[data-pc]').forEach(i=>i.onchange=()=>{ const pl=p.places[+i.dataset.pc]; pl.counts=Object.assign({}, pl.counts, { [i.dataset.ev]: Math.max(0,Math.min(20,+i.value||0)) }); sv(); });

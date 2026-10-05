@@ -1,10 +1,18 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-05.1 -->
+<!-- إصدار: 2026-10-05.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>نظام الفصول الدراسية</title>
+<!-- تطبيق إنجاز (PWA) — ص-١٢ -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="إنجاز">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/favicon-48.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -487,6 +495,7 @@ body.theme-night .tab.tools-toggle.open{color:#fff}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script src="pwa.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
@@ -640,6 +649,8 @@ const ADMIN_TOOLS = [
   { key:'duty', perm:'tools.duty', label:'المناوبة والإشراف', icon:'🛡️', href:'duty.html', noAdmin:true, roles:['schoolAdmin','agent'] },
   // حصص الانتظار: تبويب في أداة الجدول — صلاحية كاملة للوكيل بالدور (أو تفويض «حصص الانتظار»)، وتفتح عليه مباشرة
   { key:'waiting', perm:'tools.waiting', permField:'edit', label:'حصص الانتظار', icon:'⏳', href:'timetable.html?sec=waiting', roles:['schoolAdmin','agent'] },
+  // الإجازات وساعات هدوء الإشعارات (ص-١٢): للمدير والوكيل بالدور فقط — بلا تفويض (لا يوجد بند صلاحية له)
+  { key:'holidays', perm:'tools.holidays', label:'الإجازات', icon:'🏖️', href:'holidays.html', noAdmin:true, roles:['schoolAdmin','agent'] },
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
 const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting'];
@@ -657,6 +668,8 @@ function myBoardVisible(){
   return !!CURRENT && !!CURRENT.id && CURRENT.role!=='admin' && CURRENT.role!=='soloTeacher' && !!CURRENT.schoolId;
 }
 const MYBOARD_ITEMS = [
+  // «يومي» (ص-١٢): جدول اليوم وتنبيهاته — أول صفحة للمعلم في التطبيق
+  { key:'myday',     href:'myday.html', icon:'☀️', label:'يومي' },
   { key:'circulars', href:'circulars.html', icon:'📨', label:'التعاميم' },
   { key:'schedule',  href:'myschedule.html', icon:'📅', label:'جدولي' },
   // الإرشاد الطلابي: مواعيد أولياء الأمور (الوكيل والموجه) + متابعات الحالات المستحقة (الموجه)
@@ -1829,9 +1842,27 @@ function enterApp(){
     b.onclick=()=>{ activeTab=t.key; renderTabs(); renderPanel(); };
     bar.appendChild(b);
   });
+  /* روابط مباشرة (من الإشعارات و«يومي»): ?tab=received|absence|… مرة واحدة بعد الدخول */
+  if(!enterApp._deep){ enterApp._deep = true;
+    try{ const qt = new URLSearchParams(location.search).get('tab'); if(qt && tabs.find(t=>t.key===qt)) activeTab = qt; }catch(e){} }
   if(!tabs.find(t=>t.key===activeTab)) activeTab = tabs.length?tabs[0].key:null;
   renderTabs(); renderPanel();
   watchActive();
+  /* تطبيق إنجاز (PWA): شريط التثبيت/الإشعارات وتحديث رمز الجهاز — لموظفي المدارس فقط */
+  if(window.InjazPWA && CURRENT.schoolId && CURRENT.role!=='admin' && CURRENT.role!=='soloTeacher'){
+    try{ InjazPWA.init({ db, uid:CURRENT.id, sid:CURRENT.schoolId, role:CURRENT.role }); }catch(e){}
+  }
+/* [ADMIN-TOOLS:BEGIN] */
+  /* المعلم داخل التطبيق المثبّت: أول صفحة «يومي» (المدير والوكيل تبقى لهم الرئيسية) — مرة لكل تشغيل */
+  try{
+    const qs = new URLSearchParams(location.search);
+    if(window.InjazPWA && InjazPWA.isStandalone() && myBoardVisible() && CURRENT.role!=='schoolAdmin' && CURRENT.role!=='agent'
+       && !qs.get('home') && !sessionStorage.getItem('injaz_myday_once')){
+      sessionStorage.setItem('injaz_myday_once','1'); location.replace('myday.html'); return;
+    }
+    if(qs.get('board') && !enterApp._board){ enterApp._board = true; setTimeout(()=>{ const t=$('#myBoardToggle'); if(t) toggleMyBoardMenu(t); }, 400); }
+  }catch(e){}
+/* [ADMIN-TOOLS:END] */
   buildIndexCtxSwitcher();
   if(typeof refreshUnread==='function') refreshUnread();
   if(typeof liveStartBadge==='function') liveStartBadge();
@@ -1931,7 +1962,11 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeToolsMenu()
 /* [ADMIN-TOOLS:END] */
 $('#tbOmr').onclick = ()=>{ window.location.href='omr.html'; };
 $('#tbPw').onclick  = ()=>{ openChangePw(false); };
-$('#tbOut').onclick = ()=>{ logout(); };
+$('#tbOut').onclick = async ()=>{
+  // فك ربط هذا الجهاز بإشعارات الحساب قبل الخروج (ص-١٢) — بحد أقصى ثانيتين
+  try{ if(window.InjazPWA) await Promise.race([InjazPWA.forget(), new Promise(r=>setTimeout(r,2000))]); }catch(e){}
+  logout();
+};
 $('#tbMyAcc').onclick = ()=>{ openMyAccountsPanel(); };
 async function openMyAccountsPanel(){
   if(!CURRENT || !CURRENT.id) return;

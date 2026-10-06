@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-05.1 -->
+<!-- إصدار: 2026-10-06.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -612,7 +612,11 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 
   <!-- ================= RESULTS ================= -->
   <section id="panel-results" class="panel">
-    <div class="card">
+    <div class="row no-print" id="resSubNav" style="margin-bottom:10px">
+      <button class="primary" id="resSubList" onclick="showResSub('list')">📋 سجل النتائج</button>
+      <button class="ghost" id="resSubAn" onclick="showResSub('an')">📈 تحليل النتائج</button>
+    </div>
+    <div class="card" id="resListCard">
       <h2>سجل النتائج <span class="sub" id="resCount">٠ بطاقة</span></h2>
       <div id="resultsTableHost"><div class="empty">لا توجد نتائج محفوظة بعد.<br>صحّح بطاقة ثم احفظها لتظهر هنا.</div></div>
       <div class="row no-print" style="margin-top:12px">
@@ -624,6 +628,39 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
         <button class="primary" style="background:var(--bg-0b7a63,#0b7a63)" onclick="saveGradesToRecord()">💾 حفظ الدرجات</button>
       </div>
       <p class="hint" style="margin-top:8px">«حفظ الدرجات» يرسل النتائج إلى سجل الأعمال ثم يفرّغ هذا السجل. «حذف النتائج» يمسح القائمة دون حفظ.</p>
+    </div>
+      <div class="card" id="resAnCard" style="display:none">
+      <h2>تحليل النتائج <span class="sub">من درجات سجل الأعمال</span></h2>
+      <div class="row no-print" style="margin-bottom:8px">
+        <button class="primary" type="button">📒 سجل الأعمال</button>
+        <button class="ghost" type="button" disabled title="قريباً">📄 ملف PDF من نور — قريباً</button>
+      </div>
+      <div class="no-print" id="anControls">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <label class="field" style="flex:1;min-width:150px">الفترة
+            <select id="anPeriod" onchange="anPeriodChanged()"></select></label>
+          <label class="field" style="flex:2;min-width:200px">البند المراد تحليله
+            <select id="anMetric" onchange="anMetricChanged()"></select></label>
+          <label class="field" style="flex:0 0 110px">درجة القياس
+            <input id="anScale" type="number" min="1" step="any" inputmode="decimal" onchange="anRun()"></label>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <label class="field" style="flex:1;min-width:170px">المادة (تظهر في العنوان)
+            <input id="anSubject" placeholder="مثال: الرياضيات" oninput="anRun()"></label>
+          <label class="field" style="flex:1;min-width:170px">نص المربع العلوي
+            <input id="anExam" placeholder="مثال: الاختبار النهائي" oninput="anRun()"></label>
+        </div>
+        <div style="margin:6px 0 4px;font-weight:700;font-size:13px">الفصول
+          <button class="ghost" type="button" style="padding:3px 10px;margin-right:8px" onclick="anSelectAll(true)">تحديد الكل</button>
+          <button class="ghost" type="button" style="padding:3px 10px" onclick="anSelectAll(false)">إلغاء التحديد</button></div>
+        <div id="anClasses"></div>
+      </div>
+      <div id="anReportHost" style="margin-top:10px;overflow-x:auto"></div>
+      <div class="row no-print" style="margin-top:12px">
+        <button class="primary" onclick="anPrint()">🖨️ طباعة / PDF</button>
+        <button class="ghost" id="anSendBtn" onclick="anSend()">📨 إرسال للموجه الطلابي</button>
+      </div>
+      <p class="hint" style="margin-top:8px">المستويات ثابتة: ممتاز ٩٠٪ فأكثر، جيد جداً ٨٠٪، جيد ٧٠٪، مقبول ٥٠٪، ضعيف أقل من ٥٠٪ من درجة القياس. الطالب بلا درجة مرصودة يُستبعد من الإحصاءات.</p>
     </div>
   </section>
 
@@ -3784,8 +3821,8 @@ function runExport(code, colorKey){
 
 // شعار وزارة التعليم كـSVG مضمّن (نفس نمط بطاقات الإجابة)
 function moeLogoInline(w){
-  const h=w*0.30, inner = moeLogoSVG(w/2, 0, w);
-  return `<svg width="${w}" height="${h+w*0.18}" viewBox="0 0 ${w} ${h+w*0.18}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+  const h=w*0.30, pad=w*0.03, inner = moeLogoSVG(w/2, pad, w);   // هامش علوي كي لا يُقصّ صف النقاط الأول
+  return `<svg width="${w}" height="${h+w*0.18+pad}" viewBox="0 0 ${w} ${h+w*0.18+pad}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
 }
 
 // ---- التصدير الكامل (شكل النموذج الرسمي) ----
@@ -5344,6 +5381,251 @@ async function renderOmrNotes(){
   }catch(e){ document.getElementById('omrInbox').innerHTML='<div class="empty">تعذّر تحميل الملاحظات: '+escapeHtml(e.message)+'</div>'; }
 }
 
+/* ============================================================
+   تحليل النتائج (ص-٢١): تقرير من سجل الأعمال — المستويات الخمسة ثابتة (٩٠/٨٠/٧٠/٥٠٪ من درجة القياس)
+   ============================================================ */
+const AN_LEVELS = [
+  { key:'exc',  name:'ممتاز',    pct:90, color:'#43b36f' },
+  { key:'vg',   name:'جيد جداً', pct:80, color:'#2bb3a6' },
+  { key:'good', name:'جيد',      pct:70, color:'#4299e1' },
+  { key:'ok',   name:'مقبول',    pct:50, color:'#ed8936' },
+  { key:'weak', name:'ضعيف',     pct:0,  color:'#f56565' }
+];
+const AN_CSS = `
+.anr{font-family:Tahoma,Arial,sans-serif;color:#13343b;background:#fff;direction:rtl;padding:16px 18px;border:1px solid #d9e2e0;border-radius:10px;max-width:794px;margin:0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.anr *{box-sizing:border-box}
+.anr .an-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.anr .an-hd .an-r{flex:1;font-size:12px;line-height:1.8;font-weight:700}
+.anr .an-hd .an-c{flex:0 0 auto;text-align:center}
+.anr .an-hd .an-l{flex:1;display:flex;justify-content:flex-end}
+.anr .an-xbox{border:1.5px solid #555;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;text-align:center;min-width:120px}
+.anr .an-ttl{margin:12px 0 12px;border:1.5px solid #1b8b86;border-radius:8px;text-align:center;padding:8px;font-weight:800;font-size:16px}
+.anr .an-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.anr .an-mb{position:relative;border:1.5px solid #1b8b86;border-radius:8px;padding:12px 10px 8px;text-align:center;font-size:14px;font-weight:700;min-height:44px}
+.anr .an-mb span{position:absolute;top:-10px;right:12px;background:#fff;padding:0 6px;color:#1b6f8b;font-size:12px;font-weight:800}
+.anr hr{border:0;border-top:1px solid #d4dcda;margin:10px 0}
+.anr .an-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px;align-items:start}
+.anr .an-two>div{min-width:0}
+.anr .an-kv{display:flex;gap:8px;margin-bottom:7px}
+.anr .an-kv .an-k{flex:0 0 118px;border:1.5px solid #1b8b86;border-radius:8px;padding:7px 8px;text-align:center;color:#1b6f8b;font-weight:800;font-size:13px}
+.anr .an-kv .an-v{flex:1;border:1px solid #bcc7c5;border-radius:8px;padding:7px 8px;text-align:center;font-weight:700;font-size:14px}
+.anr .an-lv h4{margin:0 0 6px;color:#16a34a;font-size:14px}
+.anr .an-lv .an-row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.2fr) minmax(0,.9fr);gap:6px;margin-bottom:6px}
+.anr .an-lv .an-hdr{color:#6b7a78;font-size:12px;text-align:center;font-weight:700}
+.anr .an-lv .an-pill{border-radius:7px;color:#fff;text-align:center;padding:7px 4px;font-weight:800;font-size:13px}
+.anr .an-lv .an-box{border:1px solid #bcc7c5;border-radius:7px;text-align:center;padding:7px 4px;font-weight:700;font-size:13px}
+.anr .an-charts{border:1.5px solid #1b8b86;border-radius:8px;padding:10px 12px;margin-top:12px;page-break-inside:avoid}
+.anr .an-ct{display:flex;align-items:center;gap:8px;color:#1b6f8b;font-weight:800;font-size:13px;margin:2px 0 8px}
+.anr .an-ct:before,.anr .an-ct:after{content:"";flex:1;border-top:2px dotted #c5d0ce}
+.anr .an-rings{display:flex;justify-content:space-around;margin-bottom:6px}
+.anr .an-bars{display:flex;justify-content:space-around;align-items:flex-end;margin-top:6px}
+.anr .an-bcol{flex:1;max-width:76px;min-width:0;margin:0 3px;text-align:center;font-size:12px;font-weight:700}
+.anr .an-bwrap{position:relative;height:110px;margin-top:20px;margin-bottom:4px}
+.anr .an-bt{position:absolute;inset:0;background:#e3e8ee;border-radius:8px}
+.anr .an-bf{position:absolute;left:0;right:0;bottom:0;border-radius:8px}
+.anr .an-bn{position:absolute;left:0;right:0;text-align:center;font-weight:800;font-size:14px}
+.anr .an-cmp{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px}
+.anr .an-cmp th,.anr .an-cmp td{border:1px solid #bcc7c5;padding:5px 4px;text-align:center}
+.anr .an-cmp th{background:#eef5f4;color:#1b6f8b}
+.anr .an-sig{display:flex;justify-content:space-between;margin-top:16px;font-size:13px;font-weight:700}
+.anr .an-note{font-size:12px;color:#6b7a78;margin-top:8px}
+.anr .an-rings svg{max-width:100%;height:auto}
+@media (max-width:600px){.anr{padding:12px 10px}.anr .an-meta{grid-template-columns:minmax(0,1fr);gap:16px}.anr .an-two{grid-template-columns:minmax(0,1fr)}.anr .an-hd{flex-wrap:wrap;justify-content:center}.anr .an-hd .an-r,.anr .an-hd .an-l{flex:1 1 100%;justify-content:center;text-align:center}.anr .an-rings{flex-wrap:wrap;gap:6px}.anr .an-kv .an-k{flex-basis:104px}.anr .an-cmp{display:block;overflow-x:auto}}
+`;
+function anFmt(n){ const r=Math.round((+n||0)*100)/100; return toArabic(String(r)); }
+function anPeriodChanged(){ anFillMetrics(); anRun(); }
+function anMetrics(pi){
+  const p=(state.workCfg.periods||[])[pi]; if(!p) return [];
+  const out=[{ key:'all', label:'مجموع '+p.name, max:periodTotal(p), get:e=>periodSum(e,p) }];
+  (p.items||[]).filter(it=>!it.hidden).forEach(it=> out.push({ key:'i:'+it.id, label:it.name, max:+it.max||0, get:e=>itemValue(e,it) }));
+  (p.groups||[]).forEach(g=> out.push({ key:'g:'+g.id, label:g.name, max:groupMax(p,g), get:e=>groupValue(e,p,g) }));
+  return out;
+}
+function anFillMetrics(){
+  const pi=+(document.getElementById('anPeriod')||{}).value||0;
+  const sel=document.getElementById('anMetric'); if(!sel) return;
+  const defs=anMetrics(pi); const cur=sel.value;
+  sel.innerHTML=defs.map(d=>`<option value="${escapeHtml(d.key)}">${escapeHtml(d.label)} (${toArabic(d.max)})</option>`).join('');
+  if(defs.some(d=>d.key===cur)) sel.value=cur;
+  anResetTexts();
+}
+function anCurMetric(){
+  const pi=+(document.getElementById('anPeriod')||{}).value||0;
+  const defs=anMetrics(pi); const k=(document.getElementById('anMetric')||{}).value;
+  return defs.find(d=>d.key===k)||defs[0]||null;
+}
+function anResetTexts(){
+  const m=anCurMetric(); if(!m) return;
+  const sc=document.getElementById('anScale'); if(sc) sc.value=m.max||'';
+  const ex=document.getElementById('anExam'); if(ex) ex.value=m.label;
+}
+function anMetricChanged(){ anResetTexts(); anRun(); }
+function anPopulate(){
+  const ps=document.getElementById('anPeriod'); if(!ps) return;
+  if(!ps.options.length){
+    ps.innerHTML=(state.workCfg.periods||[]).map((p,i)=>`<option value="${i}">${escapeHtml(p.name)}</option>`).join('');
+    ps.value=String(wlPeriodIndex());
+  }
+  anFillMetrics();
+  const host=document.getElementById('anClasses');
+  const checked=new Set([...host.querySelectorAll('input.anc:checked')].map(x=>x.value));
+  const vcs=getVirtualClasses();
+  host.innerHTML=vcs.length? vcs.map(v=>`<label class="chip" style="display:inline-flex;gap:6px;align-items:center;padding:6px 10px;border:1px solid var(--line);border-radius:18px;margin:0 0 6px 6px;cursor:pointer"><input type="checkbox" class="anc" value="${escapeHtml(v.key)}" ${checked.has(v.key)?'checked':''} onchange="anRun()"> ${escapeHtml(v.label)}</label>`).join('')
+    : '<div class="empty">لا توجد فصول. أضف الطلاب أولاً.</div>';
+  const sendBtn=document.getElementById('anSendBtn');
+  if(sendBtn) sendBtn.style.display = (CLS_SESSION && CLS_SESSION.schoolId && CLS_SESSION.role!=='soloTeacher') ? '' : 'none';
+  anRun();
+}
+function anSelectAll(on){ document.querySelectorAll('#anClasses input.anc').forEach(x=>{ x.checked=on; }); anRun(); }
+function showResSub(w){
+  const an = (w==='an');
+  const l=document.getElementById('resListCard'), a=document.getElementById('resAnCard');
+  if(l) l.style.display = an?'none':''; if(a) a.style.display = an?'':'none';
+  const b1=document.getElementById('resSubList'), b2=document.getElementById('resSubAn');
+  if(b1) b1.className = an?'ghost':'primary'; if(b2) b2.className = an?'primary':'ghost';
+  if(an) anPopulate();
+}
+function anLevelOf(v,scale){
+  const pc = v/scale*100 + 1e-9;
+  for(let i=0;i<4;i++) if(pc>=AN_LEVELS[i].pct) return i;
+  return 4;
+}
+function anStats(vals,scale){
+  const n=vals.length; const cnt=[0,0,0,0,0];
+  vals.forEach(v=>{ cnt[anLevelOf(v,scale)]++; });
+  const sum=vals.reduce((s,v)=>s+v,0);
+  return { n, sum, max:n?Math.max(...vals):0, min:n?Math.min(...vals):0, mean:n?sum/n:0, ach:n&&scale?(sum/n)/scale*100:0, cnt };
+}
+// يحسب بيانات التقرير من الاختيارات الحالية (أو null/نص خطأ)
+function anCompute(){
+  const m=anCurMetric(); const keys=[...document.querySelectorAll('#anClasses input.anc:checked')].map(x=>x.value);
+  if(!m || !keys.length) return { err:'اختر فصلاً واحداً على الأقل لعرض التحليل.' };
+  const scale = +(document.getElementById('anScale')||{}).value || m.max;
+  if(!(scale>0)) return { err:'درجة القياس لهذا البند صفر. أدخل درجة قياس أكبر من صفر.' };
+  const vcs=getVirtualClasses(); const per=[]; let excluded=0;
+  keys.forEach(k=>{
+    const pk=parseVKey(k);
+    const label=(vcs.find(v=>v.key===k)||{}).label || classNameByCode(pk.classCode) || pk.classCode;
+    const log=state.workLog[k]||{}; const vals=[];
+    state.students.filter(s=>s.classCode===pk.classCode).forEach(s=>{
+      const v=m.get(log[s.seat]||{});
+      if(v==null) excluded++; else vals.push(v);
+    });
+    per.push({ key:k, label, subject:pk.subject, vals, stats:anStats(vals,scale) });
+  });
+  const all=[].concat(...per.map(x=>x.vals));
+  if(!all.length) return { err:'لا توجد درجات مرصودة لهذا البند في الفصول المختارة.' };
+  return { metric:m, scale, per, all, excluded, stats:anStats(all,scale), pi:+(document.getElementById('anPeriod')||{}).value||0 };
+}
+function anRangeText(i,scale){
+  const b=AN_LEVELS.map(l=>l.pct*scale/100);
+  if(i===0) return anFmt(scale)+' - '+anFmt(b[0]);
+  if(i===4) return anFmt(b[3]-0.01)+' - '+anFmt(0);
+  return anFmt(b[i-1]-0.01)+' - '+anFmt(b[i]);
+}
+function anRing(l,pct){
+  const R=34, C=2*Math.PI*R, L=C*Math.max(0,Math.min(100,pct))/100;
+  return `<div><svg viewBox="0 0 84 84" width="88" height="88"><circle cx="42" cy="42" r="${R}" fill="none" stroke="#e3e8ee" stroke-width="7"/>`+
+    (pct>0?`<circle cx="42" cy="42" r="${R}" fill="none" stroke="${l.color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${L.toFixed(2)} ${C.toFixed(2)}" transform="rotate(-90 42 42)"/>`:'')+
+    `<text x="42" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#13343b" font-family="Tahoma,Arial">${l.name}</text>`+
+    `<text x="42" y="54" text-anchor="middle" font-size="12" font-weight="800" fill="#13343b" font-family="Tahoma,Arial">${anFmt(pct)}٪</text></svg></div>`;
+}
+function anReportHTML(d){
+  const h=state.workCfg.header||{};
+  const st=d.stats; const total=st.n;
+  const subj = ((document.getElementById('anSubject')||{}).value||'').trim() || [...new Set(d.per.map(x=>x.subject).filter(Boolean))].join('، ') || '';
+  const exam = ((document.getElementById('anExam')||{}).value||'').trim() || d.metric.label;
+  const classes = d.per.map(x=>x.label).join('، ');
+  const term = [h.term,h.year].filter(Boolean).join(' / ') || (state.workCfg.periods[d.pi]||{}).name || '—';
+  const title = 'تحليل نتائج '+(d.metric.key==='all'?'':'«'+d.metric.label+'» ')+(subj?'مادة ['+subj+']':'');
+  const kv=(k,v)=>`<div class="an-kv"><div class="an-k">${k}</div><div class="an-v">${v}</div></div>`;
+  const lvRows = AN_LEVELS.map((l,i)=>`<div class="an-row"><div class="an-pill" style="background:${l.color}">${l.name}</div><div class="an-box" dir="ltr">${anRangeText(i,d.scale)}</div><div class="an-box">${toArabic(st.cnt[i])}</div></div>`).join('');
+  const pcts = st.cnt.map(c=> total? Math.round(c/total*1000)/10 : 0);
+  const mx = Math.max(1,...st.cnt);
+  const rings = AN_LEVELS.map((l,i)=>anRing(l,pcts[i])).join('');
+  const bars = AN_LEVELS.map((l,i)=>{ const p=st.cnt[i]/mx*100; return `<div class="an-bcol"><div class="an-bwrap"><div class="an-bt"></div><div class="an-bf" style="height:${p.toFixed(1)}%;background:${l.color}"></div><div class="an-bn" style="bottom:calc(${p.toFixed(1)}% + 4px)">${toArabic(st.cnt[i])}</div></div>${l.name}</div>`; }).join('');
+  const cmp = d.per.length>1 ? `<table class="an-cmp"><thead><tr><th>الفصل</th><th>العدد</th><th>المتوسط</th><th>نسبة التحصيل</th>${AN_LEVELS.map(l=>`<th>${l.name}</th>`).join('')}</tr></thead><tbody>${d.per.map(x=>`<tr><td>${escapeHtml(x.label)}</td><td>${toArabic(x.stats.n)}</td><td>${anFmt(x.stats.mean)}</td><td>${anFmt(x.stats.ach)}٪</td>${x.stats.cnt.map(c=>`<td>${toArabic(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
+  const exc = d.excluded ? `<div class="an-note">استُبعد ${toArabic(d.excluded)} طالب لعدم رصد درجة لهم في هذا البند.</div>` : '';
+  return `<div class="anr">
+    <div class="an-hd">
+      <div class="an-r">${escapeHtml(h.edu||'')}<br>${escapeHtml(h.school||'')}</div>
+      <div class="an-c">${moeLogoInline(130)}</div>
+      <div class="an-l"><div class="an-xbox">${escapeHtml(exam)}</div></div>
+    </div>
+    <div class="an-ttl">${escapeHtml(title)}</div>
+    <div class="an-meta">
+      <div class="an-mb"><span>المرحلة الدراسية / الصف:</span>${escapeHtml(classes)}</div>
+      <div class="an-mb"><span>السنة / الفصل الدراسي:</span>${escapeHtml(term)}</div>
+      <div class="an-mb"><span>درجة القياس (الاختبار):</span>${anFmt(d.scale)}</div>
+    </div>
+    <hr>
+    <div class="an-two">
+      <div>${kv('عدد الطلاب',toArabic(st.n))}${kv('أعلى درجة',anFmt(st.max))}${kv('أقل درجة',anFmt(st.min))}${kv('متوسط الدرجات',anFmt(st.mean))}${kv('نسبة التحصيل',anFmt(st.ach)+'٪')}${kv('مجموع الدرجات',anFmt(st.sum))}</div>
+      <div class="an-lv"><h4>الإحصائيات التفصيلية</h4>
+        <div class="an-row an-hdr"><div>المستوى</div><div>النطاق</div><div>عدد الطلاب</div></div>${lvRows}</div>
+    </div>
+    <div class="an-charts"><div class="an-ct">رسم بياني (نسب الطلاب لكل تقدير)</div><div class="an-rings">${rings}</div>
+      <div class="an-ct">رسم بياني (عدد الطلاب لكل تقدير)</div><div class="an-bars">${bars}</div></div>
+    ${cmp}${exc}
+    <div class="an-sig"><div>معلم المادة / الاسم: ${escapeHtml(h.teacher||'')}</div><div>مدير المدرسة / الاسم: ${escapeHtml(h.principal||'')}</div></div>
+  </div>`;
+}
+function anRun(){
+  const host=document.getElementById('anReportHost'); if(!host) return;
+  const d=anCompute();
+  if(d.err){ host.innerHTML='<div class="empty">'+escapeHtml(d.err)+'</div>'; window.AN_LAST=null; return; }
+  window.AN_LAST=d;
+  host.innerHTML='<style>'+AN_CSS+'</style>'+anReportHTML(d);
+}
+function anPrint(){
+  const d=window.AN_LAST; if(!d){ alert('اختر فصلاً به درجات مرصودة أولاً.'); return; }
+  const win=window.open('','_blank'); if(!win){ alert('فضلاً اسمح بالنوافذ المنبثقة للطباعة.'); return; }
+  win.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تحليل النتائج</title>
+  <style>@page{size:A4 portrait;margin:8mm} body{margin:0;background:#fff} ${AN_CSS} .anr{border:none;border-radius:0;max-width:none;padding:0}</style></head>
+  <body>${anReportHTML(d)}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
+  win.document.close();
+}
+function anSummaryText(d){
+  const st=d.stats; const subj=((document.getElementById('anSubject')||{}).value||'').trim() || [...new Set(d.per.map(x=>x.subject).filter(Boolean))].join('، ');
+  const lv=AN_LEVELS.map((l,i)=>l.name+' '+toArabic(st.cnt[i])).join(' | ');
+  return 'تقرير تحليل نتائج: '+d.metric.label+(subj?' — مادة '+subj:'')+'\nالفصول: '+d.per.map(x=>x.label).join('، ')+
+    '\nعدد الطلاب: '+toArabic(st.n)+(d.excluded?' (استُبعد '+toArabic(d.excluded)+' لعدم رصد درجة)':'')+' | درجة القياس: '+anFmt(d.scale)+
+    '\nالمتوسط: '+anFmt(st.mean)+' | نسبة التحصيل: '+anFmt(st.ach)+'٪ | أعلى: '+anFmt(st.max)+' | أقل: '+anFmt(st.min)+
+    '\nالمستويات: '+lv;
+}
+async function anSend(){
+  const d=window.AN_LAST; if(!d){ alert('اختر فصلاً به درجات مرصودة أولاً.'); return; }
+  if(!CLS_SESSION || !CLS_SESSION.schoolId){ alert('الإرسال متاح لمنسوبي المدارس فقط.'); return; }
+  omrModal('<div style="text-align:center;color:var(--fg-888888,#888);padding:26px">جارٍ التحميل…</div>');
+  let cands=[];
+  try{
+    const snap=await db.collection('users').get();
+    cands=snap.docs.map(x=>({id:x.id,...x.data()}))
+      .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId])
+      .map(u=>{ const ctx=u.schools[CLS_SESSION.schoolId]; return { id:u.id, username:u.username, role:ctx.role, active:ctx.active }; })
+      .filter(u=>u.active!==false && u.role==='counselor');
+  }catch(e){}
+  if(!cands.length){ omrModal('<h3 style="margin:0 0 8px">إرسال للموجه الطلابي</h3><div class="empty">لا يوجد موجه طلابي مسجَّل في مدرستك.</div><button class="ghost" style="width:100%;margin-top:10px" onclick="closeOmrModal()">إغلاق</button>'); return; }
+  window.AN_SEND_TEXT = anSummaryText(d); window.AN_SEND_CLASSES = d.per.map(x=>x.label).join('، ');
+  omrModal('<h3 style="margin:0 0 8px">إرسال التحليل للموجه الطلابي</h3>'+
+    '<label class="field">المستلِم<select id="anRecip">'+cands.map(u=>'<option value="'+escapeHtml(u.id)+'">'+escapeHtml(u.username||'')+'</option>').join('')+'</select></label>'+
+    '<div style="margin:8px 0;padding:9px 11px;background:var(--bg-eef4f3,#eef4f3);border-radius:8px;white-space:pre-wrap;font-size:13px">'+escapeHtml(window.AN_SEND_TEXT)+'</div>'+
+    '<div class="row"><button class="primary" onclick="anDoSend()">إرسال</button><button class="ghost" onclick="closeOmrModal()">إلغاء</button></div>');
+}
+async function anDoSend(){
+  const rid=(document.getElementById('anRecip')||{}).value; if(!rid) return;
+  try{
+    const us=await db.collection('users').doc(rid).get(); const u=us.data()||{};
+    const ctx=(u.schools&&u.schools[CLS_SESSION.schoolId])||{};
+    await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
+      fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
+      recipients:[rid], recipientsInfo:[{userId:rid,name:u.username||'',role:ctx.role||u.role||''}], scope:'report',
+      studentSeat:'', studentName:'', classCode:'', className:window.AN_SEND_CLASSES||'',
+      text:window.AN_SEND_TEXT||'', referralReason:'تقرير تحليل نتائج', createdAt:Date.now(), replies:[], readAt:{}, closed:false });
+    closeOmrModal(); alert('تم إرسال التحليل إلى الموجه الطلابي.');
+  }catch(e){ alert('فشل الإرسال: '+(e.message||e)); }
+}
+
 function showTab(t){
   ['design','students','grade','results','cloud','notes'].forEach(x=>{
     document.getElementById('panel-'+x).classList.toggle('active', x===t);
@@ -5353,6 +5635,7 @@ function showTab(t){
   const flc=document.getElementById('flCard');
   if(t==='students'){ collapseStudentCards(); if(flc) flc.classList.add('show'); }
   else { if(flc) flc.classList.remove('show'); closeStuOverlays(); }
+  if(t==='results'){ const a=document.getElementById('resAnCard'); if(a && a.style.display!=='none') anPopulate(); }
   if(t==='cloud'){ autofillWlHeader().then(renderWlHeader); renderWlSetup(); renderStickerSetup(); renderWorkLog(); }
   if(t==='notes') renderOmrNotes(); else oliveOff();   // مستمعو التحويلات تعمل فقط والتبويب مفتوح
 }

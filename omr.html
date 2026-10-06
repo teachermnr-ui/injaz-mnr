@@ -11,6 +11,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css?v=2026-10-05.1">
 <script src="mn-dialog.js?v=2026-10-06.1"></script>
+<script>/* احتياط: لو لم يُحمَّل mn-dialog.js (لم يُرفع/كاش قديم) تبقى التأكيدات تعمل بنافذة المتصفح بدل أن تتوقف الأزرار */
+if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return Promise.resolve(window.confirm(m)); }; window.mnPrompt=function(m,d){ return Promise.resolve(window.prompt(m,d)); }; window.mnAlert=function(m){ window.alert(m); return Promise.resolve(); }; }</script>
 <script src="theme.js?v=2026-10-05.1"></script>
 <style>
   :root{
@@ -663,20 +665,13 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
         <label class="field" style="flex:1;min-width:170px">عرض سجل الصف
           <select id="wlViewClass" onchange="onVClassChange(this);renderWorkLog()"><option value="">— اختر الصف —</option></select>
         </label>
-        <label class="field" style="flex:1;min-width:150px">فترة الرصد
-          <select id="wlActivePeriod" onchange="onWlPeriodChange()">
-            <option value="0">الفترة الأولى</option>
-            <option value="1">الفترة الثانية</option>
-          </select>
-        </label>
       </div>
-      <div class="hint" id="wlPeriodHint" style="margin:-4px 0 10px">الدرجات تُرصد في الفترة المحددة أعلاه.</div>
       <div id="workLogHost"><div class="empty">اختر صفاً لعرض سجل أعماله.</div></div>
       <div class="row no-print" style="margin-top:10px">
         <button class="ghost" onclick="loadWorkLog(true)">🔄 تحديث السجل</button>
-        <button class="primary" style="background:var(--bg-0b7a63,#0b7a63)" onclick="openExportDialog('full')">🖨️ تصدير السجل PDF</button>
+        <button class="primary" style="background:var(--bg-0b7a63,#0b7a63)" onclick="openExportDialog('full')">🖨️ تصدير نموذج ١</button>
       </div>
-      <button class="ghost no-print" style="width:100%;margin-top:8px" onclick="openExportDialog('detailed')">📋 تصدير مفصّل (كل المحاولات — فترة واحدة)</button>
+      <button class="ghost no-print" style="width:100%;margin-top:8px" onclick="openExportDialog('detailed')">📋 تصدير نموذج ٢</button>
     </div>
     </div>
     <div class="card" id="resAnCard" style="display:none">
@@ -748,8 +743,8 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 <div id="stRecordOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,30,28,.55);z-index:9999;overflow-y:auto;padding:16px">
   <div style="max-width:560px;margin:24px auto;background:var(--bg-ffffff,#fff);border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <h2 style="margin:0">📋 سجل الطالب</h2>
-      <button class="ghost" style="padding:6px 12px" onclick="closeStudentRecord()">✕ إغلاق</button>
+      <h2 style="margin:0;font-size:18px;white-space:nowrap">📋 سجل الطالب</h2>
+      <button class="ghost" type="button" style="padding:6px 14px;width:auto;flex:0 0 auto;white-space:nowrap" onclick="closeStudentRecord()">✕ إغلاق</button>
     </div>
     <div id="stRecordBody"></div>
   </div>
@@ -3260,27 +3255,11 @@ async function loadWorkLog(manual){
   }catch(e){ if(manual) alert('فشل التحميل: '+e.message); }
 }
 // جدول سجل الأعمال الرسمي: بنود الفترتين (قابلة للإدخال) + المجاميع + النهائي + الغياب/التأخّر
-/* فترة الرصد الفرعية النشطة داخل منظومة الفترة الحالية */
-function wlPeriodIndex(){
-  const el=document.getElementById('wlActivePeriod');
-  const i = el ? +el.value : 0;
-  return (i===1) ? 1 : 0;
-}
-function onWlPeriodChange(){
-  try{ localStorage.setItem('wl_active_period'+(CLS_NS||''), String(wlPeriodIndex())); }catch(e){}
-  const h=document.getElementById('wlPeriodHint');
-  const p=(state.workCfg.periods||[])[wlPeriodIndex()];
-  if(h&&p) h.textContent='الدرجات تُرصد الآن في «'+p.name+'».';
-  renderWorkLog();
-}
-function restoreWlPeriod(){
-  try{
-    const v=localStorage.getItem('wl_active_period'+(CLS_NS||''));
-    const el=document.getElementById('wlActivePeriod');
-    if(el && v!=null) el.value = (v==='1'?'1':'0');
-  }catch(e){}
-  onWlPeriodChange();
-}
+/* لا «فترة رصد» نشطة بعد الآن: الجدول يعرض الفترتين وتُدخل الدرجة بالضغط على خانتها.
+   تبقى الدوال القديمة بلا أثر (أي استدعاء متبقٍّ يعمل بأمان) */
+function wlPeriodIndex(){ return 0; }
+function onWlPeriodChange(){ renderWorkLog(); }
+function restoreWlPeriod(){ renderWorkLog(); }
 function renderWorkLog(){
   const host = document.getElementById('workLogHost'); if(!host) return;
   const sel = document.getElementById('wlViewClass');
@@ -3339,28 +3318,34 @@ function openBandEditor(seat, itemId){
   const classCount = state.students.filter(x=>x.classCode===s.classCode).length;
   const catKey = (itemId||'').endsWith('_part')?'part' : (itemId||'').endsWith('_hw')?'hw' : (itemId||'').endsWith('_proj')?'proj' : null;
 
-  body.innerHTML = `<div style="text-align:right;font-weight:800;font-size:16px">${escapeHtml(item.name)} <span style="color:var(--muted);font-size:13px">(الوزن ${toArabic(item.max)})</span></div>
-    <div style="text-align:right;font-size:12px;color:var(--muted);margin-bottom:12px">${escapeHtml(period.name)}</div>
-    <div style="text-align:right;font-weight:700;font-size:13px;color:var(--ink);margin-bottom:6px">— درجة الطالب: ${escapeHtml(s.name)} —</div>
-    <div style="padding:10px;background:var(--bg-f6eef1,#f6eef1);border-radius:8px;margin-bottom:12px;font-weight:700;color:var(--teal-d)">الدرجة الحالية: ${cur!=null?toArabic(cur):'—'} من ${toArabic(item.max)}</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
-      <input id="bandScore" type="number" min="0" max="${item.max}" step="0.5" value="${cur!=null?cur:''}" placeholder="درجة من ${item.max}" style="flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit">
-      <button class="primary" style="padding:9px 14px" onclick="saveBandScore('${escapeHtml(seat)}','${itemId}')">حفظ</button>
+  const BTN='width:auto;flex:0 0 auto;padding:11px 22px;white-space:nowrap;border-radius:10px;font-weight:800';
+  const INP='flex:1 1 0;min-width:0;width:100%;padding:11px 10px;border:1.5px solid var(--line);border-radius:10px;font:inherit;font-size:17px;text-align:center;box-sizing:border-box';
+  body.innerHTML = `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <div style="font-weight:800;font-size:17px">${escapeHtml(item.name)}</div>
+      <div style="font-size:12.5px;color:var(--muted)">${escapeHtml(period.name)} · الوزن ${toArabic(item.max)}</div>
     </div>
-    ${catKey?`<div style="background:var(--bg-eef6f4,#eef6f4);border:1px solid var(--teal-l);border-radius:10px;padding:10px;margin-bottom:12px">
-      <div style="font-weight:800;color:var(--teal-d);margin-bottom:6px">⬇️ استيراد من سجل المتابعة</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">يجلب مجموع ملصقات «${escapeHtml(item.name)}» لهذا الطالب كدرجة قابلة للتعديل.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0;padding:10px 12px;background:var(--bg-f6eef1,#f6eef1);border-radius:10px">
+      <span style="font-weight:700;font-size:14px">${escapeHtml(s.name)}</span>
+      <span style="font-weight:800;color:var(--teal-d);white-space:nowrap">${cur!=null?toArabic(cur):'—'} <span style="font-weight:600;color:var(--muted)">من ${toArabic(item.max)}</span></span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:stretch;margin-bottom:14px">
+      <input id="bandScore" type="number" min="0" max="${item.max}" step="0.5" inputmode="decimal" value="${cur!=null?cur:''}" placeholder="الدرجة من ${toArabic(item.max)}" style="${INP}">
+      <button class="primary" type="button" style="${BTN}" onclick="saveBandScore('${escapeHtml(seat)}','${itemId}')">حفظ</button>
+    </div>
+    ${catKey?`<div style="background:var(--bg-eef6f4,#eef6f4);border:1px solid var(--teal-l);border-radius:12px;padding:10px 12px;margin-bottom:12px">
+      <div style="font-weight:800;color:var(--teal-d);margin-bottom:4px">⬇️ استيراد من سجل المتابعة</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">يجلب مجموع ملصقات «${escapeHtml(item.name)}» كدرجة قابلة للتعديل.</div>
       <div style="display:flex;gap:8px">
-        <button class="ghost" style="flex:1;padding:9px" onclick="importFromFollow('${escapeHtml(seat)}','${itemId}','${catKey}',false)">لهذا الطالب</button>
-        <button class="ghost" style="flex:1;padding:9px" onclick="importFromFollow('${escapeHtml(seat)}','${itemId}','${catKey}',true)">لكل الصف</button>
+        <button class="ghost" type="button" style="flex:1;padding:9px;width:auto" onclick="importFromFollow('${escapeHtml(seat)}','${itemId}','${catKey}',false)">لهذا الطالب</button>
+        <button class="ghost" type="button" style="flex:1;padding:9px;width:auto" onclick="importFromFollow('${escapeHtml(seat)}','${itemId}','${catKey}',true)">لكل الصف</button>
       </div>
     </div>`:''}
-    <div style="background:var(--bg-eef6f4,#eef6f4);border:1px solid var(--teal-l);border-radius:10px;padding:10px">
-      <div style="font-weight:800;color:var(--teal-d);margin-bottom:6px">⚡ إعطاء الدرجة لجميع طلاب الصف (${toArabic(classCount)})</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">تُسجَّل الدرجة نفسها لكل طلاب «${escapeHtml(classNameByCode(s.classCode)||s.classCode)}».</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="bandScoreAll" type="number" min="0" max="${item.max}" step="0.5" placeholder="درجة من ${item.max} للجميع" style="flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit">
-        <button class="primary" style="padding:9px 14px;background:var(--bg-0b7a63,#0b7a63)" onclick="saveBandScoreAll('${escapeHtml(seat)}','${itemId}')">للجميع</button>
+    <div style="border:1px dashed var(--teal-l,#bfe6cf);border-radius:12px;padding:10px 12px">
+      <div style="font-weight:800;color:var(--teal-d);margin-bottom:2px">⚡ الدرجة نفسها لكل طلاب الفصل (${toArabic(classCount)})</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">«${escapeHtml(classNameByCode(s.classCode)||s.classCode)}»</div>
+      <div style="display:flex;gap:8px;align-items:stretch">
+        <input id="bandScoreAll" type="number" min="0" max="${item.max}" step="0.5" inputmode="decimal" placeholder="الدرجة من ${toArabic(item.max)}" style="${INP}">
+        <button class="primary" type="button" style="${BTN};background:var(--bg-0b7a63,#0b7a63)" onclick="saveBandScoreAll('${escapeHtml(seat)}','${itemId}')">للجميع</button>
       </div>
     </div>`;
   closeOmrModal();
@@ -3378,7 +3363,7 @@ function saveBandScore(seat, itemId){
     if(isNaN(v) || v<0 || v>item.max){ alert('أدخل درجة بين 0 و'+item.max); return; }
     setItemScore(entry,itemId,v);
   }
-  saveWorkLogToCloud(); renderWorkLog(); openBandEditor(seat,itemId);
+  saveWorkLogToCloud(); renderWorkLog(); closeStudentRecord();
 }
 async function saveBandScoreAll(seat, itemId){
   const s = findStudent(seat); if(!s) return;
@@ -3390,8 +3375,8 @@ async function saveBandScoreAll(seat, itemId){
   if(!studs.length) return;
   if(!await mnConfirm('تسجيل الدرجة '+v+' في «'+item.name+'» لجميع طلاب الصف ('+studs.length+')؟')) return;
   studs.forEach(x=>{ setItemScore(workEntry(x.classCode,x.seat), itemId, v); });
-  saveWorkLogToCloud(); renderWorkLog(); openBandEditor(seat,itemId);
-  alert('تم تسجيل الدرجة لـ'+studs.length+' طالباً.');
+  saveWorkLogToCloud(); renderWorkLog(); closeStudentRecord();
+  alert('تم تسجيل الدرجة لـ'+toArabic(studs.length)+' طالباً.');
 }
 /* استيراد درجة البند من مجموع ملصقات سجل المتابعة (لا يُصفّر المتابعة) */
 async function importFromFollow(seat, itemId, catKey, forAll){
@@ -3796,7 +3781,7 @@ function openExportDialog(mode){
   const code = document.getElementById('wlViewClass') ? document.getElementById('wlViewClass').value : '';
   if(!code){ alert('اختر صفاً أولاً من «عرض سجل الصف».'); return; }
   exportMode = mode;
-  document.getElementById('exportTitle').textContent = mode==='detailed' ? '📋 تصدير مفصّل' : '🖨️ تصدير السجل';
+  document.getElementById('exportTitle').textContent = mode==='detailed' ? '📋 تصدير نموذج ٢' : '🖨️ تصدير نموذج ١';
   const body = document.getElementById('exportBody');
   let periodPick = '';
   if(mode==='detailed'){
@@ -6257,8 +6242,8 @@ function gradeTypeStep(step, data){
   const cfg = state.workCfg;
   if(step==='root'){
     const act = (typeof wlPeriodIndex==='function') ? wlPeriodIndex() : 0;
-    body.innerHTML = `<p class="hint" style="margin-top:0">اختر فترة الرصد التي تُرحَّل إليها الدرجات:</p>`
-      + cfg.periods.map((p,pi)=>btn(`📅 ${escapeHtml(p.name)}${pi===act?' ✓':''}`, `gradeTypeStep('item',{pi:${pi}})`, pi===act?'background:var(--bg-0b7a63,#0b7a63)':'')).join('');
+    body.innerHTML = `<p class="hint" style="margin-top:0">اختر الفترة التي تُرحَّل إليها الدرجات:</p>`
+      + cfg.periods.map((p,pi)=>btn(`📅 ${escapeHtml(p.name)}`, `gradeTypeStep('item',{pi:${pi}})`, '')).join('');
   } else if(step==='item'){
     const p = cfg.periods[data.pi];
     body.innerHTML = `<p class="hint" style="margin-top:0">اختر البند في «${escapeHtml(p.name)}»:</p>`

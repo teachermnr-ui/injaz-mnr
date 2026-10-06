@@ -8,6 +8,9 @@
 <title>المناوبة والإشراف</title>
 <meta name="theme-color" content="#3f6659">
 <link rel="stylesheet" href="theme.css?v=2026-10-05.1">
+<script src="mn-dialog.js?v=2026-10-06.1"></script>
+<script>/* احتياط: لو لم يُحمَّل mn-dialog.js (لم يُرفع/كاش قديم) تبقى التأكيدات تعمل بنافذة المتصفح بدل أن تتوقف الأزرار */
+if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return Promise.resolve(window.confirm(m)); }; window.mnPrompt=function(m,d){ return Promise.resolve(window.prompt(m,d)); }; window.mnAlert=function(m){ window.alert(m); return Promise.resolve(); }; }</script>
 <script src="theme.js?v=2026-10-05.1"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -345,7 +348,7 @@ function render(){
   if($('#btnAuto')) $('#btnAuto').onclick = async()=>{
     const pp = P();
     if(!pp.participants.length){ toast('حدّد المشمولين أولًا'); return; }
-    if((Object.keys(pp.dutyDays||{}).length || Object.keys(pp.sup||{}).length) && !confirm('إعادة التوزيع تستبدل التوزيع الحالي (ومنه تعديلاتك اليدوية). متابعة؟')) return;
+    if((Object.keys(pp.dutyDays||{}).length || Object.keys(pp.sup||{}).length) && !await mnConfirm('إعادة التوزيع تستبدل التوزيع الحالي (ومنه تعديلاتك اليدوية). متابعة؟')) return;
     autoDistribute(); await savePlan(true); toast('تم التوزيع'); if(DS.tab==='setup') DS.tab='duty'; render();
   };
   $('#btnPrint').onclick = printRecord;
@@ -413,7 +416,7 @@ function renderSetup(body){
   if($('#plAdd')) $('#plAdd').onclick = ()=>{ p.places = p.places.concat([{ id:'pl'+Date.now().toString(36), name:'', counts:{} }]); sv(); render(); setTimeout(()=>{ const ins=body.querySelectorAll('[data-pn]'); if(ins.length) ins[ins.length-1].focus(); },0); };
   body.querySelectorAll('[data-pn]').forEach(i=>i.onchange=()=>{ p.places[+i.dataset.pn].name=i.value.trim(); sv(); });
   body.querySelectorAll('[data-pc]').forEach(i=>i.onchange=()=>{ const pl=p.places[+i.dataset.pc]; pl.counts=Object.assign({}, pl.counts, { [i.dataset.ev]: Math.max(0,Math.min(20,+i.value||0)) }); sv(); });
-  body.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>{ if(!confirm('حذف المكان؟')) return; const id=p.places[+b.dataset.pdel].id; p.places.splice(+b.dataset.pdel,1);
+  body.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=async ()=>{ if(!await mnConfirm('حذف المكان؟')) return; const id=p.places[+b.dataset.pdel].id; p.places.splice(+b.dataset.pdel,1);
     Object.values(p.sup||{}).forEach(byEv=>Object.values(byEv||{}).forEach(byPl=>{ delete byPl[id]; })); sv(); render(); });
   $('#sgA').onchange = ()=>{ p.agentName=$('#sgA').value.trim(); sv(); };
   $('#sgP').onchange = ()=>{ p.principalName=$('#sgP').value.trim(); sv(); };
@@ -593,7 +596,7 @@ async function publish(){
   Object.values(p.sup||{}).forEach(byEv=>Object.values(byEv||{}).forEach(byPl=>Object.values(byPl||{}).forEach(a=>a.forEach(id=>members.add(id)))));
   if(!members.size){ toast('لا يوجد توزيع لاعتماده'); return; }
   const w = warnings();
-  if(!confirm((w.length?('تنبيهات:\n'+w.join('\n')+'\n\n'):'')+'اعتماد التوزيع ورفعه تعميمًا إلزاميًا لـ '+members.size+' معلم؟ يصل كل معلم تنبيه في «لوحتي».')) return;
+  if(!await mnConfirm((w.length?('تنبيهات:\n'+w.join('\n')+'\n\n'):'')+'اعتماد التوزيع ورفعه تعميمًا إلزاميًا لـ '+members.size+' معلم؟ يصل كل معلم تنبيه في «لوحتي».')) return;
   $('#btnPub').disabled = true;
   try{
     const names = {}; members.forEach(id=>names[id]=uName(id));

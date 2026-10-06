@@ -8,6 +8,9 @@
 <title>الإجازات</title>
 <meta name="theme-color" content="#3f6659">
 <link rel="stylesheet" href="theme.css?v=2026-10-05.1">
+<script src="mn-dialog.js?v=2026-10-06.1"></script>
+<script>/* احتياط: لو لم يُحمَّل mn-dialog.js (لم يُرفع/كاش قديم) تبقى التأكيدات تعمل بنافذة المتصفح بدل أن تتوقف الأزرار */
+if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return Promise.resolve(window.confirm(m)); }; window.mnPrompt=function(m,d){ return Promise.resolve(window.prompt(m,d)); }; window.mnAlert=function(m){ window.alert(m); return Promise.resolve(); }; }</script>
 <script src="theme.js?v=2026-10-05.1"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -219,7 +222,7 @@ function render(){
   document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{ HS.mode=b.dataset.mode; render(); });
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
     const h = HS.cal.holidays.find(x=>x.id===b.dataset.del); if(!h) return;
-    if(!confirm('حذف «'+(h.label||'إجازة')+'»؟')) return;
+    if(!await mnConfirm('حذف «'+(h.label||'إجازة')+'»؟')) return;
     const prev = HS.cal.holidays; HS.cal.holidays = prev.filter(x=>x.id!==h.id);
     if(!(await save('حُذفت'))) HS.cal.holidays = prev;
     render();

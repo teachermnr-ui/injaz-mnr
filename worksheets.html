@@ -7,6 +7,9 @@
 <title>أوراق العمل الإلكترونية</title>
 <meta name="theme-color" content="#3f6659">
 <link rel="stylesheet" href="theme.css?v=2026-10-05.1">
+<script src="mn-dialog.js?v=2026-10-06.1"></script>
+<script>/* احتياط: لو لم يُحمَّل mn-dialog.js (لم يُرفع/كاش قديم) تبقى التأكيدات تعمل بنافذة المتصفح بدل أن تتوقف الأزرار */
+if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return Promise.resolve(window.confirm(m)); }; window.mnPrompt=function(m,d){ return Promise.resolve(window.prompt(m,d)); }; window.mnAlert=function(m){ window.alert(m); return Promise.resolve(); }; }</script>
 <script src="theme.js?v=2026-10-05.1"></script>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -1024,8 +1027,8 @@
         wrap.appendChild(div);
         renderEditor(ex);
 
-        div.querySelector(`[data-delete="${ex.id}"]`).addEventListener("click", () => {
-          if (confirm("هل أنت متأكد من رغبتك في حذف هذا التمرين؟")) {
+        div.querySelector(`[data-delete="${ex.id}"]`).addEventListener("click", async () => {
+          if (await mnConfirm("هل أنت متأكد من رغبتك في حذف هذا التمرين؟")) {
             exercises.splice(idx, 1);
             renderExercises();
           }
@@ -1251,8 +1254,8 @@
       document.getElementById("worksheetLesson").value = "";
       document.getElementById("saveStatus").textContent = "";
     }
-    document.getElementById("cancelWorksheetBtn").addEventListener("click", () => {
-      if (!confirm("سيتم إلغاء جميع التمارين المستخرجة والبيانات المدخلة. هل ترغب في المتابعة؟")) return;
+    document.getElementById("cancelWorksheetBtn").addEventListener("click", async () => {
+      if (!await mnConfirm("سيتم إلغاء جميع التمارين المستخرجة والبيانات المدخلة. هل ترغب في المتابعة؟")) return;
       resetBuildActivityForm();
     });
 
@@ -1428,7 +1431,7 @@
         statusEl.textContent = "تم نشر الورقة بنجاح، وستظهر للطلاب في الفصول المحددة.";
         statusEl.style.color = "var(--ok)";
 
-        if (confirm("هل ترغب في حفظ نسخة من هذا النشاط في بنك الأسئلة الخاص بك؟")) {
+        if (await mnConfirm("هل ترغب في حفظ نسخة من هذا النشاط في بنك الأسئلة الخاص بك؟")) {
           try {
             const wSnap = await getDoc(doc(db, "worksheets", currentPublishId));
             if (wSnap.exists()) {
@@ -1512,7 +1515,7 @@
 
       listEl.querySelectorAll("[data-delete-draft]").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          if (!confirm("هل أنت متأكد من رغبتك في حذف هذه المسودة نهائيًا؟")) return;
+          if (!await mnConfirm("هل أنت متأكد من رغبتك في حذف هذه المسودة نهائيًا؟")) return;
           await deleteDoc(doc(db, "worksheets", btn.dataset.deleteDraft));
           await loadDrafts();
         });
@@ -1520,7 +1523,7 @@
 
       listEl.querySelectorAll("[data-tobank]").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          if (!confirm("ستُنقل هذه الورقة إلى بنك الأسئلة وتُحذف من المسودات. متابعة؟")) return;
+          if (!await mnConfirm("ستُنقل هذه الورقة إلى بنك الأسئلة وتُحذف من المسودات. متابعة؟")) return;
           const wDoc = snap.docs.find((d) => d.id === btn.dataset.tobank);
           const w = wDoc.data();
           await addDoc(collection(db, "questionBank"), {
@@ -1726,7 +1729,7 @@
 
       listEl.querySelectorAll("[data-delete-bank]").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          if (!confirm("هل أنت متأكد من رغبتك في حذف هذه الورقة نهائيًا من بنك الأسئلة؟ لا يمكن التراجع عن هذا الإجراء.")) return;
+          if (!await mnConfirm("هل أنت متأكد من رغبتك في حذف هذه الورقة نهائيًا من بنك الأسئلة؟ لا يمكن التراجع عن هذا الإجراء.")) return;
           await deleteDoc(doc(db, "questionBank", btn.dataset.deleteBank));
           await loadBank();
         });
@@ -1823,7 +1826,7 @@
           const w = wDoc.data();
 
           if (!w.stopped) {
-            if (!confirm(`هل ترغب في إيقاف نشر «${w.title}»؟ ستبقى الورقة ظاهرة للطلاب، ولكن لن يتمكنوا من التسليم، وستظهر عليها علامة "منتهي".`)) return;
+            if (!await mnConfirm(`هل ترغب في إيقاف نشر «${w.title}»؟ ستبقى الورقة ظاهرة للطلاب، ولكن لن يتمكنوا من التسليم، وستظهر عليها علامة "منتهي".`)) return;
             await updateDoc(doc(db, "worksheets", wId), { stopped: true });
             await loadWorksheetsForSubmissions();
             return;
@@ -1855,7 +1858,7 @@
         btn.addEventListener("click", async (e) => {
           e.stopPropagation();
           const wId = btn.dataset.republishAll;
-          if (!confirm("سيتم حذف جميع التسليمات الحالية لهذه الورقة نهائياً. هل ترغب في المتابعة؟")) return;
+          if (!await mnConfirm("سيتم حذف جميع التسليمات الحالية لهذه الورقة نهائياً. هل ترغب في المتابعة؟")) return;
           const subsDocs = await getSubmissionsFor(wId);
           await Promise.all(subsDocs.map((sd) => deleteDoc(doc(db, "submissions", sd.id))));
           await updateDoc(doc(db, "worksheets", wId), { stopped: false });
@@ -1946,7 +1949,7 @@
       if (!currentWorksheetId) return;
       const btn = document.getElementById("closePublishBtn");
       const st  = document.getElementById("closePublishStatus");
-      if (!confirm("إغلاق النشر وترحيل الدرجات إلى سجل المتابعة؟ لا يمكن التراجع.")) return;
+      if (!await mnConfirm("إغلاق النشر وترحيل الدرجات إلى سجل المتابعة؟ لا يمكن التراجع.")) return;
       btn.disabled = true; st.style.color = "var(--ink-soft)"; st.textContent = "جاري الترحيل...";
       try {
         const wSnap = await getDoc(doc(db, "worksheets", currentWorksheetId));

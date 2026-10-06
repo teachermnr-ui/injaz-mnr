@@ -6,6 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>منجز المدرسي</title>
 <link rel="stylesheet" href="theme.css?v=2026-10-06.1">
+<script src="mn-dialog.js?v=2026-10-06.1"></script>
+<script>/* احتياط: لو لم يُحمَّل mn-dialog.js (لم يُرفع/كاش قديم) تبقى التأكيدات تعمل بنافذة المتصفح بدل أن تتوقف الأزرار */
+if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return Promise.resolve(window.confirm(m)); }; window.mnPrompt=function(m,d){ return Promise.resolve(window.prompt(m,d)); }; window.mnAlert=function(m){ window.alert(m); return Promise.resolve(); }; }</script>
 <script src="theme.js?v=2026-10-06.1"></script>
 <!-- تطبيق إنجاز (PWA) — ص-١٢ -->
 <link rel="manifest" href="manifest.json">
@@ -1575,7 +1578,7 @@ function showPendingSchoolChooser(pendingList, onDone){
   };
   if(showBlock){
     $('#pscBlockBtn').onclick = async ()=>{
-      if(!confirm('حظر هذه المدرسة نهائيًا؟ لن تُعرض عليك مرة أخرى حتى لو أعاد مديرها تفعيلها — يمكنك رفع الحظر لاحقًا من «حساباتي».')) return;
+      if(!await mnConfirm('حظر هذه المدرسة نهائيًا؟ لن تُعرض عليك مرة أخرى حتى لو أعاد مديرها تفعيلها — يمكنك رفع الحظر لاحقًا من «حساباتي».')) return;
       try{
         const au = firebase.auth().currentUser;
         await usersCol().doc(au.uid).update({ blockedSchools: firebase.firestore.FieldValue.arrayUnion(next.schoolId), updatedAt: Date.now() });
@@ -2020,7 +2023,7 @@ async function openMyAccountsPanel(){
     });
     document.querySelectorAll('.myAcctDisableBtn').forEach(btn=>{
       btn.onclick = async function(){
-        if(!confirm('تعطيل هذا السياق؟ لن تقدر تُعيد تفعيله بنفسك — يحتاج مدير تلك المدرسة.')) return;
+        if(!await mnConfirm('تعطيل هذا السياق؟ لن تقدر تُعيد تفعيله بنفسك — يحتاج مدير تلك المدرسة.')) return;
         const sid = this.getAttribute('data-sid');
         try{
           await usersCol().doc(CURRENT.id).update({ ['schools.'+sid+'.active']: false, updatedAt: Date.now() });
@@ -2134,7 +2137,7 @@ function printLeaveSlip(id){
   w.document.close();
 }
 async function delLeave(id){
-  if(!confirm('حذف سجل الاستئذان؟')) return;
+  if(!await mnConfirm('حذف سجل الاستئذان؟')) return;
   try{ await leavesCol().doc(id).delete(); toast('حُذف'); renderAbsence($('#content')); }catch(e){ toast('خطأ: '+e.message); }
 }
 function leaveRow(l, canDel){
@@ -2251,7 +2254,7 @@ async function renderNotPreparedClasses(){
   }catch(e){ host.innerHTML = '<div class="alert err">'+esc(e.message)+'</div>'; }
 }
 async function confirmClassPrepared(classCode, date){
-  if(!confirm('تأكيد أن هذا الفصل تم تحضيره اليوم؟ سيُسجَّل اسمك.')) return;
+  if(!await mnConfirm('تأكيد أن هذا الفصل تم تحضيره اليوم؟ سيُسجَّل اسمك.')) return;
   try{
     const id = 'prep_'+CURRENT.schoolId+'_'+String(date).replace(/\//g,'-')+'_'+classCode;
     await db.collection('prepOverrides').doc(id).set({ schoolId:CURRENT.schoolId, date, classCode:String(classCode),
@@ -2436,7 +2439,7 @@ function openGuideThresholds(){
   };
 }
 async function guideIgnore(seat){
-  if(!confirm('إخفاء الطالب من قائمة المتابعة لهذه الفترة؟ يعود إن وصل تحويل جديد من الوكيل.')) return;
+  if(!await mnConfirm('إخفاء الطالب من قائمة المتابعة لهذه الفترة؟ يعود إن وصل تحويل جديد من الوكيل.')) return;
   try{
     await gSet().doc(CURRENT.schoolId).set({ ignored: { [SESSION.period]: { [seat]: { at:Date.now(), by:CURRENT.id } } }, updatedAt:Date.now() }, {merge:true});
     toast('أُخفي من القائمة'); renderGuidance($('#content'));
@@ -2727,7 +2730,7 @@ function openApptResult(id, status){
   };
 }
 async function delAppt(id){
-  if(!confirm('حذف الموعد؟')) return;
+  if(!await mnConfirm('حذف الموعد؟')) return;
   try{ await gAppts().doc(id).delete(); APPTS.list = APPTS.list.filter(x=>x.id!==id); paintAppts(); toast('حُذف'); }catch(e){ toast('خطأ: '+e.message); }
 }
 // «لوحتي ← مواعيدي»: للوكيل نافذة مستقلة، وللموجه قسم المواعيد في تبويبه
@@ -2821,7 +2824,7 @@ async function markAbsNotified(seat){
 }
 async function undoAbsNotified(seat){
   const n = ABS_ACC.notices[String(seat)]; if(!n) return;
-  if(!confirm('إلغاء توثيق إشعار هذا الطالب؟ سيعود للبطاقة إن كان فوق الحد.')) return;
+  if(!await mnConfirm('إلغاء توثيق إشعار هذا الطالب؟ سيعود للبطاقة إن كان فوق الحد.')) return;
   try{ await absNoticesCol().doc(n.id).delete(); delete ABS_ACC.notices[String(seat)]; paintAbsAcc(); }
   catch(e){ toast('خطأ: '+(e.message||e)); }
 }
@@ -3386,7 +3389,7 @@ async function approveUserRequest(id){
   }catch(e){ toast('خطأ: '+e.message); }
 }
 async function rejectUserRequest(id){
-  if(!confirm('رفض الطلب؟ يتوقف الاستيراد المرتبط به.')) return;
+  if(!await mnConfirm('رفض الطلب؟ يتوقف الاستيراد المرتبط به.')) return;
   try{ await db.collection('userRequests').doc(id).update({ status:'rejected', rejectedAt:Date.now(), rejectedBy:CURRENT.id }); renderUserRequests(); }catch(e){ toast('خطأ: '+e.message); }
 }
 /* [ADMIN-TOOLS:END] */
@@ -4456,7 +4459,6 @@ function paintClasses(){
     html += '<div class="card" style="padding:12px;margin-bottom:12px"><div class="field" style="margin:0"><label>المدرسة</label><select id="rSchool">'+
       sids.map(([id,s])=>'<option value="'+esc(id)+'"'+(id===RSchoolId?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select></div></div>';
   }
-  html += '<div class="sub-note">روستر المدرسة العام — عرض فقط. لإضافة أو تعديل فصول وطلاب، افتح <b>«إدارة الصف»</b> من الشريط العلوي (تبويب «الطلاب والفصول»).</div>';
   html += renderStagesHtml(false,false);
   $('#rRoot').innerHTML=html;
   const sel=$('#rSchool'); if(sel) sel.onchange=()=>{ RSchoolId=sel.value; loadRoster(); };
@@ -4524,8 +4526,8 @@ function studentRowR(s,canDel,canEdit){
   const openRec = 'openStudentRecordIndex(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')';
   return '<div style="padding:7px 4px;border-top:1px solid var(--line)">'+
     '<div style="display:flex;gap:6px;align-items:center">'+
-      '<span onclick="'+openRec+'" style="font-family:monospace;color:var(--accent);font-size:12.5px;min-width:90px;cursor:pointer;text-decoration:underline" title="عرض سجل الطالب">'+esc(s.seat||'—')+'</span>'+
-      '<span onclick="'+openRec+'" style="flex:1;font-size:14px;cursor:pointer" title="عرض سجل الطالب">'+esc(s.name)+'</span>'+
+      '<span onclick="'+openRec+'" style="font-family:monospace;color:var(--accent);font-size:12.5px;min-width:90px;cursor:pointer;text-decoration:underline">'+esc(s.seat||'—')+'</span>'+
+      '<span onclick="'+openRec+'" style="flex:1;font-size:14px;cursor:pointer">'+esc(s.name)+'</span>'+
       (canAbs?'<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:var(--bad);border-color:var(--bad)" onclick="markAbsentFromClasses(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\',\'absent\')" title="تسجيل غياب اليوم">غائب</button>'+
        '<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:var(--fg-c07a00,#c07a00);border-color:var(--bd-c07a00,#c07a00)" onclick="markAbsentFromClasses(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\',\'late\')" title="تسجيل تأخّر اليوم">متأخر</button>':'')+
       (canLv?'<button class="btn ghost sm" style="padding:4px 9px;font-size:12px;color:var(--fg-6d3fc0,#6d3fc0);border-color:var(--bd-6d3fc0,#6d3fc0)" onclick="openLeaveForm(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')" title="تسجيل استئذان (خروج مبكر)">استئذان</button>':'')+
@@ -4817,7 +4819,7 @@ async function markNoteRead(id){
 }
 async function replyNote(id){
   if(!can('index.received','edit') && !can('index.sent','edit')){ toast('ليس لديك صلاحية الرد (مشاهدة فقط).'); return; }
-  const txt=prompt('اكتب ردّك:'); if(!txt||!txt.trim()) return;
+  const txt=await mnPrompt('اكتب ردّك:'); if(!txt||!txt.trim()) return;
   const now=Date.now();
   try{
     await notesCol().doc(id).update({ replies: firebase.firestore.FieldValue.arrayUnion(

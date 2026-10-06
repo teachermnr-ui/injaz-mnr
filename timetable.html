@@ -8,6 +8,9 @@
 <title>بناء الجدول المدرسي</title>
 <meta name="theme-color" content="#3f6659">
 <link rel="stylesheet" href="theme.css?v=2026-10-05.1">
+<script src="mn-dialog.js?v=2026-10-06.1"></script>
+<script>/* احتياط: لو لم يُحمَّل mn-dialog.js (لم يُرفع/كاش قديم) تبقى التأكيدات تعمل بنافذة المتصفح بدل أن تتوقف الأزرار */
+if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return Promise.resolve(window.confirm(m)); }; window.mnPrompt=function(m,d){ return Promise.resolve(window.prompt(m,d)); }; window.mnAlert=function(m){ window.alert(m); return Promise.resolve(); }; }</script>
 <script src="theme.js?v=2026-10-05.1"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2299,11 +2302,11 @@ function renderExportTeachers(sks){
         ${(a.mode==='sub'||a.mode==='cancel')?` ← <select class="sm" data-exto="${t.id}"><option value="">— اختر المعلم البديل —</option>${candOpts(t.id, a.to)}<option value="__new__">＋ معلم جديد…</option></select>`:''}</td></tr>`;
     }).join('')}</table>`;
   $$('[data-exa]').forEach(s=>s.onchange=()=>{ TT.exp.actions[s.dataset.exa].mode = s.value; renderExportTeachers(sks); });
-  $$('[data-exto]').forEach(s=>s.onchange=()=>{
+  $$('[data-exto]').forEach(s=>s.onchange=async ()=>{
     const tid = s.dataset.exto;
     if(s.value==='__new__'){
-      const name = prompt('اسم المعلم الجديد:'); if(!name || !name.trim()){ s.value=''; return; }
-      const nid = normDigits(prompt('رقم الهوية (اختياري):')||'').replace(/\D/g,'');
+      const name = await mnPrompt('اسم المعلم الجديد:'); if(!name || !name.trim()){ s.value=''; return; }
+      const nid = normDigits(await mnPrompt('رقم الهوية (اختياري):')||'').replace(/\D/g,'');
       const src = teacherById(tid);
       const nt = { id:uid('t'), name:name.trim(), nid, stages: (src.stages||[]).filter(k=>sks.includes(k)), quota: +src.quota||24, unavail:{} };
       teachers().push(nt); markDirty(docIds.teachers());

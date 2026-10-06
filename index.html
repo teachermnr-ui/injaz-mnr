@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-06.2 -->
+<!-- إصدار: 2026-10-06.3 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -917,6 +917,13 @@ async function doStudentGoogleLogin(){
     const gUser = res.user;
     if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
 
+    // حاجز: البريد المسجَّل لمعلم/منسوب مدرسة/حساب فردي لا يُستخدم أبدًا في دخول الطالب
+    if(await emailBelongsToStaff(gUser)){
+      try{ await firebase.auth().signOut(); }catch(_){}
+      alertBox('studentLoginAlert','err','هذا البريد مسجَّل في النظام كحساب معلم أو منسوب مدرسة، ولا يمكن استخدامه في دخول الطالب. استخدم بريدك الشخصي كطالب.');
+      return;
+    }
+
     const q = await studentAccountsCol().where('googleUid','==',gUser.uid).limit(1).get();
     if(!q.empty){
       const data = q.docs[0].data();
@@ -958,6 +965,24 @@ async function doStudentGoogleLogin(){
     alertBox('studentLoginAlert','err',msg);
     try{ firebase.auth().signOut(); }catch(_){}
   }finally{ t.textContent=old; btn.disabled=false; }
+}
+
+/* هل الحساب/البريد يخص معلمًا أو منسوب مدرسة أو حسابًا فرديًا؟ (يُفحص بالـ UID ثم بالبريد) */
+async function emailBelongsToStaff(gUser){
+  const uid = gUser.uid;
+  const em = String(gUser.email||'').trim();
+  const emails = Array.from(new Set([em, em.toLowerCase()])).filter(Boolean);
+  const direct = await usersCol().doc(uid).get();
+  if(direct.exists) return true;
+  const byUid = await usersCol().where('authUid','==',uid).limit(1).get();
+  if(!byUid.empty) return true;
+  for(const e of emails){
+    const a = await usersCol().where('email','==',e).limit(1).get();
+    if(!a.empty) return true;
+    const b = await usersCol().where('googleEmail','==',e).limit(1).get();
+    if(!b.empty) return true;
+  }
+  return false;
 }
 
 async function doStudentVerify(){

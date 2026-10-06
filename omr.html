@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css?v=2026-10-05.1">
+<script src="mn-dialog.js?v=2026-10-06.1"></script>
 <script src="theme.js?v=2026-10-05.1"></script>
 <style>
   :root{
@@ -257,6 +258,7 @@ body.alt-theme .flcard{ display:flex !important; }
 <style>
 /* منع وميض التبويبات: مخفية حتى تُحسم الصلاحيات (أو تُستعاد من ذاكرة الجهاز) */
 body.cls-perm-pending nav.tabs > button{ visibility:hidden; }
+  nav.tabs > button.tab-hidden-grp{ display:none !important; }
 body.cls-perm-pending nav.tabs::after{ content:'⏳'; font-size:14px; opacity:.6; padding:6px 10px; }
 body.cls-panels-pending section.panel{ visibility:hidden; }
 </style>
@@ -271,9 +273,9 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 <header class="app">
   <nav class="tabs">
     <button id="tab-students" class="active" onclick="showTab('students')">👥 الطلاب والفصول</button>
-    <button id="tab-design" onclick="showTab('design')">تصميم الاختبار</button>
-    <button id="tab-grade" onclick="showTab('grade')">📷 التصحيح</button>
-    <button id="tab-results" onclick="showTab('results')">📊 النتائج</button>
+    <button id="tab-design" onclick="showTab('exam')">تصميم الاختبار</button>
+    <button id="tab-grade" class="tab-hidden-grp" onclick="showTab('grade')">📷 التصحيح</button>
+    <button id="tab-results" class="tab-hidden-grp" onclick="showTab('results')">📊 النتائج</button>
     <button id="tab-cloud" onclick="showTab('cloud')">💼 سجل الأعمال</button>
     <button id="tab-notes" onclick="showTab('notes')">تحويلات الطلاب</button>
     <button id="tab-worksheets" onclick="window.location.href='worksheets.html'">🗂️ أنشطة رقمية</button>
@@ -294,6 +296,14 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 </header>
 
 <main>
+  <!-- ================= تصميم الاختبار: شريط التبويبات الثلاثة (لا تبويب مفعّل افتراضيًا) ================= -->
+  <section id="panel-exam" class="panel">
+    <div class="row no-print" id="examSubNav" style="margin-bottom:10px">
+      <button class="ghost" id="examSub-design" onclick="showTab('design')">📝 إعداد نموذج اختبار</button>
+      <button class="ghost" id="examSub-grade" onclick="showTab('grade')">📷 التصحيح</button>
+      <button class="ghost" id="examSub-results" onclick="showTab('results')">📊 النتائج</button>
+    </div>
+  </section>
   <!-- ================= DESIGN ================= -->
   <section id="panel-design" class="panel">
     <div class="card no-print">
@@ -512,7 +522,6 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
             </span>
           </div>
         </div>
-        <p class="hint" style="margin:10px 0 0;line-height:1.9">📌 <b>عرض سجل الطالب:</b> اضغط رقم الهوية.<br>📌 <b>تسجيل الحضور والغياب والتأخّر:</b> استخدم الأزرار الظاهرة تحت اسم الطالب مباشرة.<br>📌 <b>نقل الطالب أو حذفه:</b> من الزرّين بجانب بطاقته. <b>إرسال ملاحظة عن طالب:</b> من تبويب «تحويلات الطلاب».</p>
         <button class="primary" style="position:sticky;bottom:8px;margin-top:12px;width:100%;background:var(--bg-0b7a63,#0b7a63);box-shadow:0 4px 14px rgba(11,122,99,.35);z-index:20" onclick="commitAttendance()">💾 حفظ</button>
       </div>
     </div>
@@ -612,10 +621,6 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 
   <!-- ================= RESULTS ================= -->
   <section id="panel-results" class="panel">
-    <div class="row no-print" id="resSubNav" style="margin-bottom:10px">
-      <button class="primary" id="resSubList" onclick="showResSub('list')">📋 سجل النتائج</button>
-      <button class="ghost" id="resSubAn" onclick="showResSub('an')">📈 تحليل النتائج</button>
-    </div>
     <div class="card" id="resListCard">
       <h2>سجل النتائج <span class="sub" id="resCount">٠ بطاقة</span></h2>
       <div id="resultsTableHost"><div class="empty">لا توجد نتائج محفوظة بعد.<br>صحّح بطاقة ثم احفظها لتظهر هنا.</div></div>
@@ -629,7 +634,52 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
       </div>
       <p class="hint" style="margin-top:8px">«حفظ الدرجات» يرسل النتائج إلى سجل الأعمال ثم يفرّغ هذا السجل. «حذف النتائج» يمسح القائمة دون حفظ.</p>
     </div>
-      <div class="card" id="resAnCard" style="display:none">
+  </section>
+
+  <!-- ================= سجل الأعمال ================= -->
+  <section id="panel-cloud" class="panel">
+    <div class="row no-print" id="cloudSubNav" style="margin-bottom:10px">
+      <button class="primary" id="cloudSubLog" onclick="showCloudSub('log')">📒 سجل الأعمال</button>
+      <button class="ghost" id="cloudSubAn" onclick="showCloudSub('an')">📈 تحليل النتائج</button>
+    </div>
+    <div id="cloudLogWrap">
+    <div class="card">
+      <h2><button class="collapseBtn" onclick="toggleCard('cardSetupAll',this)">+</button> إعداد سجل الأعمال <span class="sub">الترويسة وبنود السجل</span></h2>
+      <div id="cardSetupAll" style="display:none">
+        <div style="border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden">
+          <h3 style="margin:0;padding:11px 12px;background:var(--bg-f4f8f7,#f4f8f7);font-size:14px;cursor:pointer" onclick="toggleCard('cardWlHeader',this)"><span class="collapseBtn" style="display:inline-block">+</span> ترويسة السجل</h3>
+          <div id="cardWlHeader" style="display:none;padding:12px"><div id="wlHeaderHost"></div></div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden">
+          <h3 style="margin:0;padding:11px 12px;background:var(--bg-f4f8f7,#f4f8f7);font-size:14px;cursor:pointer" onclick="toggleCard('cardWlSetup',this)"><span class="collapseBtn" style="display:inline-block">+</span> إعداد بنود السجل</h3>
+          <div id="cardWlSetup" style="display:none;padding:12px"><div id="wlSetupHost"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>سجل الأعمال</h2>
+      <div id="cloudStatus" class="status info" style="margin-bottom:10px">جارٍ التهيئة…</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label class="field" style="flex:1;min-width:170px">عرض سجل الصف
+          <select id="wlViewClass" onchange="onVClassChange(this);renderWorkLog()"><option value="">— اختر الصف —</option></select>
+        </label>
+        <label class="field" style="flex:1;min-width:150px">فترة الرصد
+          <select id="wlActivePeriod" onchange="onWlPeriodChange()">
+            <option value="0">الفترة الأولى</option>
+            <option value="1">الفترة الثانية</option>
+          </select>
+        </label>
+      </div>
+      <div class="hint" id="wlPeriodHint" style="margin:-4px 0 10px">الدرجات تُرصد في الفترة المحددة أعلاه.</div>
+      <div id="workLogHost"><div class="empty">اختر صفاً لعرض سجل أعماله.</div></div>
+      <div class="row no-print" style="margin-top:10px">
+        <button class="ghost" onclick="loadWorkLog(true)">🔄 تحديث السجل</button>
+        <button class="primary" style="background:var(--bg-0b7a63,#0b7a63)" onclick="openExportDialog('full')">🖨️ تصدير السجل PDF</button>
+      </div>
+      <button class="ghost no-print" style="width:100%;margin-top:8px" onclick="openExportDialog('detailed')">📋 تصدير مفصّل (كل المحاولات — فترة واحدة)</button>
+    </div>
+    </div>
+    <div class="card" id="resAnCard" style="display:none">
       <h2>تحليل النتائج <span class="sub">من درجات سجل الأعمال</span></h2>
       <div class="row no-print" style="margin-bottom:8px">
         <button class="primary" type="button">📒 سجل الأعمال</button>
@@ -661,49 +711,6 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
         <button class="ghost" id="anSendBtn" onclick="anSend()">📨 إرسال للموجه الطلابي</button>
       </div>
       <p class="hint" style="margin-top:8px">المستويات ثابتة: ممتاز ٩٠٪ فأكثر، جيد جداً ٨٠٪، جيد ٧٠٪، مقبول ٥٠٪، ضعيف أقل من ٥٠٪ من درجة القياس. الطالب بلا درجة مرصودة يُستبعد من الإحصاءات.</p>
-    </div>
-  </section>
-
-  <!-- ================= سجل الأعمال ================= -->
-  <section id="panel-cloud" class="panel">
-    <div class="card">
-      <h2><button class="collapseBtn" onclick="toggleCard('cardSetupAll',this)">+</button> إعداد السجل والملصقات <span class="sub">الترويسة وبنود السجل وملصقات التقييم</span></h2>
-      <div id="cardSetupAll" style="display:none">
-        <div style="border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden">
-          <h3 style="margin:0;padding:11px 12px;background:var(--bg-f4f8f7,#f4f8f7);font-size:14px;cursor:pointer" onclick="toggleCard('cardWlHeader',this)"><span class="collapseBtn" style="display:inline-block">+</span> ترويسة السجل</h3>
-          <div id="cardWlHeader" style="display:none;padding:12px"><div id="wlHeaderHost"></div></div>
-        </div>
-        <div style="border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden">
-          <h3 style="margin:0;padding:11px 12px;background:var(--bg-f4f8f7,#f4f8f7);font-size:14px;cursor:pointer" onclick="toggleCard('cardWlSetup',this)"><span class="collapseBtn" style="display:inline-block">+</span> إعداد بنود السجل</h3>
-          <div id="cardWlSetup" style="display:none;padding:12px"><div id="wlSetupHost"></div></div>
-        </div>
-        <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
-          <h3 style="margin:0;padding:11px 12px;background:var(--bg-f4f8f7,#f4f8f7);font-size:14px;cursor:pointer" onclick="toggleCard('cardStickers',this)"><span class="collapseBtn" style="display:inline-block">+</span> إعداد ملصقات التقييم</h3>
-          <div id="cardStickers" style="display:none;padding:12px"><div id="stickerSetupHost"></div></div>
-        </div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>سجل الأعمال</h2>
-      <div id="cloudStatus" class="status info" style="margin-bottom:10px">جارٍ التهيئة…</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <label class="field" style="flex:1;min-width:170px">عرض سجل الصف
-          <select id="wlViewClass" onchange="onVClassChange(this);renderWorkLog()"><option value="">— اختر الصف —</option></select>
-        </label>
-        <label class="field" style="flex:1;min-width:150px">فترة الرصد
-          <select id="wlActivePeriod" onchange="onWlPeriodChange()">
-            <option value="0">الفترة الأولى</option>
-            <option value="1">الفترة الثانية</option>
-          </select>
-        </label>
-      </div>
-      <div class="hint" id="wlPeriodHint" style="margin:-4px 0 10px">الدرجات تُرصد في الفترة المحددة أعلاه.</div>
-      <div id="workLogHost"><div class="empty">اختر صفاً لعرض سجل أعماله.</div></div>
-      <div class="row no-print" style="margin-top:10px">
-        <button class="ghost" onclick="loadWorkLog(true)">🔄 تحديث السجل</button>
-        <button class="primary" style="background:var(--bg-0b7a63,#0b7a63)" onclick="openExportDialog('full')">🖨️ تصدير السجل PDF</button>
-      </div>
-      <button class="ghost no-print" style="width:100%;margin-top:8px" onclick="openExportDialog('detailed')">📋 تصدير مفصّل (كل المحاولات — فترة واحدة)</button>
     </div>
   </section>
 
@@ -1583,15 +1590,15 @@ function updateGradeButtons(){
   [bc,bl,bb,bu,bp,bs].forEach(b=>{ if(b){ b.disabled=!ok; b.style.opacity=ok?'1':'.5'; b.style.cursor=ok?'pointer':'not-allowed'; } });
   if(warn) warn.style.display = ok ? 'none' : 'block';
 }
-function onCaptureClick(){
+async function onCaptureClick(){
   if(!isKeyComplete()){ alert('أكمل مفتاح الإجابة لكل الأسئلة أولاً.'); return; }
-  if(state.results.length && !confirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. سيُضاف التصحيح الجديد إليها (تراكمياً). متابعة؟`)) return;
+  if(state.results.length && !await mnConfirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. سيُضاف التصحيح الجديد إليها (تراكمياً). متابعة؟`)) return;
   document.getElementById('fileInput').click();
 }
-function onLiveClick(){
+async function onLiveClick(){
   if(!isKeyComplete()){ alert('أكمل مفتاح الإجابة لكل الأسئلة أولاً.'); return; }
-  if(!confirm('📹 المسح المباشر المتعدّد:\n\nتحتاج هذه الخاصية ثباتاً في الإضاءة ودقّةً عاليةً في الكاميرا، لأنها تلتقط تلقائياً أثناء التمرير.\n\nللحصول على أفضل دقّة استخدم «التقاط بنقرة» أو «تصوير دفعة».\n\nهل تريد المتابعة بالمسح المباشر؟')) return;
-  if(state.results.length && !confirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. سيُضاف المسح الجديد إليها (تراكمياً). متابعة؟`)) return;
+  if(!await mnConfirm('📹 المسح المباشر المتعدّد:\n\nتحتاج هذه الخاصية ثباتاً في الإضاءة ودقّةً عاليةً في الكاميرا، لأنها تلتقط تلقائياً أثناء التمرير.\n\nللحصول على أفضل دقّة استخدم «التقاط بنقرة» أو «تصوير دفعة».\n\nهل تريد المتابعة بالمسح المباشر؟')) return;
+  if(state.results.length && !await mnConfirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. سيُضاف المسح الجديد إليها (تراكمياً). متابعة؟`)) return;
   startLiveScan();
 }
 // اختيار الصف المراد تصحيحه (اختياري)
@@ -1821,7 +1828,7 @@ async function addCustomSubject(){
   /* [ADMIN-TOOLS:END] */
   // إضافة مادة جديدة تُكتب بروستر المدرسة — تتطلب صلاحية إضافة الفصول والطلاب؛ الإسناد نفسه لا يتطلبها
   if(CLS_USER_ROLE!=='admin' && !CLS_CAN_ADD_MANAGE){ alert('إضافة مادة جديدة للقائمة تتطلب صلاحية إضافة الفصول والطلاب. اختر من المواد الموجودة.'); return; }
-  const name = prompt('اسم المادة الجديدة:');
+  const name = await mnPrompt('اسم المادة الجديدة:');
   if(!name || !name.trim()) return;
   const trimmed = name.trim();
   if(allSubjectsList().includes(trimmed)){ alert('المادة موجودة بالفعل.'); return; }
@@ -1972,7 +1979,7 @@ async function delClass(code){
   const msg = studs.length>0
     ? `حذف الصف «${cl?cl.name:code}» سيحذف أيضاً ${toArabic(studs.length)} طالباً مرتبطين به نهائياً. متابعة؟`
     : `حذف الصف «${cl?cl.name:code}»؟`;
-  if(!confirm(msg)) return;
+  if(!await mnConfirm(msg)) return;
   // حذف طلاب الصف وكل بياناتهم المرتبطة (حضور + سجل أعمال) — محلي (خاص بالمعلم)
   studs.forEach(s=>{ delete state.attendance[s.seat]; delete state.selectedStudents[s.seat]; });
   Object.keys(state.workLog).forEach(k=>{ if(k===code || k.indexOf(code+'::')===0) delete state.workLog[k]; });
@@ -1990,7 +1997,7 @@ function classNameByCode(code){ const c=(state.fullClasses.length?state.fullClas
 // توليد رمز دخول رجعي لفصل قديم أُنشئ قبل إضافة هذه الميزة (يطلب المرحلة أولاً)
 async function assignClassStage(code){
   if(!canManageStudents()){ alert('هذا الإجراء صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
-  const stage = prompt('اختر المرحلة لهذا الصف بالضبط كما هي مكتوبة:\nابتدائية\nمتوسطة\nثانوية');
+  const stage = await mnPrompt('اختر المرحلة لهذا الصف بالضبط كما هي مكتوبة:\nابتدائية\nمتوسطة\nثانوية');
   if(!stage) return;
   if(!CLS_STAGE_LETTER[stage.trim()]){ alert('المرحلة غير صحيحة. اكتبها بالضبط: ابتدائية أو متوسطة أو ثانوية.'); return; }
   try{
@@ -2382,7 +2389,7 @@ async function confirmImport(){
 }
 async function delStudent(seat){
   if(!canManageStudents()){ alert('حذف الطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
-  if(!confirm('حذف هذا الطالب؟ سيختفي من جميع الشاشات والسجلات والتقارير ويتوقف دخوله فوراً، مع الاحتفاظ ببياناته في قاعدة البيانات.')) return;
+  if(!await mnConfirm('حذف هذا الطالب؟ سيختفي من جميع الشاشات والسجلات والتقارير ويتوقف دخوله فوراً، مع الاحتفاظ ببياناته في قاعدة البيانات.')) return;
   try{
     await mutateSharedRoster((classes, students)=>{
       const st = students.find(s=>s.seat===seat);
@@ -2469,9 +2476,9 @@ async function ciEditClass(code){
   if(!ciCanEdit()){ alert('ليست لديك صلاحية تعديل بيانات الفصول.'); return; }
   const all = state.fullClasses.length ? state.fullClasses : state.classes;
   const cl = all.find(c=>String(c.code)===String(code)); if(!cl) return;
-  const nm = prompt('اسم الصف:', cl.name||''); if(nm===null) return;
+  const nm = await mnPrompt('اسم الصف:', cl.name||''); if(nm===null) return;
   const newName = nm.trim(); if(!newName){ alert('اسم الصف لا يكون فارغًا.'); return; }
-  const cd = prompt('رمز الصف:', cl.code||''); if(cd===null) return;
+  const cd = await mnPrompt('رمز الصف:', cl.code||''); if(cd===null) return;
   const newCode = normalizeDigits(cd).trim(); if(!newCode){ alert('رمز الصف لا يكون فارغًا.'); return; }
   /* [ADMIN-TOOLS:MOD] ORIG: if(newName!==cl.name && all.some(c=>String(c.code)!==String(code) && c.name===newName)){ alert('اسم الصف مستخدم لصف آخر.'); return; } */
   /* الاسم يتكرر بين الشعب؛ الرمز وحده هو الفريد */
@@ -2493,7 +2500,7 @@ async function ciEditClass(code){
       return;
     }
   }
-  if(codeChanged && !confirm('تغيير رمز الصف من «'+cl.code+'» إلى «'+newCode+'». سيُحدَّث الطلاب والإسنادات. متابعة؟')) return;
+  if(codeChanged && !await mnConfirm('تغيير رمز الصف من «'+cl.code+'» إلى «'+newCode+'». سيُحدَّث الطلاب والإسنادات. متابعة؟')) return;
   try{
     await mutateSharedRoster((classes, students)=>{
       const c = classes.find(x=>String(x.code)===String(code)); if(!c) throw new Error('الصف غير موجود.');
@@ -2542,7 +2549,7 @@ async function ciRequestDelete(code){
   if(!ciCanEdit()){ alert('ليست لديك صلاحية حذف الفصول.'); return; }
   if(ciIsApprover()){ await ciDeleteNow(code, true); return; }
   const cl = state.classes.find(c=>String(c.code)===String(code));
-  if(!confirm('طلب حذف الصف «'+(cl?cl.name:code)+'»؟ لن يُحذف حتى يوافق مدير المدرسة.')) return;
+  if(!await mnConfirm('طلب حذف الصف «'+(cl?cl.name:code)+'»؟ لن يُحذف حتى يوافق مدير المدرسة.')) return;
   try{
     await mutateSharedRoster((classes)=>{
       const c = classes.find(x=>String(x.code)===String(code)); if(!c) throw new Error('الصف غير موجود.');
@@ -2570,7 +2577,7 @@ async function ciDeleteNow(code, ask){
   const msg = studs.length>0
     ? 'حذف الصف «'+(cl?cl.name:code)+'» سيحذف أيضًا '+toArabic(studs.length)+' طالبًا مرتبطين به. متابعة؟'
     : 'حذف الصف «'+(cl?cl.name:code)+'»؟';
-  if(ask && !confirm(msg)) return;
+  if(ask && !await mnConfirm(msg)) return;
   studs.forEach(s=>{ delete state.attendance[s.seat]; delete state.selectedStudents[s.seat]; });
   Object.keys(state.workLog).forEach(k=>{ if(k===code || k.indexOf(code+'::')===0) delete state.workLog[k]; });
   try{
@@ -2752,7 +2759,7 @@ async function openMyAccountsPanel(){
     });
     document.querySelectorAll('.myAcctDisableBtn').forEach(btn=>{
       btn.onclick = async function(){
-        if(!confirm('تعطيل هذا السياق؟ لن تقدر تُعيد تفعيله بنفسك — يحتاج مدير تلك المدرسة.')) return;
+        if(!await mnConfirm('تعطيل هذا السياق؟ لن تقدر تُعيد تفعيله بنفسك — يحتاج مدير تلك المدرسة.')) return;
         const sid = this.getAttribute('data-sid');
         try{
           await db.collection('users').doc(CLS_SESSION.userId).update({ ['schools.'+sid+'.active']: false, updatedAt: Date.now() });
@@ -2807,7 +2814,7 @@ function showOtherPendingChooser(list){
   };
   if(showBlock){
     document.getElementById('opcBlockBtn').onclick = async function(){
-      if(!confirm('حظر هذه المدرسة نهائيًا؟ لن تُعرض عليك مرة أخرى حتى لو أعاد مديرها تفعيلها.')) return;
+      if(!await mnConfirm('حظر هذه المدرسة نهائيًا؟ لن تُعرض عليك مرة أخرى حتى لو أعاد مديرها تفعيلها.')) return;
       try{
         const au = firebase.auth().currentUser;
         await db.collection('users').doc(au.uid).update({ blockedSchools: firebase.firestore.FieldValue.arrayUnion(next.schoolId), updatedAt: Date.now() });
@@ -3373,7 +3380,7 @@ function saveBandScore(seat, itemId){
   }
   saveWorkLogToCloud(); renderWorkLog(); openBandEditor(seat,itemId);
 }
-function saveBandScoreAll(seat, itemId){
+async function saveBandScoreAll(seat, itemId){
   const s = findStudent(seat); if(!s) return;
   let item=null; state.workCfg.periods.forEach(p=>{ const it=p.items.find(x=>x.id===itemId); if(it)item=it; });
   if(!item) return;
@@ -3381,13 +3388,13 @@ function saveBandScoreAll(seat, itemId){
   if(isNaN(v) || v<0 || v>item.max){ alert('أدخل درجة بين 0 و'+item.max); return; }
   const studs = state.students.filter(x=>String(x.classCode)===String(s.classCode));
   if(!studs.length) return;
-  if(!confirm('تسجيل الدرجة '+v+' في «'+item.name+'» لجميع طلاب الصف ('+studs.length+')؟')) return;
+  if(!await mnConfirm('تسجيل الدرجة '+v+' في «'+item.name+'» لجميع طلاب الصف ('+studs.length+')؟')) return;
   studs.forEach(x=>{ setItemScore(workEntry(x.classCode,x.seat), itemId, v); });
   saveWorkLogToCloud(); renderWorkLog(); openBandEditor(seat,itemId);
   alert('تم تسجيل الدرجة لـ'+studs.length+' طالباً.');
 }
 /* استيراد درجة البند من مجموع ملصقات سجل المتابعة (لا يُصفّر المتابعة) */
-function importFromFollow(seat, itemId, catKey, forAll){
+async function importFromFollow(seat, itemId, catKey, forAll){
   const s = findStudent(seat); if(!s) return;
   let item=null; state.workCfg.periods.forEach(p=>{ const it=p.items.find(x=>x.id===itemId); if(it)item=it; });
   if(!item) return;
@@ -3399,7 +3406,7 @@ function importFromFollow(seat, itemId, catKey, forAll){
   if(forAll){
     const studs = state.students.filter(x=>String(x.classCode)===String(s.classCode));
     if(!studs.length) return;
-    if(!confirm('استيراد درجات «'+item.name+'» من سجل المتابعة لجميع طلاب الصف ('+studs.length+')؟')) return;
+    if(!await mnConfirm('استيراد درجات «'+item.name+'» من سجل المتابعة لجميع طلاب الصف ('+studs.length+')؟')) return;
     studs.forEach(x=>{ setItemScore(workEntry(x.classCode,x.seat), itemId, grab(x.seat)); });
     saveWorkLogToCloud(); renderWorkLog(); openBandEditor(seat,itemId);
     alert('تم الاستيراد لـ'+studs.length+' طالباً. يمكنك تعديل أي درجة.');
@@ -3437,8 +3444,8 @@ function renderWlSetup(){
   host.innerHTML = html;
 }
 // استعادة بنود السجل الافتراضية (لا يمسّ درجات الطلاب)
-function restoreDefaultWlCfg(){
-  if(!confirm('استعادة البنود الافتراضية؟\nسيُعاد ضبط أسماء البنود وأوزانها والمخفيّ منها إلى الوضع الأصلي.\n(درجات الطلاب المسجّلة لا تُحذف.)')) return;
+async function restoreDefaultWlCfg(){
+  if(!await mnConfirm('استعادة البنود الافتراضية؟\nسيُعاد ضبط أسماء البنود وأوزانها والمخفيّ منها إلى الوضع الأصلي.\n(درجات الطلاب المسجّلة لا تُحذف.)')) return;
   const hdr = state.workCfg && state.workCfg.header ? state.workCfg.header : null;
   state.workCfg = defaultWorkCfg();
   if(hdr) state.workCfg.header = hdr;   // أبقِ ترويسة السجل كما هي
@@ -3549,12 +3556,16 @@ function renderStickerSetup(){
   html+='<button class="ghost" style="margin-top:8px;width:100%;color:var(--bad);border-color:var(--bad)" onclick="restoreDefaultStickers()">↩️ استعادة الملصقات الافتراضية</button>';
   host.innerHTML=html;
 }
+function openStickerSettings(){
+  omrModal('<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b style="font-size:16px">⚙️ إعداد الملصقات</b><button class="ghost" type="button" onclick="closeOmrModal()" style="padding:4px 12px">✕</button></div><div id="stickerSetupHost"></div>');
+  renderStickerSetup();
+}
 function setStickerField(i,field,v){ const st=state.stickers[i]; if(!st) return; if(field==='score'){ st.score=parseFloat(v)||0; return; } st[field]=v; if(field==='cat' && v==='boost') st.discount=false; }
 function toggleStickerDiscount(i){ const st=state.stickers[i]; if(!st) return; if(st.cat==='boost'){ alert('لا يمكن تفعيل الحسومات على ملصق «التحفيز الإيجابي».'); return; } st.discount=!st.discount; renderStickerSetup(); }
 function stickerCatsAll(){ return stickerCats().concat([{key:'boost',name:'التحفيز الإيجابي'}]); }
 function toggleStickerEnabled(i){ if(!state.stickers[i]) return; state.stickers[i].enabled=!state.stickers[i].enabled; renderStickerSetup(); }
 function saveStickers(){ saveStudentsToCloud(true); renderStickerSetup(); alert('تم حفظ الملصقات ✅'); }
-function restoreDefaultStickers(){ if(!confirm('استعادة الملصقات الافتراضية؟ ستُلغى تعديلاتك.')) return; state.stickers=defaultStickers(); renderStickerSetup(); saveStudentsToCloud(true); }
+async function restoreDefaultStickers(){ if(!await mnConfirm('استعادة الملصقات الافتراضية؟ ستُلغى تعديلاتك.')) return; state.stickers=defaultStickers(); renderStickerSetup(); saveStudentsToCloud(true); }
 function enabledStickers(){ ensureStickers(); return state.stickers.filter(s=>s.enabled); }
 
 /* ===== المرحلة 2: عرض الطلاب العائم (الحضور/المتابعة/سجل المتابعة) ===== */
@@ -3686,9 +3697,9 @@ function commitSticker(seat, sid, earned){
   saveFollowup(); closeOmrModal(); renderFollowView();
   if(document.getElementById('recordOv') && document.getElementById('recordOv').classList.contains('show')) renderRecordView();
 }
-function removeFu(seat,fid){
+async function removeFu(seat,fid){
   if(!clsGuardDelSec('worklog')) return;
-  if(!confirm('إزالة هذا الملصق من الطالب؟')) return;
+  if(!await mnConfirm('إزالة هذا الملصق من الطالب؟')) return;
   const fk = fuKey(seat);
   const arr=state.followup&&state.followup[fk]; if(!arr) return;
   const i=arr.findIndex(x=>x.id===fid); if(i>=0) arr.splice(i,1);
@@ -4103,7 +4114,7 @@ function srToggleReplies(id){
   el.style.display = el.style.display==='none' ? 'block' : 'none';
 }
 async function srDeleteNote(id, seat){
-  if(!confirm('حذف هذي الملاحظة نهائيًا؟')) return;
+  if(!await mnConfirm('حذف هذي الملاحظة نهائيًا؟')) return;
   try{ await db.collection('studentNotes').doc(id).delete(); srLoadNotes(seat); }
   catch(e){ alert('تعذّر الحذف: '+(e.message||e)); }
 }
@@ -4190,8 +4201,8 @@ function applyQEditor(){
   closeQEditor();
   renderSheet();
 }
-function clearQData(){
-  if(!confirm('تفريغ كل الأسئلة المكتوبة؟')) return;
+async function clearQData(){
+  if(!await mnConfirm('تفريغ كل الأسئلة المكتوبة؟')) return;
   state.qData = [];
   closeQEditor();
   renderSheet();
@@ -4201,7 +4212,7 @@ function clearQData(){
 async function saveCurrentExam(){
   readCfg(); buildMeta();
   const def = state.editingExamId ? (state.exams.find(e=>e.id===state.editingExamId)||{}).name : (state.cfg.subject||'اختبار');
-  const name = prompt('اسم الاختبار:', def||'اختبار');
+  const name = await mnPrompt('اسم الاختبار:', def||'اختبار');
   if(name===null) return;
   const nm = name.trim(); if(!nm){ alert('اكتب اسماً.'); return; }
   const exam = {
@@ -4539,10 +4550,10 @@ function gradeCore(srcMat, corners, drawVis){
    وضع تصوير الدفعة: صوّر كل الأوراق ثم صحّح الكل دفعة واحدة
    ============================================================ */
 state.batch = [];   // [{url, w, h}]
-function onBatchClick(){
+async function onBatchClick(){
   if(!isKeyComplete()){ alert('أكمل مفتاح الإجابة لكل الأسئلة أولاً.'); return; }
   if(!state.cvReady){ alert('محرّك المعالجة غير جاهز بعد. أمهله ثوانٍ.'); return; }
-  if(state.results.length && !confirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. ستُضاف نتائج الدفعة إليها (تراكمياً). متابعة؟`)) return;
+  if(state.results.length && !await mnConfirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. ستُضاف نتائج الدفعة إليها (تراكمياً). متابعة؟`)) return;
   stopLiveScan();
   state.batch = [];
   document.getElementById('batchPanel').style.display='block';
@@ -4550,17 +4561,17 @@ function onBatchClick(){
   document.getElementById('batchInput').click();   // افتح الكاميرا للورقة الأولى
 }
 // بدء دفعة (مشتركة لرفع الصور/الـPDF) — تتحقّق وتفتح اللوحة
-function startBatchSession(){
+async function startBatchSession(){
   if(!isKeyComplete()){ alert('أكمل مفتاح الإجابة لكل الأسئلة أولاً.'); return false; }
   if(!state.cvReady){ alert('محرّك المعالجة غير جاهز بعد. أمهله ثوانٍ.'); return false; }
-  if(state.results.length && !confirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. ستُضاف نتائج الدفعة إليها (تراكمياً). متابعة؟`)) return false;
+  if(state.results.length && !await mnConfirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. ستُضاف نتائج الدفعة إليها (تراكمياً). متابعة؟`)) return false;
   stopLiveScan();
   document.getElementById('batchPanel').style.display='block';
   return true;
 }
 // رفع عدة صور دفعة واحدة
-function onUploadImagesClick(){
-  if(!startBatchSession()) return;
+async function onUploadImagesClick(){
+  if(!await startBatchSession()) return;
   document.getElementById('imagesInput').click();
 }
 function onImagesPicked(ev){
@@ -4577,8 +4588,8 @@ function onImagesPicked(ev){
   renderBatchStrip();
 }
 // رفع ملف PDF — يقرأ النظام صفحاته (تحميل كسول لمكتبة PDF.js)
-function onUploadPdfClick(){
-  if(!startBatchSession()) return;
+async function onUploadPdfClick(){
+  if(!await startBatchSession()) return;
   document.getElementById('pdfInput').click();
 }
 function onPdfPicked(ev){
@@ -4713,10 +4724,10 @@ function loadImg(url){
   return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
 }
 
-function gradeSheet(){
+async function gradeSheet(){
   if(!state.cvReady){ alert('محرّك المعالجة غير جاهز. ارفع البرنامج على موقعك ثم جرّب.'); return; }
   if(state.corners.length!==4){ alert('حدّد الأركان الأربعة أولاً.'); return; }
-  if(state.key.every(k=>k===null)){ if(!confirm('لم تُدخل مفتاح إجابة. المتابعة ستحسب الكل خطأً. هل تريد المتابعة؟')) return; }
+  if(state.key.every(k=>k===null)){ if(!await mnConfirm('لم تُدخل مفتاح إجابة. المتابعة ستحسب الكل خطأً. هل تريد المتابعة؟')) return; }
 
   let src = cv.imread(displayCanvas);
   const { result, vis } = gradeCore(src, state.corners, true);
@@ -4923,7 +4934,7 @@ let frameCanvas, frameCtx;
 async function startLiveScan(snap){
   if(!state.cvReady){ alert('محرّك المعالجة غير جاهز بعد. انتظر رسالة «جاهز» الخضراء.'); return; }
   if(state.key.every(k=>k===null)){
-    if(!confirm('لم تُدخل مفتاح الإجابة. بدون مفتاح ستُحسب كل الإجابات خطأً. المتابعة؟')) return;
+    if(!await mnConfirm('لم تُدخل مفتاح الإجابة. بدون مفتاح ستُحسب كل الإجابات خطأً. المتابعة؟')) return;
   }
   const video=document.getElementById('liveVideo');
   try{
@@ -4948,9 +4959,9 @@ async function startLiveScan(snap){
     : 'وجّه الكاميرا نحو البطاقة كاملةً مع ظهور المربعات الأربعة.');
   live.raf = requestAnimationFrame(liveLoop);
 }
-function onSnapClick(){
+async function onSnapClick(){
   if(!isKeyComplete()){ alert('أكمل مفتاح الإجابة لكل الأسئلة أولاً.'); return; }
-  if(state.results.length && !confirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. سيُضاف الالتقاط الجديد إليها (تراكمياً). متابعة؟`)) return;
+  if(state.results.length && !await mnConfirm(`توجد ${toArabic(state.results.length)} نتيجة سابقة في السجل. سيُضاف الالتقاط الجديد إليها (تراكمياً). متابعة؟`)) return;
   startLiveScan(true);
 }
 // التقاط الإطار الحالي وتصحيحه فوراً (وضع النقرة)
@@ -5178,7 +5189,7 @@ async function omrReplyNote(id){
     const cur=await db.collection('notes').doc(id).get();
     if(cur.exists && cur.data().closed){ alert('هذه الرسالة مغلقة ولا يمكن الرد عليها.'); renderOmrNotes(); return; }
   }catch(e){}
-  const t=prompt('اكتب ردّك:'); if(!t||!t.trim()) return;
+  const t=await mnPrompt('اكتب ردّك:'); if(!t||!t.trim()) return;
   try{
     await db.collection('notes').doc(id).update({ replies: firebase.firestore.FieldValue.arrayUnion(
       {fromUserId:CLS_SESSION.userId,fromName:CLS_SESSION.username,fromRole:'teacher',text:t.trim(),at:Date.now()}) });
@@ -5477,11 +5488,11 @@ function anPopulate(){
   anRun();
 }
 function anSelectAll(on){ document.querySelectorAll('#anClasses input.anc').forEach(x=>{ x.checked=on; }); anRun(); }
-function showResSub(w){
+function showCloudSub(w){
   const an = (w==='an');
-  const l=document.getElementById('resListCard'), a=document.getElementById('resAnCard');
+  const l=document.getElementById('cloudLogWrap'), a=document.getElementById('resAnCard');
   if(l) l.style.display = an?'none':''; if(a) a.style.display = an?'':'none';
-  const b1=document.getElementById('resSubList'), b2=document.getElementById('resSubAn');
+  const b1=document.getElementById('cloudSubLog'), b2=document.getElementById('cloudSubAn');
   if(b1) b1.className = an?'ghost':'primary'; if(b2) b2.className = an?'primary':'ghost';
   if(an) anPopulate();
 }
@@ -5627,16 +5638,18 @@ async function anDoSend(){
 }
 
 function showTab(t){
+  const EXAM_GRP=['design','grade','results'], inExam = (t==='exam' || EXAM_GRP.indexOf(t)>=0);
   ['design','students','grade','results','cloud','notes'].forEach(x=>{
     document.getElementById('panel-'+x).classList.toggle('active', x===t);
-    document.getElementById('tab-'+x).classList.toggle('active', x===t);
+    document.getElementById('tab-'+x).classList.toggle('active', x===t || (x==='design' && inExam));
   });
+  const pe=document.getElementById('panel-exam'); if(pe) pe.classList.toggle('active', inExam);
+  EXAM_GRP.forEach(x=>{ const b=document.getElementById('examSub-'+x); if(b) b.className = (x===t)?'primary':'ghost'; });
   // عند دخول تبويب الطلاب: كل الأقسام مصغّرة افتراضياً
   const flc=document.getElementById('flCard');
   if(t==='students'){ collapseStudentCards(); if(flc) flc.classList.add('show'); }
   else { if(flc) flc.classList.remove('show'); closeStuOverlays(); }
-  if(t==='results'){ const a=document.getElementById('resAnCard'); if(a && a.style.display!=='none') anPopulate(); }
-  if(t==='cloud'){ autofillWlHeader().then(renderWlHeader); renderWlSetup(); renderStickerSetup(); renderWorkLog(); }
+  if(t==='cloud'){ autofillWlHeader().then(renderWlHeader); renderWlSetup(); renderWorkLog(); const a=document.getElementById('resAnCard'); if(a && a.style.display!=='none') anPopulate(); }
   if(t==='notes') renderOmrNotes(); else oliveOff();   // مستمعو التحويلات تعمل فقط والتبويب مفتوح
 }
 function collapseStudentCards(){
@@ -5925,7 +5938,7 @@ async function cloudGet(collection, docId){
 /* النسخة الفردية: تنظيف ملف المعلم الفردي بنفسه (فصوله وطلابه فقط) */
 async function soloWipeMyData(){
   if(!CLS_SESSION || CLS_SESSION.role!=='soloTeacher') return;
-  const val = prompt('سيُحذف جميع فصولك وطلابك وبياناتهم نهائياً ولا يمكن التراجع.\nاكتب «تصفير» للتأكيد:');
+  const val = await mnPrompt('سيُحذف جميع فصولك وطلابك وبياناتهم نهائياً ولا يمكن التراجع.\nاكتب «تصفير» للتأكيد:');
   if(val===null) return;
   if(String(val).trim()!=='تصفير'){ alert('لم تتم الكتابة بشكل صحيح.'); return; }
   try{
@@ -6121,13 +6134,17 @@ function clsApplySectionPerms(){
     const p = CLS_SEC_PERM[secKey];
     if(tabBtn) tabBtn.style.display = (p && p.access) ? '' : 'none';
   });
+  // مجموعة «تصميم الاختبار»: تبويباتها الفرعية حسب صلاحية كل قسم، والتبويب الرئيسي يظهر لمن يملك أحدها
+  let examAny=false;
+  ['design','grade','results'].forEach(k=>{ const p=CLS_SEC_PERM[k]; const okk=!!(p && p.access); if(okk) examAny=true; const b=document.getElementById('examSub-'+k); if(b) b.style.display = okk ? '' : 'none'; });
+  const tabDesign=document.getElementById('tab-design'); if(tabDesign) tabDesign.style.display = examAny ? '' : 'none';
   // إن كان التبويب النشط حالياً غير مسموح، ننتقل لأول تبويب متاح
   const activeTab = Object.keys(map).find(id=>{
     const el=document.getElementById('panel-'+id); return el && el.classList.contains('active');
   });
   if(activeTab && CLS_SEC_PERM[map[activeTab]] && !CLS_SEC_PERM[map[activeTab]].access){
     const firstAllowed = Object.keys(map).find(id=>CLS_SEC_PERM[map[id]] && CLS_SEC_PERM[map[id]].access);
-    if(firstAllowed) showTab(firstAllowed);
+    if(firstAllowed) showTab(['design','grade','results'].indexOf(firstAllowed)>=0 ? 'exam' : firstAllowed);
   }
   // بند ١٣: بطاقتا "بيانات الفصول" و"أسماء الطلاب" تُخفيان دون صلاحية access الخاصة بكل منهما
   const infoCard = document.getElementById('classInfoSecCard');
@@ -6291,9 +6308,9 @@ function commitBandGrades(){
   showTab('cloud');
 }
 // حذف كل النتائج يدوياً (دون حفظ)
-function clearAllResults(){
+async function clearAllResults(){
   if(!state.results.length){ alert('لا توجد نتائج لحذفها.'); return; }
-  if(!confirm(`حذف ${toArabic(state.results.length)} نتيجة من السجل؟ لا يمكن التراجع.`)) return;
+  if(!await mnConfirm(`حذف ${toArabic(state.results.length)} نتيجة من السجل؟ لا يمكن التراجع.`)) return;
   state.results = [];
   renderResults();
   saveResultsToCloud();
@@ -6325,9 +6342,9 @@ function printResultsPDF(){
     </body></html>`);
   win.document.close();
 }
-function delRecord(id){
+async function delRecord(id){
   const r = state.savedRecords.find(x=>x.id===id);
-  if(!r || !confirm(`حذف سجل «${r.title}»؟`)) return;
+  if(!r || !await mnConfirm(`حذف سجل «${r.title}»؟`)) return;
   state.savedRecords = state.savedRecords.filter(x=>x.id!==id);
   renderSavedRecords(); saveRecordsToCloud();
 }
@@ -6414,7 +6431,7 @@ function applyExam(id){
 }
 async function deleteExam(id){
   const e = state.exams.find(x=>x.id===id);
-  if(!e || !confirm(`حذف الاختبار «${e.name}» نهائياً؟`)) return;
+  if(!e || !await mnConfirm(`حذف الاختبار «${e.name}» نهائياً؟`)) return;
   state.exams = state.exams.filter(x=>x.id!==id);
   if(state.editingExamId===id) state.editingExamId=null;
   renderExamLog();
@@ -6740,6 +6757,7 @@ window.addEventListener('load', ()=>{
   <div class="flov-head">
     <b style="font-size:15px;color:var(--teal-d);white-space:nowrap">📌 المتابعة</b>
     <select id="followClass" onchange="onVClassChange(this);renderFollowView()"></select>
+    <button class="flx" type="button" onclick="openStickerSettings()" title="إعداد الملصقات" aria-label="إعداد الملصقات">⚙️</button>
   </div>
   <div class="flov-body" id="followBody"></div>
 </div>

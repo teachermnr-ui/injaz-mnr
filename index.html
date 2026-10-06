@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-06.1 -->
+<!-- إصدار: 2026-10-06.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -233,25 +233,12 @@ input,select{font-family:inherit;font-size:15px}
 <!-- ===== Login ===== -->
 <div id="loginView" class="auth-wrap hidden">
 
-  <!-- 0) اختيار البوابة -->
-  <div class="auth-card" id="roleChoiceCard">
+  <!-- 1أ) دخول النظام المدرسي (Firebase Authentication) -->
+  <div class="auth-card" id="staffLoginCard"><!-- ص-١٨: بطاقة الدخول الموحَّدة (مدرسة/فردي/طالب) -->
     <img class="brand-logo" src="brand.png" alt="">
     <h1 class="brand-name">منجز المدرسي</h1>
     <p class="brand-tag">إدارة مدرسية رقمية بلا تعقيد</p>
-    <p class="auth-sub" style="margin-bottom:18px">اختر طريقة الدخول</p>
-    <button class="btn" id="roleStaffBtn" style="margin-bottom:10px;">النسخة المدرسية</button>
-    <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px;">لكامل أعضاء التدريس والإدارة داخل المدرسة</p>
-    <button class="btn" id="roleSoloBtn" style="margin-bottom:10px;">النسخة الفردية</button>
-    <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px;">معلم فردي باشتراك ذاتي، غير مرتبط بمدرسة أو إدارة</p>
-    <button class="btn" id="roleStudentBtn" style="background:var(--warn);margin-bottom:10px;">دخول الطالب</button>
-    <p style="font-size:12px;color:var(--muted);margin:-4px 0 0;">للطلاب لعرض أنشطتهم وحل واجباتهم</p>
-  </div>
-
-  <!-- 1أ) دخول النظام المدرسي (Firebase Authentication) -->
-  <div class="auth-card hidden" id="staffLoginCard">
-    <img class="brand-logo sm" src="brand.png" alt="">
-    <h1>النسخة المدرسية</h1>
-    <p class="auth-sub">سجّل الدخول بحسابك للمتابعة</p>
+    <p class="auth-sub" id="loginSub" style="margin-bottom:18px">سجّل الدخول للمتابعة</p>
     <div id="loginAlert"></div>
 
     <div id="staffSignInBox">
@@ -268,12 +255,27 @@ input,select{font-family:inherit;font-size:15px}
         <div class="field"><label>البريد الإلكتروني</label><input id="liEmail" type="email" autocomplete="username" placeholder="name@example.com"></div>
         <div class="field"><label>كلمة المرور</label><input id="liPass" type="password" autocomplete="current-password" placeholder="كلمة المرور"></div>
         <button class="btn" id="liBtn">متابعة</button>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px;">إن كان دخولك الأول، سيُنشأ حسابك ثم تُطلب بيانات التفعيل.</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px;">إن كان دخولك الأول، سيُنشأ حسابك ويصلك رابط تحقق لبريدك، ثم تختار طريقة الاستخدام.</p>
+        <button type="button" class="btn" id="liForgot" style="background:transparent;color:var(--brand);margin-top:2px;padding:6px;">نسيت كلمة المرور؟</button>
       </div>
 
-      <div class="field" style="margin-top:14px;text-align:right;"><label>الفترة</label>
+      <div class="field" style="margin-top:14px;text-align:right;"><label>الفترة الدراسية (لمنسوبي المدارس)</label>
         <select id="liPeriod"><option value="first">الفترة الأولى</option><option value="second">الفترة الثانية</option></select>
       </div>
+      <div style="margin:14px 0 10px;text-align:center;color:var(--muted);font-size:12px;">— أو —</div>
+      <button class="btn" id="roleStudentBtn" style="background:var(--warn);">دخول الطالب</button>
+      <p style="font-size:12px;color:var(--muted);margin:6px 0 0;text-align:center;">للطلاب لعرض أنشطتهم وحل واجباتهم</p>
+    </div>
+
+    <!-- ص-١٨: حساب جديد كليًا (لا مستند له بعد): يختار طريقة الاستخدام مرة واحدة -->
+    <div id="staffNewBox" class="hidden" style="text-align:right;">
+      <p style="font-weight:700;margin:0 0 4px;">كيف تريد استخدام منجز المدرسي؟</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">حسابك <b id="nbEmailShown"></b> جديد، اختر طريقة الاستخدام:</p>
+      <button class="btn" id="nbSchoolBtn">لدي بيانات تفعيل من منجز المدرسي</button>
+      <p style="font-size:12px;color:var(--muted);margin:6px 0 14px;">اختر هذا إن زوّدتك إدارة مدرستك برقم الهوية وكلمة المرور الأولية.</p>
+      <button class="btn" id="nbSoloBtn">أستخدمه معلمًا بشكل فردي</button>
+      <p style="font-size:12px;color:var(--muted);margin:6px 0 10px;">حساب مستقل بفترة تجريبية ٣٠ يومًا، غير مرتبط بمدرسة أو إدارة.</p>
+      <button class="btn" id="nbCancelBtn" style="background:transparent;color:var(--muted);margin-top:4px;">إلغاء</button>
     </div>
 
     <!-- إكمال التفعيل: يظهر تلقائياً بعد الدخول إن كان البريد غير مربوط بعد -->
@@ -283,7 +285,8 @@ input,select{font-family:inherit;font-size:15px}
       <div class="field"><label>رقم الهوية</label><input id="acSeat" inputmode="numeric" placeholder="رقم الهوية"></div>
       <div class="field"><label>كلمة المرور الأولية</label><input id="acTemp" type="password" placeholder="كلمة المرور الأولية"></div>
       <button class="btn" id="acDoBtn">تفعيل وربط الحساب</button>
-      <button class="btn" id="acCancelBtn" style="background:transparent;color:var(--muted);margin-top:8px;">إلغاء</button>
+      <button class="btn" id="acBackBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
+      <button class="btn" id="acCancelBtn" style="background:transparent;color:var(--muted);margin-top:0;">إلغاء</button>
     </div>
 
     <!-- بند ١٢: هذا البريد مرتبط بأكثر من حساب (فردي + مدرسة واحدة أو أكثر) — يظهر بكل دخول طالما التعدد قائم -->
@@ -293,10 +296,10 @@ input,select{font-family:inherit;font-size:15px}
       <div id="macOptions" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
 
-    <button class="btn" id="backFromStaffBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
+    <button class="btn hidden" id="backFromStaffBtn" style="background:transparent;color:var(--muted);margin-top:8px;">← رجوع</button>
   </div>
 
-  <!-- 1ب) دخول المعلم الفردي (النسخة الفردية) -->
+  <!-- 1ب) [مُعطَّل من ص-١٨ — يبقى للرجوع السريع] دخول المعلم الفردي (النسخة الفردية) -->
   <div class="auth-card hidden" id="soloLoginCard">
     <img class="brand-logo sm" src="brand.png" alt="">
     <h1>النسخة الفردية</h1>
@@ -799,9 +802,11 @@ const esc = s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;
 function show(view){
   ['bootView','loginView','pwView','appView'].forEach(v=>$('#'+v).classList.toggle('hidden',v!==view));
   if(view==='loginView'){
-    $('#roleChoiceCard').classList.remove('hidden');
-    $('#staffLoginCard').classList.add('hidden');
+    $('#staffLoginCard').classList.remove('hidden');
     $('#studentLoginCard').classList.add('hidden');
+    $('#soloLoginCard').classList.add('hidden');
+    $('#staffSignInBox').classList.remove('hidden'); $('#loginSub').classList.remove('hidden');
+    ['staffActivateBox','staffMultiAccountBox','staffNewBox'].forEach(id=>$('#'+id).classList.add('hidden'));
   }
 }
 function alertBox(id,type,msg){ $('#'+id).innerHTML = msg?`<div class="alert ${type}">${esc(msg)}</div>`:''; }
@@ -885,12 +890,11 @@ async function loadSchools(){
 /* ========================================================================
    اختيار الدور (عضو تدريس / طالب)
    ======================================================================== */
-$('#roleStaffBtn').onclick = ()=>{ $('#roleChoiceCard').classList.add('hidden'); $('#staffLoginCard').classList.remove('hidden'); };
-$('#roleSoloBtn').onclick = ()=>{ $('#roleChoiceCard').classList.add('hidden'); $('#soloLoginCard').classList.remove('hidden'); };
-$('#backFromSoloBtn').onclick = ()=>{ $('#soloLoginCard').classList.add('hidden'); $('#roleChoiceCard').classList.remove('hidden'); };
-$('#roleStudentBtn').onclick = ()=>{ $('#roleChoiceCard').classList.add('hidden'); $('#studentLoginCard').classList.remove('hidden'); };
-$('#backFromStaffBtn').onclick = ()=>{ $('#staffLoginCard').classList.add('hidden'); $('#roleChoiceCard').classList.remove('hidden'); };
-$('#backFromStudentBtn').onclick = ()=>{ $('#studentLoginCard').classList.add('hidden'); $('#roleChoiceCard').classList.remove('hidden'); };
+/* ص-١٨: لا بوابات منفصلة — بطاقة دخول واحدة، والطالب زر داخلها */
+$('#roleStudentBtn').onclick = ()=>{ $('#staffLoginCard').classList.add('hidden'); $('#studentLoginCard').classList.remove('hidden'); };
+$('#backFromStudentBtn').onclick = ()=>{ $('#studentLoginCard').classList.add('hidden'); $('#staffLoginCard').classList.remove('hidden'); };
+$('#backFromSoloBtn').onclick = ()=>{ $('#soloLoginCard').classList.add('hidden'); $('#staffLoginCard').classList.remove('hidden'); };
+$('#backFromStaffBtn').onclick = ()=>{ $('#staffLoginCard').classList.remove('hidden'); };
 
 /* ========================================================================
    دخول الطالب: تسجيل بالبريد مرة واحدة + تحقّق بالهوية ورمز الفصل مرة واحدة
@@ -1031,11 +1035,35 @@ $('#staffEmailToggle').onclick = ()=>{
 };
 $('#acDoBtn').onclick = ()=>doStaffActivate();
 $('#acCancelBtn').onclick = ()=>cancelActivation();
+$('#acBackBtn').onclick = ()=>{ $('#staffActivateBox').classList.add('hidden'); $('#acSeat').value=''; $('#acTemp').value=''; showNewAccountChoice(firebase.auth().currentUser); };
+$('#nbSchoolBtn').onclick = ()=>{ const au=firebase.auth().currentUser; if(au) showActivation(au); else cancelActivation(); };
+$('#nbSoloBtn').onclick = ()=>chooseSoloAccount();
+$('#nbCancelBtn').onclick = ()=>cancelActivation();
+$('#liForgot').onclick = ()=>doForgotPassword();
 $('#acTemp').addEventListener('keydown',e=>{ if(e.key==='Enter') doStaffActivate(); });
 
 // هل أنشأنا حساب المصادقة الآن؟ (لحذفه تلقائياً إن لم يكتمل التفعيل)
 let AUTH_JUST_CREATED = false;
 
+/* ص-١٨: عند auth/email-already-in-use بعد فشل الدخول، السبب غالبًا كلمة مرور خاطئة (لا «بريد مسجَّل» فقط) */
+async function emailInUseMsg(em){
+  let m=[]; try{ m = await firebase.auth().fetchSignInMethodsForEmail(em); }catch(e){}
+  if(m.indexOf('password')>=0) return 'كلمة المرور غير صحيحة. يمكنك استخدام «نسيت كلمة المرور؟».';
+  if(m.length && m.indexOf('password')<0) return 'هذا البريد مسجَّل عبر Google — اضغط «المتابعة بحساب Google».';
+  return 'كلمة المرور غير صحيحة، أو أن هذا البريد مسجَّل عبر Google. جرّب «نسيت كلمة المرور؟» أو «المتابعة بحساب Google».';
+}
+async function doForgotPassword(){
+  const em=($('#liEmail').value||'').trim();
+  if(!em){ alertBox('loginAlert','err','اكتب بريدك في خانة البريد الإلكتروني أولًا ثم اضغط «نسيت كلمة المرور؟».'); return; }
+  const b=$('#liForgot'); b.disabled=true;
+  try{
+    await firebase.auth().sendPasswordResetEmail(em);
+    alertBox('loginAlert','ok','إن كان البريد مسجَّلًا بكلمة مرور فسيصلك رابط إعادة التعيين خلال دقائق (راجع الرسائل غير المرغوبة). وإن كان حسابك عبر Google فادخل بزر «المتابعة بحساب Google».');
+  }catch(e){
+    if(e.code==='auth/invalid-email' || e.code==='auth/too-many-requests') alertBox('loginAlert','err',authErrMsg(e));
+    else alertBox('loginAlert','ok','إن كان البريد مسجَّلًا بكلمة مرور فسيصلك رابط إعادة التعيين خلال دقائق (راجع الرسائل غير المرغوبة).');
+  }finally{ b.disabled=false; }
+}
 function authErrMsg(e){
   const m={ 'auth/invalid-credential':'البريد أو كلمة المرور غير صحيحة',
     'auth/wrong-password':'كلمة المرور غير صحيحة',
@@ -1076,7 +1104,7 @@ async function afterAuth(authUser){
     try{ await ensureSeed(); await loadSchools(); await loadRoleTemplates(); }catch(e){}
   }
   const q = await usersCol().where('authUid','==',authUser.uid).limit(1).get();
-  if(q.empty){ showActivation(authUser); return; }   // بريد غير مربوط بعد
+  if(q.empty){ showNewAccountChoice(authUser); return; }   // حساب جديد كليًا (ص-١٨): يختار مدرسة/فردي
   const period = $('#liPeriod') ? $('#liPeriod').value : 'first';
   const d=q.docs[0], data=d.data();
   const ctxs = availableContexts(data);
@@ -1191,6 +1219,7 @@ function showMergeCodeBox(onDone){
   };
 }
 function showAccountChooser(authUser, docId, data, ctxs, period){
+  $('#loginSub').classList.add('hidden');
   $('#staffSignInBox').classList.add('hidden');
   $('#staffActivateBox').classList.add('hidden');
   $('#staffMultiAccountBox').classList.remove('hidden');
@@ -1206,7 +1235,31 @@ function showAccountChooser(authUser, docId, data, ctxs, period){
 async function cleanSignOut(){
   try{ await firebase.auth().signOut(); }catch(e){}
 }
+/* ص-١٨: حساب مصادقة جديد لا مستند له — يختار مرة واحدة: بيانات تفعيل مدرسة، أو معلم فردي.
+   لا يُنشأ أي مستند قبل اختياره (التفعيل أو resolveSoloLogin كما كانا دون تغيير). */
+function showNewAccountChoice(authUser){
+  $('#loginSub').classList.add('hidden');
+  $('#nbEmailShown').textContent = (authUser && authUser.email) || '';
+  $('#staffSignInBox').classList.add('hidden');
+  $('#staffActivateBox').classList.add('hidden');
+  $('#staffMultiAccountBox').classList.add('hidden');
+  $('#staffNewBox').classList.remove('hidden');
+  alertBox('loginAlert','','');
+}
+async function chooseSoloAccount(){
+  const au = firebase.auth().currentUser;
+  if(!au){ alertBox('loginAlert','err','انتهت الجلسة، أعد المحاولة'); await cancelActivation(); return; }
+  const btn=$('#nbSoloBtn'); const old=btn.textContent; btn.disabled=true; btn.textContent='جارٍ إنشاء حسابك…';
+  try{
+    AUTH_JUST_CREATED = false;
+    await resolveSoloLogin(au);
+  }catch(e){
+    alertBox('loginAlert','err',authErrMsg(e));
+  }finally{ btn.disabled=false; btn.textContent=old; }
+}
 function showActivation(authUser){
+  $('#loginSub').classList.add('hidden');
+  $('#staffNewBox').classList.add('hidden');
   $('#acEmailShown').textContent = authUser.email || '';
   $('#staffSignInBox').classList.add('hidden');
   $('#staffActivateBox').classList.remove('hidden');
@@ -1222,6 +1275,8 @@ async function cancelActivation(){
   }catch(e){ await cleanSignOut(); }
   AUTH_JUST_CREATED = false;
   $('#staffActivateBox').classList.add('hidden');
+  $('#staffNewBox').classList.add('hidden');
+  $('#loginSub').classList.remove('hidden');
   $('#staffSignInBox').classList.remove('hidden');
   $('#acSeat').value=''; $('#acTemp').value='';
   alertBox('loginAlert','','');
@@ -1244,7 +1299,7 @@ async function doLogin(){
           cred = await firebase.auth().createUserWithEmailAndPassword(em,p);
           AUTH_JUST_CREATED = true;
         }catch(err2){
-          if(err2.code==='auth/email-already-in-use') throw new Error('هذا البريد مسجَّل مسبقاً — إن كنت فعّلت حسابك عبر Google، اضغط «المتابعة بحساب Google» بدل كلمة المرور.');
+          if(err2.code==='auth/email-already-in-use') throw new Error(await emailInUseMsg(em));
           throw err2;
         }
       } else throw err;
@@ -1589,7 +1644,7 @@ async function doSoloEmailLogin(){
           cred = await firebase.auth().createUserWithEmailAndPassword(em,p);
           justCreated = true;
         }catch(err2){
-          if(err2.code==='auth/email-already-in-use') throw new Error('هذا البريد مسجَّل مسبقاً — إن كنت فعّلت حسابك عبر Google، اضغط «المتابعة بحساب Google» بدل كلمة المرور.');
+          if(err2.code==='auth/email-already-in-use') throw new Error(await emailInUseMsg(em));
           throw err2;
         }
       } else throw err;

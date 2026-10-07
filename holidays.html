@@ -197,8 +197,8 @@ function render(){
     <section class="card">
       <h3>إضافة إجازة</h3>
       <div class="row" style="margin-bottom:10px">
-        <button class="pill ${HS.mode==='one'?'on':''}" data-mode="one">يوم واحد</button>
-        <button class="pill ${HS.mode==='range'?'on':''}" data-mode="range">من – إلى</button>
+        <button class="pill ${HS.mode==='one'?'on':''}" data-hmode="one">يوم واحد</button>
+        <button class="pill ${HS.mode==='range'?'on':''}" data-hmode="range">من – إلى</button>
       </div>
       <div class="row">
         <label class="field" style="flex:1 1 150px">${HS.mode==='one'?'التاريخ':'من تاريخ'}<input type="date" id="hFrom"></label>
@@ -219,7 +219,7 @@ function render(){
       <div class="sub" id="qSum" style="margin-top:6px">${q.on?'مفعّلة: من '+esc(fmtTime(q.from))+' إلى '+esc(fmtTime(q.to)):'غير مفعّلة — تصل الإشعارات فور حدوثها.'}</div>
       <button class="btn pri" id="qSave" style="margin-top:10px">حفظ</button>
     </section>`;
-  document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{ HS.mode=b.dataset.mode; render(); });
+  document.querySelectorAll('[data-hmode]').forEach(b=>b.onclick=()=>{ HS.mode=b.dataset.hmode; render(); });
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
     const h = HS.cal.holidays.find(x=>x.id===b.dataset.del); if(!h) return;
     if(!await mnConfirm('حذف «'+(h.label||'إجازة')+'»؟')) return;

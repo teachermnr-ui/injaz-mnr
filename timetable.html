@@ -2986,14 +2986,14 @@ function impStartScreen(main){
     <div class="card"><h3>كيف تبني جدول هذه الفترة؟</h3>
       ${miss.length?`<div class="alert warn">قبل البدء: ${miss.map(([s,t])=>`<div>• ${esc(t)} <button class="btn sm sec" data-go="${s}">انتقال</button></div>`).join('')}</div>`:''}
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
-        <button class="card" data-mode="scratch" style="flex:1 1 260px;text-align:right;cursor:pointer;margin:0;border:2px solid var(--line)" ${miss.length?'disabled':''}>
+        <button class="card" data-bmode="scratch" style="flex:1 1 260px;text-align:right;cursor:pointer;margin:0;border:2px solid var(--line)" ${miss.length?'disabled':''}>
           <h3 style="margin:0 0 6px">⚙️ إعداد من الصفر</h3><div class="sub">الخطة ← الإسناد ← التوليد التلقائي للجدول.</div></button>
-        <button class="card" data-mode="ready" style="flex:1 1 260px;text-align:right;cursor:pointer;margin:0;border:2px solid var(--line)" ${miss.length?'disabled':''}>
+        <button class="card" data-bmode="ready" style="flex:1 1 260px;text-align:right;cursor:pointer;margin:0;border:2px solid var(--line)" ${miss.length?'disabled':''}>
           <h3 style="margin:0 0 6px">📋 جدول جاهز</h3><div class="sub">عندك جدول مبني مسبقًا: رفع ملف من برنامج آخر، أو قالب النظام (Excel)، أو إدخال يدوي. الإسناد يُبنى تلقائيًا من الجدول.</div></button>
       </div>
       <div class="sub" style="margin-top:10px">الطريقة تُحفظ لهذه الفترة، ويمكن تغييرها لاحقًا من قسم «الجدول».</div></div>`;
   $$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
-  $$('[data-mode]').forEach(b=>b.onclick=()=>{ if(b.disabled) return; cfg().buildMode = b.dataset.mode; markDirty(docIds.config()); if(b.dataset.mode==='ready'){ IMP.view='manual'; show('imp'); } else show('table'); });
+  $$('[data-bmode]').forEach(b=>b.onclick=()=>{ if(b.disabled) return; cfg().buildMode = b.dataset.bmode; markDirty(docIds.config()); if(b.dataset.bmode==='ready'){ IMP.view='manual'; show('imp'); } else show('table'); });
 }
 function impBindBar(){
   $$('[data-imp]').forEach(b=>b.onclick=()=>{

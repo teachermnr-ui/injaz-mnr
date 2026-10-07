@@ -1,0 +1,518 @@
+// إصدار: 2026-10-05.2
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ===================== دوال مساعدة عامة ===================== */
+
+    function signedIn() { return request.auth != null; }
+
+    // مستند الشخص الموحَّد — معرّفه دائمًا = uid الحقيقي لحساب Firebase Auth
+    function meDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function meExists() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+
+    function isAdmin() { return meExists() && meDoc().get('role', null) == 'admin' && meDoc().get('active', true) != false; }
+
+    // مدير مدرسة: دور ثابت على مستوى المستند بالكامل (يشبه admin تمامًا) — لا يُدار إلا من admin العام،
+    // وقائمة المدارس التي يديرها (adminSchools) تُضاف/تُزال من admin العام فقط.
+    function isSchoolAdminDoc() { return meExists() && meDoc().get('role', null) == 'schoolAdmin' && meDoc().get('active', true) != false; }
+    function myAdminSchools() { return isSchoolAdminDoc() ? meDoc().get('adminSchools', []) : []; }
+    function isSchoolAdminOf(sid) { return sid != null && (sid in myAdminSchools()); }
+
+    /* ⚠️ أداء: كل دالة تحسب ما تحتاجه مرة واحدة عبر let — حد Firestore للتعابير المقيَّمة لكل طلب هو 1000،
+       والنسخة السابقة كانت تعيد قراءة مستند المدرسة وسياق الموظف عشرات المرات فتتجاوزه وتُرفض الطلبات
+       (حالات الطلاب، نافذة التغيب، استيراد Excel للموظف المفوَّض). كل الحقول الاختيارية تُقرأ بـ.get(). */
+
+    // ===== سياق الحساب الفردي (داخل مستند "موظف/معلم" عادي، مفتاح 'solo') =====
+    function soloCtx() { return meExists() ? meDoc().get('solo', null) : null; }
+    function isSolo() {
+      let s = soloCtx();
+      return s != null && s.get('active', true) != false;
+    }
+
+    // ===== حالة المدرسة نفسها (تفعيل/إيقاف + فترة تفعيل) =====
+    function schoolDoc(sid) {
+      return (sid != null && exists(/databases/$(database)/documents/schoolData/$(sid)))
+        ? get(/databases/$(database)/documents/schoolData/$(sid)).data : null;
+    }
+    function isSchoolCurrentlyActive(sid) {
+      let d = schoolDoc(sid);
+      let fromMs = d == null ? null : d.get('activeFromMs', null);
+      let toMs = d == null ? null : d.get('activeToMs', null);
+      return d == null || (
+        d.get('active', true) != false
+        && (fromMs == null || request.time.toMillis() >= fromMs)
+        && (toMs == null || request.time.toMillis() <= toMs)
+      );
+    }
+
+    // ===== سياقي داخل مدرسة معيّنة كموظف عادي (خريطة schools[sid] على مستندي الموحَّد) =====
+    function schoolCtx(sid) {
+      let schools = meExists() ? meDoc().get('schools', {}) : {};
+      return (sid != null && (sid in schools)) ? schools[sid] : null;
+    }
+    // صلاحيات الموظف الفعّال بالمدرسة (null لو ليس موظفًا فعّالًا فيها) — تُحسب مرة واحدة
+    function staffPerms(sid) {
+      let c = schoolCtx(sid);
+      return (c != null && c.get('active', true) != false && isSchoolCurrentlyActive(sid))
+        ? c.get('permissions', {}) : null;
+    }
+    function isStaffOf(sid) { return staffPerms(sid) != null; }
+    // هل الصلاحيات p تمنح "تعديل" على المفتاح key
+    function permEdit(p, key) { return p != null && (key in p) && p[key].get('edit', false) == true; }
+
+    // وكيل، أو صاحب صلاحية تعديل غياب، بالمدرسة المُستخرَجة من معرّف سجل الأعمال worklog_{schoolId}_...
+    function agentOrAbsenceEditOf(sid) {
+      let c = schoolCtx(sid);
+      let p = staffPerms(sid);
+      return p != null && (c.get('role', '') == 'agent' || permEdit(p, 'index.absence'));
+    }
+
+    function canManageRosterOf(sid) {
+      let p = staffPerms(sid);
+      return isAdmin() || isSchoolAdminOf(sid) || isSolo()
+        || permEdit(p, 'omr.classes.addManage') || permEdit(p, 'index.studentStatus')
+        || permEdit(p, 'omr.classes.info');
+    }
+    // صاحب صلاحية تعديل الغياب بمدرسة معيّنة (admin، مديرها، أو موظف ممنوح index.absence.edit)
+    function canAbsEditOf(sid) {
+      return isAdmin() || isSchoolAdminOf(sid) || permEdit(staffPerms(sid), 'index.absence');
+    }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function isStudent() {
+      return signedIn() && exists(/databases/$(database)/documents/studentAccounts/$(request.auth.uid));
+    }
+    // سجل معلَّق (لم يُفعَّل بعد): بلا authUid إطلاقًا — أنشأه مدير/أدمن لموظف لم يربط بريده بعد
+    function isPending(data) { return !('authUid' in data) || data.authUid == null; }
+    function iBelongAnywhere() { return meExists() && (('schools' in meDoc()) || ('solo' in meDoc())); }
+
+    /* ===================== المستخدمون ===================== */
+    match /users/{uid} {
+      allow read: if signedIn();
+
+      allow create: if
+        isAdmin()
+        // سجل معلَّق جديد لموظف عادي بمدرسة: admin العام أو مدير تلك المدرسة، معرّف عشوائي (لا authUid)
+        || (
+          isPending(request.resource.data)
+          && request.resource.data.get('role', null) != 'admin'
+          && request.resource.data.get('role', null) != 'schoolAdmin'
+          && isSchoolAdminOf(request.resource.data.schoolId)
+        )
+        // أول مستند موحَّد حقيقي لشخص عادي (تسجيل فردي، أو أول تفعيل مدرسة) — بمعرّف = uid نفسه
+        || (
+          isOwner(uid) && request.resource.data.authUid == uid
+          && request.resource.data.get('role', null) != 'admin'
+        );
+
+      allow update: if
+        isAdmin()
+        // مدير مدرسة: يعدّل سياق مدرسته هو تحديدًا داخل مستند موظف عادي — يرسل _editCtx=معرّف مدرسته،
+        // ولا يغيّر بالطلب إلا مفتاح تلك المدرسة وحدها، ولا يمنح دور admin/schoolAdmin
+        || (
+          isSchoolAdminOf(request.resource.data.get('_editCtx', null))
+          && resource.data.get('role', null) != 'admin' && resource.data.get('role', null) != 'schoolAdmin'
+          && request.resource.data.get('schools',{}).diff(resource.data.get('schools',{})).affectedKeys()
+               .hasOnly([request.resource.data._editCtx])
+          && request.resource.data.schools[request.resource.data._editCtx].role != 'admin'
+          && request.resource.data.schools[request.resource.data._editCtx].role != 'schoolAdmin'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['schools','_editCtx','updatedAt'])
+        )
+        // موظف مفوَّض بإسناد المواد: يعدّل subjectAssignments لموظف آخر بنفس مدرسته فقط — لا شيء غيرها
+        || (
+          request.resource.data.get('_editCtx', null) != null
+          && permEdit(staffPerms(request.resource.data._editCtx), 'omr.classes.subjects')
+          && resource.data.get('role', null) != 'admin' && resource.data.get('role', null) != 'schoolAdmin'
+          && (request.resource.data._editCtx in resource.data.get('schools', {}))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['schools','_editCtx','updatedAt'])
+          && request.resource.data.get('schools',{}).diff(resource.data.get('schools',{})).affectedKeys()
+               .hasOnly([request.resource.data._editCtx])
+          && request.resource.data.schools[request.resource.data._editCtx]
+               .diff(resource.data.schools[request.resource.data._editCtx]).affectedKeys().hasOnly(['subjectAssignments'])
+        )
+        // صاحب مستند موظف عادي (لا admin ولا schoolAdmin): يضيف/يعدّل سياق مدرسة أو حسابه الفردي بنفسه
+        || (
+          isOwner(uid) && resource.data.get('role', null) != 'admin' && resource.data.get('role', null) != 'schoolAdmin'
+          && request.resource.data.get('role', null) != 'admin' && request.resource.data.get('role', null) != 'schoolAdmin'
+          && resource.data.get('authUid', uid) == uid && request.resource.data.authUid == uid
+        )
+        // تعليم مستند مدرسة قديم غير مرتبط بأنه انتقل لحساب موحَّد آخر (بند ٧ القديم — توافقيًا)
+        || (
+          signedIn() && resource.data.get('authUid', null) == null
+          && request.resource.data.migratedTo == request.auth.uid
+          && meExists() && meDoc().authUid == request.auth.uid
+        )
+        // تعطيل ذاتي لسجل معلَّق بمدرسة أخرى يطابق رقم هويتي أنا تحديدًا (اكتشاف تلقائي عند الدخول) —
+        // رقم الهوية فريد دائمًا فلا حاجة لإثبات كلمة مرور هنا، ولا يمكن الاتجاه العكسي (لا تفعيل ذاتي إطلاقًا)
+        || (
+          meExists() && meDoc().get('loginId', null) != null
+          && isPending(resource.data) && resource.data.get('loginId', null) == meDoc().loginId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active','updatedAt'])
+          && request.resource.data.active == false
+        );
+
+      allow delete: if isAdmin()
+        || (isPending(resource.data) && isSchoolAdminOf(resource.data.schoolId));
+    }
+
+    /* ===================== حسابات الطلاب ===================== */
+    match /studentAccounts/{docId} {
+      allow read: if signedIn();
+      // لا يُنشأ حساب طالب لـ UID له مستند مستخدم (معلم/منسوب/فردي) — الطالب لا يدخل ببريد مسجَّل بالنظام
+      allow create: if signedIn() && request.resource.data.googleUid == request.auth.uid
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update: if signedIn() && resource.data.googleUid == request.auth.uid
+        && request.resource.data.seat == resource.data.seat;
+      allow delete: if isAdmin()
+        || (signedIn() && 'email' in request.auth.token && request.auth.token.email == resource.data.email);
+    }
+
+    /* ===================== الروستر وبيانات المدارس ===================== */
+    match /schoolData/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin()
+        || (isSolo() && docId == 'roster_solo_' + request.auth.uid)
+        || (docId == 'roleTemplates')
+        || (docId.matches('roster_.*') && canManageRosterOf(docId.replace('roster_','')))
+        || isSchoolAdminOf(docId)
+        || permEdit(staffPerms(docId), 'index.attendanceWindow');
+    }
+
+    /* ===================== فهرس الطلاب ===================== */
+    match /rosterIndex/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || isSchoolAdminDoc() || iBelongAnywhere();
+    }
+
+    /* ===================== الغياب — سجل مستقل لكل معلم ===================== */
+    match /attendance/{docId} {
+      allow read: if isAdmin()
+        || isSchoolAdminOf(resource.data.schoolId)
+        || isStaffOf(resource.data.schoolId)
+        || isOwner(resource.data.markedBy);
+      allow create: if isStaffOf(request.resource.data.schoolId) && request.resource.data.markedBy == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.markedBy) || canAbsEditOf(resource.data.schoolId);
+    }
+
+    /* تأكيد تحضير فصل يدويًا (زر «تم التحضير» بقائمة الفصول غير المحضَّرة) */
+    match /prepOverrides/{docId} {
+      allow read: if isAdmin() || isSchoolAdminOf(resource.data.schoolId) || isStaffOf(resource.data.schoolId);
+      allow create: if canAbsEditOf(request.resource.data.schoolId) && request.resource.data.byUserId == request.auth.uid;
+      allow update, delete: if canAbsEditOf(resource.data.schoolId);
+    }
+
+    /* تنبيهات الغياب: معلم حضّر طالبًا مسجَّلًا غائبًا بالسجل المركزي — ينشئها المعلم، ويحسمها صاحب تعديل الغياب */
+    match /attAlerts/{docId} {
+      allow read: if canAbsEditOf(resource.data.schoolId) || isOwner(resource.data.byUserId);
+      allow create: if isStaffOf(request.resource.data.schoolId) && request.resource.data.byUserId == request.auth.uid;
+      allow update, delete: if canAbsEditOf(resource.data.schoolId);
+    }
+
+    /* سجل الاستئذان (الخروج المبكر) — مستقل عن سجل الغياب. يقرؤه أي موظف بالمدرسة (لتظهر «مستأذن» للمعلم)،
+       وينشئه صاحب تعديل الغياب أو بند «تسجيل الاستئذان» باسمه هو، ويحذفه صاحب تعديل الغياب أو منشئه */
+    match /leaves/{docId} {
+      allow read: if isAdmin() || isSchoolAdminOf(resource.data.schoolId) || isStaffOf(resource.data.schoolId);
+      allow create: if signedIn() && request.resource.data.byUserId == request.auth.uid
+        && (canAbsEditOf(request.resource.data.schoolId) || permEdit(staffPerms(request.resource.data.schoolId), 'index.leave'));
+      allow update, delete: if canAbsEditOf(resource.data.schoolId)
+        || (isOwner(resource.data.byUserId) && permEdit(staffPerms(resource.data.schoolId), 'index.leave'));
+    }
+
+    /* تنبيه تراكم الغياب: إعدادات الحد (settings_{sid}) وتوثيق «تم الإشعار» — لصاحب تعديل الغياب فقط */
+    match /absNotices/{docId} {
+      allow read: if canAbsEditOf(resource.data.schoolId);
+      allow create: if canAbsEditOf(request.resource.data.schoolId) && request.resource.data.byUserId == request.auth.uid;
+      allow update: if canAbsEditOf(resource.data.schoolId) && request.resource.data.schoolId == resource.data.schoolId
+        && request.resource.data.byUserId == request.auth.uid;
+      allow delete: if canAbsEditOf(resource.data.schoolId);
+    }
+
+    /* ===================== الإرشاد الطلابي =====================
+       guideFull: الموجه (الدور) أو صلاحية «الإرشاد الطلابي» تعديل — موظف فعّال بالمدرسة فقط، فلا يدخل فيها
+       مدير المدرسة ولا أدمن النظام (خصوصية تفاصيل الجلسات). guideView: يرى رأس الحالة (وجودها ونوعها) فقط. */
+    function guideFull(sid) {
+      let c = schoolCtx(sid);
+      let p = staffPerms(sid);
+      return p != null && (c.get('role', '') == 'counselor' || permEdit(p, 'index.guidance'));
+    }
+    function guideView(sid) {
+      let p = staffPerms(sid);
+      return isAdmin() || isSchoolAdminOf(sid) || guideFull(sid)
+        || (p != null && ('index.guidance' in p) && p['index.guidance'].get('access', false) == true);
+    }
+    // مواعيد أولياء الأمور: الوكيل والموجه (الدور) أو صلاحية «مواعيد أولياء الأمور»
+    function canAppt(sid) {
+      let c = schoolCtx(sid);
+      let p = staffPerms(sid);
+      return p != null && (c.get('role', '') == 'agent' || c.get('role', '') == 'counselor' || permEdit(p, 'index.appointments'));
+    }
+    match /guidanceCases/{docId} {
+      allow read: if guideView(resource.data.schoolId);
+      allow create: if guideFull(request.resource.data.schoolId);
+      allow update: if guideFull(resource.data.schoolId) && request.resource.data.schoolId == resource.data.schoolId;
+      allow delete: if guideFull(resource.data.schoolId);
+    }
+    // تفاصيل الجلسات: للموجه فقط (لا مدير ولا أدمن)
+    match /guidanceSessions/{docId} {
+      allow read, delete: if guideFull(resource.data.schoolId);
+      allow create: if guideFull(request.resource.data.schoolId) && request.resource.data.byUserId == request.auth.uid;
+      allow update: if guideFull(resource.data.schoolId) && request.resource.data.schoolId == resource.data.schoolId;
+    }
+    // كل موعد لصاحبه فقط
+    match /guidanceAppointments/{docId} {
+      allow read, delete: if isOwner(resource.data.byUserId);
+      allow create: if canAppt(request.resource.data.schoolId) && request.resource.data.byUserId == request.auth.uid;
+      allow update: if isOwner(resource.data.byUserId) && request.resource.data.byUserId == resource.data.byUserId;
+    }
+    // إعدادات القائمة (الحدود والتجاهل) لكل مدرسة
+    match /guidanceSettings/{sid} {
+      allow read: if guideView(sid);
+      allow write: if guideFull(sid);
+    }
+
+    /* ===================== الملاحظات ===================== */
+    match /notes/{docId} {
+      // القراءة: admin، المُرسِل، المستلم، أو أي موظف بنفس المدرسة (لازم لعدّاد "كم مرة حُوِّل الطالب"
+      // ولسجل الطالب التفصيلي — الوصول لهذي التفاصيل مُقيَّد بالواجهة بصلاحية index.studentRecord)
+      allow read: if isAdmin()
+        || isOwner(resource.data.fromUserId)
+        || (signedIn() && request.auth.uid in resource.data.recipients)
+        || isSchoolAdminOf(resource.data.schoolId)
+        || isStaffOf(resource.data.schoolId);
+      allow create: if isStaffOf(request.resource.data.schoolId) && request.resource.data.fromUserId == request.auth.uid;
+      allow update: if isAdmin() || isOwner(resource.data.fromUserId)
+        || (signedIn() && request.auth.uid in resource.data.recipients);
+      allow delete: if isAdmin() || isOwner(resource.data.fromUserId);
+    }
+
+    /* سجل ملاحظات دائم خاص بكل معلم عن طلابه — لا يُرسَل لأحد، يتراكم، خاص بصاحبه فقط */
+    match /studentNotes/{docId} {
+      allow read: if isAdmin() || isOwner(resource.data.fromUserId);
+      allow create: if request.resource.data.fromUserId == request.auth.uid
+        && (isStaffOf(request.resource.data.schoolId)
+            || (isSolo() && request.resource.data.schoolId == 'solo_' + request.auth.uid));
+      allow update: if false;
+      allow delete: if isAdmin() || isOwner(resource.data.fromUserId);
+    }
+
+    /* ===================== الأنشطة الرقمية — خاصة بالمعلم وحده (بند الصيانة ص-١) =====================
+       لا يطّلع عليها ولا يعدّلها غير صاحبها (ولا مدير المدرسة ولا أدمن النظام من داخل الموقع).
+       الاستثناء الوحيد: الطالب يقرأ النشاط المنشور، ويقرأ ويكتب تسليمه هو فقط.
+       الدالة المجدولة archiveDepartedTeachers تعمل بصلاحيات الخادم (خارج هذه القواعد). */
+    function wsData(id) { return get(/databases/$(database)/documents/worksheets/$(id)).data; }
+    function mySeat() { return get(/databases/$(database)/documents/studentAccounts/$(request.auth.uid)).data.get('seat', null); }
+    match /worksheets/{docId} {
+      allow read: if isOwner(resource.data.createdBy)
+        || (isStudent() && resource.data.get('status', '') == 'published');
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isOwner(resource.data.createdBy) && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if isOwner(resource.data.createdBy);
+    }
+
+    /* ===================== التسليمات ===================== */
+    // teacherUid/studentUid تُكتب مع كل تسليم جديد؛ الشروط «القديمة» تخص تسليمات سابقة بلا هذين الحقلين
+    match /submissions/{docId} {
+      allow read: if (signedIn() && resource.data.get('studentUid', null) == request.auth.uid)
+        || (signedIn() && resource.data.get('teacherUid', null) == request.auth.uid)
+        || (isStudent() && resource.data.get('studentUid', null) == null && resource.data.get('studentId', '') == mySeat())
+        || (signedIn() && resource.data.get('teacherUid', null) == null && resource.data.get('hidden', false) != true
+            && wsData(resource.data.worksheetId).createdBy == request.auth.uid);
+      allow create: if isStudent()
+        && request.resource.data.studentUid == request.auth.uid
+        && request.resource.data.studentId == mySeat()
+        && wsData(request.resource.data.worksheetId).get('status', '') == 'published'
+        && wsData(request.resource.data.worksheetId).get('stopped', false) != true
+        && request.resource.data.teacherUid == wsData(request.resource.data.worksheetId).createdBy;
+      allow update: if
+        // الطالب: تسليمه هو، قبل التصحيح، ما دام النشاط منشورًا وغير موقوف
+        (isStudent()
+          && (resource.data.get('studentUid', null) == request.auth.uid
+              || (resource.data.get('studentUid', null) == null && resource.data.get('studentId', '') == mySeat()))
+          && resource.data.get('status', '') != 'corrected'
+          && request.resource.data.studentUid == request.auth.uid
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.worksheetId == resource.data.worksheetId
+          && wsData(resource.data.worksheetId).get('status', '') == 'published'
+          && wsData(resource.data.worksheetId).get('stopped', false) != true
+          && request.resource.data.teacherUid == wsData(resource.data.worksheetId).createdBy)
+        // المعلم صاحب النشاط: التصحيح
+        || (signedIn()
+          && (resource.data.get('teacherUid', null) == request.auth.uid
+              || (resource.data.get('teacherUid', null) == null && resource.data.get('hidden', false) != true
+                  && wsData(resource.data.worksheetId).createdBy == request.auth.uid))
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.worksheetId == resource.data.worksheetId);
+      allow delete: if signedIn()
+        && (resource.data.get('teacherUid', null) == request.auth.uid
+            || (resource.data.get('teacherUid', null) == null && resource.data.get('hidden', false) != true
+                && wsData(resource.data.worksheetId).createdBy == request.auth.uid));
+    }
+
+    /* ============ بيانات المعلم الخاصة (المعرّف ينتهي بـ userId) ============ */
+    match /exams/{docId} {
+      allow read: if isAdmin() || (signedIn() && docId.matches('.*_' + request.auth.uid));
+      allow write: if isAdmin() || (signedIn() && docId.matches('.*_' + request.auth.uid));
+    }
+    match /results/{docId} {
+      allow read: if isAdmin() || (signedIn() && docId.matches('.*_' + request.auth.uid))
+        || (docId.matches('worklog_.*') && (agentOrAbsenceEditOf(docId.split('_')[1]) || isSchoolAdminOf(docId.split('_')[1])));
+      allow write: if isAdmin() || (signedIn() && docId.matches('.*_' + request.auth.uid));
+    }
+    // بنك الأسئلة: ملك المعلم وحده، ينتقل معه أينما ذهب (ص-١)
+    match /questionBank/{docId} {
+      allow read, delete: if isOwner(resource.data.createdBy);
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isOwner(resource.data.createdBy) && request.resource.data.createdBy == request.auth.uid;
+    }
+
+    /* ===================== الإعدادات ===================== */
+    match /settings/{docId} {
+      allow read: if signedIn();
+      // مظهر النظام: أدمن النظام العام حصرًا — قرار مركزي شامل على الجميع
+      allow write: if (docId=='appearance') ? isAdmin() : (isAdmin() || isSchoolAdminDoc());
+    }
+
+    /* ===================== رموز أجهزة الإشعارات (تطبيق إنجاز — ص-١٢) =====================
+       المعرّف = رمز الجهاز نفسه. يكتبه صاحب الحساب لجهازه (authUid = حسابه)، ولو انتقل الجهاز لحساب آخر
+       يعيد صاحبه الجديد كتابته باسمه. الإرسال من دوال Firebase (صلاحيات الخادم). pushQueue للخادم فقط. */
+    match /pushTokens/{tok} {
+      allow read, delete: if signedIn() && resource.data.get('authUid', '') == request.auth.uid;
+      allow create, update: if signedIn() && request.resource.data.authUid == request.auth.uid
+        && request.resource.data.uid is string && request.resource.data.uid.size() > 0;
+    }
+
+    /* [ADMIN-TOOLS:BEGIN] */
+    /* ============ الجدول المدرسي (الأدوات الإدارية) — مجموعة مستقلة: timetables/{sid}/data/{docId} ============ */
+    function ttPerm(sid, f) {
+      let p = staffPerms(sid);
+      return p != null && ('tools.timetable' in p) && p['tools.timetable'].get(f, false) == true;
+    }
+    // حصص الانتظار: صلاحية كاملة للوكيل (بالدور) أو تفويض «حصص الانتظار»، ولصاحب تعديل الجدول؛ يقرأ باقي الجدول للحساب فقط
+    function waitManage(sid) {
+      let c = schoolCtx(sid);
+      let p = staffPerms(sid);
+      return isSchoolAdminOf(sid) || ttPerm(sid, 'edit') || (p != null && (c.get('role', '') == 'agent' || permEdit(p, 'tools.waiting')));
+    }
+    match /timetables/{sid}/data/{docId} {
+      // مستند meta فيه علم «الأداة مفعّلة؟» الذي يحدّد قفل الإسناد اليدوي في omr.html وindex.html —
+      // يقرؤه أي موظف فعّال بالمدرسة (لا يحتاج صلاحية الأداة نفسها)، وباقي مستندات الجدول تبقى مقصورة كما كانت.
+      // كذلك النسخة المنشورة (..._published) يقرؤها أي موظف فعّال — يكتبها زر «نشر» بالأداة، ومنها تعرض
+      // «لوحتي ← جدولي» لكل موظف حصصه هو (قراءة فقط) دون صلاحية الأداة نفسها. المسودات والمعتمد غير المنشور لا تُقرأ.
+      // والانتظار المنشور (..._waitpub) والتحديد اليومي (..._wday_{التاريخ}) يقرؤهما أي موظف فعّال («جدولي» و«لوحتي ← انتظاري»).
+      allow read: if isAdmin() || isSchoolAdminOf(sid) || ttPerm(sid, 'access') || waitManage(sid)
+        || (docId=='meta' && isStaffOf(sid))
+        || (docId.matches('.*_published') && isStaffOf(sid))
+        || ((docId.matches('.*_waitpub') || docId.matches('.*_wday_.*')) && isStaffOf(sid));
+      allow write: if isAdmin() || isSchoolAdminOf(sid) || ttPerm(sid, 'edit')
+        || ((docId.matches('.*_waiting') || docId.matches('.*_waitpub') || docId.matches('.*_wday_.*')) && waitManage(sid));
+    }
+    // طلبات تعميد معلمين جدد من استيراد الجدول: ينشئها المفوَّض بتعديل الجدول باسمه، ويعمّدها/يرفضها مدير المدرسة فقط
+    match /userRequests/{docId} {
+      allow read: if isSchoolAdminOf(resource.data.schoolId) || isOwner(resource.data.byUserId) || ttPerm(resource.data.schoolId, 'edit');
+      allow create: if (isSchoolAdminOf(request.resource.data.schoolId) || ttPerm(request.resource.data.schoolId, 'edit'))
+        && request.resource.data.byUserId == request.auth.uid && request.resource.data.status == 'pending';
+      allow update: if isSchoolAdminOf(resource.data.schoolId);
+      allow delete: if isSchoolAdminOf(resource.data.schoolId) || isOwner(resource.data.byUserId);
+    }
+    /* [ADMIN-TOOLS:END] */
+
+    /* [ADMIN-TOOLS:BEGIN] */
+    /* ============ التوقيع على التعاميم (الأدوات الإدارية) — مجموعة مستقلة: circulars/{sid}/... ============
+       خصوصية كاملة للمدرسة بطلب صريح من المستخدم: لا isAdmin() هنا إطلاقًا، خلاف كل مجموعة أخرى بهذا الملف —
+       أدمن النظام لا يقرأ ولا يكتب شيئًا من بيانات التعاميم مهما كانت صلاحياته بباقي النظام. */
+    function circPerm(sid, f) {
+      let p = staffPerms(sid);
+      return p != null && ('tools.circulars' in p) && p['tools.circulars'].get(f, false) == true;
+    }
+    function circManage(sid) { return isSchoolAdminOf(sid) || circPerm(sid, 'edit'); }
+    match /circulars/{sid} {
+      // المستند نفسه مجرّد عدّاد ترقيم داخلي — لا يحتاجه أحد غير صاحب صلاحية الإدارة
+      allow read, write: if circManage(sid);
+      match /items/{cid} {
+        allow read: if isSchoolAdminOf(sid) || circPerm(sid, 'access')
+          || (signedIn() && request.auth.uid in resource.data.get('recipients', []));
+        allow create, update, delete: if circManage(sid);
+        match /pages/{n} {
+          allow read: if isSchoolAdminOf(sid) || circPerm(sid, 'access')
+            || (signedIn() && request.auth.uid in get(/databases/$(database)/documents/circulars/$(sid)/items/$(cid)).data.get('recipients', []));
+          allow write: if circManage(sid);
+        }
+        match /signatures/{uid} {
+          allow read: if isSchoolAdminOf(sid) || circPerm(sid, 'access') || isOwner(uid);
+          // توقيع رقمي: صاحبه فقط، ولمستلم مُدرَج بالفعل، ولا يُعاد كتابته لاحقًا (manual=false إلزامي عند الإنشاء الذاتي)
+          allow create: if isOwner(uid) && request.resource.data.get('manual', false) == false
+            && uid in get(/databases/$(database)/documents/circulars/$(sid)/items/$(cid)).data.get('recipients', []);
+          // تحديد يدوي أو حذف توقيع: صاحب صلاحية الإدارة فقط
+          allow update, delete: if circManage(sid);
+        }
+      }
+    }
+    /* [ADMIN-TOOLS:END] */
+
+    /* [ADMIN-TOOLS:BEGIN] */
+    /* ============ الزيارات الصفية (الأدوات الإدارية) — نموذج (٤٩): classVisits ============
+       مدير المدرسة والوكيل (بالدور) أو تفويض «الزيارات الصفية» تعديل: إدارة الخطة. تفويض الوصول: اطّلاع فقط.
+       المعلم يقرأ خطته هو فقط (teacherId = حسابه) لتظهر في «لوحتي ← زياراتي». لا isAdmin() (خصوصية المدرسة). */
+    function visitPerm(sid, f) {
+      let p = staffPerms(sid);
+      return p != null && ('tools.visits' in p) && p['tools.visits'].get(f, false) == true;
+    }
+    function visitManage(sid) {
+      let c = schoolCtx(sid);
+      return isSchoolAdminOf(sid) || (staffPerms(sid) != null && c.get('role', '') == 'agent') || visitPerm(sid, 'edit');
+    }
+    match /classVisits/{docId} {
+      allow read: if visitManage(resource.data.schoolId) || visitPerm(resource.data.schoolId, 'access')
+        || isOwner(resource.data.get('teacherId', ''));
+      allow create: if visitManage(request.resource.data.schoolId);
+      allow update: if visitManage(resource.data.schoolId) && request.resource.data.schoolId == resource.data.schoolId;
+      allow delete: if visitManage(resource.data.schoolId);
+    }
+    /* [ADMIN-TOOLS:END] */
+
+    /* [ADMIN-TOOLS:BEGIN] */
+    /* ============ المناوبة والإشراف (الأدوات الإدارية): dutyPlans/{sid}_{period}_{stage} ============
+       الإعداد والتوزيع: مدير المدرسة والوكيل (بالدور) أو تفويض «المناوبة والإشراف» تعديل؛ تفويض الوصول اطّلاع فقط.
+       النسخة المعتمدة (pub) وقائمة المكلَّفين (members): لا تُكتب إلا ممن يملك إدارة التعاميم (circManage) — قرار المستخدم (ب).
+       المعلم المكلَّف يقرأ المستند لتظهر تكليفاته في «لوحتي ← مناوبتي». لا isAdmin(). */
+    function dutyPerm(sid, f) {
+      let p = staffPerms(sid);
+      return p != null && ('tools.duty' in p) && p['tools.duty'].get(f, false) == true;
+    }
+    function dutyManage(sid) {
+      let c = schoolCtx(sid);
+      return isSchoolAdminOf(sid) || (staffPerms(sid) != null && c.get('role', '') == 'agent') || dutyPerm(sid, 'edit');
+    }
+    match /dutyPlans/{docId} {
+      allow read: if dutyManage(resource.data.schoolId) || dutyPerm(resource.data.schoolId, 'access')
+        || (signedIn() && request.auth.uid in resource.data.get('members', []));
+      allow create: if dutyManage(request.resource.data.schoolId)
+        && ((!('pub' in request.resource.data) && !('members' in request.resource.data)) || circManage(request.resource.data.schoolId));
+      allow update: if dutyManage(resource.data.schoolId) && request.resource.data.schoolId == resource.data.schoolId
+        && ((request.resource.data.get('pub', null) == resource.data.get('pub', null)
+             && request.resource.data.get('members', null) == resource.data.get('members', null))
+            || circManage(resource.data.schoolId));
+      allow delete: if dutyManage(resource.data.schoolId);
+    }
+    /* [ADMIN-TOOLS:END] */
+
+    /* [ADMIN-TOOLS:BEGIN] */
+    /* ============ الإجازات وساعات هدوء الإشعارات (الأدوات الإدارية — ص-١٢): schoolCalendar/{sid} ============
+       مصدر واحد للمدرسة: يقرؤه أي موظف فعّال («يومي» وأداة المناوبة)، ويكتبه مدير المدرسة والوكيل بالدور فقط. */
+    function calManage(sid) {
+      let c = schoolCtx(sid);
+      return isSchoolAdminOf(sid) || (staffPerms(sid) != null && c.get('role', '') == 'agent');
+    }
+    match /schoolCalendar/{sid} {
+      allow read: if isSchoolAdminOf(sid) || isStaffOf(sid);
+      allow write: if calManage(sid);
+    }
+    /* [ADMIN-TOOLS:END] */
+
+    /* أي مجموعة أخرى: مرفوضة */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

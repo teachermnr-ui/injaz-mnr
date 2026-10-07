@@ -1,0 +1,12 @@
+const { chromium } = require('playwright'); const fs=require('fs');
+const MOCK=fs.readFileSync(__dirname+'/mock-firebase.js','utf8'); const DB=JSON.parse(fs.readFileSync(__dirname+'/db-after.json','utf8'));
+(async()=>{ const b=await chromium.launch(); const ctx=await b.newContext({viewport:{width:420,height:900}});
+ await ctx.route(/cdnjs|googleapis|jsdelivr/, r=>r.fulfill({status:200,contentType:'application/javascript',body:''}));
+ await ctx.route(/gstatic\.com\/firebasejs\/.*firebase-app-compat/, r=>r.fulfill({status:200,contentType:'application/javascript',body:MOCK}));
+ await ctx.route(/gstatic\.com\/firebasejs\/.*(firestore|auth|messaging)-compat/, r=>r.fulfill({status:200,contentType:'application/javascript',body:''}));
+ await ctx.addInitScript(([db])=>{ window.__mockUid='U_u1'; localStorage.setItem('cls_session',JSON.stringify({userId:'u1',username:'م',role:'teacher',schoolId:'S2',period:'first',ctxKey:'school:S2'})); localStorage.setItem('__mockdb',JSON.stringify(db)); },[DB]);
+ const p=await ctx.newPage(); await p.goto('http://127.0.0.1:8765/myday.html'); await p.waitForTimeout(2500);
+ console.log(await p.evaluate(()=>[typeof InjazPWA, InjazPWA&&InjazPWA.notifState(), 'Notification' in window, 'PushManager' in window, Notification.permission]));
+ console.log((await p.innerText('#main')).slice(-300));
+ console.log(await p.$eval('#ipwaBar',e=>e.innerText).catch(()=>'no bar'));
+ await b.close(); })();

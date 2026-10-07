@@ -1,0 +1,16 @@
+const { chromium, devices } = require('playwright'); const fs=require('fs');
+const MOCK = fs.readFileSync(__dirname+'/mock-firebase.js','utf8');
+const DB = { 'users/sa1':{username:'ي',role:'schoolAdmin',authUid:'U_sa1',active:true,adminSchools:['S2']}, 'schoolData/S2':{name:'مدرسة'} };
+(async()=>{ const b=await chromium.launch(); const ctx=await b.newContext({...devices['Pixel 5']});
+ await ctx.route(/cdnjs|googleapis|jsdelivr/, r=>r.fulfill({status:200,contentType:'application/javascript',body:''}));
+ await ctx.route(/gstatic\.com\/firebasejs\/.*firebase-app-compat/, r=>r.fulfill({status:200,contentType:'application/javascript',body:MOCK}));
+ await ctx.route(/gstatic\.com\/firebasejs\/.*(firestore|auth)-compat/, r=>r.fulfill({status:200,contentType:'application/javascript',body:''}));
+ await ctx.addInitScript(([s,db])=>{window.__mockUid='U_sa1';localStorage.setItem('cls_session',JSON.stringify(s));localStorage.setItem('__mockdb',JSON.stringify(db));},[{userId:'sa1',username:'ي',role:'schoolAdmin',schoolId:'S2',period:'first',ctxKey:'school:S2'},DB]);
+ const p=await ctx.newPage(); p.on('pageerror',e=>console.log('ERR',e.message));
+ await p.goto('http://127.0.0.1:8765/holidays.html'); await p.waitForTimeout(1500);
+ const st=()=>p.evaluate(()=>[...document.querySelectorAll('.pill')].map(x=>x.className)+' | mode='+HS.mode);
+ console.log(await st());
+ console.log(await p.evaluate(()=>{const e=document.querySelector('#hFrom');const q=e.getBoundingClientRect();const t=document.elementFromPoint(q.x+q.width/2,q.y+q.height/2);return t.outerHTML.slice(0,120)+' | modeBtns='+document.querySelectorAll('[data-mode]').length+' '+[...document.querySelectorAll('[data-mode]')].map(x=>x.className+'@'+Math.round(x.getBoundingClientRect().top)).join(',')})); await p.tap('#hFrom'); await p.waitForTimeout(300); console.log('after date tap',await st());
+ await p.tap('#qOn'); await p.waitForTimeout(300); console.log('after chk', await st(), await p.$eval('#qOn',e=>e.checked));
+ await p.tap('[data-mode=one]'); await p.waitForTimeout(300); console.log('after pill', await st());
+ await b.close();})();

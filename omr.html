@@ -5227,6 +5227,7 @@ function omrNoteCard(n,mineSent){
   const closedBadge = isClosed ? '<div style="display:inline-block;margin-bottom:4px;padding:2px 10px;border-radius:12px;background:var(--bg-eeeeee,#eee);color:var(--fg-666666,#666);font-size:12px;font-weight:700">🔒 مغلقة</div>' : '';
   return '<div class="subcard"'+(isClosed?' style="opacity:.75"':'')+'>'+closedBadge+'<div style="font-weight:700">'+who+'</div>'+stu+
     '<div style="margin:8px 0;padding:9px 11px;background:var(--bg-ffffff,#fff);border-right:3px solid var(--teal,var(--bd-0f766e,#0f766e));border-radius:8px;font-weight:600;white-space:pre-wrap">'+escapeHtml(n.text)+'</div>'+(reps||'')+
+    ((n.pdfB64 && (n.recipients||[]).indexOf(me)>=0)?'<button class="primary" style="margin:4px 0" onclick="openNotePdf(\''+n.id+'\')">📄 فتح PDF</button>':'')+
     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+replyBtn+closeBtn+'</div></div>';
 }
 async function omrToggleNoteClosed(id, closed){
@@ -5498,20 +5499,22 @@ function anCompute(){
   if(!m || !keys.length) return { err:'اختر فصلاً واحداً على الأقل لعرض التحليل.' };
   const scale = +(document.getElementById('anScale')||{}).value || m.max;
   if(!(scale>0)) return { err:'درجة القياس لهذا البند صفر. أدخل درجة قياس أكبر من صفر.' };
-  const vcs=getVirtualClasses(); const per=[]; let excluded=0;
+  const vcs=getVirtualClasses(); const reports=[], skipped=[]; const pi=+(document.getElementById('anPeriod')||{}).value||0;
+  // تقرير مستقل لكل فصل (ولكل مادة في الفصل الواحد): لا دمج للدرجات بين الفصول
   keys.forEach(k=>{
     const pk=parseVKey(k);
     const label=(vcs.find(v=>v.key===k)||{}).label || classNameByCode(pk.classCode) || pk.classCode;
-    const log=state.workLog[k]||{}; const vals=[];
+    const log=state.workLog[k]||{}; const vals=[]; let excluded=0;
     state.students.filter(s=>s.classCode===pk.classCode).forEach(s=>{
       const v=m.get(log[s.seat]||{});
       if(v==null) excluded++; else vals.push(v);
     });
-    per.push({ key:k, label, subject:pk.subject, vals, stats:anStats(vals,scale) });
+    if(!vals.length){ skipped.push(label); return; }
+    const x={ key:k, label, subject:pk.subject, vals, stats:anStats(vals,scale) };
+    reports.push({ metric:m, scale, per:[x], all:vals, excluded, stats:x.stats, pi, label, subject:pk.subject });
   });
-  const all=[].concat(...per.map(x=>x.vals));
-  if(!all.length) return { err:'لا توجد درجات مرصودة لهذا البند في الفصول المختارة.' };
-  return { metric:m, scale, per, all, excluded, stats:anStats(all,scale), pi:+(document.getElementById('anPeriod')||{}).value||0 };
+  if(!reports.length) return { err:'لا توجد درجات مرصودة لهذا البند في الفصول المختارة.' };
+  return { metric:m, scale, pi, reports, skipped };
 }
 function anRangeText(i,scale){
   const b=AN_LEVELS.map(l=>l.pct*scale/100);
@@ -5540,7 +5543,6 @@ function anReportHTML(d){
   const mx = Math.max(1,...st.cnt);
   const rings = AN_LEVELS.map((l,i)=>anRing(l,pcts[i])).join('');
   const bars = AN_LEVELS.map((l,i)=>{ const p=st.cnt[i]/mx*100; return `<div class="an-bcol"><div class="an-bwrap"><div class="an-bt"></div><div class="an-bf" style="height:${p.toFixed(1)}%;background:${l.color}"></div><div class="an-bn" style="bottom:calc(${p.toFixed(1)}% + 4px)">${toArabic(st.cnt[i])}</div></div>${l.name}</div>`; }).join('');
-  const cmp = d.per.length>1 ? `<table class="an-cmp"><thead><tr><th>الفصل</th><th>العدد</th><th>المتوسط</th><th>نسبة التحصيل</th>${AN_LEVELS.map(l=>`<th>${l.name}</th>`).join('')}</tr></thead><tbody>${d.per.map(x=>`<tr><td>${escapeHtml(x.label)}</td><td>${toArabic(x.stats.n)}</td><td>${anFmt(x.stats.mean)}</td><td>${anFmt(x.stats.ach)}٪</td>${x.stats.cnt.map(c=>`<td>${toArabic(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
   const exc = d.excluded ? `<div class="an-note">استُبعد ${toArabic(d.excluded)} طالب لعدم رصد درجة لهم في هذا البند.</div>` : '';
   return `<div class="anr">
     <div class="an-hd">
@@ -5562,7 +5564,7 @@ function anReportHTML(d){
     </div>
     <div class="an-charts"><div class="an-ct">رسم بياني (نسب الطلاب لكل تقدير)</div><div class="an-rings">${rings}</div>
       <div class="an-ct">رسم بياني (عدد الطلاب لكل تقدير)</div><div class="an-bars">${bars}</div></div>
-    ${cmp}${exc}
+    ${exc}
     <div class="an-sig"><div>معلم المادة / الاسم: ${escapeHtml(h.teacher||'')}</div><div>مدير المدرسة / الاسم: ${escapeHtml(h.principal||'')}</div></div>
   </div>`;
 }
@@ -5571,23 +5573,83 @@ function anRun(){
   const d=anCompute();
   if(d.err){ host.innerHTML='<div class="empty">'+escapeHtml(d.err)+'</div>'; window.AN_LAST=null; return; }
   window.AN_LAST=d;
-  host.innerHTML='<style>'+AN_CSS+'</style>'+anReportHTML(d);
+  const skip = d.skipped.length ? '<div class="empty" style="margin-bottom:10px">لا درجات مرصودة لهذا البند في: '+d.skipped.map(escapeHtml).join('، ')+' — لم يُنشأ لها تقرير.</div>' : '';
+  host.innerHTML='<style>'+AN_CSS+'</style>'+skip+d.reports.map((r,i)=>'<div class="an-pg" style="margin-bottom:14px">'+anReportHTML(r)+'</div>').join('');
 }
 function anPrint(){
   const d=window.AN_LAST; if(!d){ alert('اختر فصلاً به درجات مرصودة أولاً.'); return; }
   const win=window.open('','_blank'); if(!win){ alert('فضلاً اسمح بالنوافذ المنبثقة للطباعة.'); return; }
   win.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تحليل النتائج</title>
-  <style>@page{size:A4 portrait;margin:8mm} body{margin:0;background:#fff} ${AN_CSS} .anr{border:none;border-radius:0;max-width:none;padding:0}</style></head>
-  <body>${anReportHTML(d)}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
+  <style>@page{size:A4 portrait;margin:8mm} body{margin:0;background:#fff} ${AN_CSS} .anr{border:none;border-radius:0;max-width:none;padding:0} .an-pg{page-break-after:always;break-after:page} .an-pg:last-child{page-break-after:auto;break-after:auto}</style></head>
+  <body>${d.reports.map(r=>'<div class="an-pg">'+anReportHTML(r)+'</div>').join('')}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
   win.document.close();
 }
-function anSummaryText(d){
-  const st=d.stats; const subj=((document.getElementById('anSubject')||{}).value||'').trim() || [...new Set(d.per.map(x=>x.subject).filter(Boolean))].join('، ');
-  const lv=AN_LEVELS.map((l,i)=>l.name+' '+toArabic(st.cnt[i])).join(' | ');
-  return 'تقرير تحليل نتائج: '+d.metric.label+(subj?' — مادة '+subj:'')+'\nالفصول: '+d.per.map(x=>x.label).join('، ')+
-    '\nعدد الطلاب: '+toArabic(st.n)+(d.excluded?' (استُبعد '+toArabic(d.excluded)+' لعدم رصد درجة)':'')+' | درجة القياس: '+anFmt(d.scale)+
-    '\nالمتوسط: '+anFmt(st.mean)+' | نسبة التحصيل: '+anFmt(st.ach)+'٪ | أعلى: '+anFmt(st.max)+' | أقل: '+anFmt(st.min)+
-    '\nالمستويات: '+lv;
+/* ===== إنشاء PDF لكل تقرير داخل المتصفح (بلا مكتبات خارجية): HTML ← SVG foreignObject ← JPEG ← ملف PDF ===== */
+function anLoadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('تعذّر تحميل مكتبة')); document.head.appendChild(s); }); }
+function anRenderCanvas(r, scale){
+  const W=794;
+  const wrap=document.createElement('div'); wrap.style.cssText='position:fixed;left:-12000px;top:0;width:'+W+'px;background:#fff';
+  wrap.innerHTML='<div xmlns="http://www.w3.org/1999/xhtml" id="anPdfRoot" style="width:'+W+'px;background:#fff;direction:rtl"><style>'+AN_CSS+' .anr{border:none;border-radius:0;max-width:none;padding:10px 14px}</style>'+anReportHTML(r)+'</div>';
+  document.body.appendChild(wrap);
+  const root=wrap.firstElementChild; const H=Math.ceil(root.scrollHeight)+2;
+  const xml=new XMLSerializer().serializeToString(root);
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'"><foreignObject x="0" y="0" width="100%" height="100%">'+xml+'</foreignObject></svg>';
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    img.onload=()=>{ try{
+        const c=document.createElement('canvas'); c.width=Math.round(W*scale); c.height=Math.round(H*scale);
+        const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,c.width,c.height);
+        c.toDataURL('image/jpeg',0.5);   // يرمي استثناءً لو لُوِّثت اللوحة (بعض المتصفحات) فننتقل للمسار البديل
+        wrap.remove(); res({canvas:c,w:W,h:H});
+      }catch(e){ wrap.remove(); rej(e); } };
+    img.onerror=()=>{ wrap.remove(); rej(new Error('تعذّر رسم التقرير')); };
+    img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+  });
+}
+async function anRenderCanvasFallback(r, scale){
+  if(!window.html2canvas) await anLoadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+  const wrap=document.createElement('div'); wrap.style.cssText='position:fixed;left:-12000px;top:0;width:794px;background:#fff';
+  wrap.innerHTML='<style>'+AN_CSS+' .anr{border:none;border-radius:0;max-width:none;padding:10px 14px}</style>'+anReportHTML(r);
+  document.body.appendChild(wrap);
+  try{ const c=await window.html2canvas(wrap,{scale,backgroundColor:'#ffffff'}); return {canvas:c,w:wrap.offsetWidth,h:wrap.offsetHeight}; }
+  finally{ wrap.remove(); }
+}
+function anBytesToB64(u8){ let s=''; const CH=0x8000; for(let i=0;i<u8.length;i+=CH) s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH)); return btoa(s); }
+// ملف PDF من صفحة A4 واحدة فيها صورة JPEG (تُوضَع بعرض الصفحة مع هامش)
+function anPdfFromJpeg(jpegB64, wpx, hpx){
+  const bin=atob(jpegB64); const jpg=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) jpg[i]=bin.charCodeAt(i);
+  const PW=595.28, PH=841.89, M=14; let w=PW-2*M, h=w*hpx/wpx; if(h>PH-2*M){ h=PH-2*M; w=h*wpx/hpx; }
+  const x=(PW-w)/2, y=PH-M-h; const enc=new TextEncoder(); const parts=[]; const offs=[]; let len=0;
+  const push=(u8)=>{ parts.push(u8); len+=u8.length; };
+  const str=(t)=>push(enc.encode(t));
+  const f=(n)=>n.toFixed(2);
+  str('%PDF-1.4\n');
+  const obj=(n,fn)=>{ offs[n]=len; str(n+' 0 obj\n'); fn(); str('\nendobj\n'); };
+  obj(1,()=>str('<</Type/Catalog/Pages 2 0 R>>'));
+  obj(2,()=>str('<</Type/Pages/Kids[3 0 R]/Count 1>>'));
+  obj(3,()=>str('<</Type/Page/Parent 2 0 R/MediaBox[0 0 '+PW+' '+PH+']/Resources<</XObject<</Im0 4 0 R>>>>/Contents 5 0 R>>'));
+  obj(4,()=>{ str('<</Type/XObject/Subtype/Image/Width '+wpx+'/Height '+hpx+'/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length '+jpg.length+'>>\nstream\n'); push(jpg); str('\nendstream'); });
+  const content='q '+f(w)+' 0 0 '+f(h)+' '+f(x)+' '+f(y)+' cm /Im0 Do Q';
+  obj(5,()=>str('<</Length '+content.length+'>>\nstream\n'+content+'\nendstream'));
+  const xr=len; str('xref\n0 6\n0000000000 65535 f \n');
+  for(let n=1;n<=5;n++) str(String(offs[n]).padStart(10,'0')+' 00000 n \n');
+  str('trailer\n<</Size 6/Root 1 0 R>>\nstartxref\n'+xr+'\n%%EOF');
+  const out=new Uint8Array(len); let p=0; parts.forEach(u=>{ out.set(u,p); p+=u.length; });
+  return out;
+}
+// يُنتج PDF لتقرير واحد؛ يخفّض الجودة تدريجيًا كي يبقى الحجم صغيرًا (حدّ مستند Firestore ١ ميغابايت)
+async function anMakePdf(r){
+  const tries=[[1.6,0.62],[1.4,0.5],[1.2,0.42]];
+  for(const [sc,q] of tries){
+    let cv; try{ cv=await anRenderCanvas(r,sc); }catch(e){ cv=await anRenderCanvasFallback(r,sc); }
+    const jpeg=cv.canvas.toDataURL('image/jpeg',q).split(',')[1];
+    const pdf=anBytesToB64(anPdfFromJpeg(jpeg,cv.canvas.width,cv.canvas.height));
+    if(pdf.length<420000 || sc===tries[tries.length-1][0]) return pdf;
+  }
+}
+function anNoteText(r){
+  const subj=((document.getElementById('anSubject')||{}).value||'').trim() || r.subject || '';
+  return 'تقرير تحليل نتائج: '+r.metric.label+' — '+r.label+(subj&&r.label.indexOf(subj)<0?' — مادة '+subj:'');
 }
 async function anSend(){
   const d=window.AN_LAST; if(!d){ alert('اختر فصلاً به درجات مرصودة أولاً.'); return; }
@@ -5602,24 +5664,45 @@ async function anSend(){
       .filter(u=>u.active!==false && u.role==='counselor');
   }catch(e){}
   if(!cands.length){ omrModal('<h3 style="margin:0 0 8px">إرسال للموجه الطلابي</h3><div class="empty">لا يوجد موجه طلابي مسجَّل في مدرستك.</div><button class="ghost" style="width:100%;margin-top:10px" onclick="closeOmrModal()">إغلاق</button>'); return; }
-  window.AN_SEND_TEXT = anSummaryText(d); window.AN_SEND_CLASSES = d.per.map(x=>x.label).join('، ');
   omrModal('<h3 style="margin:0 0 8px">إرسال التحليل للموجه الطلابي</h3>'+
     '<label class="field">المستلِم<select id="anRecip">'+cands.map(u=>'<option value="'+escapeHtml(u.id)+'">'+escapeHtml(u.username||'')+'</option>').join('')+'</select></label>'+
-    '<div style="margin:8px 0;padding:9px 11px;background:var(--bg-eef4f3,#eef4f3);border-radius:8px;white-space:pre-wrap;font-size:13px">'+escapeHtml(window.AN_SEND_TEXT)+'</div>'+
-    '<div class="row"><button class="primary" onclick="anDoSend()">إرسال</button><button class="ghost" onclick="closeOmrModal()">إلغاء</button></div>');
+    '<div style="margin:8px 0;padding:9px 11px;background:var(--bg-eef4f3,#eef4f3);border-radius:8px;font-size:13px;line-height:1.9">سيُرسل <b>'+toArabic(d.reports.length)+'</b> ملف PDF، لكل فصل ملف مستقل:<br>'+d.reports.map(r=>'📄 '+escapeHtml(r.label)).join('<br>')+'</div>'+
+    '<div id="anSendMsg" class="hint" style="margin:0 0 8px"></div>'+
+    '<div class="row"><button class="primary" id="anSendGo" onclick="anDoSend()">إرسال</button><button class="ghost" onclick="closeOmrModal()">إلغاء</button></div>');
 }
 async function anDoSend(){
   const rid=(document.getElementById('anRecip')||{}).value; if(!rid) return;
+  const d=window.AN_LAST; if(!d) return;
+  const go=document.getElementById('anSendGo'), msg=document.getElementById('anSendMsg'); if(go) go.disabled=true;
   try{
     const us=await db.collection('users').doc(rid).get(); const u=us.data()||{};
     const ctx=(u.schools&&u.schools[CLS_SESSION.schoolId])||{};
-    await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
-      fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
-      recipients:[rid], recipientsInfo:[{userId:rid,name:u.username||'',role:ctx.role||u.role||''}], scope:'report',
-      studentSeat:'', studentName:'', classCode:'', className:window.AN_SEND_CLASSES||'',
-      text:window.AN_SEND_TEXT||'', referralReason:'تقرير تحليل نتائج', createdAt:Date.now(), replies:[], readAt:{}, closed:false });
-    closeOmrModal(); alert('تم إرسال التحليل إلى الموجه الطلابي.');
-  }catch(e){ alert('فشل الإرسال: '+(e.message||e)); }
+    let n=0;
+    for(const r of d.reports){
+      if(msg) msg.textContent='⏳ جارٍ إنشاء الملف '+toArabic(n+1)+' من '+toArabic(d.reports.length)+'…';
+      const pdf=await anMakePdf(r);
+      if(pdf.length>900000) throw new Error('حجم ملف «'+r.label+'» كبير جدًا.');
+      await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
+        fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
+        recipients:[rid], recipientsInfo:[{userId:rid,name:u.username||'',role:ctx.role||u.role||''}], scope:'report',
+        studentSeat:'', studentName:'', classCode:r.per[0].key?parseVKey(r.per[0].key).classCode:'', className:r.label,
+        text:anNoteText(r), referralReason:'تقرير تحليل نتائج', pdfB64:pdf, pdfName:('تحليل-'+r.metric.label+'-'+r.label).replace(/[\\/:*?"<>|]+/g,'-')+'.pdf',
+        createdAt:Date.now(), replies:[], readAt:{}, closed:false });
+      n++;
+    }
+    closeOmrModal(); alert('تم إرسال '+toArabic(n)+' تقرير PDF إلى الموجه الطلابي.');
+  }catch(e){ if(go) go.disabled=false; if(msg) msg.textContent=''; alert('فشل الإرسال: '+(e.message||e)); }
+}
+// فتح ملف PDF المرفق بملاحظة (يُفتح في تبويب جديد، وإن مُنع يُحمَّل)
+async function openNotePdf(id){
+  const w=window.open('','_blank');
+  try{
+    const snap=await db.collection('notes').doc(id).get(); const d=snap.data()||{};
+    if(!d.pdfB64) throw new Error('لا يوجد ملف مرفق.');
+    const bin=atob(d.pdfB64), u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+    const url=URL.createObjectURL(new Blob([u8],{type:'application/pdf'}));
+    if(w) w.location.href=url; else { const a=document.createElement('a'); a.href=url; a.download=d.pdfName||'report.pdf'; document.body.appendChild(a); a.click(); a.remove(); }
+  }catch(e){ if(w) w.close(); alert('تعذّر فتح الملف: '+(e.message||e)); }
 }
 
 function showTab(t){

@@ -4719,6 +4719,17 @@ async function createNote(n){
     referralReason:n.referralReason||'', guidanceReferral:!!n.guidanceReferral,
     createdAt:Date.now(), replies:[], readAt:{}, closed:false });
 }
+/* فتح ملف PDF المرفق بملاحظة (تقرير تحليل نتائج) — تبويب جديد، وإن مُنع فتحميل */
+async function openNotePdf(id){
+  const w=window.open('','_blank');
+  try{
+    const snap=await notesCol().doc(id).get(); const d=snap.data()||{};
+    if(!d.pdfB64) throw new Error('لا يوجد ملف مرفق.');
+    const bin=atob(d.pdfB64), u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+    const url=URL.createObjectURL(new Blob([u8],{type:'application/pdf'}));
+    if(w) w.location.href=url; else { const a=document.createElement('a'); a.href=url; a.download=d.pdfName||'report.pdf'; document.body.appendChild(a); a.click(); a.remove(); }
+  }catch(e){ if(w) w.close(); alert('تعذّر فتح الملف: '+(e.message||e)); }
+}
 function noteLastActivity(n){
   const lastReplyAt = (n.replies||[]).length ? Math.max(...n.replies.map(r=>r.at||0)) : 0;
   return Math.max(n.createdAt||0, lastReplyAt);
@@ -4768,6 +4779,7 @@ function noteCard(n, mineSent, counts){
     '<div style="margin:10px 0;padding:10px 12px;background:var(--bg-ffffff,#fff);border-right:3px solid var(--accent);border-radius:8px;font-size:15px;color:var(--ink);font-weight:600;line-height:1.75;white-space:pre-wrap">'+esc(n.text)+'</div>'+
     '<div class="umeta">'+new Date(n.createdAt).toLocaleString('ar')+'</div>'+
     (reps?'<div style="margin-top:8px">'+reps+'</div>':'')+
+    ((n.pdfB64 && (n.recipients||[]).indexOf(CURRENT.id)>=0)?'<button class="btn" style="margin-top:6px" onclick="openNotePdf(\''+n.id+'\')">📄 فتح PDF</button>':'')+
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+replyBtn+readBtn+closeBtn+forwardBtn+'</div></div></div>';
 }
 /* تحويل ملاحظة واردة لمستخدم آخر (مرة واحدة فقط) — أي دور عدا معلم */

@@ -1,4 +1,4 @@
-// إصدار: 2026-10-05.3
+// إصدار: 2026-10-08.1
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -395,6 +395,125 @@ exports.reclaimTeacherContent = onCall(async (request) => {
     }
   }
   return { moved };
+});
+
+/* =========================================================================
+   نقل سجلات المعلم عند إعادة ربط حسابه بعد فك الربط (ص-٣٦)
+   الشرط (قرار المستخدم): تُنقل السجلات التي في نفس المدرسة ونفس الفترة الحالية ونفس العام الدراسي فقط.
+   ما عداها (فترات/أعوام سابقة) يبقى على الحساب القديم كأرشيف ولا يُحذف.
+   مصدر الحدود: schoolData/{sid} → yearFromMs/yearToMs و periods[{id,fromMs,toMs}] (إعدادات المدرسة).
+   لا حدود معرّفة للعام ⇒ لا يُنقل شيء (الأمان أولًا). سجلات المعلم القديم تُعلَّم transferredTo ولا تُحذف.
+   لا يشمل: الجدول المدرسي وخطط المناوبة والزيارات الصفية (يعيد المدير إسنادها).
+   ========================================================================= */
+const TR_REC_COLS = [
+  ["attendance", "markedBy"], ["attAlerts", "byUserId"], ["leaves", "byUserId"], ["prepOverrides", "byUserId"],
+  ["studentNotes", "fromUserId"], ["notes", "fromUserId"], ["guidanceSessions", "byUserId"], ["guidanceAppointments", "byUserId"],
+];
+function trCurrentPeriod(school, nowMs) {
+  const ps = Array.isArray(school.periods) ? school.periods : [];
+  const hit = ps.find((p) => p && p.fromMs != null && p.toMs != null && nowMs >= p.fromMs && nowMs <= p.toMs);
+  return hit ? hit.id : (school.activePeriod || "first");
+}
+function trRecTime(v) {
+  if (typeof v.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(v.date)) { const t = Date.parse(v.date.slice(0, 10) + "T12:00:00Z"); if (!isNaN(t)) return t; }
+  for (const f of ["ts", "createdAt", "at", "updatedAt"]) if (typeof v[f] === "number") return v[f];
+  return null;
+}
+/** هل السجل ضمن مدرسة/فترة/عام المعلم الحالية؟ */
+function trEligible(v, sid, period, school) {
+  if (!v || v.schoolId !== sid) return false;
+  if (v.period && v.period !== period) return false;
+  const t = trRecTime(v);
+  if (t == null || school.yearFromMs == null || school.yearToMs == null) return false;
+  if (t < school.yearFromMs || t > school.yearToMs) return false;
+  if (!v.period) { // سجل بلا حقل فترة: يُحكم عليه بتاريخه داخل حدود الفترة الحالية إن عُرّفت
+    const p = (school.periods || []).find((x) => x.id === period);
+    if (p && p.fromMs != null && (t < p.fromMs || t > p.toMs)) return false;
+  }
+  return true;
+}
+exports.transferTeacherRecords = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول أولاً.");
+  const uid = request.auth.uid;
+  const db = admin.firestore();
+  const me = await db.collection("users").doc(uid).get();
+  if (!me.exists) return { moved: 0, skipped: "no-user" };
+  const meData = me.data();
+  if (!meData.loginId) return { moved: 0, skipped: "no-login-id" };
+  const olds = (await db.collection("users").where("migratedTo", "==", uid).get()).docs
+    .filter((d) => d.data().loginId && d.data().loginId === meData.loginId && d.data().schools);
+  const now = Date.now();
+  const out = { moved: 0, byCollection: {}, skippedSchools: [], conflicts: 0 };
+  const bump = (k, n = 1) => { out.byCollection[k] = (out.byCollection[k] || 0) + n; out.moved += n; };
+  for (const od of olds) {
+    const oldId = od.id;
+    for (const sid of Object.keys(od.data().schools || {})) {
+      const myCtx = (meData.schools || {})[sid];
+      if (!myCtx || myCtx.active === false) continue;
+      const ss = await db.collection("schoolData").doc(sid).get();
+      const school = ss.exists ? ss.data() : null;
+      if (!school || school.yearFromMs == null || school.yearToMs == null) { out.skippedSchools.push({ sid, reason: "no-year-config" }); continue; }
+      const period = trCurrentPeriod(school, now);
+
+      // (أ) مستندات المعلم الواحدة (سجل الأعمال، المتابعة، الاختبارات، النتائج): معرّفها يتضمن رقم الحساب ⇒ تُنسخ بمعرّف جديد
+      for (const col of ["results", "exams"]) {
+        const qs = await db.collection(col).where("userId", "==", oldId).get();
+        for (const d of qs.docs) {
+          const v = d.data();
+          if (v.schoolId !== sid || v.period !== period || v.transferredTo) continue;
+          if (typeof v.updatedAt !== "number" || v.updatedAt < school.yearFromMs || v.updatedAt > school.yearToMs) continue;
+          const newRef = db.collection(col).doc((v.base || "") + "_" + sid + "_" + period + "_" + uid);
+          if (!v.base) continue;
+          if ((await newRef.get()).exists) { out.conflicts++; continue; }
+          await newRef.set(Object.assign({}, v, { userId: uid, transferredFrom: oldId }));
+          await d.ref.update({ transferredTo: uid });
+          bump(col);
+        }
+      }
+
+      // (ب) السجلات المنفردة: يتغيّر حقل صاحب السجل فقط
+      for (const [col, f] of TR_REC_COLS) {
+        const qs = await db.collection(col).where(f, "==", oldId).get();
+        let batch = db.batch(), n = 0;
+        for (const d of qs.docs) {
+          if (!trEligible(d.data(), sid, period, school)) continue;
+          batch.update(d.ref, { [f]: uid, transferredFrom: oldId });
+          if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+        }
+        if (n % 400 !== 0) await batch.commit();
+        if (n) bump(col, n);
+      }
+
+      // (ج) ملاحظات أُرسلت إليه (هو مستلم)
+      const rn = await db.collection("notes").where("recipients", "array-contains", oldId).get();
+      for (const d of rn.docs) {
+        const v = d.data();
+        if (!trEligible(v, sid, period, school)) continue;
+        await d.ref.update({ recipients: (v.recipients || []).map((x) => (x === oldId ? uid : x)) });
+        bump("notes-recipient");
+      }
+
+      // (د) التعاميم: قائمة المستلمين وتوقيعه (المعرّف = رقم الحساب ⇒ نسخ)
+      const items = await db.collection("circulars").doc(sid).collection("items").get();
+      for (const it of items.docs) {
+        const iv = it.data();
+        const t = trRecTime(iv);
+        if (t == null || t < school.yearFromMs || t > school.yearToMs) continue;
+        const rec = iv.recipients || [];
+        if (!rec.includes(oldId)) continue;
+        const sigNew = it.ref.collection("signatures").doc(uid);
+        const sigOld = await it.ref.collection("signatures").doc(oldId).get();
+        if (sigOld.exists && !sigOld.data().transferredTo && !(await sigNew.get()).exists) {
+          await sigNew.set(Object.assign({}, sigOld.data(), { transferredFrom: oldId }));
+          await sigOld.ref.update({ transferredTo: uid });
+          bump("circular-signatures");
+        }
+        await it.ref.update({ recipients: rec.map((x) => (x === oldId ? uid : x)) });
+        bump("circular-recipients");
+      }
+    }
+  }
+  return out;
 });
 
 /* =========================================================================

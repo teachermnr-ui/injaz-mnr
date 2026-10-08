@@ -415,11 +415,12 @@ const firebaseConfig = {
   appId: "1:640060389242:web:37e42c456d7b4e015e88c3"
 };
 
-let db = null, fnUnlinkUserAccount = null, fnCheckPendingMerge = null, fnConfirmMergeLink = null;
+let db = null, fnTransferTeacherRecords = null, fnUnlinkUserAccount = null, fnCheckPendingMerge = null, fnConfirmMergeLink = null;
 try {
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
   fnUnlinkUserAccount = firebase.functions().httpsCallable('unlinkUserAccount');
+  fnTransferTeacherRecords = firebase.functions().httpsCallable('transferTeacherRecords');
   fnCheckPendingMerge = firebase.functions().httpsCallable('checkPendingMerge');
   fnConfirmMergeLink = firebase.functions().httpsCallable('confirmMergeLink');
 }
@@ -1461,6 +1462,8 @@ async function doStaffActivate(){
       await usersCol().doc(au.uid).set(payload);
       try{ await usersCol().doc(d.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
       AUTH_JUST_CREATED = false;
+      // نقل سجلات المعلم القديمة (نفس المدرسة والفترة والعام فقط) — لا يوقف التفعيل لو فشل
+      try{ if(fnTransferTeacherRecords) await fnTransferTeacherRecords({}); }catch(e){ console.warn('transferTeacherRecords', e); }
       $('#staffActivateBox').classList.add('hidden');
       $('#staffSignInBox').classList.remove('hidden');
       await afterAuth(au);
@@ -4290,6 +4293,20 @@ function openSchoolModal(id){
     <div class="field"><label>إدارة التعليم</label><input id="smEduDept" value="${esc(s.eduDept||'')}" placeholder="مثال: إدارة التعليم بمنطقة الرياض"></div>
     <div class="field"><label>رقم التواصل</label><input id="smContact" value="${esc(s.contactNumber||'')}" inputmode="tel" placeholder="رقم جوال أو هاتف"></div>
     <div class="field"><label>العام الدراسي</label><input id="smYear" value="${esc(s.year||'')}" placeholder="مثال: ١٤٤٧/١٤٤٨ هـ"></div>
+    <div class="field"><label>مدة العام الدراسي</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="smYearFrom" type="date" value="${esc(s.yearFrom||'')}" style="flex:1">
+        <span style="color:var(--muted)">إلى</span>
+        <input id="smYearTo" type="date" value="${esc(s.yearTo||'')}" style="flex:1">
+      </div>
+      <div class="sub-note" style="margin-top:6px">تُستخدم لتحديد سجلات العام الدراسي الحالي عند إعادة ربط حساب معلم سبق فك ربطه. اختياري الآن.</div></div>
+    <div class="field"><label>عدد الفترات الدراسية</label>
+      <select id="smPeriodCount">
+        <option value="0" ${!(s.periods&&s.periods.length)?'selected':''}>غير محددة</option>
+        <option value="1" ${(s.periods||[]).length===1?'selected':''}>فترة واحدة</option>
+        <option value="2" ${(s.periods||[]).length===2?'selected':''}>فترتان</option>
+      </select>
+      <div id="smPeriodsBox" style="margin-top:8px"></div></div>
     <div class="field"><label>فترة تفعيل المدرسة</label>
       <div style="display:flex;gap:8px;align-items:center">
         <input id="smActiveFrom" type="date" value="${esc(s.activeFrom||'')}" style="flex:1">
@@ -4311,9 +4328,38 @@ function openSchoolModal(id){
   let smActiveState = s.active!==false;
   $('#smActive').onclick=()=>{smActiveState=true;$('#smActive').classList.add('active');$('#smInactive').classList.remove('active');};
   $('#smInactive').onclick=()=>{smActiveState=false;$('#smInactive').classList.add('active');$('#smActive').classList.remove('active');};
+  const PER_IDS = ['first','second'];
+  const renderPeriodRows = ()=>{
+    const n = parseInt($('#smPeriodCount').value,10)||0;
+    const old = s.periods||[];
+    $('#smPeriodsBox').innerHTML = PER_IDS.slice(0,n).map((pid,i)=>{
+      const p = old.find(x=>x.id===pid)||{};
+      return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <span style="min-width:96px">${esc(periodLabel(pid))}</span>
+        <input type="date" id="smPer${i}From" value="${esc(p.from||'')}" style="flex:1">
+        <span style="color:var(--muted)">إلى</span>
+        <input type="date" id="smPer${i}To" value="${esc(p.to||'')}" style="flex:1">
+      </div>`;
+    }).join('');
+  };
+  $('#smPeriodCount').onchange = renderPeriodRows;
+  renderPeriodRows();
   $('#smSave').onclick=async()=>{
     const name=$('#smName').value.trim();
     if(!name){ alertBox('smAlert','err','أدخل اسم المدرسة'); return; }
+    // مدة العام والفترات: تحقق من الترتيب وعدم التداخل
+    const yF=$('#smYearFrom').value, yT=$('#smYearTo').value;
+    if((yF&&!yT)||(!yF&&yT)||(yF&&yT&&yT<yF)){ alertBox('smAlert','err','حدّد بداية العام الدراسي ونهايته بشكل صحيح'); return; }
+    const pCount = parseInt($('#smPeriodCount').value,10)||0;
+    const periods = [];
+    for(let i=0;i<pCount;i++){
+      const f=$('#smPer'+i+'From').value, t=$('#smPer'+i+'To').value;
+      if(!f||!t||t<f){ alertBox('smAlert','err','حدّد تاريخ بداية ونهاية صحيحين لـ'+periodLabel(PER_IDS[i])); return; }
+      if(yF && (f<yF||t>yT)){ alertBox('smAlert','err',periodLabel(PER_IDS[i])+' خارج مدة العام الدراسي'); return; }
+      if(periods.length && f<=periods[periods.length-1].to){ alertBox('smAlert','err','الفترتان متداخلتان أو غير مرتبتين'); return; }
+      periods.push({ id:PER_IDS[i], from:f, to:t,
+        fromMs:new Date(f+'T00:00:00').getTime(), toMs:new Date(t+'T23:59:59').getTime() });
+    }
     const sid = id || ('s'+Date.now().toString(36));
     let code = s.code;
     if(!code){
@@ -4323,7 +4369,12 @@ function openSchoolModal(id){
       code = 'S'+(max+1);
     }
     SCHOOLS[sid]={ name, code, eduDept:$('#smEduDept').value.trim(), contactNumber:$('#smContact').value.trim(),
-      year:$('#smYear').value.trim(), activePeriod:$('#smPeriod').value, classCount:$('#smCount').value.trim(),
+      year:$('#smYear').value.trim(),
+      yearFrom:yF||'', yearTo:yT||'',
+      yearFromMs: yF ? new Date(yF+'T00:00:00').getTime() : null,
+      yearToMs:   yT ? new Date(yT+'T23:59:59').getTime() : null,
+      periods,
+      activePeriod:$('#smPeriod').value, classCount:$('#smCount').value.trim(),
       active: smActiveState,
       activeFrom: $('#smActiveFrom').value || '',
       activeTo:   $('#smActiveTo').value   || '',

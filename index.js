@@ -1,4 +1,4 @@
-// إصدار: 2026-10-08.1
+// إصدار: 2026-10-08.2
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -514,6 +514,68 @@ exports.transferTeacherRecords = onCall(async (request) => {
     }
   }
   return out;
+});
+
+/* =========================================================================
+   حذف الحساب (متطلب متجر Google Play — المرحلة ١، ص-٣٦)
+   - المعلم الفردي (بلا أي مدرسة): حذف فوري لبياناته وحساب الدخول.
+   - موظف المدرسة: لا يحذف مباشرة (سجلاته تخص المدرسة) ⇒ يُسجَّل طلب في deletionRequests
+     ويصل بريدًا إلى info@awraqai.com ليُنفَّذ بفك الربط (🔓) من admin العام. السجل يبقى معلّقًا ويمكن إعادة تفعيله.
+   - الطالب والأدمن ومدير المدرسة: يُرفض الطلب برسالة توجّه للجهة المناسبة.
+   ========================================================================= */
+async function delAllWhere(db, col, field, val) {
+  const qs = await db.collection(col).where(field, "==", val).get();
+  for (let i = 0; i < qs.docs.length; i += 400) {
+    const b = db.batch();
+    qs.docs.slice(i, i + 400).forEach((d) => b.delete(d.ref));
+    await b.commit();
+  }
+  return qs.docs.length;
+}
+exports.deleteMyAccount = onCall({ secrets: [GMAIL_APP_PASSWORD] }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول أولاً.");
+  if (request.data && request.data.confirm !== "حذف") throw new HttpsError("invalid-argument", "لم يتم تأكيد الحذف.");
+  const uid = request.auth.uid;
+  const db = admin.firestore();
+  const meSnap = await db.collection("users").doc(uid).get();
+  if (!meSnap.exists) {
+    const st = await db.collection("studentAccounts").doc(uid).get();
+    if (st.exists) throw new HttpsError("failed-precondition", "حسابات الطلاب تُحذف عبر إدارة المدرسة أو بمراسلة info@awraqai.com.");
+    throw new HttpsError("not-found", "لا يوجد حساب مرتبط.");
+  }
+  const me = meSnap.data();
+  if (me.role === "admin" || me.role === "schoolAdmin") {
+    throw new HttpsError("failed-precondition", "حسابات الإدارة لا تُحذف من هنا. راسل info@awraqai.com.");
+  }
+  const schools = Object.keys(me.schools || {});
+  if (schools.length) {
+    await db.collection("deletionRequests").doc(uid).set({
+      uid, loginId: me.loginId || null, username: me.username || "", email: me.email || request.auth.token.email || null,
+      schools, hasSolo: !!me.solo, status: "pending", requestedAt: Date.now(),
+    });
+    try {
+      const transporter = nodemailer.createTransport({ service: "gmail", auth: { user: "awraqaicom@gmail.com", pass: GMAIL_APP_PASSWORD.value() } });
+      await transporter.sendMail({
+        from: "awraqaicom@gmail.com", to: "info@awraqai.com", subject: "طلب حذف حساب — منجز المدرسي",
+        text: "طلب حذف حساب موظف\nالاسم: " + (me.username || "") + "\nرقم الهوية: " + (me.loginId || "") +
+          "\nالبريد: " + (me.email || request.auth.token.email || "") + "\nالمدارس: " + schools.join(", ") +
+          "\nالتنفيذ: فك الربط (🔓) من إدارة المستخدمين ثم تعطيل الحساب. المعرّف: " + uid,
+      });
+    } catch (e) { console.error("deleteMyAccount mail", e); }
+    return { mode: "request" };
+  }
+  if (!me.solo) throw new HttpsError("failed-precondition", "لا توجد بيانات للحذف على هذا الحساب.");
+  // حذف فوري للمعلم الفردي
+  const counts = {};
+  await db.collection("schoolData").doc("roster_solo_" + uid).delete().catch(() => {});
+  await db.collection("rosterIndex").doc("solo_" + uid).delete().catch(() => {});
+  for (const [c, f] of [["results", "userId"], ["exams", "userId"], ["studentNotes", "fromUserId"], ["attendance", "markedBy"],
+    ["worksheets", "createdBy"], ["questionBank", "createdBy"], ["submissions", "teacherUid"], ["pushTokens", "authUid"]]) {
+    counts[c] = await delAllWhere(db, c, f, uid);
+  }
+  await db.collection("users").doc(uid).delete();
+  try { await admin.auth().deleteUser(uid); } catch (e) { if (!e || e.code !== "auth/user-not-found") console.error("deleteUser", e); }
+  return { mode: "deleted", counts };
 });
 
 /* =========================================================================

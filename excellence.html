@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-11.1 -->
+<!-- إصدار: 2026-10-11.2 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <!-- ص-٣٧ المرحلة ١ب: لوحة التعبئة + نموذج العرض. الحفظ محلي في هذا المتصفح فقط، ولا يقرأ ولا يكتب شيئًا في Firebase. -->
 <html lang="ar" dir="rtl">
@@ -68,6 +68,8 @@ button{cursor:pointer;border:0}
 input[type=text],textarea,select{background:#061816;color:var(--ink);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px 10px;font-size:14px;width:100%}
 textarea{min-height:60px;resize:vertical}
 
+.addsec h3.tg{cursor:pointer;margin:0;user-select:none}
+.addsec h3.tg+*{margin-top:12px}
 .ptabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;align-items:center}
 .ptabs button{background:rgba(255,255,255,.07);color:var(--ink);font-weight:700;font-size:13.5px;padding:8px 14px;border-radius:10px}
 .ptabs button.on{background:var(--gold);color:#251b04}
@@ -420,7 +422,7 @@ function restart(){
 function jumpToCat(cat){ const i=SL.findIndex(s=>s.cat===cat); if(i>=0) show(i); }
 
 /* ===== لوحة التعبئة (تبويبات فرعية: إضافة | الفئات | تلقائية | الأخبار) ===== */
-let PT='add', FORM=null;
+let FORM=null;
 function newForm(cat){ return {id:uid(),ch:CH,cat:cat||CHAN[CH].cats[0].n,name:'',sub:'',note:'',m:[],photo:'',period:'',shownIn:[]}; }
 function itemRow(it){
   const own = it.ch===CH;
@@ -445,47 +447,41 @@ function formHtml(){
     +(opts.length?'<div class="fld also"><label class="l">يُعرض أيضًا في</label><div class="tgl">'+opts.map(o=>'<label><input type="checkbox" data-also="'+o+'"'+(FORM.shownIn.includes(o)?' checked':'')+'> '+esc(CHAN[o].label)+'</label>').join('')+'</div></div>':'')
     +'<div class="mact"><button class="btn" id="fSave">حفظ</button>'+(ex?'<button class="btn ghost" id="fCancel">إلغاء التعديل</button>':'')+'</div></div>';
 }
+let ADDOPEN=false;
 function renderPanel(){
   const all=itemsFor(CH), cats=catOrder(CH), au=AUTO[CH]||[];
-  if(PT!=='add' && PT!=='news' && PT!=='auto' && !cats.includes(PT)) PT='add';
-  if(PT==='auto' && !au.length) PT='add';
   const hasDemo = D.items.some(i=>i.demo) || D.news.some(n=>n.demo);
-  const tabs=[['add','+ إضافة']].concat(cats.map(cn=>[cn, cn+' ('+all.filter(i=>i.cat===cn).length+')']));
-  if(au.length) tabs.push(['auto','شرائح تلقائية']);
-  tabs.push(['news','الأخبار ('+D.news.filter(n=>n.ch===CH).length+')']);
   let h='<div class="notice">وضع التجربة: ما تدخله هنا يُحفظ في هذا المتصفح فقط ولا يُرسل إلى أي مكان. حالة «نشر / إيقاف» في الأعلى مؤشر فقط في هذه المرحلة، ونموذج العرض بالأسفل يعرض آخر ما أُدخل دائمًا. لا تُدخل درجات أو أرقام اتصال أو هويات أو بيانات غياب.</div>';
-  h+='<div class="ptabs">'+tabs.map(t=>'<button data-pt="'+esc(t[0])+'" class="'+(t[0]===PT?'on':'')+(t[0]==='add'?' addt':'')+'">'+esc(t[1])+'</button>').join('')
-    +'<span class="sp"></span>'+(hasDemo?'<button class="ghost" id="delDemo">حذف البيانات التجريبية</button>':'<button class="ghost" id="addDemo">استرجاع البيانات التجريبية</button>')+'</div>';
-  if(PT==='add'){ if(!FORM) FORM=newForm(); h+=formHtml(); }
-  else if(PT==='auto'){
+  h+='<div class="sec addsec"><h3 class="tg" id="addTg" role="button" tabindex="0"><span>'+(ADDOPEN?'▾':'◂')+'</span> إضافة بيانات — '+esc(CHAN[CH].label)+'<span class="sp"></span>'
+    +(hasDemo?'<button class="btn ghost sm" id="delDemo">حذف البيانات التجريبية</button>':'<button class="btn ghost sm" id="addDemo">استرجاع البيانات التجريبية</button>')+'</h3>';
+  if(ADDOPEN){ if(!FORM) FORM=newForm(); h+=formHtml(); }
+  h+='</div>';
+  cats.forEach(cn=>{
+    const list=all.filter(i=>i.cat===cn);
+    h+='<div class="sec"><h3>'+esc(cn)+' <small>'+list.length+' مضاف</small></h3>'
+      +(list.length?'<div class="items">'+list.map(itemRow).join('')+'</div>':'<div class="empty">لم يُضف أحد بعد، وتُخفى هذه الفئة من العرض حتى يُضاف فيها.</div>')+'</div>';
+  });
+  if(au.length){
     h+='<div class="sec"><h3>شرائح تلقائية <small>بيانات توضيحية الآن، وتُسحب لاحقًا من النظام</small></h3><div class="tgl">'
       +au.map(a=>'<label><input type="checkbox" data-auto="'+a.key+'"'+(autoOn(a)?' checked':'')+'> '+esc(a.cat)+'</label>').join('')+'</div></div>';
   }
-  else if(PT==='news'){
-    const news=D.news.filter(n=>n.ch===CH);
-    h+='<div class="sec"><h3>الشريط الإخباري <small>'+news.length+' خبر</small></h3>'
-      +(news.length?'<div class="items">'+news.map(n=>'<div class="it"><div class="tx"><b>'+esc(n.t)+(n.demo?'<span class="chip demo">تجريبي</span>':'')+'</b></div><button class="btn danger sm" data-delnews="'+n.id+'">حذف</button></div>').join('')+'</div>':'<div class="empty">لا توجد أخبار، ويُخفى الشريط حتى يُضاف خبر.</div>')
-      +'<div class="newsrow"><input type="text" id="newsIn" maxlength="140" placeholder="نص الخبر"><button class="btn" id="newsAdd">إضافة</button></div></div>';
-  }
-  else{
-    const list=all.filter(i=>i.cat===PT);
-    h+='<div class="sec"><h3>'+esc(PT)+' <small>'+list.length+' مضاف</small></h3>'
-      +(list.length?'<div class="items">'+list.map(itemRow).join('')+'</div>':'<div class="empty">لم يُضف أحد بعد. أضف من تبويب «+ إضافة»، وتُخفى هذه الفئة من العرض حتى يُضاف فيها.</div>')
-      +'<small style="color:var(--mute);display:block;margin-top:8px">تتكيّف الشريحة مع العدد: واحد بعرض بارز، حتى ثلاثة بطاقات، أكثر شبكة.</small></div>';
-  }
+  const news=D.news.filter(n=>n.ch===CH);
+  h+='<div class="sec"><h3>الشريط الإخباري <small>'+news.length+' خبر</small></h3>'
+    +(news.length?'<div class="items">'+news.map(n=>'<div class="it"><div class="tx"><b>'+esc(n.t)+(n.demo?'<span class="chip demo">تجريبي</span>':'')+'</b></div><button class="btn danger sm" data-delnews="'+n.id+'">حذف</button></div>').join('')+'</div>':'<div class="empty">لا توجد أخبار، ويُخفى الشريط حتى يُضاف خبر.</div>')
+    +'<div class="newsrow"><input type="text" id="newsIn" maxlength="140" placeholder="نص الخبر"><button class="btn" id="newsAdd">إضافة</button></div></div>';
   $('#panel').innerHTML=h;
-  if(PT==='add') bindForm();
+  if(ADDOPEN) bindForm();
 }
 function bindForm(){
   $('#fFile').onchange=onPhoto;
   $('#fRm').onclick=()=>{ FORM.photo=''; $('#fAv').innerHTML=STAR; $('#fFile').value=''; };
   $('#fSave').onclick=saveForm;
-  const c=$('#fCancel'); if(c) c.onclick=()=>{ const cat=FORM.cat; FORM=null; PT=cat; renderPanel(); };
+  const c=$('#fCancel'); if(c) c.onclick=()=>{ FORM=null; renderPanel(); };
 }
 $('#panel').addEventListener('click', e=>{
+  if(e.target.closest('#addTg') && !e.target.closest('button')){ ADDOPEN=!ADDOPEN; if(!ADDOPEN) FORM=null; renderPanel(); return; }
   const b=e.target.closest('button'); if(!b) return;
-  if(b.dataset.pt!=null){ PT=b.dataset.pt; if(PT!=='add') FORM=null; renderPanel(); if(PT!=='add' && PT!=='news' && PT!=='auto') jumpToCat(PT); }
-  else if(b.dataset.edit){ FORM=JSON.parse(JSON.stringify(D.items.find(i=>i.id===b.dataset.edit))); PT='add'; renderPanel(); $('#panel').scrollIntoView({behavior:'smooth'}); }
+  if(b.dataset.edit){ FORM=JSON.parse(JSON.stringify(D.items.find(i=>i.id===b.dataset.edit))); ADDOPEN=true; renderPanel(); $('#addTg').scrollIntoView({behavior:'smooth'}); }
   else if(b.dataset.del){ if(confirm('حذف هذا البند؟')){ D.items=D.items.filter(i=>i.id!==b.dataset.del); save(); refresh(); } }
   else if(b.dataset.goto){ switchCh(b.dataset.goto); }
   else if(b.dataset.delnews){ D.news=D.news.filter(n=>n.id!==b.dataset.delnews); save(); refresh(); }
@@ -532,8 +528,8 @@ function saveForm(){
   const prev = i>=0 ? D.items[i] : null;
   if(i>=0) D.items[i]=FORM; else D.items.push(FORM);
   if(!save()){ if(prev) D.items[i]=prev; else D.items.pop(); return; }
-  const cat=FORM.cat; FORM=null; PT=cat; refresh(cat);
-  toast('تم الحفظ في تبويب «'+cat+'»');
+  const cat=FORM.cat; FORM=null; refresh(cat);
+  toast('تمت الإضافة في فئة «'+cat+'»');
 }
 
 /* ===== الساعة والتاريخ ===== */
@@ -563,7 +559,7 @@ $('#fs').onclick=()=>{ const pv=$('#pv'); if(document.fullscreenElement) documen
 const q=new URLSearchParams(location.search);
 if(q.get('kiosk')==='1') document.body.classList.add('kiosk');
 if(CHAN[q.get('ch')]) CH=q.get('ch');
-function switchCh(ch){ CH=ch; IDX=0; PT='add'; FORM=null; renderPanel(); build(); applyPub(); window.scrollTo({top:0,behavior:'smooth'}); }
+function switchCh(ch){ CH=ch; IDX=0; FORM=null; renderPanel(); build(); applyPub(); window.scrollTo({top:0,behavior:'smooth'}); }
 document.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>switchCh(b.dataset.ch));
 document.querySelectorAll('.bar .grp').forEach(g=>{
   g.querySelector('[data-act=pub]').onclick=()=>setPub(g.dataset.g,true);

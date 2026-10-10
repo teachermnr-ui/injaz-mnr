@@ -558,6 +558,9 @@ const ADMIN_TOOLS = [
   { key:'holidays', perm:'tools.holidays', label:'الإجازات', icon:'🏖️', href:'holidays.html', noAdmin:true, roles:['schoolAdmin','agent'] },
   // شاشة التميز (ص-٣٧): لوحة الشرف وشاشات العرض — مدير المدرسة بالدور، وغيره بالتفويض، ولا أدمن النظام
   { key:'excellence', perm:'tools.excellence', label:'شاشة التميز', icon:'🏆', href:'excellence.html', noAdmin:true, roles:['schoolAdmin'] },
+  // «الوكلاء» تظهر لدور الوكيل فقط، و«الموجه الطلابي» لدور الموجه فقط — المحتوى يُحدَّد لاحقًا
+  { key:'agents', label:'الوكلاء', icon:'🧭', href:'agents.html', noAdmin:true, roles:['agent'] },
+  { key:'counselor', label:'الموجه الطلابي', icon:'🤝', href:'counselor.html', noAdmin:true, roles:['counselor'] },
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
 /* [ADMIN-TOOLS:MOD] ORIG: const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting']; */

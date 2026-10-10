@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-10.1 -->
+<!-- إصدار: 2026-10-10.2 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <!-- ص-٣٧ المرحلة ١: قالب بصري ثابت ببيانات تجريبية. لا يقرأ ولا يكتب شيئًا في Firebase. -->
 <html lang="ar" dir="rtl">
@@ -35,6 +35,13 @@ button{font-family:inherit;cursor:pointer;border:0}
 .bar a,.bar button{flex:none;color:var(--ink);background:rgba(255,255,255,.08);padding:7px 14px;border-radius:9px;font-weight:700;font-size:13px;text-decoration:none;white-space:nowrap}
 .bar button.on{background:var(--gold);color:#251b04}
 .bar .sp{flex:1}
+.bar .grp{flex:none;display:flex;align-items:center;gap:4px;padding:3px 4px 3px 8px;border-radius:12px;background:rgba(255,255,255,.05)}
+.bar .grp.sel{background:rgba(223,174,72,.16);outline:1px solid rgba(223,174,72,.5)}
+.bar .grp .dot{width:9px;height:9px;border-radius:50%;background:#b05050;flex:none}
+.bar .grp.live .dot{background:#5fd09a}
+.bar .grp button.act{padding:6px 11px;font-size:12.5px}
+.bar .grp button.act.on{background:var(--gold);color:#251b04}
+.bar .grp button.act:disabled{opacity:.45;cursor:default}
 .bar .note{flex:none;color:var(--mute);font-size:12.5px;white-space:nowrap}
 body.kiosk .bar{display:none}
 :fullscreen .bar{display:none}
@@ -131,10 +138,15 @@ body.kiosk .viewport,:fullscreen .viewport{inset:0}
 .ticker .run em{font-style:normal;color:var(--gold);padding:0 30px}
 @keyframes run{from{transform:translateX(0)}to{transform:translateX(50%)}}
 
-.tag{position:absolute;inset:auto auto 120px 24px;font-size:20px;color:var(--mute);background:rgba(0,0,0,.35);padding:4px 12px;border-radius:6px;z-index:5}
+.standby{position:absolute;inset:0;z-index:10;display:grid;place-items:center;background:
+    radial-gradient(900px 600px at 50% 45%, rgba(29,106,93,.35), transparent 70%), #061816;opacity:0;visibility:hidden;transition:opacity .6s ease,visibility 0s .6s}
+.standby.on{opacity:1;visibility:visible;transition:opacity .6s ease}
+.standby .lg{background:#fff;border-radius:24px;padding:56px 90px 44px;box-shadow:0 20px 80px rgba(0,0,0,.5)}
+.standby.on ~ .tag{display:none}
+.tag{position:absolute;z-index:11;inset:auto auto 120px 24px;font-size:20px;color:var(--mute);background:rgba(0,0,0,.35);padding:4px 12px;border-radius:6px;z-index:5}
 
 @media (prefers-reduced-motion:reduce){
-  .slide,.slide.on{transition:none}
+  .slide,.slide.on,.standby,.standby.on{transition:none}
   .slide.on .medal .ring{animation:none}
   .ticker .run{animation:none}
   .rail .item.cur .fill i{transition:none}
@@ -145,13 +157,11 @@ body.kiosk .viewport,:fullscreen .viewport{inset:0}
 
 <div class="bar" id="bar">
   <a href="index.html">← الموقع</a>
-  <button data-ch="public">الشاشة العامة</button>
-  <button data-ch="teachers">شاشة المعلمين</button>
-  <button data-ch="admins">شاشة الإداريين</button>
-  <button id="pp">إيقاف</button>
-  <button id="fs">ملء الشاشة</button>
+  <div class="grp" data-g="public"><span class="dot"></span><button data-ch="public">الشاشة العامة</button><button class="act" data-act="pub">نشر</button><button class="act" data-act="stop">إيقاف</button></div>
+  <div class="grp" data-g="teachers"><span class="dot"></span><button data-ch="teachers">شاشة المعلمين</button><button class="act" data-act="pub">نشر</button><button class="act" data-act="stop">إيقاف</button></div>
+  <div class="grp" data-g="admins"><span class="dot"></span><button data-ch="admins">شاشة الإداريين</button><button class="act" data-act="pub">نشر</button><button class="act" data-act="stop">إيقاف</button></div>
   <span class="sp"></span>
-  <span class="note">قالب بصري ببيانات تجريبية. الأسهم للتنقل، والمسطرة للإيقاف</span>
+  <span class="note">قالب تجريبي: حالة النشر تُحفظ في هذا المتصفح فقط. الأسهم للتنقل</span>
 </div>
 
 <div class="viewport" id="vp">
@@ -170,12 +180,14 @@ body.kiosk .viewport,:fullscreen .viewport{inset:0}
       <div class="lab" id="tlab">أخبار المدرسة</div>
       <div class="track"><div class="run" id="run"></div></div>
     </footer>
+    <div class="standby" id="standby"><div class="lg" id="moe"></div></div>
     <div class="tag">قالب تجريبي</div>
   </div>
 </div>
 
 <script>
 /* ===== بيانات تجريبية (المرحلة ١) — تُستبدل في المرحلة ٣ بلقطة العرض من Firestore ===== */
+const $ = s=>document.querySelector(s);
 const STAR = '<svg viewBox="0 0 100 100" aria-hidden="true"><path fill="#dfae48" d="M50 4 L60 30 L88 20 L76 46 L96 50 L76 54 L88 80 L60 70 L50 96 L40 70 L12 80 L24 54 L4 50 L24 46 L12 20 L40 30 Z"/></svg>';
 const CHANNELS = {
   public:{
@@ -205,12 +217,40 @@ const CHANNELS = {
       {cat:'الأسبوع', type:'stats', title:'ملخص الأسبوع', lead:'مقارنة بالأسبوع الماضي', stats:[['٩٤٪','متوسط الحضور'],['٨','زيارات صفية منفّذة'],['١٥','مواعيد أولياء أمور'],['٣','حالات أُغلقت']]}
     ]}
 };
-const DUR = 10; // ثواني لكل شريحة
+const DUR = 10;
+const MOE_DOTS=[[7,0,100,"#23B1A4"],[993,0,100,"#23B1A4"],[904,9,91,"#23B1A4"],[96,13,91,"#23B1A4"],[818,25,92,"#0E9C8C"],[183,28,91,"#0E9C8C"],[732,48,78,"#0E9C8C"],[268,50,78,"#0E9C8C"],[650,80,61,"#0E9C8C"],[350,82,61,"#0E9C8C"],[997,104,88,"#6FC9BE"],[3,107,88,"#6FC9BE"],[902,107,80,"#23B1A4"],[95,109,80,"#23B1A4"],[813,122,74,"#23B1A4"],[188,124,74,"#23B1A4"],[573,125,52,"#0E9C8C"],[428,128,52,"#0E9C8C"],[726,149,63,"#0E9C8C"],[274,151,63,"#0E9C8C"],[500,179,48,"#0E9C8C"],[645,188,57,"#0E9C8C"],[356,190,57,"#0E9C8C"],[1000,201,79,"#6FC9BE"],[0,204,80,"#6FC9BE"],[902,201,75,"#6FC9BE"],[101,204,75,"#6FC9BE"],[800,222,62,"#23B1A4"],[200,224,62,"#23B1A4"],[569,237,48,"#0E9C8C"],[432,239,48,"#0E9C8C"],[710,258,44,"#23B1A4"],[290,260,44,"#23B1A4"],[500,300,44,"#0E9C8C"]];
+/* شعار وزارة التعليم (نفس رسم omr.html) */
+function moeLogoSVG(cx, topY, w){
+  const h = w*0.30, sx = w/1000, sy = h/300, x0 = cx - w/2, maxR = w*0.021; let o='';
+  for(const d of MOE_DOTS){ o += '<circle cx="'+(x0+d[0]*sx).toFixed(1)+'" cy="'+(topY+d[1]*sy).toFixed(1)+'" r="'+Math.max(1.1,d[2]/100*maxR).toFixed(1)+'" fill="'+d[3]+'"/>'; }
+  const wy = topY + h + w*0.14;
+  o += '<text x="'+cx+'" y="'+wy+'" text-anchor="middle" font-size="'+(w*0.125).toFixed(1)+'" font-weight="bold" fill="#1f9e90" font-family="Tajawal,sans-serif">وزارة التعليم</text>';
+  o += '<text x="'+cx+'" y="'+(wy+w*0.085).toFixed(1)+'" text-anchor="middle" font-size="'+(w*0.05).toFixed(1)+'" letter-spacing="0.5" fill="#8a9a99" font-family="Tajawal,sans-serif">Ministry of Education</text>';
+  return o;
+}
+function moeLogoInline(w){ const h=w*0.30, pad=w*0.03, H=h+w*0.27+pad; return '<svg width="'+w+'" height="'+H+'" viewBox="0 0 '+w+' '+H+'" xmlns="http://www.w3.org/2000/svg">'+moeLogoSVG(w/2,pad,w)+'</svg>'; }
+$('#moe').innerHTML = moeLogoInline(640);
+ // ثواني لكل شريحة
 
 /* ===== بناء الشرائح ===== */
-const $ = s=>document.querySelector(s);
 const esc = s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let CH = 'public', IDX = 0, PAUSED = false, timer = null;
+/* حالة النشر لكل قناة — في هذه المرحلة تُحفظ في متصفح المعاينة فقط (Firestore بعد اعتماد التصميم) */
+const PUB_KEY = 'excellence_pub_v1';
+function pubState(){ try{ return Object.assign({public:true,teachers:true,admins:true}, JSON.parse(localStorage.getItem(PUB_KEY)||'{}')); }catch(e){ return {public:true,teachers:true,admins:true}; } }
+function setPub(ch,v){ const st=pubState(); st[ch]=!!v; try{ localStorage.setItem(PUB_KEY, JSON.stringify(st)); }catch(e){} applyPub(); }
+function isLive(){ return !!pubState()[CH]; }
+function applyPub(){
+  const st = pubState();
+  document.querySelectorAll('.bar .grp').forEach(g=>{
+    const ch=g.dataset.g, on=!!st[ch];
+    g.classList.toggle('live', on); g.classList.toggle('sel', ch===CH);
+    g.querySelector('[data-act=pub]').disabled = on;  g.querySelector('[data-act=stop]').disabled = !on;
+    g.querySelector('[data-act=pub]').classList.toggle('on', on);
+  });
+  $('#standby').classList.toggle('on', !st[CH]);
+  restart();
+}
 
 function railHtml(slides, cur){
   /* الفئات بدون تكرار بالاسم، تُعلَّم الحالية */
@@ -256,7 +296,7 @@ function restart(){
   /* إعادة تشغيل عدّاد الفئة الحالية */
   const cur = document.querySelector('.slide.on .rail .item.cur .fill i');
   if(cur){ cur.style.transition='none'; cur.style.width='0'; void cur.offsetWidth; cur.style.transition=''; cur.style.width=''; }
-  if(!PAUSED) timer = setTimeout(()=>show(IDX+1), DUR*1000);
+  if(!PAUSED && isLive()) timer = setTimeout(()=>show(IDX+1), DUR*1000);
 }
 
 /* ===== الساعة والتاريخ ===== */
@@ -283,15 +323,17 @@ window.addEventListener('resize', fit);
 const q = new URLSearchParams(location.search);
 if(q.get('kiosk')==='1') document.body.classList.add('kiosk');
 if(CHANNELS[q.get('ch')]) CH = q.get('ch');
-function markCh(){ document.querySelectorAll('[data-ch]').forEach(b=>b.classList.toggle('on', b.dataset.ch===CH)); }
-document.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{ CH=b.dataset.ch; markCh(); build(); });
-$('#pp').onclick=()=>{ PAUSED=!PAUSED; $('#pp').textContent = PAUSED?'تشغيل':'إيقاف'; restart(); };
-$('#fs').onclick=()=>{ const el=document.documentElement; if(document.fullscreenElement) document.exitFullscreen(); else if(el.requestFullscreen) el.requestFullscreen().catch(()=>{}); };
-document.addEventListener('fullscreenchange', ()=>setTimeout(fit,50));
+function markCh(){ applyPub(); }
+document.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{ CH=b.dataset.ch; build(); applyPub(); });
+document.querySelectorAll('.bar .grp').forEach(g=>{
+  g.querySelector('[data-act=pub]').onclick=()=>setPub(g.dataset.g,true);
+  g.querySelector('[data-act=stop]').onclick=()=>setPub(g.dataset.g,false);
+});
+window.addEventListener('storage', e=>{ if(e.key===PUB_KEY) applyPub(); });
 document.addEventListener('keydown', e=>{
   if(e.key==='ArrowRight') show(IDX-1);   /* RTL: السهم الأيمن = السابق */
   else if(e.key==='ArrowLeft') show(IDX+1);
-  else if(e.key===' '){ e.preventDefault(); $('#pp').click(); }
+  else if(e.key===' '){ e.preventDefault(); PAUSED=!PAUSED; restart(); }
 });
 
 markCh(); build(); fit();

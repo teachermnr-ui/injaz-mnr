@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-10.3 -->
+<!-- إصدار: 2026-10-11.1 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <!-- ص-٣٧ المرحلة ١ب: لوحة التعبئة + نموذج العرض. الحفظ محلي في هذا المتصفح فقط، ولا يقرأ ولا يكتب شيئًا في Firebase. -->
 <html lang="ar" dir="rtl">
@@ -68,7 +68,13 @@ button{cursor:pointer;border:0}
 input[type=text],textarea,select{background:#061816;color:var(--ink);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px 10px;font-size:14px;width:100%}
 textarea{min-height:60px;resize:vertical}
 
-/* ---------- نافذة النموذج ---------- */
+.ptabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;align-items:center}
+.ptabs button{background:rgba(255,255,255,.07);color:var(--ink);font-weight:700;font-size:13.5px;padding:8px 14px;border-radius:10px}
+.ptabs button.on{background:var(--gold);color:#251b04}
+.ptabs button.addt:not(.on){outline:1px solid rgba(223,174,72,.6);color:var(--gold-soft)}
+.ptabs .sp{flex:1}
+.ptabs button.ghost{font-size:12px;font-weight:500;color:var(--mute)}
+/* ---------- النموذج ---------- */
 .mback{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px}
 .modal{background:#0b2523;border:1px solid var(--line);border-radius:14px;padding:18px;width:min(560px,100%)}
 .modal h3{margin:0 0 12px;font-size:17px}
@@ -413,7 +419,9 @@ function restart(){
 }
 function jumpToCat(cat){ const i=SL.findIndex(s=>s.cat===cat); if(i>=0) show(i); }
 
-/* ===== لوحة التعبئة ===== */
+/* ===== لوحة التعبئة (تبويبات فرعية: إضافة | الفئات | تلقائية | الأخبار) ===== */
+let PT='add', FORM=null;
+function newForm(cat){ return {id:uid(),ch:CH,cat:cat||CHAN[CH].cats[0].n,name:'',sub:'',note:'',m:[],photo:'',period:'',shownIn:[]}; }
 function itemRow(it){
   const own = it.ch===CH;
   const chips = own ? (it.shownIn||[]).map(c=>'<span class="chip">يُعرض أيضًا في '+esc(CHAN[c].label)+'</span>').join('') : '<span class="chip">واردة من '+esc(CHAN[it.ch].label)+'</span>';
@@ -422,34 +430,62 @@ function itemRow(it){
     +(own?'<button class="btn ghost sm" data-edit="'+it.id+'">تعديل</button><button class="btn danger sm" data-del="'+it.id+'">حذف</button>'
          :'<button class="btn ghost sm" data-goto="'+it.ch+'">فتح في '+esc(CHAN[it.ch].label)+'</button>')+'</div>';
 }
+function formHtml(){
+  const ex = D.items.some(i=>i.id===FORM.id);
+  const opts=alsoOptions(CH);
+  const mrows=[0,1,2].map(i=>'<div class="mrow"><input type="text" id="mv'+i+'" maxlength="12" placeholder="الرقم" value="'+esc((FORM.m[i]||[])[0]||'')+'"><input type="text" id="ml'+i+'" maxlength="60" placeholder="ماذا يعني الرقم" value="'+esc((FORM.m[i]||[])[1]||'')+'"></div>').join('');
+  return '<div class="sec" style="max-width:620px"><h3>'+(ex?'تعديل بند':'إضافة بند')+' — '+esc(CHAN[CH].label)+'</h3>'
+    +'<div class="fld"><label class="l">الفئة (يُحفظ البند في تبويبها)</label><select id="fCat">'+CHAN[CH].cats.map(c=>'<option'+(c.n===FORM.cat?' selected':'')+'>'+esc(c.n)+'</option>').join('')+'</select></div>'
+    +'<div class="fld"><label class="l">اسم المكرَّم (أو الفصل)</label><input type="text" id="fName" maxlength="60" value="'+esc(FORM.name)+'"></div>'
+    +'<div class="fld"><label class="l">الصف أو الصفة (اختياري)</label><input type="text" id="fSub" maxlength="80" value="'+esc(FORM.sub)+'"></div>'
+    +'<div class="fld"><label class="l">سبب التكريم (سطر قصير)</label><textarea id="fNote" maxlength="140">'+esc(FORM.note)+'</textarea></div>'
+    +'<div class="fld"><label class="l">الفترة (اختياري، مثل: لشهر ربيع الأول)</label><input type="text" id="fPer" maxlength="40" value="'+esc(FORM.period)+'"></div>'
+    +'<div class="fld"><label class="l">أرقام بارزة (حتى ثلاثة، اختيارية — لا درجات ولا غياب)</label>'+mrows+'</div>'
+    +'<div class="fld"><label class="l">الصورة (اختيارية؛ إن لم تُضف تظهر النجمة)</label><div class="ph-up"><div class="av" id="fAv">'+(FORM.photo?'<img src="'+FORM.photo+'" alt="">':STAR)+'</div><input type="file" id="fFile" accept="image/*"><button class="btn danger sm" id="fRm" type="button">إزالة</button></div></div>'
+    +(opts.length?'<div class="fld also"><label class="l">يُعرض أيضًا في</label><div class="tgl">'+opts.map(o=>'<label><input type="checkbox" data-also="'+o+'"'+(FORM.shownIn.includes(o)?' checked':'')+'> '+esc(CHAN[o].label)+'</label>').join('')+'</div></div>':'')
+    +'<div class="mact"><button class="btn" id="fSave">حفظ</button>'+(ex?'<button class="btn ghost" id="fCancel">إلغاء التعديل</button>':'')+'</div></div>';
+}
 function renderPanel(){
-  const c=CHAN[CH], all=itemsFor(CH);
+  const all=itemsFor(CH), cats=catOrder(CH), au=AUTO[CH]||[];
+  if(PT!=='add' && PT!=='news' && PT!=='auto' && !cats.includes(PT)) PT='add';
+  if(PT==='auto' && !au.length) PT='add';
   const hasDemo = D.items.some(i=>i.demo) || D.news.some(n=>n.demo);
+  const tabs=[['add','+ إضافة']].concat(cats.map(cn=>[cn, cn+' ('+all.filter(i=>i.cat===cn).length+')']));
+  if(au.length) tabs.push(['auto','شرائح تلقائية']);
+  tabs.push(['news','الأخبار ('+D.news.filter(n=>n.ch===CH).length+')']);
   let h='<div class="notice">وضع التجربة: ما تدخله هنا يُحفظ في هذا المتصفح فقط ولا يُرسل إلى أي مكان. حالة «نشر / إيقاف» في الأعلى مؤشر فقط في هذه المرحلة، ونموذج العرض بالأسفل يعرض آخر ما أُدخل دائمًا. لا تُدخل درجات أو أرقام اتصال أو هويات أو بيانات غياب.</div>';
-  h+='<div class="sec"><h3>بيانات '+esc(c.label)+'<span class="sp"></span>'
-    +(hasDemo?'<button class="btn ghost sm" id="delDemo">حذف البيانات التجريبية</button>':'<button class="btn ghost sm" id="addDemo">استرجاع البيانات التجريبية</button>')+'</h3>'
-    +'<small style="color:var(--mute)">كل فئة تُعرض في شريحة، وتتكيّف الشريحة مع عدد المضافين فيها (واحد: عرض بارز، حتى ثلاثة: بطاقات، أكثر: شبكة).</small></div>';
-  catOrder(CH).forEach(cn=>{
-    const list=all.filter(i=>i.cat===cn);
-    const canAdd = !!CHAN[CH].cats.find(x=>x.n===cn);
-    h+='<div class="sec"><h3>'+esc(cn)+' <small>'+list.length+' مضاف</small><span class="sp"></span>'+(canAdd?'<button class="btn sm" data-add="'+esc(cn)+'">+ إضافة</button>':'')+'</h3>'
-      +(list.length?'<div class="items">'+list.map(itemRow).join('')+'</div>':'<div class="empty">لم يُضف أحد بعد، وتُخفى هذه الفئة من العرض حتى يُضاف فيها.</div>')+'</div>';
-  });
-  const au=AUTO[CH]||[];
-  if(au.length){
+  h+='<div class="ptabs">'+tabs.map(t=>'<button data-pt="'+esc(t[0])+'" class="'+(t[0]===PT?'on':'')+(t[0]==='add'?' addt':'')+'">'+esc(t[1])+'</button>').join('')
+    +'<span class="sp"></span>'+(hasDemo?'<button class="ghost" id="delDemo">حذف البيانات التجريبية</button>':'<button class="ghost" id="addDemo">استرجاع البيانات التجريبية</button>')+'</div>';
+  if(PT==='add'){ if(!FORM) FORM=newForm(); h+=formHtml(); }
+  else if(PT==='auto'){
     h+='<div class="sec"><h3>شرائح تلقائية <small>بيانات توضيحية الآن، وتُسحب لاحقًا من النظام</small></h3><div class="tgl">'
       +au.map(a=>'<label><input type="checkbox" data-auto="'+a.key+'"'+(autoOn(a)?' checked':'')+'> '+esc(a.cat)+'</label>').join('')+'</div></div>';
   }
-  const news=D.news.filter(n=>n.ch===CH);
-  h+='<div class="sec"><h3>الشريط الإخباري <small>'+news.length+' خبر</small></h3>'
-    +(news.length?'<div class="items">'+news.map(n=>'<div class="it"><div class="tx"><b>'+esc(n.t)+(n.demo?'<span class="chip demo">تجريبي</span>':'')+'</b></div><button class="btn danger sm" data-delnews="'+n.id+'">حذف</button></div>').join('')+'</div>':'<div class="empty">لا توجد أخبار، ويُخفى الشريط حتى يُضاف خبر.</div>')
-    +'<div class="newsrow"><input type="text" id="newsIn" maxlength="140" placeholder="نص الخبر"><button class="btn" id="newsAdd">إضافة</button></div></div>';
+  else if(PT==='news'){
+    const news=D.news.filter(n=>n.ch===CH);
+    h+='<div class="sec"><h3>الشريط الإخباري <small>'+news.length+' خبر</small></h3>'
+      +(news.length?'<div class="items">'+news.map(n=>'<div class="it"><div class="tx"><b>'+esc(n.t)+(n.demo?'<span class="chip demo">تجريبي</span>':'')+'</b></div><button class="btn danger sm" data-delnews="'+n.id+'">حذف</button></div>').join('')+'</div>':'<div class="empty">لا توجد أخبار، ويُخفى الشريط حتى يُضاف خبر.</div>')
+      +'<div class="newsrow"><input type="text" id="newsIn" maxlength="140" placeholder="نص الخبر"><button class="btn" id="newsAdd">إضافة</button></div></div>';
+  }
+  else{
+    const list=all.filter(i=>i.cat===PT);
+    h+='<div class="sec"><h3>'+esc(PT)+' <small>'+list.length+' مضاف</small></h3>'
+      +(list.length?'<div class="items">'+list.map(itemRow).join('')+'</div>':'<div class="empty">لم يُضف أحد بعد. أضف من تبويب «+ إضافة»، وتُخفى هذه الفئة من العرض حتى يُضاف فيها.</div>')
+      +'<small style="color:var(--mute);display:block;margin-top:8px">تتكيّف الشريحة مع العدد: واحد بعرض بارز، حتى ثلاثة بطاقات، أكثر شبكة.</small></div>';
+  }
   $('#panel').innerHTML=h;
+  if(PT==='add') bindForm();
+}
+function bindForm(){
+  $('#fFile').onchange=onPhoto;
+  $('#fRm').onclick=()=>{ FORM.photo=''; $('#fAv').innerHTML=STAR; $('#fFile').value=''; };
+  $('#fSave').onclick=saveForm;
+  const c=$('#fCancel'); if(c) c.onclick=()=>{ const cat=FORM.cat; FORM=null; PT=cat; renderPanel(); };
 }
 $('#panel').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  if(b.dataset.add!=null) openForm(null,b.dataset.add);
-  else if(b.dataset.edit) openForm(b.dataset.edit);
+  if(b.dataset.pt!=null){ PT=b.dataset.pt; if(PT!=='add') FORM=null; renderPanel(); if(PT!=='add' && PT!=='news' && PT!=='auto') jumpToCat(PT); }
+  else if(b.dataset.edit){ FORM=JSON.parse(JSON.stringify(D.items.find(i=>i.id===b.dataset.edit))); PT='add'; renderPanel(); $('#panel').scrollIntoView({behavior:'smooth'}); }
   else if(b.dataset.del){ if(confirm('حذف هذا البند؟')){ D.items=D.items.filter(i=>i.id!==b.dataset.del); save(); refresh(); } }
   else if(b.dataset.goto){ switchCh(b.dataset.goto); }
   else if(b.dataset.delnews){ D.news=D.news.filter(n=>n.id!==b.dataset.delnews); save(); refresh(); }
@@ -467,34 +503,6 @@ function addNews(){
   D.news.push({id:uid(),ch:CH,t:v}); save(); refresh();
 }
 function refresh(keepCat){ renderPanel(); build(); if(keepCat) jumpToCat(keepCat); }
-
-/* ===== نموذج الإضافة/التعديل ===== */
-let FORM=null;
-function openForm(id, cat){
-  const ex = id ? D.items.find(i=>i.id===id) : null;
-  FORM = ex ? JSON.parse(JSON.stringify(ex)) : {id:uid(),ch:CH,cat:cat,name:'',sub:'',note:'',m:[],photo:'',period:'',shownIn:[]};
-  const opts=alsoOptions(CH);
-  const mrows=[0,1,2].map(i=>'<div class="mrow"><input type="text" id="mv'+i+'" maxlength="12" placeholder="الرقم" value="'+esc((FORM.m[i]||[])[0]||'')+'"><input type="text" id="ml'+i+'" maxlength="60" placeholder="ماذا يعني الرقم" value="'+esc((FORM.m[i]||[])[1]||'')+'"></div>').join('');
-  const m=document.createElement('div'); m.className='mback'; m.id='fmodal';
-  m.innerHTML='<div class="modal"><h3>'+(ex?'تعديل بند':'إضافة بند')+' — '+esc(CHAN[CH].label)+'</h3>'
-    +'<div class="fld"><label class="l">الفئة</label><select id="fCat">'+CHAN[CH].cats.map(c=>'<option'+(c.n===FORM.cat?' selected':'')+'>'+esc(c.n)+'</option>').join('')+'</select></div>'
-    +'<div class="fld"><label class="l">اسم المكرَّم (أو الفصل)</label><input type="text" id="fName" maxlength="60" value="'+esc(FORM.name)+'"></div>'
-    +'<div class="fld"><label class="l">الصف أو الصفة (اختياري)</label><input type="text" id="fSub" maxlength="80" value="'+esc(FORM.sub)+'"></div>'
-    +'<div class="fld"><label class="l">سبب التكريم (سطر قصير)</label><textarea id="fNote" maxlength="140">'+esc(FORM.note)+'</textarea></div>'
-    +'<div class="fld"><label class="l">الفترة (اختياري، مثل: لشهر ربيع الأول)</label><input type="text" id="fPer" maxlength="40" value="'+esc(FORM.period)+'"></div>'
-    +'<div class="fld"><label class="l">أرقام بارزة (حتى ثلاثة، اختيارية — لا درجات ولا غياب)</label>'+mrows+'</div>'
-    +'<div class="fld"><label class="l">الصورة (اختيارية؛ إن لم تُضف تظهر النجمة)</label><div class="ph-up"><div class="av" id="fAv">'+(FORM.photo?'<img src="'+FORM.photo+'" alt="">':STAR)+'</div><input type="file" id="fFile" accept="image/*"><button class="btn danger sm" id="fRm" type="button">إزالة</button></div></div>'
-    +(opts.length?'<div class="fld also"><label class="l">يُعرض أيضًا في</label><div class="tgl">'+opts.map(o=>'<label><input type="checkbox" data-also="'+o+'"'+(FORM.shownIn.includes(o)?' checked':'')+'> '+esc(CHAN[o].label)+'</label>').join('')+'</div></div>':'')
-    +'<div class="mact"><button class="btn" id="fSave">حفظ</button><button class="btn ghost" id="fCancel">إلغاء</button></div></div>';
-  document.body.appendChild(m);
-  $('#fFile').onchange=onPhoto;
-  $('#fRm').onclick=()=>{ FORM.photo=''; $('#fAv').innerHTML=STAR; $('#fFile').value=''; };
-  $('#fCancel').onclick=closeForm;
-  $('#fSave').onclick=saveForm;
-  m.addEventListener('mousedown', e=>{ if(e.target===m) closeForm(); });
-  $('#fName').focus();
-}
-function closeForm(){ const m=$('#fmodal'); if(m) m.remove(); FORM=null; }
 function onPhoto(e){
   const f=e.target.files[0]; if(!f) return;
   const r=new FileReader();
@@ -518,13 +526,14 @@ function saveForm(){
   FORM.cat=$('#fCat').value; FORM.name=name;
   FORM.sub=$('#fSub').value.trim(); FORM.note=$('#fNote').value.trim(); FORM.period=$('#fPer').value.trim();
   FORM.m=[0,1,2].map(i=>[$('#mv'+i).value.trim(),$('#ml'+i).value.trim()]).filter(x=>x[0]&&x[1]);
-  FORM.shownIn=[...document.querySelectorAll('#fmodal [data-also]')].filter(x=>x.checked).map(x=>x.dataset.also);
+  FORM.shownIn=[...document.querySelectorAll('#panel [data-also]')].filter(x=>x.checked).map(x=>x.dataset.also);
   delete FORM.demo;
   const i=D.items.findIndex(x=>x.id===FORM.id);
   const prev = i>=0 ? D.items[i] : null;
   if(i>=0) D.items[i]=FORM; else D.items.push(FORM);
   if(!save()){ if(prev) D.items[i]=prev; else D.items.pop(); return; }
-  const cat=FORM.cat; closeForm(); refresh(cat);
+  const cat=FORM.cat; FORM=null; PT=cat; refresh(cat);
+  toast('تم الحفظ في تبويب «'+cat+'»');
 }
 
 /* ===== الساعة والتاريخ ===== */
@@ -554,14 +563,14 @@ $('#fs').onclick=()=>{ const pv=$('#pv'); if(document.fullscreenElement) documen
 const q=new URLSearchParams(location.search);
 if(q.get('kiosk')==='1') document.body.classList.add('kiosk');
 if(CHAN[q.get('ch')]) CH=q.get('ch');
-function switchCh(ch){ CH=ch; IDX=0; renderPanel(); build(); applyPub(); window.scrollTo({top:0,behavior:'smooth'}); }
+function switchCh(ch){ CH=ch; IDX=0; PT='add'; FORM=null; renderPanel(); build(); applyPub(); window.scrollTo({top:0,behavior:'smooth'}); }
 document.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>switchCh(b.dataset.ch));
 document.querySelectorAll('.bar .grp').forEach(g=>{
   g.querySelector('[data-act=pub]').onclick=()=>setPub(g.dataset.g,true);
   g.querySelector('[data-act=stop]').onclick=()=>setPub(g.dataset.g,false);
 });
 document.addEventListener('keydown', e=>{
-  const tg=e.target.tagName; if(tg==='INPUT'||tg==='TEXTAREA'||tg==='SELECT'||document.getElementById('fmodal')) { if(e.key==='Escape') closeForm(); return; }
+  const tg=e.target.tagName; if(tg==='INPUT'||tg==='TEXTAREA'||tg==='SELECT'){ return; }
   if(e.key==='ArrowRight') show(IDX-1);
   else if(e.key==='ArrowLeft') show(IDX+1);
   else if(e.key===' '){ e.preventDefault(); PAUSED=!PAUSED; restart(); }

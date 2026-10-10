@@ -1525,7 +1525,7 @@ async function nativeGoogleCredential(){
   if(!SL) throw new Error('إضافة الدخول بحساب Google غير مثبّتة في التطبيق.');
   if(!NATIVE_GOOGLE_WEB_CLIENT_ID) throw new Error('إعداد دخول Google في التطبيق غير مكتمل.');
   if(!_nativeGoogleReady){ await SL.initialize({ google:{ webClientId: NATIVE_GOOGLE_WEB_CLIENT_ID } }); _nativeGoogleReady = true; }
-  const r = await SL.login({ provider:'google', options:{ scopes:['email','profile'] } });
+  const r = await SL.login({ provider:'google', options:{} });
   const idToken = r && r.result && r.result.idToken;
   if(!idToken) throw new Error('تعذّر إكمال الدخول بحساب Google.');
   return firebase.auth.GoogleAuthProvider.credential(idToken);

@@ -465,6 +465,7 @@ const PERM_TREE = [
     { key:'tools.visits', label:'الزيارات الصفية', only:['access','edit'] },
     { key:'tools.duty', label:'المناوبة والإشراف', only:['access','edit'] },
     { key:'tools.waiting', label:'حصص الانتظار', only:['edit'] },
+    { key:'tools.excellence', label:'شاشة التميز', only:['access','edit'] },
   ]},
 /* [ADMIN-TOOLS:END] */
   { key:'omr', label:'إدارة الصفوف', leaves:[
@@ -555,9 +556,12 @@ const ADMIN_TOOLS = [
   { key:'waiting', perm:'tools.waiting', permField:'edit', label:'حصص الانتظار', icon:'⏳', href:'timetable.html?sec=waiting', roles:['schoolAdmin','agent'] },
   // الإجازات وساعات هدوء الإشعارات (ص-١٢): للمدير والوكيل بالدور فقط — بلا تفويض (لا يوجد بند صلاحية له)
   { key:'holidays', perm:'tools.holidays', label:'الإجازات', icon:'🏖️', href:'holidays.html', noAdmin:true, roles:['schoolAdmin','agent'] },
+  // شاشة التميز (ص-٣٧): لوحة الشرف وشاشات العرض — مدير المدرسة بالدور، وغيره بالتفويض، ولا أدمن النظام
+  { key:'excellence', perm:'tools.excellence', label:'شاشة التميز', icon:'🏆', href:'excellence.html', noAdmin:true, roles:['schoolAdmin'] },
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
-const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting'];
+/* [ADMIN-TOOLS:MOD] ORIG: const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting']; */
+const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting','tools.excellence'];
 function visibleTools(){
   if(!CURRENT) return [];
   if(CURRENT.role==='admin') return ADMIN_TOOLS.filter(t=>!t.noAdmin);

@@ -919,7 +919,7 @@ async function doStudentGoogleLogin(){
   t.textContent='جارٍ الدخول…'; btn.disabled=true;
   try{
     if(!firebase.auth) throw new Error('خدمة المصادقة غير متاحة. تأكد من الاتصال بالإنترنت.');
-    const res = await firebase.auth().signInWithPopup(googleProvider());
+    const res = await googleSignIn();
     const gUser = res.user;
     if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
 
@@ -1373,7 +1373,7 @@ async function staffProviderLogin(){
   const btn=$('#staffGoogleBtn'); btn.disabled=true;
   const t=btn.querySelector('.pv-txt'); const old=t.textContent; t.textContent='جارٍ الدخول…';
   try{
-    const res = await firebase.auth().signInWithPopup(googleProvider());
+    const res = await googleSignIn();
     AUTH_JUST_CREATED = !!(res.additionalUserInfo && res.additionalUserInfo.isNewUser);
     await afterAuth(res.user);
   }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
@@ -1397,7 +1397,7 @@ function showMergeRedirectBox(already, newCred){
     <div id="mrgAlert"></div>`;
   if(already.googleEmail){
     $('#mrgGoogleBtn').onclick = async ()=>{
-      try{ const cred = await firebase.auth().signInWithPopup(googleProvider()); await finishMerge(cred.user, newCred); }
+      try{ const cred = await googleSignIn(); await finishMerge(cred.user, newCred); }
       catch(e){ alertBox('mrgAlert','err',authErrMsg(e)); }
     };
   } else {
@@ -1409,7 +1409,7 @@ function showMergeRedirectBox(already, newCred){
 }
 async function finishMerge(oldUser, newCred){
   try{
-    if(newCred.google){ await oldUser.linkWithPopup(googleProvider()); }
+    if(newCred.google){ await googleLinkTo(oldUser); }
     else { await oldUser.linkWithCredential(firebase.auth.EmailAuthProvider.credential(newCred.email, newCred.password)); }
     toast('تم دمج الحسابين بنجاح');
     showActivation(firebase.auth().currentUser);
@@ -1513,6 +1513,31 @@ async function doStaffActivate(){
     await afterAuth(au);
   }catch(e){ alertBox('loginAlert','err',authErrMsg(e)); }
   finally{ btn.textContent='تفعيل وربط الحساب'; btn.disabled=false; }
+}
+/* ===== دخول Google داخل تطبيق الأندرويد (Capacitor) =====
+   نافذة signInWithPopup لا تعمل داخل WebView، فنستعمل الإضافة الأصلية ثم نسلّم الرمز لـ Firebase.
+   معرّف عميل الويب: Firebase Console ← Authentication ← Sign-in method ← Google ← «Web client ID». يُعبَّأ مرة واحدة. */
+const NATIVE_GOOGLE_WEB_CLIENT_ID = '640060389242-om6m222mnvaes9a8hh256ddjug4ihihp.apps.googleusercontent.com';
+function isNativeApp(){ try{ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }catch(e){ return false; } }
+let _nativeGoogleReady = false;
+async function nativeGoogleCredential(){
+  const SL = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SocialLogin;
+  if(!SL) throw new Error('إضافة الدخول بحساب Google غير مثبّتة في التطبيق.');
+  if(!NATIVE_GOOGLE_WEB_CLIENT_ID) throw new Error('إعداد دخول Google في التطبيق غير مكتمل.');
+  if(!_nativeGoogleReady){ await SL.initialize({ google:{ webClientId: NATIVE_GOOGLE_WEB_CLIENT_ID } }); _nativeGoogleReady = true; }
+  const r = await SL.login({ provider:'google', options:{ scopes:['email','profile'] } });
+  const idToken = r && r.result && r.result.idToken;
+  if(!idToken) throw new Error('تعذّر إكمال الدخول بحساب Google.');
+  return firebase.auth.GoogleAuthProvider.credential(idToken);
+}
+/* بديل signInWithPopup: نفس شكل النتيجة (user + additionalUserInfo) في الموقع والتطبيق */
+async function googleSignIn(){
+  if(isNativeApp()) return firebase.auth().signInWithCredential(await nativeGoogleCredential());
+  return firebase.auth().signInWithPopup(googleProvider());
+}
+async function googleLinkTo(user){
+  if(isNativeApp()) return user.linkWithCredential(await nativeGoogleCredential());
+  return user.linkWithPopup(googleProvider());
 }
 function googleProvider(){
   const p = new firebase.auth.GoogleAuthProvider();
@@ -1646,8 +1671,7 @@ async function doSoloGoogleLogin(){
   t.textContent='جارٍ الدخول…'; btn.disabled=true;
   try{
     if(!firebase.auth) throw new Error('خدمة المصادقة غير متاحة. تأكد من الاتصال بالإنترنت.');
-    const provider = googleProvider();
-    const res = await firebase.auth().signInWithPopup(provider);
+    const res = await googleSignIn();
     const gUser = res.user;
     if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
     await resolveSoloLogin(gUser);

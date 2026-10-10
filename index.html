@@ -1963,6 +1963,35 @@ window.addEventListener('scroll', ()=>{
   const mb=document.getElementById('myBoardMenu'); if(mb && !mb.classList.contains('inline')) closeMyBoardMenu();
 }, true);
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeToolsMenu(); closeMyBoardMenu(); } });
+/* ===== زر الرجوع في تطبيق الأندرويد (Capacitor) =====
+   الموقع صفحة واحدة بلا سجل تصفح، فنعالج الرجوع يدويًا: نافذة مفتوحة ← تُقفل، تبويب غير الرئيسي ← الرئيسي،
+   وفي الرئيسية «اضغط مرة أخرى للخروج». لا يؤثر في الموقع على المتصفح. */
+(function(){
+  let lastBack = 0;
+  function bind(){
+    try{
+      const AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+      if(!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || !AppP || !AppP.addListener) return;
+      AppP.addListener('backButton', ()=>{
+        try{
+          if(document.querySelector('#modalRoot .modal-back')){ closeModal(); return; }
+          if(document.getElementById('toolsMenu')){ closeToolsMenu(); return; }
+          if(document.getElementById('myBoardMenu')){ closeMyBoardMenu(); return; }
+          const appV = $('#appView');
+          if(appV && !appV.classList.contains('hidden')){
+            const tabs = (typeof visibleTabs==='function') ? visibleTabs() : [];
+            const home = tabs.length ? tabs[0].key : null;
+            if(home && activeTab && activeTab!==home){ activeTab=home; renderTabs(); renderPanel(); return; }
+          }
+          const now = Date.now();
+          if(now - lastBack < 2000){ if(AppP.exitApp) AppP.exitApp(); return; }
+          lastBack = now; toast('اضغط مرة أخرى للخروج');
+        }catch(e){ if(AppP.exitApp) AppP.exitApp(); }
+      });
+    }catch(e){}
+  }
+  bind();
+})();
 /* [ADMIN-TOOLS:END] */
 $('#tbOmr').onclick = ()=>{ window.location.href='omr.html'; };
 /* الترويسة الموحّدة: الحروف الأولى، رأس القائمة، اختيار الوضع، فتح/إغلاق القائمة — شكل فقط */

@@ -1,4 +1,4 @@
-// إصدار: 2026-10-08.2
+// إصدار: 2026-10-11.1
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -952,3 +952,127 @@ exports.flushPushQueue = onSchedule({ schedule: "every 10 minutes", timeZone: "A
     await d.ref.delete().catch(() => {});
   }
 });
+
+
+/* [ADMIN-TOOLS:BEGIN] */
+/* ============ شاشات التميز (ص-٣٧): اقتران تلفازات العرض بالمدرسة والقناة ============
+   التطبيق على التلفاز يدخل مجهولًا (Anonymous Auth) فيكون uid الدخول = معرّف الشاشة.
+   screenRequestCode (من التلفاز) ← رمز ٦ أرقام يصدره الخادم بعملية ذرية (لا يتكرر بين رمزين فعّالين).
+   screenPeek / screenClaim (من مدير المدرسة أو المفوَّض «شاشة التميز» تعديل) ← يعاين الجهاز ثم يربطه بمدرسته وقناته.
+   pairings/{الرمز} و screenClaimAttempts/{uid} مغلقة على العميل بالقواعد؛ هذه الدوال وحدها تكتب فيها. */
+const exCrypto = require("crypto");
+const EX_CHANNELS = ["public", "teachers", "admins"];
+const EX_CODE_TTL_MS = 10 * 60 * 1000;
+const EX_MAX_SCREENS = 30;
+
+function exCanManage(u, sid) {
+  if (!u || u.active === false || !sid) return false;
+  if (u.role === "schoolAdmin") return (u.adminSchools || []).includes(sid);
+  const c = (u.schools || {})[sid];
+  if (!c || c.active === false) return false;
+  const p = (c.permissions || {})["tools.excellence"];
+  return !!(p && p.edit === true);
+}
+async function exAssertManager(db, request, sid) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول أولاً.");
+  const me = await db.collection("users").doc(request.auth.uid).get();
+  if (!me.exists || !exCanManage(me.data(), sid)) throw new HttpsError("permission-denied", "ليست لديك صلاحية إدارة شاشة التميز في هذه المدرسة.");
+  return me.data();
+}
+// ٨ محاولات فاشلة كل ١٠ دقائق كحد أقصى لكل مدير
+async function exAttemptGate(db, uid) {
+  const ref = db.collection("screenClaimAttempts").doc(uid);
+  const now = Date.now();
+  const s = await ref.get();
+  const fails = ((s.exists && s.data().fails) || []).filter((t) => now - t < 10 * 60 * 1000);
+  if (fails.length >= 8) throw new HttpsError("resource-exhausted", "محاولات كثيرة خاطئة. حاول بعد قليل.");
+  return { ref, fails, now };
+}
+async function exFail(gate) { await gate.ref.set({ fails: gate.fails.concat([gate.now]) }); }
+
+exports.screenRequestCode = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول.");
+  const uid = request.auth.uid;
+  const db = admin.firestore();
+  const dev = request.data && request.data.device ? request.data.device : {};
+  const device = {
+    model: String(dev.model || "").slice(0, 60),
+    platform: String(dev.platform || "").slice(0, 30),
+    app: String(dev.app || "").slice(0, 20),
+  };
+  // مقترنة أصلًا؟
+  const sc = await db.collection("screens").doc(uid).get();
+  if (sc.exists) return { paired: true };
+  const now = Date.now();
+  // رمز فعّال سابق لنفس الجهاز: نعيده بدل إصدار آخر
+  const prev = await db.collection("pairings").where("uid", "==", uid).get();
+  for (const d of prev.docs) {
+    const v = d.data();
+    if (v.expiresAt > now + 30000) return { code: d.id, expiresAt: v.expiresAt };
+    await d.ref.delete();
+  }
+  for (let i = 0; i < 15; i++) {
+    const code = String(100000 + exCrypto.randomInt(900000));
+    const ref = db.collection("pairings").doc(code);
+    const ok = await db.runTransaction(async (tx) => {
+      const s = await tx.get(ref);
+      if (s.exists && s.data().expiresAt > now) return false;
+      tx.set(ref, { uid, device, createdAt: now, expiresAt: now + EX_CODE_TTL_MS });
+      return true;
+    });
+    if (ok) return { code, expiresAt: now + EX_CODE_TTL_MS };
+  }
+  throw new HttpsError("unavailable", "تعذّر إصدار رمز. أعد المحاولة.");
+});
+
+exports.screenPeek = onCall(async (request) => {
+  const db = admin.firestore();
+  const sid = request.data && request.data.sid;
+  const code = String((request.data && request.data.code) || "").trim();
+  await exAssertManager(db, request, sid);
+  if (!/^\d{6}$/.test(code)) throw new HttpsError("invalid-argument", "الرمز ٦ أرقام.");
+  const gate = await exAttemptGate(db, request.auth.uid);
+  const s = await db.collection("pairings").doc(code).get();
+  if (!s.exists || s.data().expiresAt < Date.now()) { await exFail(gate); throw new HttpsError("not-found", "الرمز غير صحيح أو انتهت صلاحيته. اطلب رمزًا جديدًا من التلفاز."); }
+  const v = s.data();
+  return { device: v.device || {}, createdAt: v.createdAt, expiresAt: v.expiresAt };
+});
+
+exports.screenClaim = onCall(async (request) => {
+  const db = admin.firestore();
+  const d = request.data || {};
+  const sid = d.sid, code = String(d.code || "").trim(), channel = d.channel;
+  const name = String(d.name || "").trim().slice(0, 40);
+  const me = await exAssertManager(db, request, sid);
+  if (!/^\d{6}$/.test(code)) throw new HttpsError("invalid-argument", "الرمز ٦ أرقام.");
+  if (!EX_CHANNELS.includes(channel)) throw new HttpsError("invalid-argument", "قناة غير صحيحة.");
+  if (!name) throw new HttpsError("invalid-argument", "اكتب اسمًا للشاشة.");
+  const gate = await exAttemptGate(db, request.auth.uid);
+  const count = (await db.collection("screens").where("schoolId", "==", sid).get()).size;
+  if (count >= EX_MAX_SCREENS) throw new HttpsError("failed-precondition", "بلغت المدرسة الحد الأقصى للشاشات (" + EX_MAX_SCREENS + ").");
+  const pref = db.collection("pairings").doc(code);
+  const now = Date.now();
+  const res = await db.runTransaction(async (tx) => {
+    const s = await tx.get(pref);
+    if (!s.exists || s.data().expiresAt < now) return null;
+    const v = s.data();
+    tx.set(db.collection("screens").doc(v.uid), {
+      schoolId: sid, channel, name, device: v.device || {}, active: true,
+      pairedAt: now, pairedBy: request.auth.uid, pairedByName: me.username || "", lastSeen: null, updatedAt: now,
+    });
+    tx.delete(pref);
+    return v.uid;
+  });
+  if (!res) { await exFail(gate); throw new HttpsError("not-found", "الرمز غير صحيح أو انتهت صلاحيته."); }
+  return { id: res };
+});
+
+// تنظيف الرموز المنتهية (كل ساعة)
+exports.cleanupScreenPairings = onSchedule({ schedule: "every 60 minutes", timeZone: "Asia/Riyadh" }, async () => {
+  const db = admin.firestore();
+  const old = await db.collection("pairings").where("expiresAt", "<", Date.now() - 60 * 60 * 1000).limit(300).get();
+  const b = db.batch();
+  old.docs.forEach((d) => b.delete(d.ref));
+  if (!old.empty) await b.commit();
+});
+/* [ADMIN-TOOLS:END] */

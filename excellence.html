@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-11.3 -->
+<!-- إصدار: 2026-10-11.4 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <!-- ص-٣٧ المرحلة ١ب: لوحة التعبئة + نموذج العرض. الحفظ محلي في هذا المتصفح فقط، ولا يقرأ ولا يكتب شيئًا في Firebase. -->
 <html lang="ar" dir="rtl">
@@ -164,11 +164,16 @@ textarea{min-height:60px;resize:vertical}
 .hero .tag{display:flex;align-items:center;gap:12px;font-size:28px;color:var(--gold-soft)}
 .hero .tag svg{width:30px;height:30px;color:var(--gold)}
 .hero .cat{display:inline-block;font-family:'Readex Pro','Tajawal',sans-serif;font-size:76px;font-weight:600;color:var(--gold);border-bottom:2px solid var(--gold);padding-bottom:10px;margin:8px 0 26px}
-.hero .name{font-family:'Readex Pro','Tajawal',sans-serif;font-size:64px;font-weight:500;line-height:1.3;margin:0 0 6px}
+.hero .name{font-family:'Readex Pro','Tajawal',sans-serif;font-size:64px;font-weight:500;line-height:1.3;margin:0 0 20px}
 .hero .name.long{font-size:50px}
 .hero .sub{display:flex;align-items:center;gap:12px;font-size:32px;color:var(--mute);margin-bottom:16px}
 .hero .sub svg{width:30px;height:30px}
-.hero .note{font-size:30px;color:var(--ink);margin-bottom:18px;max-width:850px;line-height:1.5}
+.hero .note{font-size:30px;color:var(--ink);margin-bottom:12px;max-width:850px;line-height:1.5}
+.hero .note b{color:var(--gold-soft);font-weight:700}
+.sep{display:flex;align-items:center;gap:14px;color:var(--gold);max-width:620px;margin:0 0 14px}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(223,174,72,.7),transparent)}
+.sep::after{background:linear-gradient(270deg,rgba(223,174,72,.7),transparent)}
+.sep svg{width:20px;height:20px;flex:none}
 .hero .ah{display:flex;align-items:center;gap:10px;font-size:26px;color:var(--gold-soft);margin:14px 0}
 .hero .ah svg{width:26px;height:26px;color:var(--gold)}
 .facts{display:flex;flex-direction:column;gap:12px}
@@ -188,6 +193,7 @@ textarea{min-height:60px;resize:vertical}
 .card .disc{width:168px;height:168px;margin:0 auto 22px;box-shadow:inset 0 0 0 4px rgba(223,174,72,.4)}
 .card .n{font-family:'Readex Pro','Tajawal',sans-serif;font-size:50px;font-weight:700;line-height:1.2}
 .card .c{font-size:29px;color:var(--gold-soft);margin:6px 0 12px}
+.card .r .rl{color:var(--gold-soft);font-weight:700}
 .card .r{font-size:29px;color:var(--mute);line-height:1.5}
 .card .mt{font-size:28px;color:var(--gold);margin-top:10px}
 /* شبكة ٤–٦ */
@@ -435,7 +441,7 @@ function body(s){
       +(tag?'<div class="tag">'+ico('medal')+esc(tag)+'</div>':'')
       +'<div class="cat">'+esc(s.badge)+'</div><div class="name'+(long?' long':'')+'">'+esc(it.name)+'</div>'
       +(it.sub?'<div class="sub">'+ico(k==='teacher'?'book':k==='student'?'cap':'users')+esc(it.sub)+'</div>':'')
-      +(it.note?'<div class="note">'+esc(it.note)+'</div>':'')
+      +(it.note?'<div class="note"><b>سبب التكريم :</b> '+esc(it.note)+'</div><div class="sep">'+ico('star')+'</div>':'')
       +(it.m&&it.m.length?'<div class="ah">'+ico('star')+'بصمات من التميّز</div><div class="facts">'+it.m.map(factRow).join('')+'</div>':'')
       +'<div class="thx">'+ico('sparkle')+'شكرًا لأنك تصنع الفرق</div></div>'
       +'<div class="pframe"><div class="pin">'+(it.photo?'<img src="'+it.photo+'" alt="">':STAR)+'</div><span class="spk">'+ico('sparkle')+'</span>'
@@ -443,7 +449,7 @@ function body(s){
   }
   if(s.type==='cards'){
     return '<h2 class="title">'+esc(s.title)+'</h2><p class="lead">'+esc(s.lead)+'</p><div class="cards'+(s.dense?' dense':'')+'" style="grid-template-columns:repeat('+s.cols+',1fr)">'
-      +s.items.map(it=>'<div class="card"><div class="disc">'+disc(it)+'</div><div class="n">'+esc(it.name)+'</div><div class="c">'+esc(it.sub)+'</div><div class="r">'+esc(it.note)+'</div>'
+      +s.items.map(it=>'<div class="card"><div class="disc">'+disc(it)+'</div><div class="n">'+esc(it.name)+'</div><div class="c">'+esc(it.sub)+'</div>'+(it.note?'<div class="r"><b class="rl">سبب التكريم :</b> '+esc(it.note)+'</div>':'')
         +(it.m&&it.m[0]?'<div class="mt">'+esc(mtxt(it.m[0]))+'</div>':'')+'</div>').join('')+'</div>';
   }
   if(s.type==='rows'){

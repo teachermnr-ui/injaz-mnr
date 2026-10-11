@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-11.5 -->
+<!-- إصدار: 2026-10-11.6 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <!-- ص-٣٧ المرحلة ١ب: لوحة التعبئة + نموذج العرض. الحفظ محلي في هذا المتصفح فقط، ولا يقرأ ولا يكتب شيئًا في Firebase. -->
 <html lang="ar" dir="rtl">
@@ -114,13 +114,13 @@ textarea{min-height:60px;resize:vertical}
 .head .school{font-size:34px;font-weight:700}
 .head .chan{font-size:24px;color:var(--gold-soft)}
 .head .sp{flex:1}
-.head .ban{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:900px;text-align:center}
+.head .ban{position:absolute;left:50%;top:6px;transform:translateX(-50%);width:900px;text-align:center}
 .head .ban .t1{display:flex;align-items:center;justify-content:center;gap:18px;font-size:23px;color:var(--mute)}
 .head .ban .t1::before,.head .ban .t1::after{content:"";width:64px;height:1px;background:var(--gold);opacity:.7}
 .head .ban .t2{font-family:'Readex Pro','Tajawal',sans-serif;font-size:62px;font-weight:700;line-height:1.15;margin:2px 0}
 .head .ban .t2 b{color:var(--gold);font-weight:700}
-.head .ban .t3{font-size:22px;color:var(--mute)}
-.head .ban .orn{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:6px;height:22px;color:var(--gold)}
+.head .ban .t3{font-size:22px;color:var(--mute);margin-top:12px}
+.head .ban .orn{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:4px;height:22px;color:var(--gold)}
 .head .ban .orn::before,.head .ban .orn::after{content:"";width:96px;height:1px;background:var(--gold);opacity:.6}
 .head .ban .orn svg{width:22px;height:22px}
 .head.isban .who{display:none}
@@ -182,8 +182,8 @@ textarea{min-height:60px;resize:vertical}
 .dia svg{width:27px;height:27px;position:relative}
 .fact,.ach{display:flex;align-items:center;gap:20px;font-size:32px}
 .fact b{font-family:'Readex Pro','Tajawal',sans-serif;font-size:56px;line-height:1;color:var(--gold);font-weight:600}
-.hero .thx{margin-top:20px;font-size:26px;color:var(--mute);display:flex;align-items:center;gap:10px}
-.hero .thx svg{width:22px;height:22px;color:var(--gold)}
+.hero .thx{position:absolute;left:0;right:0;bottom:8px;justify-content:center;font-size:32px;color:var(--gold-soft);display:flex;align-items:center;gap:12px}
+.hero .thx svg{width:28px;height:28px;color:var(--gold)}
 
 .title{font-family:'Readex Pro','Tajawal',sans-serif;font-size:72px;font-weight:700;margin:0 0 6px}
 .lead{font-size:32px;color:var(--mute);margin:0 0 34px}

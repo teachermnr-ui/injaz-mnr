@@ -773,6 +773,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
+<script src="users-api.js"></script>
 <!-- مولّد رمز QR (لطباعة باركود كل طالب) -->
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <!-- قارئ رمز QR موثوق (لفكّ الباركود أثناء التصحيح) -->
@@ -1852,7 +1853,7 @@ async function initSubjectDelegate(){
   wrap.style.display='';
   sel.innerHTML = '<option value="">⏳ …</option>';
   try{
-    const us = await db.collection('users').get();
+    const us = await UsersAPI.listSnap(CLS_SESSION.schoolId);
     const list = us.docs.map(d=>({id:d.id, ...d.data()}))
       .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId] && u.schools[CLS_SESSION.schoolId].active!==false)
       .sort((a,b)=>(a.username||'').localeCompare(b.username||'','ar'));
@@ -1929,7 +1930,7 @@ async function saveSubjectAssignment(){
     const newAssignments = [...others, ...fresh];
     // يُحفظ داخل سياق المدرسة (أو الحساب الفردي) — نفس المكان الذي يُقرأ منه عند التحميل
     const _path = CLS_SESSION.schoolId ? ('schools.'+CLS_SESSION.schoolId+'.subjectAssignments') : 'solo.subjectAssignments';
-    await db.collection('users').doc(CLS_SESSION.userId).update({ [_path]: newAssignments, updatedAt: Date.now() });
+    await db.collection('users').doc(CLS_SESSION.userId).update(Object.assign({ [_path]: newAssignments, updatedAt: Date.now() }, CLS_SESSION.schoolId ? { _editCtx: CLS_SESSION.schoolId } : {}));
     state.mySubjectAssignments = newAssignments;
     statusEl.textContent = '✅ تم الحفظ.'; statusEl.style.color='var(--ok)';
     renderAssignedSubjectsList();
@@ -2490,7 +2491,7 @@ async function ciEditClass(code){
   let refUsers = [];
   if(codeChanged && CLS_SESSION.schoolId){
     try{
-      const us = await db.collection('users').get();
+      const us = await UsersAPI.listSnap(CLS_SESSION.schoolId);
       refUsers = us.docs.map(d=>({id:d.id, ...d.data()})).filter(u=>{
         const ctx = (u.schools||{})[CLS_SESSION.schoolId]; if(!ctx) return false;
         return (ctx.assignedClasses||[]).map(String).includes(String(code))
@@ -2536,7 +2537,7 @@ async function ciEditClass(code){
       if(mine.some(a=>String(a.classCode)===String(code))){
         state.mySubjectAssignments = mapSubj(mine);
         const _path = CLS_SESSION.schoolId ? ('schools.'+CLS_SESSION.schoolId+'.subjectAssignments') : 'solo.subjectAssignments';
-        try{ await db.collection('users').doc(CLS_SESSION.userId).update({ [_path]: state.mySubjectAssignments, updatedAt: Date.now() }); }catch(e){}
+        try{ await db.collection('users').doc(CLS_SESSION.userId).update(Object.assign({ [_path]: state.mySubjectAssignments, updatedAt: Date.now() }, CLS_SESSION.schoolId ? { _editCtx: CLS_SESSION.schoolId } : {})); }catch(e){}
       }
       Object.keys(state.workLog).forEach(k=>{
         if(k===String(code) || k.indexOf(code+'::')===0){ state.workLog[newCode + k.slice(String(code).length)] = state.workLog[k]; delete state.workLog[k]; }
@@ -2764,7 +2765,7 @@ async function openMyAccountsPanel(){
         if(!await mnConfirm('تعطيل هذا السياق؟ لن تقدر تُعيد تفعيله بنفسك — يحتاج مدير تلك المدرسة.')) return;
         const sid = this.getAttribute('data-sid');
         try{
-          await db.collection('users').doc(CLS_SESSION.userId).update({ ['schools.'+sid+'.active']: false, updatedAt: Date.now() });
+          await db.collection('users').doc(CLS_SESSION.userId).update({ ['schools.'+sid+'.active']: false, _editCtx: sid, updatedAt: Date.now() });
           openMyAccountsPanel();
         }catch(e){ alert('تعذّر التعطيل: '+e.message); }
       };
@@ -2773,11 +2774,9 @@ async function openMyAccountsPanel(){
 }
 async function checkOtherPendingSchools(loginId){
   try{
-    const meSnap = await db.collection('users').doc(CLS_SESSION.userId).get();
-    const blocked = (meSnap.data()||{}).blockedSchools||[];
-    const q = await db.collection('users').where('loginId','==',loginId).get();
-    const others = q.docs.filter(d=>!d.data().migratedTo && !d.data().authUid && d.data().active!==false && !blocked.includes(d.data().schoolId))
-      .map(d=>({id:d.id, ...d.data()}));
+    // اكتشاف السجلات المعلَّقة الأخرى لنفس رقم الهوية في الخادم (2026-10-12)
+    const r = await UsersAPI.call('discoverPending');
+    const others = r.pending || [];
     if(others.length) showOtherPendingChooser(others);
   }catch(e){}
 }
@@ -2797,19 +2796,16 @@ function showOtherPendingChooser(list){
     '</div>');
   document.getElementById('opcActivateBtn').onclick = async function(){
     const temp = document.getElementById('opcTemp').value;
-    if(!next.password || next.password!==temp){ document.getElementById('opcAlert').innerHTML='<div class="alert err">كلمة المرور الأولية غير صحيحة</div>'; return; }
+    if(!temp){ document.getElementById('opcAlert').innerHTML='<div class="alert err">أدخل كلمة المرور الأولية</div>'; return; }
     try{
-      const au = firebase.auth().currentUser;
-      const ctxPayload = { role:next.role, permissions:next.permissions||{}, assignedClasses:next.assignedClasses||[], active:true };
-      await db.collection('users').doc(au.uid).update({ ['schools.'+next.schoolId]: ctxPayload, updatedAt: Date.now() });
-      try{ await db.collection('users').doc(next.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
+      await UsersAPI.call('activateExtraSchool', { pendingId: next.id, temp });
       closeOmrModal();
       showOtherPendingChooser(rest);
     }catch(e){ document.getElementById('opcAlert').innerHTML='<div class="alert err">'+escapeHtml(e.message)+'</div>'; }
   };
   document.getElementById('opcSkipBtn').onclick = async function(){
     try{
-      await db.collection('users').doc(next.id).update({ active:false, skippedOnce:true, updatedAt: Date.now() });
+      await UsersAPI.call('skipPending', { pendingId: next.id });
       closeOmrModal();
       showOtherPendingChooser(rest);
     }catch(e){ document.getElementById('opcAlert').innerHTML='<div class="alert err">'+escapeHtml(e.message)+'</div>'; }
@@ -2818,9 +2814,7 @@ function showOtherPendingChooser(list){
     document.getElementById('opcBlockBtn').onclick = async function(){
       if(!await mnConfirm('حظر هذه المدرسة نهائيًا؟ لن تُعرض عليك مرة أخرى حتى لو أعاد مديرها تفعيلها.')) return;
       try{
-        const au = firebase.auth().currentUser;
-        await db.collection('users').doc(au.uid).update({ blockedSchools: firebase.firestore.FieldValue.arrayUnion(next.schoolId), updatedAt: Date.now() });
-        await db.collection('users').doc(next.id).update({ active:false, updatedAt: Date.now() });
+        await UsersAPI.call('skipPending', { pendingId: next.id, block: true });
         closeOmrModal();
         showOtherPendingChooser(rest);
       }catch(e){ document.getElementById('opcAlert').innerHTML='<div class="alert err">'+escapeHtml(e.message)+'</div>'; }
@@ -2864,7 +2858,7 @@ async function bulkNote(kind){
   omrModal('<div style="text-align:center;color:var(--fg-888888,#888);padding:26px">جارٍ التحميل…</div>');
   let cands=[];
   try{
-    const snap=await db.collection('users').get();
+    const snap=await UsersAPI.listSnap(CLS_SESSION.schoolId);
     cands=snap.docs.map(d=>({id:d.id,...d.data()}))
       .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId])
       .map(u=>{ const ctx=u.schools[CLS_SESSION.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; })
@@ -5253,7 +5247,7 @@ const REFERRAL_REASONS = {
 };
 async function omrResolveClassAdmins(classCode){
   const norm=x=>normalizeDigits(String(x||'')).trim();
-  const snap=await db.collection('users').get();
+  const snap=await UsersAPI.listSnap(CLS_SESSION.schoolId);
   return snap.docs.map(d=>({id:d.id,...d.data()}))
     .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId])
     .map(u=>{ const ctx=u.schools[CLS_SESSION.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; })
@@ -5748,7 +5742,7 @@ async function anSend(){
   omrModal('<div style="text-align:center;color:var(--fg-888888,#888);padding:26px">جارٍ التحميل…</div>');
   let cands=[];
   try{
-    const snap=await db.collection('users').get();
+    const snap=await UsersAPI.listSnap(CLS_SESSION.schoolId);
     cands=snap.docs.map(x=>({id:x.id,...x.data()}))
       .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId])
       .map(u=>{ const ctx=u.schools[CLS_SESSION.schoolId]; return { id:u.id, username:u.username, role:ctx.role, active:ctx.active }; })
@@ -6171,8 +6165,8 @@ document.addEventListener('DOMContentLoaded', function(){
     if(!/^[0-9]{10,14}$/.test(val)){ alert('أدخل رقم هوية صحيح (بين 10 و14 خانة، أرقام فقط)'); return; }
     linkBtn.disabled = true;
     try{
-      const q = await db.collection('users').where('loginId','==',val).get();
-      const other = q.docs.find(d=> d.id!==CLS_SESSION.userId && d.data().authUid && d.data().role!=='admin' && d.data().role!=='schoolAdmin');
+      const info = await UsersAPI.call('loginIdInfo', { loginId: val, wantElsewhere: true });
+      const other = info.activatedElsewhere;
       if(!other){
         omrModal('<h3>لا يوجد رقم سجل مطابق مرتبط بحساب آخر</h3>'+
           '<div style="padding:8px 0">'+
@@ -6181,9 +6175,7 @@ document.addEventListener('DOMContentLoaded', function(){
         document.getElementById('mlCloseBtn').onclick = closeOmrModal;
         return;
       }
-      const od = other.data();
-      const realEmail = od.email||od.googleEmail||'';
-      const masked = realEmail ? (realEmail.split('@')[0].slice(0,2)+'***@'+(realEmail.split('@')[1]||'')) : 'غير معروف';
+      const masked = other.maskedEmail || 'غير معروف';
       omrModal('<h3>يوجد حساب آخر مرتبط بنفس رقم الهوية</h3>'+
         '<div style="padding:8px 0">'+
         '<p>البريد المُقنَّع: <b>'+escapeHtml(masked)+'</b></p>'+
@@ -6712,12 +6704,9 @@ async function loadActivatedSeats(){
     const seats = [...new Set((state.fullStudents||[]).map(s=>String(s.seat)).filter(Boolean))];
     if(!seats.length) return;
     const map = {};
-    // Firestore يسمح بـ 30 قيمة كحد أقصى في استعلام 'in' — نقسّم على دفعات
-    for(let i=0;i<seats.length;i+=30){
-      const chunk = seats.slice(i,i+30);
-      const snap = await db.collection('studentAccounts').where('seat','in',chunk).get();
-      snap.docs.forEach(d=>{ map[String(d.data().seat)] = true; });
-    }
+    // الاستعلام في الخادم (2026-10-12): يُرجع أرقام الهوية المفعَّلة فقط دون أي بيانات أخرى للطلاب
+    const ar = await UsersAPI.call('activatedSeats', { seats });
+    (ar.seats||[]).forEach(x=>{ map[String(x)] = true; });
     CLS_ACTIVATED_SEATS = map;
     renderStudents();
   }catch(e){ /* الشارة تحسينية فقط */ }

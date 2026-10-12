@@ -89,6 +89,7 @@ table.t td.miss{background:var(--bg-fdecec,#fdecec)}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script src="users-api.js"></script>
 <script>
 'use strict';
 /* =========================================================================
@@ -210,7 +211,7 @@ async function loadAll(){
     });
   }
   const byUser = (pub && pub.byUser) || {};
-  const uSnap = await db.collection('users').get();
+  const uSnap = await UsersAPI.listSnap(DS.sid);
   DS.users = uSnap.docs.map(d=>({id:d.id,...d.data()}))
     .filter(x=>!x.migratedTo && x.authUid && x.active!==false && x.schools && x.schools[DS.sid] && x.schools[DS.sid].active!==false)
     .map(x=>{

@@ -83,6 +83,7 @@ table.v tbody tr:hover{background:var(--bg-e6f3f1,#e6f3f1)}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script src="users-api.js"></script>
 <script>
 'use strict';
 /* =========================================================================
@@ -174,7 +175,7 @@ async function loadAll(){
     const ps = await db.collection('timetables').doc(VS.sid).collection('data').doc(VS.period+'_published').get();
     if(ps.exists){ const d = JSON.parse(ps.data().value||'null'); byUser = (d && d.byUser) || {}; }
   }catch(e){}
-  const uSnap = await db.collection('users').get();
+  const uSnap = await UsersAPI.listSnap(VS.sid);
   VS.teachers = uSnap.docs.map(d=>({id:d.id,...d.data()}))
     .filter(x=>!x.migratedTo && x.authUid && x.active!==false && x.schools && x.schools[VS.sid] && x.schools[VS.sid].active!==false)
     .filter(x=>x.schools[VS.sid].role==='teacher' || (byUser[x.id] && (byUser[x.id].lessons||[]).length))

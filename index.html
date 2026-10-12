@@ -400,6 +400,7 @@ input,select{font-family:inherit;font-size:15px}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="pwa.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
+<script src="users-api.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 /* =========================================================================
@@ -930,37 +931,17 @@ async function doStudentGoogleLogin(){
     const gUser = res.user;
     if(!gUser || !gUser.email) throw new Error('تعذّر قراءة بريدك من حساب Google.');
 
-    // حاجز: البريد المسجَّل لمعلم/منسوب مدرسة/حساب فردي لا يُستخدم أبدًا في دخول الطالب
-    if(await emailBelongsToStaff(gUser)){
+    // التحقق سيرفريًا (2026-10-12): هل البريد لموظف؟ هل للطالب حساب بالـ UID أو بالبريد؟ — دون قراءة studentAccounts/users من المتصفح
+    const sr = await UsersAPI.call('studentSignIn');
+    if(sr.status === 'staff'){
       try{ await firebase.auth().signOut(); }catch(_){}
       alertBox('studentLoginAlert','err','هذا البريد مسجَّل في النظام كحساب معلم أو منسوب مدرسة، ولا يمكن استخدامه في دخول الطالب. استخدم بريدك الشخصي كطالب.');
       return;
     }
-
-    const q = await studentAccountsCol().where('googleUid','==',gUser.uid).limit(1).get();
-    if(!q.empty){
-      const data = q.docs[0].data();
+    if(sr.status === 'ok'){
       localStorage.setItem('stu_session', JSON.stringify({
-        accountId: q.docs[0].id, googleUid: gUser.uid, email: gUser.email,
-        seat: data.seat, name: data.name || gUser.displayName || ''
-      }));
-      window.location.href='student-worksheets.html';
-      return;
-    }
-
-    // ما فيه حساب بالـ UID الحالي — نبحث احتياطيًا بالبريد قبل ما نعتبره تسجيلاً جديدًا:
-    // لو Firebase Auth انحذف وأُعيد إنشاؤه لنفس الطالب (نفس Gmail)، الـ UID يتغيّر رغم إنه نفس الحساب،
-    // فنكتشفه بالبريد وندمجه على المعرّف الجديد بدل ما نطلب منه يسجّل رقم الهوية ورمز الفصل من جديد
-    const qEmail = await studentAccountsCol().where('email','==',gUser.email).limit(1).get();
-    if(!qEmail.empty){
-      const oldDoc = qEmail.docs[0];
-      const data = oldDoc.data();
-      const payload = { ...data, googleUid: gUser.uid, name: data.name || gUser.displayName || '', updatedAt: Date.now() };
-      await studentAccountsCol().doc(gUser.uid).set(payload);
-      await oldDoc.ref.delete();
-      localStorage.setItem('stu_session', JSON.stringify({
-        accountId: gUser.uid, googleUid: gUser.uid, email: gUser.email,
-        seat: data.seat, name: payload.name
+        accountId: sr.account.id, googleUid: gUser.uid, email: gUser.email,
+        seat: sr.account.seat, name: sr.account.name || gUser.displayName || ''
       }));
       window.location.href='student-worksheets.html';
       return;
@@ -980,24 +961,6 @@ async function doStudentGoogleLogin(){
   }finally{ t.textContent=old; btn.disabled=false; }
 }
 
-/* هل الحساب/البريد يخص معلمًا أو منسوب مدرسة أو حسابًا فرديًا؟ (يُفحص بالـ UID ثم بالبريد) */
-async function emailBelongsToStaff(gUser){
-  const uid = gUser.uid;
-  const em = String(gUser.email||'').trim();
-  const emails = Array.from(new Set([em, em.toLowerCase()])).filter(Boolean);
-  const direct = await usersCol().doc(uid).get();
-  if(direct.exists) return true;
-  const byUid = await usersCol().where('authUid','==',uid).limit(1).get();
-  if(!byUid.empty) return true;
-  for(const e of emails){
-    const a = await usersCol().where('email','==',e).limit(1).get();
-    if(!a.empty) return true;
-    const b = await usersCol().where('googleEmail','==',e).limit(1).get();
-    if(!b.empty) return true;
-  }
-  return false;
-}
-
 async function doStudentVerify(){
   const seat = $('#stuSeat').value.trim();
   const code = $('#stuClassCode').value.trim().toUpperCase();
@@ -1006,41 +969,11 @@ async function doStudentVerify(){
   const btn = $('#stuVerifyBtn');
   btn.textContent='جارٍ التحقق…'; btn.disabled=true;
   try{
-    // ابحث عن الروسترات التي تحتوي رقم الهوية هذا
-    const snap = await rosterIndexCol().where('seatList','array-contains',seat).get();
-    if(snap.empty) throw new Error('رقم الهوية غير مسجّل لدى أي معلم. تأكد منه مع معلمك.');
-
-    // تحقّق أن رمز الفصل المُدخل يخص فصلاً هذا الطالب مسجَّل فيه فعلاً
-    let matched = null;
-    snap.docs.forEach(d=>{
-      const r = d.data();
-      const myClasses = (r.classBySeat||{})[seat] || [];
-      myClasses.forEach(cc=>{
-        const meta = (r.classMeta||{})[cc];
-        if(meta && meta.loginCode && String(meta.loginCode).toUpperCase() === code) matched = { rosterId:r.rosterId, classCode:cc };
-      });
-    });
-    if(!matched) throw new Error('رمز الفصل لا يطابق أي فصل أنت مسجَّل فيه. تأكد منه مع معلمك.');
-
-    // رقم الهوية لا يُربط إلا بحساب واحد — زملاء الفصل يعرفون نفس الرمز، فالرمز وحده ليس إثبات هوية
-    const taken = await studentAccountsCol().where('seat','==',seat).limit(1).get();
-    if(!taken.empty){
-      throw new Error('رقم الهوية هذا مرتبط بحساب آخر بالفعل. إن كان حسابك، سجّل الدخول بالبريد نفسه، وإلا راجع معلمك.');
-    }
-
-    const now = Date.now();
-    const payload = {
-      googleUid: STU_PENDING_GOOGLE.uid, email: STU_PENDING_GOOGLE.email,
-      name: STU_PENDING_GOOGLE.name, seat,
-      linkedRosters: [matched.rosterId],   // النسخة الفردية تحتاج تأكيداً لكل معلم على حدة
-      verifiedAt: now, updatedAt: now
-    };
-    // معرّف المستند = googleUid نفسه (لا معرّف عشوائي) — قاعدة isStudent() بـ firestore.rules
-    // تتحقق من وجود studentAccounts/{uid} بالضبط، فلازم يتطابقا
-    await studentAccountsCol().doc(STU_PENDING_GOOGLE.uid).set(payload);
+    // التحقق من الهوية ورمز الفصل وإنشاء الحساب سيرفريًا (2026-10-12)
+    const vr = await UsersAPI.call('studentVerify', { seat, code });
     localStorage.setItem('stu_session', JSON.stringify({
-      accountId: STU_PENDING_GOOGLE.uid, googleUid: payload.googleUid, email: payload.email,
-      seat, name: payload.name
+      accountId: vr.account.id, googleUid: STU_PENDING_GOOGLE.uid, email: STU_PENDING_GOOGLE.email,
+      seat, name: vr.account.name || STU_PENDING_GOOGLE.name || ''
     }));
     window.location.href='student-worksheets.html';
   }catch(e){ alertBox('studentLoginAlert','err',e.message); }
@@ -1219,7 +1152,7 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
   }
   if(flat.role!=='admin' && flat.role!=='schoolAdmin' && data.loginId){
     try{
-      const others = await discoverOtherPendingByLoginId(data.loginId, null, data.blockedSchools);
+      const others = await discoverOtherPendingByLoginId();
       if(others.length){
         showPendingSchoolChooser(others, async ()=>{
           closeModal();
@@ -1433,44 +1366,26 @@ async function doStaffActivate(){
   if(!au){ alertBox('loginAlert','err','انتهت الجلسة، أعد المحاولة'); await cancelActivation(); return; }
   const btn=$('#acDoBtn'); btn.textContent='جارٍ التفعيل…'; btn.disabled=true;
   try{
-    let q = await usersCol().where('loginId','==',seat).get().catch(()=>({empty:true,docs:[]}));
-    let docs = q.empty ? [] : q.docs.filter(d=>!d.data().migratedTo && isPendingDocClient(d.data()));
-    if(!docs.length){ q = await usersCol().where('username','==',seat).get().catch(()=>({empty:true,docs:[]})); docs = q.empty ? [] : q.docs.filter(d=>!d.data().migratedTo && isPendingDocClient(d.data())); }
-    if(!docs.length) throw new Error('رقم الهوية غير موجود، أو تم تفعيله مسبقاً. راجع الإدارة.');
-    // لو فيه أكثر من سجل معلَّق بنفس رقم الهوية (بمدارس مختلفة)، نبحث عن السجل اللي كلمة مروره تطابق المُدخَلة
-    const activeDocs = docs.filter(x=>x.data().active!==false);
-    let d = activeDocs.find(x=>x.data().password===temp) || docs.find(x=>x.data().password===temp);
-    if(!d){
-      d = activeDocs[0] || docs[0];
-      const data0 = d.data();
-      if(data0.active===false) throw new Error('هذا الحساب معطّل. راجع المسؤول');
-      throw new Error('كلمة المرور الأولية غير صحيحة');
-    }
-    const data=d.data();
-    if(data.active===false) throw new Error('هذا الحساب معطّل. راجع المسؤول');
-
-    // سيناريو ٣: رقم الهوية هذا مرتبط بحساب مُفعَّل مسبقًا بحساب مصادقة مختلف (بريد آخر) —
-    // نوجّهه لتسجيل الدخول بالحساب الأصلي ثم نربط البريد الحالي عليه تلقائيًا، بدل إنشاء حساب مستقل ثانٍ
-    const already = await discoverActivatedElsewhereByLoginId(seat, au.uid);
-    if(already){
+    // التحقق من رقم الهوية وكلمة المرور الأولية وإنشاء المستند الموحَّد يتمان في الخادم (2026-10-12) —
+    // لا يقرأ المتصفح سجلات المعلَّقين ولا كلمات مرورهم الأولية
+    const ar = await UsersAPI.call('activateStaff', { seat, temp });
+    if(ar.status === 'already'){
+      // سيناريو ٣: رقم الهوية مرتبط بحساب مُفعَّل مسبقًا بمصادقة أخرى — نوجّهه للدخول بالحساب الأصلي ثم ندمج البريد الحالي عليه
+      const already = ar.already || {};
       const isGoogleNew = au.providerData && au.providerData.some(p=>p.providerId==='google.com');
       const newCred = isGoogleNew ? {google:true} : {email: ($('#liEmail')?$('#liEmail').value.trim():au.email)||au.email, password: $('#liPass')?$('#liPass').value:''};
       try{ await firebase.auth().signOut(); }catch(_){}
       showMergeRedirectBox(already, newCred);
       return;
     }
-
-    if(!Object.keys(SCHOOLS||{}).length){ try{ await loadSchools(); }catch(e){} }
-    const existing = await usersCol().doc(au.uid).get();
-    const now = Date.now();
-    if(data.schools || data.solo){
-      // إعادة ربط حساب كامل سبق فك ربطه (يحمل مدارس/سياق فردي متعدد أصلاً على نفس السجل)
-      if(existing.exists) throw new Error('حسابك الحالي مرتبط بحساب آخر بالفعل — لا يمكن إعادة ربط حساب كامل عليه. راجع admin العام.');
-      const payload = Object.assign({}, data, { authUid:au.uid, email:au.email||null, updatedAt:now });
-      delete payload.password;
-      await usersCol().doc(au.uid).set(payload);
-      try{ await usersCol().doc(d.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
-      AUTH_JUST_CREATED = false;
+    if(ar.status === 'needGoogle'){
+      try{ await firebase.auth().signOut(); }catch(_){}
+      $('#staffActivateBox').classList.add('hidden');
+      $('#staffSignInBox').classList.remove('hidden');
+      throw new Error('تفعيل حساب مدير المدرسة يتطلب الدخول عبر "المتابعة بحساب Google" حصرًا — لا يمكن تفعيله بالبريد وكلمة المرور. اضغط "المتابعة بحساب Google" وأعد إدخال رقم الهوية وكلمة المرور الأولية.');
+    }
+    AUTH_JUST_CREATED = false;
+    if(ar.kind === 'relink'){
       // نقل سجلات المعلم القديمة (نفس المدرسة والفترة والعام فقط) — لا يوقف التفعيل لو فشل
       try{ if(fnTransferTeacherRecords) await fnTransferTeacherRecords({}); }catch(e){ console.warn('transferTeacherRecords', e); }
       $('#staffActivateBox').classList.add('hidden');
@@ -1478,42 +1393,8 @@ async function doStaffActivate(){
       await afterAuth(au);
       return;
     }
-    if(data.role==='schoolAdmin'){
-      const isGoogleAuth = au.providerData && au.providerData.some(p=>p.providerId==='google.com');
-      if(!isGoogleAuth){
-        try{ await firebase.auth().signOut(); }catch(_){}
-        $('#staffActivateBox').classList.add('hidden');
-        $('#staffSignInBox').classList.remove('hidden');
-        throw new Error('تفعيل حساب مدير المدرسة يتطلب الدخول عبر "المتابعة بحساب Google" حصرًا — لا يمكن تفعيله بالبريد وكلمة المرور. اضغط "المتابعة بحساب Google" وأعد إدخال رقم الهوية وكلمة المرور الأولية.');
-      }
-      if(!existing.exists){
-        await usersCol().doc(au.uid).set({ role:'schoolAdmin', authUid:au.uid, email:au.email||null, googleEmail:au.email||null, username:data.username, active:true, adminSchools:[data.schoolId], loginId: seat, createdAt:now, updatedAt:now });
-      } else {
-        throw new Error('لديك حساب مدير مفعَّل مسبقًا — إضافة مدرسة أخرى لحسابك تتم مباشرة من admin العام، لا عبر هذا التفعيل.');
-      }
-    } else {
-      const ctxPayload = { role:data.role, permissions:data.permissions||permsForNewUser(data.role), assignedClasses:data.assignedClasses||[], active:true };
-      if(!existing.exists){
-        await usersCol().doc(au.uid).set({
-          authUid:au.uid, email:au.email||null, username:data.username, loginId: seat,
-          schools:{ [data.schoolId]: ctxPayload }, createdAt:now, updatedAt:now
-        });
-      } else if(existing.data().role!=='admin' && existing.data().role!=='schoolAdmin'){
-        const patch = { ['schools.'+data.schoolId]: ctxPayload, updatedAt: now };
-        if(!existing.data().loginId) patch.loginId = seat;
-        await usersCol().doc(au.uid).update(patch);
-      } else {
-        throw new Error('حسابك الحالي حساب أدمن/مدير — لا يمكن إضافة سياق موظف عادي عليه.');
-      }
-    }
-    // السجل المعلَّق القديم لا يُحذف (صلاحية الحذف مقصورة على الأدمن/المدير) — يُعلَّم بدل ذلك
-    try{ await usersCol().doc(d.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
-
-    AUTH_JUST_CREATED = false;
     // سيناريو ١: هل يوجد سجلات معلَّقة أخرى بنفس رقم الهوية بمدارس أخرى؟
-    let myBlocked = [];
-    try{ const meSnap = await usersCol().doc(au.uid).get(); myBlocked = (meSnap.data()||{}).blockedSchools||[]; }catch(e){}
-    const others = await discoverOtherPendingByLoginId(seat, d.id, myBlocked);
+    const others = ar.others || [];
     if(others.length){ showPendingSchoolChooser(others); return; }
     $('#staffActivateBox').classList.add('hidden');
     $('#staffSignInBox').classList.remove('hidden');
@@ -1553,22 +1434,10 @@ function googleProvider(){
 }
 const EMAIL_VERIFY_SETTINGS = { url: 'https://injaz.awraqai.com/index.html', handleCodeInApp: false };
 function isPendingDocClient(data){ return !data.authUid; }
-/* اكتشاف سجلات معلَّقة أخرى بنفس رقم الهوية (بمدارس مختلفة) — سيناريو ١ و٢ */
-async function discoverOtherPendingByLoginId(loginId, excludeDocId, blockedSchools){
-  if(!loginId) return [];
-  const blocked = blockedSchools||[];
-  const q = await usersCol().where('loginId','==',loginId).get().catch(()=>({docs:[]}));
-  return q.docs.filter(d=> d.id!==excludeDocId && !d.data().migratedTo && isPendingDocClient(d.data())
-      && d.data().active!==false && !blocked.includes(d.data().schoolId))
-    .map(d=>({id:d.id, ...d.data()}));
-}
-/* اكتشاف حساب مُفعَّل مسبقًا (uid مختلف) بنفس رقم الهوية — سيناريو ٣ */
-async function discoverActivatedElsewhereByLoginId(loginId, excludeUid){
-  if(!loginId) return null;
-  const q = await usersCol().where('loginId','==',loginId).get().catch(()=>({docs:[]}));
-  const hit = q.docs.find(d=> d.id!==excludeUid && d.data().authUid && d.data().authUid!==excludeUid
-    && d.data().role!=='admin' && d.data().role!=='schoolAdmin');
-  return hit ? {id:hit.id, ...hit.data()} : null;
+/* اكتشاف سجلات معلَّقة أخرى بنفس رقم هوية المستخدم (بمدارس مختلفة) — سيناريو ١ و٢ — يتم في الخادم */
+async function discoverOtherPendingByLoginId(){
+  const r = await UsersAPI.call('discoverPending');
+  return r.pending || [];
 }
 function maskEmail(email){
   if(!email) return '—';
@@ -1595,20 +1464,17 @@ function showPendingSchoolChooser(pendingList, onDone){
       <button class="btn" id="pscActivateBtn">تفعيل</button>
     </div>`);
   $('#pscActivateBtn').onclick = async ()=>{
-    const seat=$('#pscSeat').value.trim(), temp=$('#pscTemp').value;
-    if(!next.password || next.password!==temp){ alertBox('pscAlert','err','كلمة المرور الأولية غير صحيحة'); return; }
+    const temp=$('#pscTemp').value;
+    if(!temp){ alertBox('pscAlert','err','أدخل كلمة المرور الأولية'); return; }
     try{
-      const au = firebase.auth().currentUser;
-      const ctxPayload = { role:next.role, permissions:next.permissions||permsForNewUser(next.role), assignedClasses:next.assignedClasses||[], active:true };
-      await usersCol().doc(au.uid).update({ ['schools.'+next.schoolId]: ctxPayload, updatedAt: Date.now() });
-      try{ await usersCol().doc(next.id).update({ migratedTo: au.uid, password: firebase.firestore.FieldValue.delete() }); }catch(e){}
+      await UsersAPI.call('activateExtraSchool', { pendingId: next.id, temp });
       toast('تم تفعيل المدرسة الإضافية');
       showPendingSchoolChooser(rest, onDone);
     }catch(e){ alertBox('pscAlert','err',e.message); }
   };
   $('#pscSkipBtn').onclick = async ()=>{
     try{
-      await usersCol().doc(next.id).update({ active:false, skippedOnce:true, updatedAt: Date.now() });
+      await UsersAPI.call('skipPending', { pendingId: next.id });
       toast('تم تعطيل هذا السجل');
       showPendingSchoolChooser(rest, onDone);
     }catch(e){ alertBox('pscAlert','err',e.message); }
@@ -1617,9 +1483,7 @@ function showPendingSchoolChooser(pendingList, onDone){
     $('#pscBlockBtn').onclick = async ()=>{
       if(!await mnConfirm('حظر هذه المدرسة نهائيًا؟ لن تُعرض عليك مرة أخرى حتى لو أعاد مديرها تفعيلها — يمكنك رفع الحظر لاحقًا من «حساباتي».')) return;
       try{
-        const au = firebase.auth().currentUser;
-        await usersCol().doc(au.uid).update({ blockedSchools: firebase.firestore.FieldValue.arrayUnion(next.schoolId), updatedAt: Date.now() });
-        await usersCol().doc(next.id).update({ active:false, updatedAt: Date.now() });
+        await UsersAPI.call('skipPending', { pendingId: next.id, block: true });
         toast('تم الحظر');
         showPendingSchoolChooser(rest, onDone);
       }catch(e){ alertBox('pscAlert','err',e.message); }
@@ -1631,47 +1495,16 @@ function showPendingSchoolChooser(pendingList, onDone){
    النسخة الفردية: دخول المعلم المستقل بحساب Google
    ======================================================================== */
 const SOLO_TRIAL_DAYS = 30;
-// توليد بادئة فريدة للمعلم الفردي (T1, T2, ...) تُستخدم في رموز دخول طلابه بدل رمز المدرسة
-async function nextSoloTeacherCode(){
-  const snap = await usersCol().where('isSolo','==',true).get();
-  let max = 0;
-  snap.docs.forEach(d=>{
-    const c = String((d.data().teacherCode)||'');
-    const n = parseInt(c.replace(/^T/,''),10);
-    if(!isNaN(n) && n>max) max = n;
-  });
-  return 'T' + (max + 1);
-}
-/* منطق حسم سياق الفردي (إنشاء ملف جديد أو إضافة solo لملف موجود) — مشترك بين Google والبريد */
+/* منطق حسم سياق الفردي (إنشاء ملف جديد أو إضافة solo لملف موجود) — مشترك بين Google والبريد.
+   إنشاء المستند وحساب مدة التجربة ورمز المعلم الفردي (T1, T2…) يتمّان في الخادم (2026-10-12). */
 async function resolveSoloLogin(authUser){
   if(!Object.keys(SCHOOLS||{}).length){ try{ await ensureSeed(); await loadSchools(); await loadRoleTemplates(); }catch(e){} }
-  const q = await usersCol().where('authUid','==',authUser.uid).limit(1).get();
-  if(q.empty){
-    const now = Date.now();
-    const teacherCode = await nextSoloTeacherCode();
-    const data = {
-      username: authUser.displayName || authUser.email.split('@')[0],
-      email: authUser.email, authUid: authUser.uid, teacherCode, isSolo: true,
-      loginId: null,
-      solo: { active:true, subscribedAt:now, subscriptionEnds: now + SOLO_TRIAL_DAYS*24*60*60*1000 },
-      createdAt: now, updatedAt: now
-    };
-    await usersCol().doc(authUser.uid).set(data);
-    await proceedWithUserDoc(authUser, authUser.uid, data, 'solo', 'first');
-  } else {
-    const d=q.docs[0], data=d.data();
-    if(!data.solo && data.role!=='admin' && data.role!=='schoolAdmin'){
-      const now = Date.now();
-      const teacherCode = data.teacherCode || await nextSoloTeacherCode();
-      const soloCtx = { active:true, subscribedAt:now, subscriptionEnds: now + SOLO_TRIAL_DAYS*24*60*60*1000 };
-      await usersCol().doc(d.id).update({ solo:soloCtx, teacherCode, isSolo:true, updatedAt:now });
-      data.solo = soloCtx;
-    }
-    const ctxs = availableContexts(data);
-    if(ctxs.length===0) throw new Error('حسابك معطّل بكل سياقاته. تواصل مع إدارة النظام.');
-    if(ctxs.length>1){ showAccountChooser(authUser, d.id, data, ctxs, 'first'); return; }
-    await proceedWithUserDoc(authUser, d.id, data, ctxs[0].key, 'first');
-  }
+  const r = await UsersAPI.call('registerSolo');
+  const data = r.data, docId = r.docId;
+  const ctxs = availableContexts(data);
+  if(ctxs.length===0) throw new Error('حسابك معطّل بكل سياقاته. تواصل مع إدارة النظام.');
+  if(ctxs.length>1){ showAccountChooser(authUser, docId, data, ctxs, 'first'); return; }
+  await proceedWithUserDoc(authUser, docId, data, ctxs[0].key, 'first');
 }
 async function doSoloGoogleLogin(){
   const btn = $('#soloGoogleBtn'); const t=btn.querySelector('.pv-txt'); const old=t.textContent;
@@ -2091,7 +1924,7 @@ async function openMyAccountsPanel(){
         if(!await mnConfirm('تعطيل هذا السياق؟ لن تقدر تُعيد تفعيله بنفسك — يحتاج مدير تلك المدرسة.')) return;
         const sid = this.getAttribute('data-sid');
         try{
-          await usersCol().doc(CURRENT.id).update({ ['schools.'+sid+'.active']: false, updatedAt: Date.now() });
+          await usersCol().doc(CURRENT.id).update({ ['schools.'+sid+'.active']: false, _editCtx: sid, updatedAt: Date.now() });
           openMyAccountsPanel();
         }catch(e){ alert('تعذّر التعطيل: '+e.message); }
       };
@@ -2242,7 +2075,7 @@ function markAbsentFromClasses(seat,code,status){
 }
 /* حساب الفصول غير المحضَّرة اليوم (يُستخدم في «تأخر وغياب الطلاب» وفي «المؤشرات») */
 async function computeNotPrepared(){
-  const uSnap = await usersCol().get();
+  const uSnap = await UsersAPI.listSnap(CURRENT.schoolId||null);
   const teachers = uSnap.docs.map(d=>({id:d.id,...d.data()}))
     .filter(u=>!u.migratedTo && u.schools && u.schools[CURRENT.schoolId])
     /* [ADMIN-TOOLS:MOD] ORIG: .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[]}; }) */
@@ -3462,7 +3295,7 @@ async function loadUsersList(){
   const isSchoolScoped = CURRENT.role==='schoolAdmin';
   const wrap=$('#usersList'); const filter = isSchoolScoped ? CURRENT.schoolId : ($('#uSchoolFilter')?$('#uSchoolFilter').value:'');
   try{
-    const snap = await usersCol().get();
+    const snap = await UsersAPI.listSnap(isSchoolScoped ? CURRENT.schoolId : null, {withIds:true});
     const idSearch = ($('#uIdSearch')?$('#uIdSearch').value:'').trim();
     let raw = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>!u.migratedTo);
     if(idSearch) raw = raw.filter(u=>u.loginId && String(u.loginId).includes(idSearch));
@@ -3793,20 +3626,9 @@ async function openUserModal(id){
 /* تعارض رقم الهوية بمدرسة معيّنة فقط — نفس الرقم بمدرسة أخرى (معلَّق أو مُفعَّل) ليس تعارضًا:
    هذا بالضبط الأسلوب اللي يسمح لاحقًا بدمج نفس الشخص تلقائيًا بمدرسة ثانية وقت التفعيل */
 async function loginIdConflictAtSchool(loginId, schoolId, excludeDocId){
-  const q = await usersCol().where('loginId','==',loginId).get();
-  for(const d of q.docs){
-    if(excludeDocId && d.id===excludeDocId) continue;
-    const data = d.data();
-    if(data.migratedTo) continue;
-    if(!data.authUid){
-      if(data.schoolId===schoolId) return true;
-    } else if(data.role==='schoolAdmin'){
-      if((data.adminSchools||[]).includes(schoolId)) return true;
-    } else if(data.schools && data.schools[schoolId]){
-      return true;
-    }
-  }
-  return false;
+  // الفحص في الخادم (2026-10-12): المتصفح لا يقرأ سجلات الآخرين بحثًا برقم الهوية
+  const r = await UsersAPI.call('loginIdInfo', { loginId, schoolId, excludeDocId: excludeDocId||null });
+  return !!r.conflictAtSchool;
 }
 async function saveUser(active){
   const linked = !!(editUser && editUser.authUid);
@@ -3986,7 +3808,7 @@ async function renderUserPerms(c){
     </div>
     <div id="upBody"></div>`;
   try{
-    const snap = await usersCol().get();
+    const snap = await UsersAPI.listSnap(isSchoolScoped ? CURRENT.schoolId : null, {withIds:true});
     const allUsers = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.authUid && u.role!=='admin' && u.role!=='schoolAdmin');
     if(isSchoolScoped){
       let users = allUsers.filter(u=>u.schools && u.schools[CURRENT.schoolId]);
@@ -4784,7 +4606,7 @@ const notesCol = ()=>db.collection('notes');
 const _normN = x=>String(x||'').replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]).trim();
 
 async function resolveRecipients(opts){
-  const snap = await usersCol().get();
+  const snap = await UsersAPI.listSnap(opts.schoolId||null);
   const users = snap.docs.map(d=>({id:d.id,...d.data()}))
     .filter(u=>!u.migratedTo && u.id!==CURRENT.id && u.schools && u.schools[opts.schoolId])
     /* [ADMIN-TOOLS:MOD] ORIG: .map(u=>{ const ctx=u.schools[opts.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; }) */
@@ -4899,7 +4721,7 @@ function noteCard(n, mineSent, counts){
 async function openForwardNote(id){
   let users=[];
   try{
-    const us=await usersCol().get();
+    const us=await UsersAPI.listSnap(CURRENT.schoolId||null);
     users=us.docs.map(d=>({id:d.id,...d.data()}))
       .filter(u=>!u.migratedTo && u.id!==CURRENT.id && u.schools && u.schools[CURRENT.schoolId])
       .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, active:ctx.active}; })
@@ -5007,7 +4829,7 @@ async function openCompose(){
   catch(e){ composeRoster={classes:[],students:[]}; }
   composeUsers=[];
   try{
-    const us=await usersCol().get();
+    const us=await UsersAPI.listSnap(CURRENT.schoolId||null);
     composeUsers=us.docs.map(d=>({id:d.id,...d.data()}))
       .filter(u=>!u.migratedTo && u.id!==CURRENT.id && u.schools && u.schools[CURRENT.schoolId])
       /* [ADMIN-TOOLS:MOD] ORIG: .map(u=>{ const ctx=u.schools[CURRENT.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; }) */

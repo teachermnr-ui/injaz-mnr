@@ -167,7 +167,7 @@ async function markSeen(sig){
   if(MS.me.role==='schoolAdmin'){ try{ localStorage.setItem(seenKey(), sig); }catch(e){} return; }
   if(sig===MS.seenSig) return;
   try{
-    await db.collection('users').doc(MS.me.id).update({ ['schools.'+MS.sid+'.schedSeenSig.'+MS.period]: sig, updatedAt: Date.now() });
+    await db.collection('users').doc(MS.me.id).update({ ['schools.'+MS.sid+'.schedSeenSig.'+MS.period]: sig, _editCtx: MS.sid, updatedAt: Date.now() });
     MS.seenSig = sig;
   }catch(e){}
 }

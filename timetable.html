@@ -289,6 +289,7 @@ table.tt td.nm.nm-sel{background:var(--bg-cfe3ff,#cfe3ff);box-shadow:inset 0 0 0
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script src="users-api.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="timetable-engine.js"></script>
 <script>
@@ -1027,7 +1028,7 @@ async function ensureUserIndex(force){
   if(TT.userIndex && !force) return TT.userIndex;
   const idx = { list:[], byNid:{}, byId:{} };
   try{
-    const us = await db.collection('users').get();
+    const us = await UsersAPI.listSnap(TT.sid, {withIds:true});
     us.docs.forEach(d=>{
       const u = d.data(); if(u.migratedTo) return;
       let inSchool=false, role='', active=true, pending=false, ctx=null;
@@ -3596,8 +3597,8 @@ function impFlexNewTeachers(body){
         teachers().push({ id:tid, name:r.name, nid:r.nid, stages:stagesOf(r.t.key), quota:r.quota, unavail:{} });
         r.t.val = tid;
         if(isPrincipal()){
-          const q = await db.collection('users').where('loginId','==',r.nid).get();
-          const exists = q.docs.some(d=>{ const u = d.data(); return !u.migratedTo && ((!u.authUid && u.schoolId===TT.sid) || (u.schools && u.schools[TT.sid])); });
+          const lr = await UsersAPI.call('loginIdInfo', { loginId: r.nid, schoolId: TT.sid });
+          const exists = !!lr.conflictAtSchool;
           if(exists){ created.push(r.name+' ('+r.nid+'): مستخدم موجود مسبقًا — رُبط بالجدول'); continue; }
           const pass = genPass();
           await db.collection('users').add({ loginId:r.nid, username:r.name, role:'teacher', schoolId:TT.sid, assignedClasses:[], permissions:clone(tplPerms), active:true, password:pass, mustChangePassword:false, createdAt:Date.now(), updatedAt:Date.now() });

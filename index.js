@@ -1,4 +1,4 @@
-// إصدار: 2026-10-11.1
+// إصدار: 2026-10-12.1
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -1076,3 +1076,398 @@ exports.cleanupScreenPairings = onSchedule({ schedule: "every 60 minutes", timeZ
   if (!old.empty) await b.commit();
 });
 /* [ADMIN-TOOLS:END] */
+
+/* ============================================================================================
+   الأمان (2026-10-12): دوال تحل محل قراءات/كتابات مجموعة users وstudentAccounts الواسعة من المتصفح
+   بعد تضييق firestore.rules: لا يقرأ أي مستخدم مستندات الآخرين مباشرة ولا يكتب صلاحياته بنفسه.
+   كل الدوال تتحقق من المستدعي سيرفريًا. لا مجموعات جديدة تُفتح للعميل (secAttempts وsystemCounters مغلقتان).
+   ============================================================================================ */
+const secDb = () => admin.firestore();
+const secFV = admin.firestore.FieldValue;
+const secMsg = (code, m) => new HttpsError(code, m);
+
+function secIsAdmin(u) { return !!u && u.role === "admin" && u.active !== false; }
+function secAdminSchools(u) { return (u && u.role === "schoolAdmin" && u.active !== false) ? (u.adminSchools || []) : []; }
+function secIsSchoolAdminOf(u, sid) { return !!sid && secAdminSchools(u).includes(sid); }
+function secStaffCtx(u, sid) {
+  const c = ((u && u.schools) || {})[sid];
+  return (c && c.active !== false) ? c : null;
+}
+function secPerm(ctx, key, f) { const p = ((ctx && ctx.permissions) || {})[key]; return !!(p && p[f] === true); }
+function secEq(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const x = Buffer.from(a), y = Buffer.from(b);
+  return x.length === y.length && exCrypto.timingSafeEqual(x, y);
+}
+function secMask(email) {
+  if (!email) return "غير معروف";
+  const parts = String(email).split("@");
+  return parts[0].slice(0, 2) + "***@" + (parts[1] || "");
+}
+async function secCaller(request, opts) {
+  if (!request.auth) throw secMsg("unauthenticated", "يجب تسجيل الدخول أولاً.");
+  const tok = request.auth.token || {};
+  if (tok.firebase && tok.firebase.sign_in_provider === "anonymous") throw secMsg("permission-denied", "هذا الإجراء غير متاح لهذا النوع من الدخول.");
+  const s = await secDb().collection("users").doc(request.auth.uid).get();
+  const out = { uid: request.auth.uid, tok, ref: s.ref, exists: s.exists, data: s.exists ? s.data() : null };
+  if (opts && opts.needDoc && !out.exists) throw secMsg("permission-denied", "لا يوجد حساب مرتبط بهذا الدخول.");
+  return out;
+}
+// محاولات فاشلة محدودة لكل مفتاح (سجل في secAttempts — مغلق على العميل)
+async function secGate(key, max, windowMs) {
+  const ref = secDb().collection("secAttempts").doc(key);
+  const now = Date.now();
+  const s = await ref.get();
+  const fails = ((s.exists && s.data().fails) || []).filter((t) => now - t < windowMs);
+  if (fails.length >= max) throw secMsg("resource-exhausted", "محاولات خاطئة كثيرة. حاول بعد قليل.");
+  return { ref, fails, now };
+}
+async function secFail(g) { await g.ref.set({ fails: g.fails.concat([g.now]) }); }
+
+// هل يملك المستدعي صلاحية «مدير» على مستخدمي هذه المدرسة (يرى أرقام الهوية والبريد وكلمات المرور الأولية للمعلَّقين)؟
+function secIsUserManager(u, sid) {
+  if (secIsAdmin(u)) return true;
+  if (secIsSchoolAdminOf(u, sid)) return true;
+  const c = secStaffCtx(u, sid);
+  return !!c && (secPerm(c, "index.users", "access") || secPerm(c, "tools.timetable", "access") || secPerm(c, "tools.timetable", "edit"));
+}
+const SEC_SENSITIVE = ["password", "loginId", "email", "googleEmail", "mergeRequestAt", "mergeRequestTarget"];
+
+/* قائمة مستخدمي مدرسة (أو كل المستخدمين للأدمن العام بلا schoolId).
+   الأدمن العام ومدير المدرسة ومن لديه «المستخدمون»/«الجدول المدرسي» يرون أرقام الهوية والبريد، وكلمة المرور الأولية
+   للسجلات المعلَّقة تُعاد لمدير المدرسة والأدمن فقط. غيرهم يرى الأسماء والسياق الوظيفي بلا حقول حساسة. */
+exports.listSchoolUsers = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  const u = me.data;
+  const sid = request.data && request.data.schoolId ? String(request.data.schoolId) : null;
+  const isAdm = secIsAdmin(u);
+  if (!isAdm) {
+    if (!sid) throw secMsg("invalid-argument", "حدّد المدرسة.");
+    if (!(secIsSchoolAdminOf(u, sid) || secStaffCtx(u, sid))) throw secMsg("permission-denied", "ليست لديك صلاحية على هذه المدرسة.");
+  }
+  const db = secDb();
+  const byId = new Map();
+  if (!sid) {
+    (await db.collection("users").get()).docs.forEach((d) => byId.set(d.id, d));
+  } else {
+    const col = db.collection("users");
+    const FP = admin.firestore.FieldPath;
+    const [a, b, c] = await Promise.all([
+      col.where(new FP("schools", sid, "role"), ">=", "").get(),
+      col.where("schoolId", "==", sid).get(),
+      col.where("adminSchools", "array-contains", sid).get(),
+    ]);
+    [a, b, c].forEach((qs) => qs.docs.forEach((d) => byId.set(d.id, d)));
+  }
+  const mgr = sid ? secIsUserManager(u, sid) : isAdm;
+  const pwOk = isAdm || (sid && secIsSchoolAdminOf(u, sid));
+  const wantIds = !!(request.data && request.data.withIds);
+  const users = [];
+  byId.forEach((d, id) => {
+    const x = d.data();
+    const out = Object.assign({}, x);
+    const pending = !x.authUid;
+    if (!(pending && pwOk)) delete out.password;
+    if (!(mgr && (wantIds || pwOk))) { SEC_SENSITIVE.forEach((k) => { if (k !== "password") delete out[k]; }); }
+    users.push({ id, data: out });
+  });
+  return { users };
+});
+
+/* معلومات رقم هوية: تعارضه بمدرسة (لمن يدير المستخدمين)، ووجود حساب مفعَّل آخر بنفس الرقم (بريد مُقنَّع فقط) */
+exports.loginIdInfo = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  const d = request.data || {};
+  const loginId = String(d.loginId || "").trim();
+  if (!loginId || loginId.length > 40) throw secMsg("invalid-argument", "رقم هوية غير صالح.");
+  const sid = d.schoolId ? String(d.schoolId) : null;
+  const exclude = d.excludeDocId ? String(d.excludeDocId) : null;
+  const qs = await secDb().collection("users").where("loginId", "==", loginId).get();
+  const out = {};
+  if (sid) {
+    if (!secIsUserManager(me.data, sid)) throw secMsg("permission-denied", "ليست لديك صلاحية على هذه المدرسة.");
+    let conflict = false;
+    for (const x of qs.docs) {
+      if (exclude && x.id === exclude) continue;
+      const v = x.data();
+      if (v.migratedTo) continue;
+      if (!v.authUid) { if (v.schoolId === sid) conflict = true; }
+      else if (v.role === "schoolAdmin") { if ((v.adminSchools || []).includes(sid)) conflict = true; }
+      else if (v.schools && v.schools[sid]) conflict = true;
+    }
+    out.conflictAtSchool = conflict;
+  }
+  if (d.wantElsewhere) {
+    const hit = qs.docs.find((x) => x.id !== me.uid && x.data().authUid && x.data().role !== "admin" && x.data().role !== "schoolAdmin");
+    out.activatedElsewhere = hit ? { found: true, maskedEmail: secMask(hit.data().email || hit.data().googleEmail) } : null;
+  }
+  return out;
+});
+
+/* السجلات المعلَّقة الأخرى (بمدارس أخرى) لنفس رقم هوية المستدعي — بلا أي بيانات حساسة */
+async function secPendingFor(me, excludeId, blocked) {
+  const lid = me && me.loginId;
+  if (!lid) return [];
+  const bl = blocked || me.blockedSchools || [];
+  const qs = await secDb().collection("users").where("loginId", "==", lid).get();
+  return qs.docs
+    .filter((x) => x.id !== excludeId && !x.data().migratedTo && !x.data().authUid && x.data().active !== false && !bl.includes(x.data().schoolId))
+    .map((x) => ({ id: x.id, schoolId: x.data().schoolId || null, role: x.data().role || null, loginId: x.data().loginId, skippedOnce: !!x.data().skippedOnce }));
+}
+exports.discoverPending = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  if (me.data.role === "admin" || me.data.role === "schoolAdmin") return { pending: [] };
+  return { pending: await secPendingFor(me.data, null, null) };
+});
+
+async function secTemplatePerms(role) {
+  try {
+    const s = await secDb().collection("schoolData").doc("roleTemplates").get();
+    const t = s.exists && ((s.data().templates || {})[role]);
+    if (t && typeof t === "object" && Object.keys(t).length) return t;
+  } catch (e) { /* يُترك للقيمة الافتراضية */ }
+  return {};
+}
+
+/* تفعيل موظف بتحقق سيرفري من رقم الهوية وكلمة المرور الأولية، وإنشاء مستنده الموحَّد */
+exports.activateStaff = onCall(async (request) => {
+  const me = await secCaller(request);
+  const tok = me.tok;
+  if (tok.email_verified !== true) throw secMsg("failed-precondition", "يجب تأكيد بريدك أولًا ثم إعادة المحاولة.");
+  const d = request.data || {};
+  const seat = String(d.seat || "").trim();
+  const temp = String(d.temp || "");
+  if (!seat || !temp || seat.length > 40) throw secMsg("invalid-argument", "أدخل رقم الهوية وكلمة المرور الأولية");
+  const gate = await secGate("act_" + me.uid, 10, 30 * 60 * 1000);
+  const db = secDb();
+  const users = db.collection("users");
+  let qs = await users.where("loginId", "==", seat).get();
+  let docs = qs.docs.filter((x) => !x.data().migratedTo && !x.data().authUid);
+  if (!docs.length) {
+    qs = await users.where("username", "==", seat).get();
+    docs = qs.docs.filter((x) => !x.data().migratedTo && !x.data().authUid);
+  }
+  if (!docs.length) { await secFail(gate); throw secMsg("not-found", "رقم الهوية غير موجود، أو تم تفعيله مسبقاً. راجع الإدارة."); }
+  const activeDocs = docs.filter((x) => x.data().active !== false);
+  const pd = activeDocs.find((x) => secEq(x.data().password, temp)) || docs.find((x) => secEq(x.data().password, temp));
+  if (!pd) {
+    await secFail(gate);
+    const d0 = activeDocs[0] || docs[0];
+    if (d0.data().active === false) throw secMsg("failed-precondition", "هذا الحساب معطّل. راجع المسؤول");
+    throw secMsg("permission-denied", "كلمة المرور الأولية غير صحيحة");
+  }
+  const data = pd.data();
+  if (data.active === false) throw secMsg("failed-precondition", "هذا الحساب معطّل. راجع المسؤول");
+
+  // رقم الهوية مرتبط بحساب مفعَّل بمصادقة أخرى: نوجّه للدخول بالحساب الأصلي (يُكشف بريده بعد نجاح التحقق من كلمة المرور فقط)
+  const all = await users.where("loginId", "==", seat).get();
+  const hit = all.docs.find((x) => x.id !== me.uid && x.data().authUid && x.data().authUid !== me.uid
+    && x.data().role !== "admin" && x.data().role !== "schoolAdmin");
+  if (hit) return { status: "already", already: { email: hit.data().email || null, googleEmail: hit.data().googleEmail || null } };
+
+  const now = Date.now();
+  const email = tok.email || null;
+  const existingSnap = await me.ref.get();
+  let kind;
+  if (data.schools || data.solo) {
+    if (existingSnap.exists) throw secMsg("failed-precondition", "حسابك الحالي مرتبط بحساب آخر بالفعل — لا يمكن إعادة ربط حساب كامل عليه. راجع admin العام.");
+    const payload = Object.assign({}, data, { authUid: me.uid, email, updatedAt: now });
+    delete payload.password;
+    await me.ref.set(payload);
+    await pd.ref.update({ migratedTo: me.uid, password: secFV.delete() });
+    kind = "relink";
+  } else if (data.role === "schoolAdmin") {
+    const ur = await admin.auth().getUser(me.uid);
+    const isGoogle = (ur.providerData || []).some((p) => p.providerId === "google.com");
+    if (!isGoogle) return { status: "needGoogle" };
+    if (existingSnap.exists) throw secMsg("failed-precondition", "لديك حساب مدير مفعَّل مسبقًا — إضافة مدرسة أخرى لحسابك تتم مباشرة من admin العام، لا عبر هذا التفعيل.");
+    await me.ref.set({ role: "schoolAdmin", authUid: me.uid, email, googleEmail: email, username: data.username, active: true,
+      adminSchools: [data.schoolId], loginId: seat, createdAt: now, updatedAt: now });
+    await pd.ref.update({ migratedTo: me.uid, password: secFV.delete() });
+    kind = "schoolAdmin";
+  } else {
+    if (data.role === "admin") throw secMsg("failed-precondition", "تفعيل حساب أدمن النظام لا يتم من هذه الشاشة. تواصل مع مالك النظام.");
+    const perms = (data.permissions && Object.keys(data.permissions).length) ? data.permissions : await secTemplatePerms(data.role);
+    const ctxPayload = { role: data.role, permissions: perms, assignedClasses: data.assignedClasses || [], active: true };
+    if (!data.schoolId) throw secMsg("failed-precondition", "السجل غير مرتبط بمدرسة. راجع الإدارة.");
+    if (!existingSnap.exists) {
+      await me.ref.set({ authUid: me.uid, email, username: data.username, loginId: seat,
+        schools: { [data.schoolId]: ctxPayload }, createdAt: now, updatedAt: now });
+    } else if (existingSnap.data().role !== "admin" && existingSnap.data().role !== "schoolAdmin") {
+      const FP = admin.firestore.FieldPath;
+      const args = [new FP("schools", data.schoolId), ctxPayload, "updatedAt", now];
+      if (!existingSnap.data().loginId) args.push("loginId", seat);
+      await me.ref.update(...args);
+    } else {
+      throw secMsg("failed-precondition", "حسابك الحالي حساب أدمن/مدير — لا يمكن إضافة سياق موظف عادي عليه.");
+    }
+    await pd.ref.update({ migratedTo: me.uid, password: secFV.delete() });
+    kind = "staff";
+  }
+  const meNow = (await me.ref.get()).data() || {};
+  const others = await secPendingFor(Object.assign({}, meNow, { loginId: seat }), pd.id, meNow.blockedSchools || []);
+  return { status: "activated", kind, others };
+});
+
+/* تفعيل مدرسة إضافية (سجل معلَّق آخر لنفس رقم الهوية) بعد التحقق من كلمة مرورها الأولية */
+exports.activateExtraSchool = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  if (me.data.role === "admin" || me.data.role === "schoolAdmin" || !me.data.loginId) throw secMsg("permission-denied", "غير متاح لهذا الحساب.");
+  const d = request.data || {};
+  const pid = String(d.pendingId || ""), temp = String(d.temp || "");
+  if (!pid || !temp) throw secMsg("invalid-argument", "بيانات ناقصة.");
+  const gate = await secGate("act_" + me.uid, 10, 30 * 60 * 1000);
+  const ps = await secDb().collection("users").doc(pid).get();
+  const p = ps.exists ? ps.data() : null;
+  if (!p || p.authUid || p.migratedTo || p.active === false || p.loginId !== me.data.loginId || !p.schoolId) {
+    throw secMsg("not-found", "السجل غير متاح للتفعيل.");
+  }
+  if (!secEq(p.password, temp)) { await secFail(gate); throw secMsg("permission-denied", "كلمة المرور الأولية غير صحيحة"); }
+  const perms = (p.permissions && Object.keys(p.permissions).length) ? p.permissions : await secTemplatePerms(p.role);
+  const ctxPayload = { role: p.role, permissions: perms, assignedClasses: p.assignedClasses || [], active: true };
+  await me.ref.update(new admin.firestore.FieldPath("schools", p.schoolId), ctxPayload, "updatedAt", Date.now());
+  await ps.ref.update({ migratedTo: me.uid, password: secFV.delete() });
+  return { ok: true };
+});
+
+/* تخطّي سجل معلَّق آخر أو حظر مدرسته نهائيًا */
+exports.skipPending = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  if (!me.data.loginId) throw secMsg("permission-denied", "غير متاح لهذا الحساب.");
+  const d = request.data || {};
+  const ps = await secDb().collection("users").doc(String(d.pendingId || "")).get();
+  const p = ps.exists ? ps.data() : null;
+  if (!p || p.authUid || p.migratedTo || p.loginId !== me.data.loginId) throw secMsg("not-found", "السجل غير متاح.");
+  const now = Date.now();
+  if (d.block) {
+    await me.ref.update({ blockedSchools: secFV.arrayUnion(p.schoolId), updatedAt: now });
+    await ps.ref.update({ active: false, updatedAt: now });
+  } else {
+    await ps.ref.update({ active: false, skippedOnce: true, updatedAt: now });
+  }
+  return { ok: true };
+});
+
+/* إنشاء الحساب الفردي (تجربة ٣٠ يومًا تُحسب هنا لا في المتصفح) أو إضافة سياق الفردي لمستند موجود */
+const SEC_SOLO_TRIAL_MS = 30 * 24 * 60 * 60 * 1000;
+async function secNextSoloCode() {
+  const db = secDb();
+  const ref = db.collection("systemCounters").doc("soloTeacher");
+  return db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    let max;
+    if (s.exists) max = s.data().max || 0;
+    else {
+      max = 0;
+      (await db.collection("users").where("isSolo", "==", true).get()).docs.forEach((x) => {
+        const n = parseInt(String(x.data().teacherCode || "").replace(/^T/, ""), 10);
+        if (!isNaN(n) && n > max) max = n;
+      });
+    }
+    tx.set(ref, { max: max + 1 });
+    return "T" + (max + 1);
+  });
+}
+exports.registerSolo = onCall(async (request) => {
+  const me = await secCaller(request);
+  if (me.tok.email_verified !== true) throw secMsg("failed-precondition", "يجب تأكيد بريدك أولًا.");
+  const db = secDb();
+  const q = await db.collection("users").where("authUid", "==", me.uid).limit(1).get();
+  const now = Date.now();
+  if (q.empty) {
+    const email = me.tok.email || "";
+    const data = {
+      username: me.tok.name || (email.split("@")[0] || "مستخدم"),
+      email, authUid: me.uid, teacherCode: await secNextSoloCode(), isSolo: true, loginId: null,
+      solo: { active: true, subscribedAt: now, subscriptionEnds: now + SEC_SOLO_TRIAL_MS },
+      createdAt: now, updatedAt: now,
+    };
+    await db.collection("users").doc(me.uid).set(data);
+    return { docId: me.uid, data };
+  }
+  const doc = q.docs[0];
+  const data = doc.data();
+  if (!data.solo && data.role !== "admin" && data.role !== "schoolAdmin") {
+    const solo = { active: true, subscribedAt: now, subscriptionEnds: now + SEC_SOLO_TRIAL_MS };
+    const teacherCode = data.teacherCode || await secNextSoloCode();
+    await doc.ref.update({ solo, teacherCode, isSolo: true, updatedAt: now });
+    Object.assign(data, { solo, teacherCode, isSolo: true, updatedAt: now });
+  }
+  return { docId: doc.id, data };
+});
+
+/* ---------------- الطالب ---------------- */
+async function secBelongsToStaff(uid, email) {
+  const db = secDb();
+  if ((await db.collection("users").doc(uid).get()).exists) return true;
+  if (!(await db.collection("users").where("authUid", "==", uid).limit(1).get()).empty) return true;
+  const ems = Array.from(new Set([String(email || "").trim(), String(email || "").trim().toLowerCase()])).filter(Boolean);
+  for (const e of ems) {
+    if (!(await db.collection("users").where("email", "==", e).limit(1).get()).empty) return true;
+    if (!(await db.collection("users").where("googleEmail", "==", e).limit(1).get()).empty) return true;
+  }
+  return false;
+}
+// دخول الطالب بحساب Google: حساب موجود بالـuid ← مباشرة، أو بالبريد ← يُنقل لمعرّف الدخول الجديد، وإلا طالب جديد يحتاج التحقق
+exports.studentSignIn = onCall(async (request) => {
+  const me = await secCaller(request);
+  const email = me.tok.email;
+  if (!email) throw secMsg("failed-precondition", "تعذّر قراءة بريدك من حساب Google.");
+  if (await secBelongsToStaff(me.uid, email)) return { status: "staff" };
+  const db = secDb();
+  const cols = db.collection("studentAccounts");
+  const q = await cols.where("googleUid", "==", me.uid).limit(1).get();
+  if (!q.empty) { const x = q.docs[0].data(); return { status: "ok", account: { id: q.docs[0].id, seat: x.seat, name: x.name || me.tok.name || "" } }; }
+  const qe = await cols.where("email", "==", email).limit(1).get();
+  if (!qe.empty) {
+    const old = qe.docs[0]; const x = old.data();
+    const payload = Object.assign({}, x, { googleUid: me.uid, name: x.name || me.tok.name || "", updatedAt: Date.now() });
+    await cols.doc(me.uid).set(payload);
+    if (old.id !== me.uid) await old.ref.delete();
+    return { status: "ok", account: { id: me.uid, seat: x.seat, name: payload.name } };
+  }
+  return { status: "new" };
+});
+// التحقق من هوية الطالب ورمز فصله ثم إنشاء حسابه
+exports.studentVerify = onCall(async (request) => {
+  const me = await secCaller(request);
+  const email = me.tok.email;
+  if (!email) throw secMsg("failed-precondition", "تعذّر قراءة بريدك من حساب Google.");
+  const d = request.data || {};
+  const seat = String(d.seat || "").trim();
+  const code = String(d.code || "").trim().toUpperCase();
+  if (!seat || !code || seat.length > 40) throw secMsg("invalid-argument", "أدخل رقم الهوية ورمز الفصل.");
+  if (await secBelongsToStaff(me.uid, email)) throw secMsg("permission-denied", "هذا البريد مسجَّل في النظام كحساب معلم أو منسوب مدرسة، ولا يمكن استخدامه في دخول الطالب.");
+  const gate = await secGate("stu_" + me.uid, 8, 30 * 60 * 1000);
+  const db = secDb();
+  const snap = await db.collection("rosterIndex").where("seatList", "array-contains", seat).get();
+  if (snap.empty) { await secFail(gate); throw secMsg("not-found", "رقم الهوية غير مسجّل لدى أي معلم. تأكد منه مع معلمك."); }
+  let matched = null;
+  snap.docs.forEach((x) => {
+    const r = x.data();
+    ((r.classBySeat || {})[seat] || []).forEach((cc) => {
+      const meta = (r.classMeta || {})[cc];
+      if (meta && meta.loginCode && String(meta.loginCode).toUpperCase() === code) matched = { rosterId: r.rosterId, classCode: cc };
+    });
+  });
+  if (!matched) { await secFail(gate); throw secMsg("permission-denied", "رمز الفصل لا يطابق أي فصل أنت مسجَّل فيه. تأكد منه مع معلمك."); }
+  const taken = await db.collection("studentAccounts").where("seat", "==", seat).limit(1).get();
+  if (!taken.empty) throw secMsg("already-exists", "رقم الهوية هذا مرتبط بحساب آخر بالفعل. إن كان حسابك، سجّل الدخول بالبريد نفسه، وإلا راجع معلمك.");
+  const now = Date.now();
+  const payload = { googleUid: me.uid, email, name: me.tok.name || "", seat, linkedRosters: [matched.rosterId], verifiedAt: now, updatedAt: now };
+  await db.collection("studentAccounts").doc(me.uid).set(payload);
+  return { status: "ok", account: { id: me.uid, seat, name: payload.name } };
+});
+// أرقام هوية طلاب فعّلوا حساباتهم (شارة «مفعَّل» عند المعلم) — بلا أي بيانات أخرى
+exports.activatedSeats = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  const u = me.data;
+  if (!(u.solo || u.schools || u.role === "admin" || u.role === "schoolAdmin")) throw secMsg("permission-denied", "غير متاح.");
+  const seats = Array.from(new Set(((request.data && request.data.seats) || []).map(String).filter(Boolean))).slice(0, 1500);
+  const found = [];
+  for (let i = 0; i < seats.length; i += 30) {
+    const qs = await secDb().collection("studentAccounts").where("seat", "in", seats.slice(i, i + 30)).get();
+    qs.docs.forEach((x) => found.push(String(x.data().seat)));
+  }
+  return { seats: found };
+});

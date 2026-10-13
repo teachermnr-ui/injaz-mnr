@@ -1,4 +1,4 @@
-// إصدار: 2026-10-13.3
+// إصدار: 2026-10-13.4
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -1628,6 +1628,61 @@ const SEM_AR = { first: "الفصل الأول", second: "الفصل الثان�
 function semTodayRiyadh() { return new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10); }
 const SEM_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// تحويل تاريخ yyyy-mm-dd إلى مللي ثانية بتوقيت الرياض (بداية اليوم أو نهايته)
+function semMs(dateStr, end) { return new Date(dateStr + (end ? "T23:59:59.999+03:00" : "T00:00:00+03:00")).getTime(); }
+
+/* حفظ تواريخ العام والفصلين (أدمن النظام فقط) مع الفحص على الخادم:
+   - تاريخ العام إلزامي متى حُدِّد أي فصل. - كل فصل داخل العام. - الفصلان لا يتداخلان (بداية الثاني بعد نهاية الأول).
+   - لا تُحذف تواريخ فصل مرخَّص. الأوقات بتوقيت الرياض. تُكتب الحقول المحمية من هنا فقط (القواعد تمنع الكتابة المباشرة). */
+async function semSaveDates(me, u, d) {
+  if (!secIsAdmin(u)) throw secMsg("permission-denied", "مقصور على أدمن النظام العام.");
+  const sid = String(d.schoolId || "");
+  if (!sid) throw secMsg("invalid-argument", "حدّد المدرسة.");
+  const yF = d.yearFrom ? String(d.yearFrom) : "", yT = d.yearTo ? String(d.yearTo) : "";
+  const given = {};
+  for (const p of SEM_IDS) {
+    const x = (d.semesters || {})[p];
+    if (!x) continue;
+    const f = String(x.from || ""), t = String(x.to || "");
+    if (!SEM_DATE_RE.test(f) || !SEM_DATE_RE.test(t)) throw secMsg("invalid-argument", "حدّد بداية ونهاية صحيحتين لـ" + SEM_AR[p] + ".");
+    if (t < f) throw secMsg("invalid-argument", "نهاية " + SEM_AR[p] + " قبل بدايته.");
+    given[p] = { from: f, to: t };
+  }
+  const has = Object.keys(given).length > 0;
+  if ((yF && !SEM_DATE_RE.test(yF)) || (yT && !SEM_DATE_RE.test(yT))) throw secMsg("invalid-argument", "تاريخ العام الدراسي غير صالح.");
+  if (has && (!yF || !yT)) throw secMsg("invalid-argument", "تاريخ العام الدراسي (بداية ونهاية) إلزامي عند تحديد الفصلين.");
+  if ((yF && !yT) || (!yF && yT)) throw secMsg("invalid-argument", "حدّد بداية العام الدراسي ونهايته معًا.");
+  if (yF && yT < yF) throw secMsg("invalid-argument", "نهاية العام الدراسي قبل بدايته.");
+  for (const p of Object.keys(given)) {
+    if (given[p].from < yF || given[p].to > yT) throw secMsg("invalid-argument", SEM_AR[p] + " خارج مدة العام الدراسي.");
+  }
+  if (given.first && given.second && given.second.from <= given.first.to) throw secMsg("invalid-argument", "الفصلان متداخلان أو غير مرتبين: يجب أن يبدأ الفصل الثاني بعد نهاية الأول.");
+  const ref = secDb().collection("schoolData").doc(sid);
+  await secDb().runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists || s.data()._isSchool !== true) throw secMsg("not-found", "المدرسة غير موجودة.");
+    const sems = s.data().semesters || {};
+    for (const p of SEM_IDS) {
+      if (!given[p] && sems[p] && sems[p].licensed === true) throw secMsg("failed-precondition", "لا يمكن حذف تواريخ " + SEM_AR[p] + " وهو مرخَّص للمدرسة. اسحب الترخيص أولًا.");
+    }
+    const periods = [], semDates = {};
+    for (const p of SEM_IDS) {
+      if (!given[p]) continue;
+      const rec = { from: given[p].from, to: given[p].to, fromMs: semMs(given[p].from, false), toMs: semMs(given[p].to, true) };
+      periods.push(Object.assign({ id: p }, rec));
+      semDates[p] = { fromMs: rec.fromMs, toMs: rec.toMs };
+    }
+    const upd = {
+      periods, updatedAt: Date.now(),
+      yearFrom: yF, yearTo: yT,
+      yearFromMs: yF ? semMs(yF, false) : null, yearToMs: yT ? semMs(yT, true) : null,
+    };
+    upd.semDates = has ? semDates : secFV.delete();
+    tx.update(ref, upd);
+  });
+  return { ok: true };
+}
+
 exports.schoolSemester = onCall(async (request) => {
   const me = await secCaller(request, { needDoc: true });
   const u = me.data;
@@ -1649,6 +1704,8 @@ exports.schoolSemester = onCall(async (request) => {
     await db.collection("schoolData").doc("soloSemesters").set(Object.assign({ updatedAt: Date.now(), updatedBy: me.uid }, out), { merge: true });
     return { ok: true };
   }
+
+  if (action === "saveDates") return semSaveDates(me, u, d);
 
   const sid = String(d.schoolId || "");
   const period = String(d.period || "");
@@ -1695,6 +1752,12 @@ exports.schoolSemester = onCall(async (request) => {
     }
     sems[period] = cur;
     const upd = { semesters: sems, updatedAt: now };
+    // تعبئة semDates (مللي ثانية بتوقيت الرياض) من periods لمدرسة حُفظت تواريخها قبل هذه المرحلة — تقرؤها القواعد
+    if (!sc.semDates && (sc.periods || []).length) {
+      const sd = {};
+      (sc.periods || []).forEach((x) => { if (x && x.id && x.from && x.to) sd[x.id] = { fromMs: semMs(x.from, false), toMs: semMs(x.to, true) }; });
+      if (Object.keys(sd).length) upd.semDates = sd;
+    }
     // يبقى الحقل القديم activePeriod صالحًا للإشعارات المجدولة: الفصل المفعّل الوحيد، وإلا يبقى كما هو
     const act = SEM_IDS.filter((p) => (sems[p] || {}).active === true);
     if (act.length === 1) upd.activePeriod = act[0];

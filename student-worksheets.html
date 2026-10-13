@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-05.1 -->
+<!-- إصدار: 2026-10-13.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -56,9 +56,10 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import {
-      getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion
+      getFirestore, collection, query, where, getDocs, doc, getDoc
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
 
     /* إعدادات مشروع Firebase الموحّد — نفس مفاتيح worksheets.html/index.html */
     const firebaseConfig = {
@@ -72,6 +73,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
+    const fns = getFunctions(app);
     // قواعد Firestore تمنع أي قراءة قبل المصادقة — ننتظر جاهزية الجلسة
     const authReady = new Promise((resolve)=>{
       const un = onAuthStateChanged(auth, (u)=>{ un(); resolve(u); });
@@ -111,29 +113,10 @@
        - المعتمدة: مدارس (تلقائية) + معلمون فرديون سبق للطالب تأكيدهم برمز الفصل
        - المعلّقة: معلمون فرديون أضافوه ولم يؤكدهم بعد (تُعرض كدعوات) */
     async function resolveMemberships() {
-      const idxSnap = await getDocs(query(
-        collection(db, "rosterIndex"),
-        where("seatList", "array-contains", String(STU.seat))
-      ));
-      const accSnap = await getDoc(doc(db, "studentAccounts", STU.accountId));
-      const linked = (accSnap.exists() ? (accSnap.data().linkedRosters || []) : []).map(String);
-
-      const approved = [];   // {rosterId, kind, classCodes}
-      const invites = [];    // {rosterId, ownerName, classNames}
-      idxSnap.docs.forEach((d) => {
-        const r = d.data();
-        const classCodes = (r.classBySeat || {})[String(STU.seat)] || [];
-        if (!classCodes.length) return;
-        if (r.kind === "solo" && !linked.includes(String(r.rosterId))) {
-          invites.push({
-            rosterId: r.rosterId, ownerName: r.ownerName || "معلم",
-            classNames: classCodes.map(cc => ((r.classMeta || {})[cc] || {}).name || cc)
-          });
-        } else {
-          approved.push({ rosterId: r.rosterId, kind: r.kind, classCodes });
-        }
-      });
-      return { approved, invites, linked };
+      // (2026-10-13) البحث في فهرس الطلاب يتم على الخادم: يُرجع فصول هذا الطالب فقط بلا أي رموز دخول
+      const res = await httpsCallable(fns, "studentMemberships")({});
+      const d = (res && res.data) || {};
+      return { approved: d.approved || [], invites: d.invites || [] };
     }
 
     /* دعوة من معلم فردي: يؤكدها الطالب بإدخال رمز الفصل المدموج */
@@ -156,17 +139,8 @@
           const code = box.querySelector(".inv-code").value.trim().toUpperCase();
           if (!code) { msg.textContent = "أدخل رمز الفصل."; return; }
           try {
-            const rSnap = await getDoc(doc(db, "rosterIndex", inv.rosterId));
-            const r = rSnap.exists() ? rSnap.data() : {};
-            const mine = (r.classBySeat || {})[String(STU.seat)] || [];
-            const ok = mine.some(cc => {
-              const lc = ((r.classMeta || {})[cc] || {}).loginCode;
-              return lc && String(lc).toUpperCase() === code;
-            });
-            if (!ok) { msg.textContent = "الرمز لا يطابق فصلك لدى هذا المعلم."; return; }
-            await updateDoc(doc(db, "studentAccounts", STU.accountId), {
-              linkedRosters: arrayUnion(String(inv.rosterId)), updatedAt: Date.now()
-            });
+            // التحقق من الرمز على الخادم (بحدّ للمحاولات)، والخادم هو من يضيف الربط
+            await httpsCallable(fns, "studentConfirmInvite")({ rosterId: String(inv.rosterId), code });
             loadWorksheets();
           } catch (e) { msg.textContent = "تعذّر التأكيد: " + e.message; }
         });

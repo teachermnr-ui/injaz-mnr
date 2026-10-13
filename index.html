@@ -1063,7 +1063,10 @@ function availableContexts(data){
   const list = [];
   if(data.role==='admin') return [{key:'admin', label:'الأدمن العام'}];
   if(data.role==='schoolAdmin') return (data.adminSchools||[]).map(sid=>({key:'school:'+sid, label:'مدير مدرسة: '+((SCHOOLS[sid]&&SCHOOLS[sid].name)||sid)}));
-  if(data.solo && data.solo.active!==false) list.push({key:'solo', label:'المتابعة كحساب مستقل (غير مرتبط بأي مدرسة)'});
+  if(data.solo && data.solo.active!==false){
+    const _exp = data.solo.subscriptionEnds && Date.now()>data.solo.subscriptionEnds;
+    list.push({key:'solo', label:'المتابعة كحساب مستقل (غير مرتبط بأي مدرسة)'+(_exp?' — اشتراكه منتهٍ (قراءة فقط)':'')});
+  }
   Object.keys(data.schools||{}).forEach(sid=>{
     const ctx = data.schools[sid];
     if(ctx.active!==false) list.push({key:'school:'+sid, label:'المتابعة كـ'+(ROLES[ctx.role]||ctx.role)+' بمدرسة: '+((SCHOOLS[sid]&&SCHOOLS[sid].name)||sid)});
@@ -1093,10 +1096,7 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
     flat = { role:'admin', schoolId:null, permissions:null, active:data.active };
   } else if(ctxKey==='solo'){
     if(data.solo.active===false){ await cleanSignOut(); throw new Error('هذا السياق معطّل. راجع المسؤول'); }
-    if(data.solo.subscriptionEnds && Date.now()>data.solo.subscriptionEnds){
-      await cleanSignOut();
-      throw new Error('انتهى اشتراكك بتاريخ '+new Date(data.solo.subscriptionEnds).toLocaleDateString('ar')+'. تواصل مع إدارة النظام.');
-    }
+    // (2026-10-13) انتهاء الاشتراك لا يمنع الدخول: يدخل المعلم «قراءة فقط» (solo-guard.js) ويرى شريط التجديد
     flat = { role:'soloTeacher', schoolId:null, permissions:permsForNewUser('soloTeacher'), active:true, assignedClasses:[] };
   } else if(ctxKey.indexOf('school:')===0){
     const sid = ctxKey.slice(7);
@@ -3527,18 +3527,28 @@ async function hardDeleteUnifiedUser(id, name){
     catch(e){ toast('خطأ: '+e.message); }
   }, true);
 }
-/* إدارة اشتراك المعلم الفردي (تفعيل/إيقاف + تمديد التاريخ) — للأدمن العام */
+/* إدارة اشتراك المعلم الفردي (تجديد/ضبط التاريخ/تفعيل وإيقاف السياق الفردي) — للأدمن العام، عبر دالة الخادم adminSoloSubscription
+   (2026-10-13: كانت تكتب حقولًا قديمة على جذر المستند ولا تلمس solo.* فعليًا، وقد توقف الحساب كله) */
 async function editSoloSubscription(id){
   try{
     const snap = await usersCol().doc(id).get();
     if(!snap.exists) return;
-    const u = snap.data();
-    const cur = u.subscriptionEnds ? new Date(u.subscriptionEnds).toISOString().slice(0,10) : '';
+    const u = snap.data(); const so = u.solo || {};
+    const cur = so.subscriptionEnds ? new Date(so.subscriptionEnds).toISOString().slice(0,10) : '';
+    const endTxt = so.subscriptionEnds ? ((Date.now()>so.subscriptionEnds?'انتهى في ':'ينتهي في ')+new Date(so.subscriptionEnds).toLocaleDateString('ar')) : 'بلا تاريخ انتهاء';
     modal('<h2>إدارة اشتراك: '+esc(u.username||'')+'</h2>'+
-      '<div class="field"><label>تاريخ انتهاء الاشتراك</label><input type="date" id="subEnd" value="'+esc(cur)+'"></div>'+
-      '<div class="field"><label>حالة الحساب</label><select id="subActive">'+
-        '<option value="1"'+(u.active!==false?' selected':'')+'>مُفعّل</option>'+
-        '<option value="0"'+(u.active===false?' selected':'')+'>موقوف</option>'+
+      '<div class="umeta" style="margin-bottom:8px">الحالة الحالية: <b>'+esc(endTxt)+'</b></div>'+
+      '<div class="field"><label>تجديد (يُضاف إلى الأبعد من اليوم أو تاريخ الانتهاء الحالي)</label>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+          '<button class="btn secondary" onclick="renewSolo(\''+id+'\',30)">+ ٣٠ يومًا</button>'+
+          '<button class="btn secondary" onclick="renewSolo(\''+id+'\',90)">+ ٩٠ يومًا</button>'+
+          '<button class="btn secondary" onclick="renewSolo(\''+id+'\',180)">+ ١٨٠ يومًا</button>'+
+          '<button class="btn secondary" onclick="renewSolo(\''+id+'\',365)">+ سنة</button>'+
+        '</div></div>'+
+      '<div class="field"><label>أو ضبط تاريخ الانتهاء يدويًا</label><input type="date" id="subEnd" value="'+esc(cur)+'"></div>'+
+      '<div class="field"><label>حالة السياق الفردي</label><select id="subActive">'+
+        '<option value="1"'+(so.active!==false?' selected':'')+'>مُفعّل</option>'+
+        '<option value="0"'+(so.active===false?' selected':'')+'>موقوف</option>'+
       '</select></div>'+
       '<div style="display:flex;gap:8px;margin-top:12px">'+
         '<button class="btn" onclick="saveSoloSubscription(\''+id+'\')">حفظ</button>'+
@@ -3546,16 +3556,19 @@ async function editSoloSubscription(id){
       '</div>');
   }catch(e){ toast('خطأ: '+e.message); }
 }
+async function renewSolo(id, days){
+  try{
+    const r = await UsersAPI.call('adminSoloSubscription', { uid:id, extendDays:days });
+    closeModal(); toast('تم التجديد حتى '+new Date(r.ends).toLocaleDateString('ar')); loadUsersList();
+  }catch(e){ toast('خطأ: '+(e.message||e)); }
+}
 async function saveSoloSubscription(id){
   try{
     const d = $('#subEnd').value;
     const active = $('#subActive').value==='1';
-    await usersCol().doc(id).update({
-      subscriptionEnds: d ? new Date(d+'T23:59:59').getTime() : null,
-      active, updatedAt: Date.now()
-    });
+    await UsersAPI.call('adminSoloSubscription', { uid:id, endsMs: d ? new Date(d+'T23:59:59').getTime() : null, active });
     closeModal(); toast('تم حفظ الاشتراك'); loadUsersList();
-  }catch(e){ toast('خطأ: '+e.message); }
+  }catch(e){ toast('خطأ: '+(e.message||e)); }
 }
 
 let editUser=null;

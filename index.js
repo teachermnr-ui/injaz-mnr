@@ -1,4 +1,4 @@
-// إصدار: 2026-10-12.1
+// إصدار: 2026-10-13.1
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -1470,4 +1470,120 @@ exports.activatedSeats = onCall(async (request) => {
     qs.docs.forEach((x) => found.push(String(x.data().seat)));
   }
   return { seats: found };
+});
+
+
+/* ============================================================================================
+   المرحلة ٤ (2026-10-13): اشتراك المعلم الفردي
+   - secExtendSolo: نقطة التمديد الوحيدة (الأدمن الآن، وبوابة الدفع الإلكتروني لاحقًا): التاريخ الجديد = (الأبعد من اليوم أو
+     تاريخ الانتهاء الحالي) + المدة، فمن يجدّد قبل الانتهاء لا يخسر أيامه. يُفعِّل السياق ويسجّل مصدر التجديد.
+   - adminSoloSubscription: واجهة الأدمن العام (تجديد بالأيام، أو ضبط تاريخ، أو تفعيل/إيقاف السياق الفردي).
+   - cleanupExpiredSolo: يوميًا؛ حذف بيانات الفردي بعد ٩٠ يومًا من الانتهاء. «تسجيل فقط» افتراضيًا حتى يُفعَّل الحذف الفعلي بـ
+     systemCounters/soloCleanup = { live: true } من لوحة Firebase (مجموعة مغلقة على العميل). السجل في soloCleanupLog.
+   ============================================================================================ */
+const SEC_DAY_MS = 24 * 60 * 60 * 1000;
+const SEC_SOLO_KEEP_DAYS = 90;
+
+async function secExtendSolo(db, uid, days, source) {
+  const n = Number(days);
+  if (!uid || !isFinite(n) || n <= 0 || n > 3660) throw secMsg("invalid-argument", "مدة التمديد غير صالحة.");
+  const ref = db.collection("users").doc(uid);
+  return db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists) throw secMsg("not-found", "الحساب غير موجود.");
+    const u = s.data();
+    if (u.role === "admin" || u.role === "schoolAdmin") throw secMsg("failed-precondition", "لا اشتراك فردي لهذا النوع من الحسابات.");
+    if (!u.solo) throw secMsg("failed-precondition", "هذا الحساب بلا سياق فردي.");
+    const now = Date.now();
+    const base = Math.max(now, u.solo.subscriptionEnds || 0);
+    const ends = base + Math.round(n * SEC_DAY_MS);
+    const solo = Object.assign({}, u.solo, { active: true, subscriptionEnds: ends, lastRenewedAt: now, lastRenewSource: source || "admin" });
+    tx.update(ref, { solo, isSolo: true, updatedAt: now });
+    return { ends };
+  });
+}
+
+exports.adminSoloSubscription = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  if (!secIsAdmin(me.data)) throw secMsg("permission-denied", "مقصور على أدمن النظام العام.");
+  const d = request.data || {};
+  const uid = String(d.uid || "");
+  if (!uid) throw secMsg("invalid-argument", "حدّد الحساب.");
+  const db = secDb();
+  if (d.extendDays != null) {
+    const r = await secExtendSolo(db, uid, d.extendDays, "admin:" + me.uid);
+    return { ok: true, ends: r.ends };
+  }
+  const ref = db.collection("users").doc(uid);
+  const s = await ref.get();
+  if (!s.exists) throw secMsg("not-found", "الحساب غير موجود.");
+  const u = s.data();
+  if (!u.solo || u.role === "admin" || u.role === "schoolAdmin") throw secMsg("failed-precondition", "هذا الحساب بلا سياق فردي.");
+  const solo = Object.assign({}, u.solo);
+  if (d.endsMs !== undefined) {
+    if (d.endsMs === null) solo.subscriptionEnds = null;
+    else if (typeof d.endsMs === "number" && isFinite(d.endsMs) && d.endsMs > 0) solo.subscriptionEnds = d.endsMs;
+    else throw secMsg("invalid-argument", "تاريخ غير صالح.");
+  }
+  if (typeof d.active === "boolean") solo.active = d.active;
+  await ref.update({ solo, updatedAt: Date.now() });
+  return { ok: true, ends: solo.subscriptionEnds || null, active: solo.active !== false };
+});
+
+// حذف بيانات الفردي. كاملًا لمن لا سياق مدرسة له، وبيانات الفردي وحدها لمن له سياق مدرسة (لا تُمس أنشطة مدرسته)
+async function secWipeSolo(db, uid, u) {
+  const counts = {};
+  const dual = Object.keys(u.schools || {}).length > 0;
+  await db.collection("schoolData").doc("roster_solo_" + uid).delete().catch(() => {});
+  await db.collection("rosterIndex").doc("solo_" + uid).delete().catch(() => {});
+  const delDocs = async (docs) => {
+    for (let i = 0; i < docs.length; i += 400) {
+      const b = db.batch();
+      docs.slice(i, i + 400).forEach((x) => b.delete(x.ref));
+      await b.commit();
+    }
+    return docs.length;
+  };
+  if (!dual) {
+    for (const [c, f] of [["results", "userId"], ["exams", "userId"], ["studentNotes", "fromUserId"], ["attendance", "markedBy"],
+      ["worksheets", "createdBy"], ["questionBank", "createdBy"], ["submissions", "teacherUid"], ["pushTokens", "authUid"]]) {
+      counts[c] = await delAllWhere(db, c, f, uid);
+    }
+    await db.collection("users").doc(uid).delete();
+    try { await admin.auth().deleteUser(uid); } catch (e) { if (!e || e.code !== "auth/user-not-found") console.error("wipeSolo deleteUser", e); }
+    counts.user = 1;
+    return counts;
+  }
+  const ws = (await db.collection("worksheets").where("createdBy", "==", uid).get()).docs.filter((x) => !x.data().schoolId);
+  const wsIds = new Set(ws.map((x) => x.id));
+  const subs = (await db.collection("submissions").where("teacherUid", "==", uid).get()).docs.filter((x) => wsIds.has(x.data().worksheetId));
+  const sn = (await db.collection("studentNotes").where("fromUserId", "==", uid).get()).docs.filter((x) => x.data().schoolId === "solo_" + uid);
+  counts.submissions = await delDocs(subs);
+  counts.worksheets = await delDocs(ws);
+  counts.studentNotes = await delDocs(sn);
+  await db.collection("users").doc(uid).update({ solo: secFV.delete(), isSolo: secFV.delete(), updatedAt: Date.now() });
+  counts.soloContext = 1;
+  return counts;
+}
+
+exports.cleanupExpiredSolo = onSchedule({ schedule: "30 3 * * *", timeZone: "Asia/Riyadh", timeoutSeconds: 540 }, async () => {
+  const db = secDb();
+  const cfg = await db.collection("systemCounters").doc("soloCleanup").get();
+  const live = !!(cfg.exists && cfg.data().live === true);
+  const now = Date.now();
+  const cutoff = now - SEC_SOLO_KEEP_DAYS * SEC_DAY_MS;
+  const qs = await db.collection("users").where(new admin.firestore.FieldPath("solo", "subscriptionEnds"), "<", cutoff).limit(50).get();
+  const cands = [];
+  for (const d of qs.docs) {
+    const u = d.data();
+    if (u.role === "admin" || u.role === "schoolAdmin" || !u.solo || !u.solo.subscriptionEnds || u.migratedTo) continue;
+    const entry = { uid: d.id, username: u.username || "", email: u.email || "", endedAt: u.solo.subscriptionEnds, hasSchools: Object.keys(u.schools || {}).length > 0 };
+    if (live) {
+      try { entry.counts = await secWipeSolo(db, d.id, u); } catch (e) { entry.error = String(e && e.message || e); console.error("cleanupExpiredSolo", d.id, e); }
+    }
+    cands.push(entry);
+  }
+  const day = new Date(now + 3 * 3600e3).toISOString().slice(0, 10);
+  await db.collection("soloCleanupLog").doc(day).set({ at: now, live, candidates: cands });
+  console.log("cleanupExpiredSolo: live=" + live + " candidates=" + cands.length);
 });

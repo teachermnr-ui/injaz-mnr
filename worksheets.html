@@ -414,7 +414,7 @@ if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return P
     const currentTeacher = { uid: CLS_SESSION.userId, name: CLS_SESSION.username, schoolId: CLS_SESSION.schoolId };
     /* ===== ص-١: الأنشطة ملك المعلم وتنتقل معه =====
        المكتبة (المسودات وبنك الأسئلة) تظهر في أي سياق يدخله المعلم (مدرسة أو حساب فردي).
-       النشر (الفصول والتسليمات والدرجات) مرتبط بالسياق الحالي وفترته فقط. */
+       النشر (الفصول والتسليمات والدرجات) مرتبط بالسياق الحالي وفصله فقط. */
     const CUR_PERIOD = (CLS_SESSION && CLS_SESSION.period) || "first";
     function wsInCurrentCtx(w) {
       return ((w.schoolId || null) === (currentTeacher.schoolId || null)) && ((w.period || "first") === CUR_PERIOD);
@@ -1439,7 +1439,7 @@ if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return P
           activityTarget,
           dueDate: dueDateVal || null,
           publishedAt: serverTimestamp(),
-          // ص-١: النشر يرتبط بالسياق الحالي وفترته (المسودة قد تكون أُنشئت في سياق آخر)
+          // ص-١: النشر يرتبط بالسياق الحالي وفصله (المسودة قد تكون أُنشئت في سياق آخر)
           schoolId: currentTeacher.schoolId || null,
           period: CUR_PERIOD
         });
@@ -1772,7 +1772,7 @@ if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return P
       const q = query(collection(db, "worksheets"),
         where("createdBy", "==", currentTeacher.uid), where("status", "==", "published"));
       const snapAll = await getDocs(q);
-      // ص-١: المنشورة هنا = منشورة في هذا السياق وهذه الفترة؛ غيرها يُعرض للنسخ فقط
+      // ص-١: المنشورة هنا = منشورة في هذا السياق وهذا الفصل الدراسي؛ غيرها يُعرض للنسخ فقط
       const hereDocs = snapAll.docs.filter((d) => wsInCurrentCtx(d.data()));
       const otherDocs = snapAll.docs.filter((d) => !wsInCurrentCtx(d.data()));
       const snap = { docs: hereDocs, empty: !hereDocs.length };
@@ -1780,15 +1780,15 @@ if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return P
       listEl.innerHTML = "";
       let otherBox = null;
       if (snap.empty) {
-        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">لا توجد أوراق منشورة في ${currentTeacher.schoolId ? "هذه المدرسة" : "حسابك الفردي"} خلال ${CUR_PERIOD === "second" ? "الفترة الثانية" : "الفترة الأولى"}.</p>`;
+        listEl.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">لا توجد أوراق منشورة في ${currentTeacher.schoolId ? "هذه المدرسة" : "حسابك الفردي"} خلال ${CUR_PERIOD === "second" ? "الفصل الثاني" : "الفصل الأول"}.</p>`;
       }
       if (otherDocs.length) {
         const box = document.createElement("div");
         box.style.cssText = "margin-top:14px;padding:10px;background:var(--paper);border-radius:10px;";
-        box.innerHTML = `<p style="margin:0 0 6px;font-weight:700;font-size:13px;">أنشطة منشورة في سياق أو فترة أخرى (${otherDocs.length})</p>
+        box.innerHTML = `<p style="margin:0 0 6px;font-weight:700;font-size:13px;">أنشطة منشورة في سياق أو فصل دراسي آخر (${otherDocs.length})</p>
           <p style="margin:0 0 8px;font-size:12px;color:var(--ink-soft);">تسليماتها ودرجاتها تبقى في سياقها. يمكنك نسخ محتواها كمسودة جديدة هنا.</p>` +
           otherDocs.map((d) => { const w = d.data(); return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);">
-            <span style="font-size:13px;">${escapeHtml(w.title || "")} <span style="color:var(--ink-soft);font-size:11px;">${w.schoolId ? "مدرسة" : "حساب فردي"} — ${(w.period || "first") === "second" ? "الفترة الثانية" : "الفترة الأولى"}</span></span>
+            <span style="font-size:13px;">${escapeHtml(w.title || "")} <span style="color:var(--ink-soft);font-size:11px;">${w.schoolId ? "مدرسة" : "حساب فردي"} — ${(w.period || "first") === "second" ? "الفصل الثاني" : "الفصل الأول"}</span></span>
             <button class="btn btn-secondary small-btn" data-copy-here="${d.id}">نسخ كمسودة هنا</button></div>`; }).join("");
         box.querySelectorAll("[data-copy-here]").forEach((btn) => btn.addEventListener("click", async () => {
           const src = otherDocs.find((x) => x.id === btn.dataset.copyHere).data();

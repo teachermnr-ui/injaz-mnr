@@ -91,7 +91,7 @@ table.v tbody tr:hover{background:var(--bg-e6f3f1,#e6f3f1)}
    أداة من «أدوات إدارية»: مدير المدرسة والوكيل (بالدور)، أو من فُوِّض ببند «الزيارات الصفية» من «الصلاحيات الخاصة».
    خصوصية كالتعاميم: لا صلاحية لأدمن النظام ولا للحساب الفردي.
    المعلم لا يدخل هذه الصفحة؛ يصله موعد زيارته في «لوحتي ← زياراتي».
-   البيانات: classVisits — مستند لكل معلم/فترة ({sid}_{period}_{teacherId}) ومستند إعدادات (settings_{sid}: أسماء التوقيع).
+   البيانات: classVisits — مستند لكل معلم/فصل دراسي ({sid}_{period}_{teacherId}) ومستند إعدادات (settings_{sid}: أسماء التوقيع).
    ========================================================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyCEW-BTrfkqLUFXj7drtts7GkN6PXpbV4A",
@@ -108,7 +108,7 @@ const FORM_META = { no:'(٤٩)', name:'خطة الزيارات الصفية لم
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const arN = n=>String(n).replace(/\d/g, d=>'٠١٢٣٤٥٦٧٨٩'[d]);
-const periodLabel = p=> p==='second'?'الفترة الثانية':'الفترة الأولى';
+const periodLabel = p=> p==='second'?'الفصل الثاني':'الفصل الأول';
 function toast(m){ const t=document.createElement('div'); t.className='toast'; t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
 function fatal(msg){
   $('#bootView').innerHTML = `<div class="card" style="max-width:460px;text-align:center"><h3>${esc(msg)}</h3>

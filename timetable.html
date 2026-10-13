@@ -255,9 +255,9 @@ table.tt td.nm.nm-sel{background:var(--bg-cfe3ff,#cfe3ff);box-shadow:inset 0 0 0
   <div class="topbar">
     <h1>🗓️ بناء الجدول المدرسي</h1>
     <span class="tb-badge" id="tbSchool">—</span>
-    <select class="tb-sel" id="tbPeriod" title="الفترة (الفصل الدراسي)">
-      <option value="first">الفترة الأولى</option>
-      <option value="second">الفترة الثانية</option>
+    <select class="tb-sel" id="tbPeriod" title="الفصل الدراسي">
+      <option value="first">الفصل الأول</option>
+      <option value="second">الفصل الثاني</option>
     </select>
     <span class="tb-badge" id="tbMode"></span>
     <span class="tb-spacer"></span>
@@ -296,7 +296,7 @@ table.tt td.nm.nm-sel{background:var(--bg-cfe3ff,#cfe3ff);box-shadow:inset 0 0 0
 /* =========================================================================
    بناء الجدول المدرسي — الأدوات الإدارية
    البيانات في مجموعة مستقلة: timetables/{sid}/data/{docId}
-     teachers                  سجل المعلمين (مشترك للفترتين)
+     teachers                  سجل المعلمين (مشترك للفصلين)
      meta                      معلومات النشر
      {period}_config           المراحل والإعدادات الزمنية والخطط
      {period}_assign           الإسناد (فصل ← مادة ← معلم)
@@ -323,7 +323,7 @@ const STAGE_BY_KEY = Object.fromEntries(STAGES.map(s=>[s.key,s]));
 const STAGE_BY_NAME = Object.fromEntries(STAGES.map(s=>[s.name,s]));
 const TRACKS = ['مشترك','عام','علوم الحاسب والهندسة','الصحة والحياة','إدارة الأعمال','الشرعي'];
 const WEEKDAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
-const PERIOD_LABEL = { first:'الفترة الأولى', second:'الفترة الثانية' };
+const PERIOD_LABEL = { first:'الفصل الأول', second:'الفصل الثاني' };
 const TIMING_LABEL = { any:'جميع الحصص', early:'حصص أولية', late:'حصص متأخرة' };
 const CONSEC_LABEL = { no:'ممنوع', allow:'مسموح', require:'مطلوب (مزدوجة)' };
 // القائمة الثابتة لمواد النظام (مطابقة لـ omr.html) + مقترحات شائعة للابتدائي والمتوسط
@@ -405,7 +405,7 @@ async function loadDoc(id){
   TT.docs[id] = { rev: d.rev||0, data };
   return TT.docs[id];
 }
-async function loadDocFresh(id){ // قراءة لا تغيّر النسخة المحلية (للقراءة من فترة أخرى)
+async function loadDocFresh(id){ // قراءة لا تغيّر النسخة المحلية (للقراءة من فصل دراسي آخر)
   const snap = await ttCol().doc(id).get();
   if(!snap.exists) return { rev:0, data:null };
   const d = snap.data(); let data=null; try{ data=JSON.parse(d.value||'null'); }catch(e){}
@@ -424,7 +424,7 @@ async function saveDocNow(id){
   });
   local.rev = local.rev + 1;
 }
-// كتابة مباشرة على مستند (للتصدير لفترة أخرى): تتحقق من النسخة المقروءة سابقًا
+// كتابة مباشرة على مستند (للتصدير لفصل دراسي آخر): تتحقق من النسخة المقروءة سابقًا
 async function saveDocExternal(id, data, expectedRev){
   const ref = ttCol().doc(id);
   let newRev = 0;
@@ -618,7 +618,7 @@ function defaultStageCfg(enabled){
 async function reloadPeriod(p){
   if(pendingSaves.size){ await flushSaves(); }
   TT.period = p;
-  // وثائق الفترة السابقة تُزال من الذاكرة
+  // وثائق الفصل الدراسي السابق تُزال من الذاكرة
   Object.keys(TT.docs).forEach(id=>{ if(id!=='teachers' && id!=='meta') delete TT.docs[id]; });
   $('#mainBody').innerHTML = '<div class="empty"><span class="spin"></span></div>';
   await loadAll();
@@ -642,7 +642,7 @@ function initChrome(){
   $$('#sideNav button[data-sec]').forEach(b=>b.onclick=()=>show(b.dataset.sec));
   if(TT.waitOnly){ $$('#sideNav button[data-sec]').forEach(b=>{ if(b.dataset.sec!=='waiting') b.classList.add('hidden'); }); TT.sec = 'waiting'; $('#tbMode').textContent = 'حصص الانتظار'; }
   try{ const q = new URLSearchParams(location.search).get('sec'); if(q==='waiting') TT.sec = 'waiting'; }catch(e){}
-  $('#sideNote').innerHTML = 'كل فترة مستقلة بموادها وإسنادها وجدولها. سجل المعلمين مشترك بين الفترتين.';
+  $('#sideNote').innerHTML = 'كل فصل دراسي مستقل بموادها وإسنادها وجدولها. سجل المعلمين مشترك بين الفصلين.';
 }
 const SECTIONS = {};
 function show(sec){
@@ -757,7 +757,7 @@ function breakAfterIdx(sk){
 function teachers(){ return D(docIds.teachers()).teachers; }
 function teacherById(id){ return teachers().find(t=>t.id===id); }
 function teacherName(id){ const t=teacherById(id); return t ? t.name : '—'; }
-// المراحل الفعلية للمعلم في الفترة الحالية (قد يقيّدها التصدير: «مع هذه المرحلة فقط»)
+// المراحل الفعلية للمعلم في الفصل الدراسي الحالي (قد يقيّدها التصدير: «مع هذه المرحلة فقط»)
 function teacherStagesNow(t){
   const ov = cfg().teacherStages[t.id];
   return Array.isArray(ov) ? t.stages.filter(s=>ov.includes(s)) : (t.stages||[]);
@@ -772,7 +772,7 @@ function setAssigned(code, subjId, tid){
   markDirty(docIds.assign());
   invalidateStage(classStageKey(classByCode(code)));
 }
-// نصاب المعلم الفعلي في الفترة الحالية لكل مرحلة
+// نصاب المعلم الفعلي في الفصل الدراسي الحالي لكل مرحلة
 function teacherLoads(){
   const loads = {};   // tid -> { total, p, m, h }
   STAGES.forEach(s=>{
@@ -966,7 +966,7 @@ function findOrphanCodes(){
 }
 function openRemap(orphans){
   const opts = TT.roster.classes.map(c=>`<option value="${esc(c.code)}">${esc(c.name)} — ${esc(c.code)}</option>`).join('');
-  modal(`<h2>ربط الرموز القديمة</h2><div class="sub">اختر الفصل الحالي المقابل لكل رمز قديم (في الفترة الحالية).</div>
+  modal(`<h2>ربط الرموز القديمة</h2><div class="sub">اختر الفصل الحالي المقابل لكل رمز قديم (في الفصل الدراسي الحالي).</div>
     <table class="tbl" style="margin-top:10px"><tr><th>الرمز القديم</th><th>الفصل الحالي</th></tr>
     ${orphans.map(o=>`<tr><td>${esc(o)}</td><td><select class="sm" data-old="${esc(o)}"><option value="">— تجاهل —</option>${opts}</select></td></tr>`).join('')}</table>
     <div class="modal-actions"><button class="btn" id="remapOk">تطبيق</button><button class="btn sec" onclick="closeModal()">إلغاء</button></div>`);
@@ -988,7 +988,7 @@ function openRemap(orphans){
 }
 
 /* =========================================================================
-   ٣) المعلمون — سجل مشترك بين الفترتين
+   ٣) المعلمون — سجل مشترك بين الفصلين
    ========================================================================= */
 SECTIONS.teachers = function(main){
   const loads = teacherLoads();
@@ -999,14 +999,14 @@ SECTIONS.teachers = function(main){
     <button class="btn sm sec" id="tFromXlsx">استيراد Excel</button>
     <button class="btn sm sec" id="tTpl">تنزيل قالب Excel</button>
     <input type="file" id="tXlsxFile" accept=".xlsx,.xls,.csv" class="hidden">`:''}</div>
-    <div class="sub" style="margin-bottom:10px">سجل المعلمين مشترك بين الفترتين. النصاب الفعلي يُحسب من الإسناد في ${esc(PERIOD_LABEL[TT.period])}. المعلم المشترك هو من يدرّس أكثر من مرحلة.</div>
+    <div class="sub" style="margin-bottom:10px">سجل المعلمين مشترك بين الفصلين. النصاب الفعلي يُحسب من الإسناد في ${esc(PERIOD_LABEL[TT.period])}. المعلم المشترك هو من يدرّس أكثر من مرحلة.</div>
     ${list.length ? `<div class="card" style="padding:0;overflow:auto"><table class="tbl">
       <tr><th>م</th><th>الاسم</th><th>الهوية</th><th>المراحل</th><th>النصاب النظامي</th><th>النصاب الفعلي</th><th>عدم التوفر</th><th>الحساب</th>${TT.canEdit?'<th></th>':''}</tr>
       ${list.map((t,i)=>{ const L=(loads[t.id]||{}).total||0; const over = L > (+t.quota||0);
         const un = Object.values(t.unavail||{}).reduce((a,arr)=>a+(arr||[]).length,0);
         const ts = teacherStagesNow(t);
         return `<tr><td>${ar(i+1)}</td><td class="r"><b>${esc(t.name)}</b></td><td>${esc(t.nid||'—')}</td>
-        <td>${(t.stages||[]).map(k=>`<span class="chip ${ts.includes(k)?'':'warn'}" title="${ts.includes(k)?'':'مستبعد في هذه الفترة'}">${esc(STAGE_BY_KEY[k].name)}</span>`).join(' ')}${(t.stages||[]).length>1?' <span class="chip info">مشترك</span>':''}</td>
+        <td>${(t.stages||[]).map(k=>`<span class="chip ${ts.includes(k)?'':'warn'}" title="${ts.includes(k)?'':'مستبعد في هذا الفصل الدراسي'}">${esc(STAGE_BY_KEY[k].name)}</span>`).join(' ')}${(t.stages||[]).length>1?' <span class="chip info">مشترك</span>':''}</td>
         <td>${ar(+t.quota||0)}</td><td><span class="chip ${over?'err':(L?'ok':'')}">${ar(L)}</span></td>
         <td>${un?`<span class="chip warn">${ar(un)} حصة</span>`:'—'}</td>
         <td>${t.nid ? (TT.userIndex && TT.userIndex.byNid[t.nid] ? '<span class="chip ok">مرتبط</span>' : '<span class="chip">غير مرتبط</span>') : '<span class="chip warn">بلا هوية</span>'}</td>
@@ -1071,7 +1071,7 @@ function openTeacher(id){
       Object.keys(t.unavail).forEach(k=>{ if(!t.stages.includes(k)) delete t.unavail[k]; });
       const arr = teachers(); const i = arr.findIndex(x=>x.id===t.id);
       if(i>=0) arr[i]=t; else arr.push(t);
-      // مرحلة أُزيلت من معلم: يُلغى إسناده فيها بالفترة الحالية
+      // مرحلة أُزيلت من معلم: يُلغى إسناده فيها بالفصل الدراسي الحالي
       if(i>=0) clearAssignOutsideStages(t);
       markDirty(docIds.teachers()); STAGE_STATE_CACHE.clear();
       closeModal(); show('teachers');
@@ -1120,7 +1120,7 @@ function clearAssignOutsideStages(t){
 async function deleteTeacher(id){
   const t = teacherById(id); if(!t) return;
   const L = (teacherLoads()[id]||{}).total||0;
-  const ok = await confirmBox('حذف معلم', `سيُحذف «${esc(t.name)}» من سجل المعلمين.${L?`\nإسناده في ${PERIOD_LABEL[TT.period]} (${ar(L)} حصة) سيتحول إلى عجز.`:''}\nفي الفترة الأخرى تتحول حصصه إلى عجز عند فتحها.`, 'حذف', true);
+  const ok = await confirmBox('حذف معلم', `سيُحذف «${esc(t.name)}» من سجل المعلمين.${L?`\nإسناده في ${PERIOD_LABEL[TT.period]} (${ar(L)} حصة) سيتحول إلى عجز.`:''}\nفي الفصل الدراسي الآخر تتحول حصصه إلى عجز عند فتحها.`, 'حذف', true);
   if(!ok) return;
   const arr = teachers(); arr.splice(arr.findIndex(x=>x.id===id),1);
   const am = amap(); Object.keys(am).forEach(code=>Object.keys(am[code]).forEach(sb=>{ if(am[code][sb]===id) delete am[code][sb]; }));
@@ -1210,7 +1210,7 @@ function allSubjectNames(){
 }
 
 /* =========================================================================
-   ٤) الخطة الدراسية (لكل فترة، لكل صف، ولكل مسار في الثانوي)
+   ٤) الخطة الدراسية (لكل فصل دراسي، لكل صف، ولكل مسار في الثانوي)
    ========================================================================= */
 SECTIONS.plan = function(main){
   const st = stageTabs(TT.ui.planStage);
@@ -1222,7 +1222,7 @@ SECTIONS.plan = function(main){
   const sk = st.sk, pks = stagePlanKeys(sk);
   const body = $('#planBody');
   if(!pks.length){ body.innerHTML = '<div class="card empty">لا توجد فصول لهذه المرحلة في الروستر.</div>'; return; }
-  body.innerHTML = `<div class="sub" style="margin-bottom:10px">المواد تنطبق على جميع شعب الصف${sk==='h'?' والمسار':''}. رمز المادة يميّزها (مثل ١-١ في الفترة الأولى و١-٢ في الثانية) ولا يظهر في إسناد المعلم.</div>`
+  body.innerHTML = `<div class="sub" style="margin-bottom:10px">المواد تنطبق على جميع شعب الصف${sk==='h'?' والمسار':''}. رمز المادة يميّزها (مثل ١-١ في الفصل الأول و١-٢ في الثانية) ولا يظهر في إسناد المعلم.</div>`
     + pks.map(pk=>`<div class="card" id="pc_${cssId(pk)}"></div>`).join('');
   pks.forEach(pk=>renderPlanCard(sk, pk));
 };
@@ -1268,7 +1268,7 @@ function renderPlanCard(sk, pk){
       <tr><th style="width:80px">الرمز</th><th>المادة</th><th style="width:90px">الحصص أسبوعيًا</th><th style="width:130px">وقت المادة</th><th>أيام مفضلة للوقت</th><th style="width:140px">الحصص المتتالية</th>${TT.canEdit?'<th style="width:40px"></th>':''}</tr>
       ${plan.map((s,i)=>`<tr>
         <td><input class="sm" style="width:70px;text-align:center" data-i="${i}" data-f="code" value="${esc(s.code||'')}" ${ro()}>${codes[s.code]>1?'<div style="color:var(--danger);font-size:11px">مكرر</div>':''}</td>
-        <td class="r"><input class="sm" style="width:100%" list="subjList" data-i="${i}" data-f="name" value="${esc(s.name)}" ${ro()}>${names[s.name]>1?'<div style="color:var(--danger);font-size:11px">مادة مكررة في نفس الفترة</div>':''}</td>
+        <td class="r"><input class="sm" style="width:100%" list="subjList" data-i="${i}" data-f="name" value="${esc(s.name)}" ${ro()}>${names[s.name]>1?'<div style="color:var(--danger);font-size:11px">مادة مكررة في نفس الفصل الدراسي</div>':''}</td>
         <td><input class="sm num" type="number" min="0" max="15" data-i="${i}" data-f="weekly" value="${+s.weekly||0}" ${ro()}></td>
         <td><select class="sm" data-i="${i}" data-f="timing" ${ro()}>${Object.entries(TIMING_LABEL).map(([k,v])=>`<option value="${k}" ${s.timing===k?'selected':''}>${v}</option>`).join('')}</select></td>
         <td>${s.timing==='any' ? '<span class="sub">—</span>' : `<div class="day-chips" style="justify-content:center">${sc.days.map(w=>`<label class="${(s.prefDays||[]).includes(w)?'on':''}" style="padding:3px 7px"><input type="checkbox" data-i="${i}" data-f="pref" data-w="${w}" ${(s.prefDays||[]).includes(w)?'checked':''} ${ro()}>${WEEKDAYS[w]}</label>`).join('')}</div>`}</td>
@@ -1588,7 +1588,7 @@ const VTYPE_LABEL = { daily:'تجاوز الحد اليومي', emptyDay:'يوم
 TT.sel = null;       // { sk, unitId, options }
 TT.preview = null;   // { sk, moves, st }
 SECTIONS.table = function(main){
-  // ص-١٣: شاشة البداية عند بدء جدول الفترة (لا طريقة محددة ولا مسودة)، أو عند «تغيير طريقة البناء»
+  // ص-١٣: شاشة البداية عند بدء جدول الفصل الدراسي (لا طريقة محددة ولا مسودة)، أو عند «تغيير طريقة البناء»
   if(TT.canEdit && ((!buildMode() && !hasAnyDraft()) || TT._forceStart)){ TT._forceStart = false; impStartScreen(main); return; }
   const st = stageTabs(TT.ui.tableStage);
   TT.ui.tableStage = st.sk;
@@ -2239,7 +2239,7 @@ function printMaster(sk, S){
 }
 
 /* =========================================================================
-   ٨) التصدير للفترة الثانية + نشر الإسناد
+   ٨) التصدير للفصل الثاني + نشر الإسناد
    ========================================================================= */
 SECTIONS.export = function(main){
   const meta = D(docIds.meta());
@@ -2251,7 +2251,7 @@ SECTIONS.export = function(main){
   const pc = $('#pubCard');
   pc.innerHTML = `<div class="card-head"><h3>نشر الإسناد إلى حسابات المعلمين — ${esc(PERIOD_LABEL[TT.period])}</h3>
       ${pub?`<span class="chip ok">آخر نشر: ${new Date(pub.at).toLocaleString('ar-SA')}</span>`:'<span class="chip">لم يُنشر بعد</span>'}</div>
-    <div class="sub" style="margin:8px 0">يُكتب إسناد هذه الفترة في صلاحيات كل معلم مرتبط بحساب (بمطابقة رقم الهوية)، فتظهر له فصوله وموادها في «إدارة الصف» عند دخوله على هذه الفترة.
+    <div class="sub" style="margin:8px 0">يُكتب إسناد هذا الفصل الدراسي في صلاحيات كل معلم مرتبط بحساب (بمطابقة رقم الهوية)، فتظهر له فصوله وموادها في «إدارة الصف» عند دخوله على هذا الفصل الدراسي.
       بعد النشر يصبح «إسناد المواد» اليدوي في «إدارة الصف» للاطلاع فقط لهؤلاء المعلمين. المعلم غير المرتبط يُنشر إسناده عند تفعيل حسابه وإعادة النشر.</div>
     ${TT.canPublish ? '<button class="btn" id="pubBtn">معاينة ونشر الإسناد</button>' : '<div class="alert info">النشر متاح لأدمن النظام ومدير المدرسة فقط.</div>'}`;
   if($('#pubBtn')) $('#pubBtn').onclick = openPublish;
@@ -2262,18 +2262,18 @@ TT.exp = { stages:{}, actions:{} };   // actions[tid] = { mode:'keep'|'sub'|'sha
 function renderExportCard(){
   const el = $('#expCard'); if(!el) return;
   if(TT.period!=='first'){
-    el.innerHTML = `<h3>تصدير الجدول إلى الفترة الثانية</h3><div class="sub">التصدير يتم من الفترة الأولى. بدّل الفترة من أعلى الصفحة.</div>`; return;
+    el.innerHTML = `<h3>تصدير الجدول إلى الفصل الثاني</h3><div class="sub">التصدير يتم من الفصل الأول. بدّل الفصل الدراسي من أعلى الصفحة.</div>`; return;
   }
   const exportable = enabledStages().filter(s=>s.key!=='h');
   const selected = exportable.filter(s=>TT.exp.stages[s.key]);
-  el.innerHTML = `<h3>تصدير الجدول إلى الفترة الثانية</h3>
+  el.innerHTML = `<h3>تصدير الجدول إلى الفصل الثاني</h3>
     <div class="sub" style="margin-bottom:10px">للمراحل الثابتة المواد طوال العام: تُنسخ الإعدادات والخطة والإسناد والجدول (المعتمد، أو المسودة إن لم يُعتمد) كما هي، مع إمكانية استبدال المعلمين.
-      المرحلة الثانوية تحتاج إعدادًا جديدًا يبدأ من المواد، ولا تُصدَّر. <b>الترتيب الصحيح:</b> صدّر المراحل الثابتة أولًا، ثم ولّد جدول الثانوي في الفترة الثانية حولها.</div>
+      المرحلة الثانوية تحتاج إعدادًا جديدًا يبدأ من المواد، ولا تُصدَّر. <b>الترتيب الصحيح:</b> صدّر المراحل الثابتة أولًا، ثم ولّد جدول الثانوي في الفصل الثاني حولها.</div>
     ${!TT.canEdit ? '<div class="alert info">التصدير يحتاج صلاحية التعديل.</div>' : `
     <div class="day-chips" style="margin-bottom:12px">${exportable.map(s=>`<label class="${TT.exp.stages[s.key]?'on':''}"><input type="checkbox" data-expst="${s.key}" ${TT.exp.stages[s.key]?'checked':''}>${esc(s.label)}</label>`).join('')}
       <label style="opacity:.55;cursor:not-allowed"><input type="checkbox" disabled>المرحلة الثانوية (إعداد جديد)</label></div>
     <div id="expTeachers"></div>
-    <button class="btn" id="expGo" ${selected.length?'':'disabled'}>تصدير إلى الفترة الثانية</button>`}`;
+    <button class="btn" id="expGo" ${selected.length?'':'disabled'}>تصدير إلى الفصل الثاني</button>`}`;
   if(!TT.canEdit) return;
   $$('[data-expst]').forEach(cb=>cb.onchange=()=>{ TT.exp.stages[cb.dataset.expst]=cb.checked; renderExportCard(); });
   if(selected.length) renderExportTeachers(selected.map(s=>s.key));
@@ -2290,13 +2290,13 @@ function renderExportTeachers(sks){
   if(!list.length){ host.innerHTML = '<div class="sub" style="margin-bottom:10px">لا يوجد معلمون مسندون في المراحل المختارة.</div>'; return; }
   const cand = sk=>teachers().filter(t=>(t.stages||[]).some(s=>sks.includes(s))).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
   const candOpts = (tid, cur)=>cand().filter(t=>t.id!==tid).map(t=>`<option value="${t.id}" ${cur===t.id?'selected':''}>${esc(t.name)}</option>`).join('');
-  host.innerHTML = `<table class="tbl" style="margin-bottom:12px"><tr><th>المعلم</th><th>المراحل</th><th>الإجراء في الفترة الثانية</th></tr>
+  host.innerHTML = `<table class="tbl" style="margin-bottom:12px"><tr><th>المعلم</th><th>المراحل</th><th>الإجراء في الفصل الثاني</th></tr>
     ${list.map(t=>{
       const shared = (t.stages||[]).some(s=>!sks.includes(s));
       const a = TT.exp.actions[t.id] = TT.exp.actions[t.id] || { mode: shared?'shared':'keep', to:'' };
       const stages = (t.stages||[]).map(k=>STAGE_BY_KEY[k].name).join('، ');
       const opts = shared
-        ? [['shared','يُصدَّر كمشترك (حصصه هنا ثابتة، ويُولَّد جدول مرحلته الأخرى حولها)'],['only','يُصدَّر مع هذه المرحلة فقط (يُستبعد من المرحلة الأخرى في الفترة الثانية)'],['cancel','يُلغى من هذه المرحلة ويحل محله معلم آخر']]
+        ? [['shared','يُصدَّر كمشترك (حصصه هنا ثابتة، ويُولَّد جدول مرحلته الأخرى حولها)'],['only','يُصدَّر مع هذه المرحلة فقط (يُستبعد من المرحلة الأخرى في الفصل الثاني)'],['cancel','يُلغى من هذه المرحلة ويحل محله معلم آخر']]
         : [['keep','يبقى كما هو'],['sub','يُستبدل بمعلم آخر']];
       return `<tr><td class="r"><b>${esc(t.name)}</b>${shared?' <span class="chip info">مشترك</span>':''}</td><td>${esc(stages)}</td>
         <td class="r"><select class="sm" data-exa="${t.id}">${opts.map(([v,l])=>`<option value="${v}" ${a.mode===v?'selected':''}>${l}</option>`).join('')}</select>
@@ -2331,7 +2331,7 @@ async function runExport(sks){
   const tgt = 'second';
   const [tc, ta, ...tt] = await Promise.all([ loadDocFresh(docIds.config(tgt)), loadDocFresh(docIds.assign(tgt)), ...sks.map(sk=>loadDocFresh(docIds.table(sk,'draft',tgt))) ]);
   const hasExisting = sks.some((sk,i)=>(tt[i].data && (tt[i].data.lessons||[]).length)) || sks.some(sk=>stagePlanKeys(sk).some(pk=>tc.data && tc.data.plans && (tc.data.plans[pk]||[]).length));
-  if(hasExisting && !(await confirmBox('بيانات موجودة في الفترة الثانية', 'للمراحل المختارة إعدادات أو خطط أو جداول في الفترة الثانية. التصدير سيستبدلها.', 'استبدال', true))) return;
+  if(hasExisting && !(await confirmBox('بيانات موجودة في الفصل الثاني', 'للمراحل المختارة إعدادات أو خطط أو جداول في الفصل الثاني. التصدير سيستبدلها.', 'استبدال', true))) return;
   const mapT = tid=> tid ? (sub[tid] || tid) : tid;
   // الإعدادات والخطط (بنفس معرّفات المواد حتى تبقى الحصص مطابقة)
   const cfgT = tc.data || { stages:{}, plans:{}, teacherStages:{} };
@@ -2379,14 +2379,14 @@ async function runExport(sks){
     await saveDocExternal(docIds.assign(tgt), asgT, ta.rev);
     for(let i=0;i<tblOut.length;i++) await saveDocExternal(docIds.table(tblOut[i].sk,'draft',tgt), tblOut[i].data, tt[i].rev);
   }catch(e){
-    if(e instanceof ConflictError){ toast('عُدِّلت بيانات الفترة الثانية أثناء التصدير — أعد المحاولة'); return; }
+    if(e instanceof ConflictError){ toast('عُدِّلت بيانات الفصل الثاني أثناء التصدير — أعد المحاولة'); return; }
     toast('تعذّر التصدير: '+e.message); return;
   }
-  modal(`<h2>✔ تم التصدير إلى الفترة الثانية</h2>
+  modal(`<h2>✔ تم التصدير إلى الفصل الثاني</h2>
     <div>صُدِّرت: ${sks.map(sk=>esc(STAGE_BY_KEY[sk].label)).join('، ')} (الإعدادات، الخطة، الإسناد، والجدول كمسودة).</div>
-    ${conflicts.length ? `<div class="alert warn" style="margin-top:10px"><b>تعارضات بسبب الاستبدال (${ar(conflicts.length)}):</b> ستُنقل الحصص المتعارضة إلى «غير موزعة» عند فتح الفترة الثانية، وتُحل بالتبديل أو بإعادة التوليد مع التثبيت.<ul class="viol-list">${conflicts.slice(0,40).map(c=>`<li>${esc(c)}</li>`).join('')}</ul></div>` : '<div class="alert ok" style="margin-top:10px">لا تعارضات متوقعة.</div>'}
-    <div class="sub">راجع الجدول في الفترة الثانية ثم اعتمده. بعدها ولّد جدول الثانوي حوله.</div>
-    <div class="modal-actions"><button class="btn" id="goSecond">الانتقال إلى الفترة الثانية</button><button class="btn sec" onclick="closeModal()">البقاء هنا</button></div>`);
+    ${conflicts.length ? `<div class="alert warn" style="margin-top:10px"><b>تعارضات بسبب الاستبدال (${ar(conflicts.length)}):</b> ستُنقل الحصص المتعارضة إلى «غير موزعة» عند فتح الفصل الثاني، وتُحل بالتبديل أو بإعادة التوليد مع التثبيت.<ul class="viol-list">${conflicts.slice(0,40).map(c=>`<li>${esc(c)}</li>`).join('')}</ul></div>` : '<div class="alert ok" style="margin-top:10px">لا تعارضات متوقعة.</div>'}
+    <div class="sub">راجع الجدول في الفصل الثاني ثم اعتمده. بعدها ولّد جدول الثانوي حوله.</div>
+    <div class="modal-actions"><button class="btn" id="goSecond">الانتقال إلى الفصل الثاني</button><button class="btn sec" onclick="closeModal()">البقاء هنا</button></div>`);
   $('#goSecond').onclick = ()=>{ closeModal(); $('#tbPeriod').value='second'; reloadPeriod('second'); };
 }
 
@@ -2464,7 +2464,7 @@ async function openPublish(){
       added: list.filter(a=>!curK.has(aKey(a))).length, removed: cur.filter(a=>!newK.has(aKey(a))).length });
     if(status==='linked') seenUsers.add(u.id);
   });
-  // مستخدمون نُشر لهم سابقًا ولم يعد لهم إسناد في هذه الفترة
+  // مستخدمون نُشر لهم سابقًا ولم يعد لهم إسناد في هذا الفصل الدراسي
   idx.list.forEach(u=>{
     if(seenUsers.has(u.id) || u.pending || !u.ctx || !u.ctx.subjectAssignmentsByPeriod) return;
     const cur = u.ctx.subjectAssignmentsByPeriod[P] || [];
@@ -2475,7 +2475,7 @@ async function openPublish(){
   const newSubjects = [...new Set(rows.flatMap(r=>r.list.map(a=>a.subject)))].filter(n=>!SYSTEM_FIXED_SUBJECTS.includes(n) && !TT.roster.customSubjects.includes(n));
   const noApproved = enabledStages().filter(s=>{ const d = tableDoc(s.key,'approved'); return !d || !(d.lessons||[]).length; }).map(s=>s.label);
   modal(`<h2>نشر إسناد ${esc(PERIOD_LABEL[P])}</h2>
-    <div class="sub">يُكتب لكل معلم مرتبط: إسناد هذه الفترة، ومجموع الفترتين في القائمة العامة (حتى لا يفقد أحد وصوله لو أُزيلت الأداة)، وتُضاف فصوله إلى فصوله المسندة.</div>
+    <div class="sub">يُكتب لكل معلم مرتبط: إسناد هذا الفصل الدراسي، ومجموع الفصلين في القائمة العامة (حتى لا يفقد أحد وصوله لو أُزيلت الأداة)، وتُضاف فصوله إلى فصوله المسندة.</div>
     <div class="alert info" style="margin-top:10px">ويُنشر الجدول <b>المعتمد</b> لكل مرحلة في «لوحتي ← جدولي» لدى كل مستخدم مرتبط، ويصل إشعار فقط لمن تغيّر جدوله منذ آخر نشر. أي اعتماد لاحق لا يظهر للمستخدمين حتى تنشر مرة أخرى.</div>
     ${noApproved.length?`<div class="alert warn" style="margin-top:8px">لا يوجد جدول معتمد لـ: ${noApproved.map(esc).join('، ')} — لن تُنشر حصصها في «جدولي».</div>`:''}
     <table class="tbl" style="margin-top:10px"><tr><th>المعلم</th><th>الحساب</th><th>المواد × الشعب</th><th>يُضاف</th><th>يُزال</th></tr>
@@ -2984,7 +2984,7 @@ function impModeBar(){
 function impStartScreen(main){
   const miss = impPrereqs();
   main.innerHTML = `<div class="sec-head"><h2>🗓️ الجدول</h2><span class="sub">${esc(PERIOD_LABEL[TT.period])}</span></div>
-    <div class="card"><h3>كيف تبني جدول هذه الفترة؟</h3>
+    <div class="card"><h3>كيف تبني جدول هذا الفصل الدراسي؟</h3>
       ${miss.length?`<div class="alert warn">قبل البدء: ${miss.map(([s,t])=>`<div>• ${esc(t)} <button class="btn sm sec" data-go="${s}">انتقال</button></div>`).join('')}</div>`:''}
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
         <button class="card" data-bmode="scratch" style="flex:1 1 260px;text-align:right;cursor:pointer;margin:0;border:2px solid var(--line)" ${miss.length?'disabled':''}>
@@ -2992,7 +2992,7 @@ function impStartScreen(main){
         <button class="card" data-bmode="ready" style="flex:1 1 260px;text-align:right;cursor:pointer;margin:0;border:2px solid var(--line)" ${miss.length?'disabled':''}>
           <h3 style="margin:0 0 6px">📋 جدول جاهز</h3><div class="sub">عندك جدول مبني مسبقًا: رفع ملف من برنامج آخر، أو قالب النظام (Excel)، أو إدخال يدوي. الإسناد يُبنى تلقائيًا من الجدول.</div></button>
       </div>
-      <div class="sub" style="margin-top:10px">الطريقة تُحفظ لهذه الفترة، ويمكن تغييرها لاحقًا من قسم «الجدول».</div></div>`;
+      <div class="sub" style="margin-top:10px">الطريقة تُحفظ لهذا الفصل الدراسي، ويمكن تغييرها لاحقًا من قسم «الجدول».</div></div>`;
   $$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
   $$('[data-bmode]').forEach(b=>b.onclick=()=>{ if(b.disabled) return; cfg().buildMode = b.dataset.bmode; markDirty(docIds.config()); if(b.dataset.bmode==='ready'){ IMP.view='manual'; show('imp'); } else show('table'); });
 }

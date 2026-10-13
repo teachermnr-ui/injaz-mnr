@@ -269,7 +269,7 @@ async function boot(au){
   $('#hello').textContent = (h<12?'صباح الخير':'مساء الخير')+'، '+(MD.me.name.split(' ')[0]||'');
   $('#today').textContent = WEEKDAYS[wdOf(MD.today)]+' '+hijriLong(MD.today);
   $('#tbAva').textContent = window.InjazTheme ? InjazTheme.initials(MD.me.name) : MD.me.name.charAt(0);
-  $('#tbPeriod').textContent = MD.period==='second' ? 'الفترة الثانية' : 'الفترة الأولى';
+  $('#tbPeriod').textContent = MD.period==='second' ? 'الفصل الثاني' : 'الفصل الأول';
   /* المظهر العام (الياسمين/الأساسي) كما اختاره الأدمن */
   try{ db.collection('settings').doc('appearance').onSnapshot(s=>{ if(window.InjazTheme) InjazTheme.applyRemote(s.exists ? (s.data().theme||'') : ''); }, ()=>{}); }catch(e){}
   $('#app').classList.remove('hidden');
@@ -492,7 +492,7 @@ function render(D){
       <div class="stat${T.W.length?' w':''}"><b>${arN(T.W.length)}</b><span>انتظار</span></div>
       <div class="stat"><b>${arN(al.length)}</b><span>تنبيهات</span></div></div>`;
   const tlCard = off ? '' : `<section class="card"><h3>جدول اليوم</h3>${any ? `<ul class="tl">${timelineHTML(T.items)}</ul>` :
-    `<div class="empty">${D.published?'لا حصص ولا تكليفات لك اليوم.':'لم يُنشر الجدول بعد لهذه الفترة.'}</div>`}</section>`;
+    `<div class="empty">${D.published?'لا حصص ولا تكليفات لك اليوم.':'لم يُنشر الجدول بعد لهذا الفصل الدراسي.'}</div>`}</section>`;
   const alCard = `<section class="card als"><div class="al-h"><h3>تنبيهاتك</h3></div>${al.length ? al.join('') : '<div class="empty">لا توجد تنبيهات جديدة.</div>'}</section>`;
   $('#main').innerHTML = top + (off ? '' : nowCard(T.items)) + stats + tlCard + alCard + notifCard();
   bottomNav(D);

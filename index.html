@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-13.2 -->
+<!-- إصدار: 2026-10-13.3 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -262,8 +262,8 @@ input,select{font-family:inherit;font-size:15px}
         <button type="button" class="btn" id="liForgot" style="background:transparent;color:var(--brand);margin-top:2px;padding:6px;">نسيت كلمة المرور؟</button>
       </div>
 
-      <div class="field" style="margin-top:14px;text-align:right;"><label>الفترة الدراسية (لمنسوبي المدارس)</label>
-        <select id="liPeriod"><option value="first">الفترة الأولى</option><option value="second">الفترة الثانية</option></select>
+      <div class="field" style="margin-top:14px;text-align:right;"><label>الفصل الدراسي (لمنسوبي المدارس)</label>
+        <select id="liPeriod"><option value="first">الفصل الأول</option><option value="second">الفصل الثاني</option></select>
       </div>
       <div style="margin:14px 0 10px;text-align:center;color:var(--muted);font-size:12px;">— أو —</div>
       <button class="btn" id="roleStudentBtn" style="background:var(--warn);">دخول الطالب</button>
@@ -405,7 +405,7 @@ input,select{font-family:inherit;font-size:15px}
 <script>
 /* =========================================================================
    نظام الفصول الدراسية — المرحلة الأولى (index.html)
-   الدخول · المستخدمون · إعدادات النظام · المدارس · الفترة · تغيير كلمة المرور
+   الدخول · المستخدمون · إعدادات النظام · المدارس · الفصل الدراسي · تغيير كلمة المرور
    ========================================================================= */
 
 /* إعدادات Firebase — مشروع classroom-system-dc213 (مطابقة لـ omr.html) */
@@ -539,6 +539,7 @@ const INDEX_TABS = [
   { key:'studentStatus', perm:'index.studentStatus', label:'حالات الطلاب' },
   { key:'users',    perm:'index.users',    label:'المستخدمون' },
   { key:'userPerms', perm:'index.users.perms', label:'الصلاحيات الخاصة' },
+  { key:'semesters', perm:'',            label:'الفصول الدراسية' },
   { key:'settings', perm:'',               label:'إعدادات النظام' },
 ];
 /* [ADMIN-TOOLS:BEGIN] */
@@ -587,7 +588,7 @@ const MYBOARD_ITEMS = [
   // الإرشاد الطلابي: مواعيد أولياء الأمور (الوكيل والموجه) + متابعات الحالات المستحقة (الموجه)
   { key:'appts',     action:'appts',     icon:'🗓️', label:'مواعيدي',  when:()=>typeof canAppts==='function' && canAppts() },
   { key:'followups', action:'followups', icon:'📌', label:'متابعاتي', when:()=>typeof guideFull==='function' && guideFull() && !!CURRENT.schoolId },
-  // الزيارات الصفية: يظهر لمن جُدولت له زيارة في هذه الفترة، وعلامته حمراء عند جدولة/تعديل لم يطّلع عليه
+  // الزيارات الصفية: يظهر لمن جُدولت له زيارة في هذا الفصل الدراسي، وعلامته حمراء عند جدولة/تعديل لم يطّلع عليه
   { key:'visits',    action:'visits',    icon:'👁', label:'زياراتي',  when:()=>MYBOARD.visits.length>0 },
   // المناوبة والإشراف: يظهر لمن كُلِّف في النسخة المعتمدة، وعلامته حمراء عند اعتماد جديد لم يطّلع عليه
   { key:'duty',      action:'duty',      icon:'🛡️', label:'مناوبتي',  when:()=>MYBOARD.duty.length>0 },
@@ -749,7 +750,7 @@ function updateMyBoardBadges(){
   // لو القائمة مفتوحة فعلًا حدّث نقاطها الفرعية فورًا (بلا إعادة بنائها فتُغلَق سهوًا)
   MYBOARD_ITEMS.forEach(t=>{ const d=document.querySelector('#myBoardMenu [data-key="'+t.key+'"] .tab-dot'); if(d) d.style.display = myBoardDotOn(t.key) ? 'inline-flex' : 'none'; });
 }
-/* قراءة جدول الموظف الشخصي من أداة «بناء الجدول المدرسي» (إن كانت مفعّلة ومُعتمَدة لهذه الفترة) —
+/* قراءة جدول الموظف الشخصي من أداة «بناء الجدول المدرسي» (إن كانت مفعّلة ومُعتمَدة لهذا الفصل الدراسي) —
    قراءة فقط، لا تتطلّب صلاحية الأداة نفسها (قاعدة Firestore تسمح لأي موظف فعّال بقراءة مستندات
    الخطة والجدول المعتمد تحديدًا، لا غير — أنظر firestore.rules). تُستخدَم هنا فقط لحساب علامة التنبيه؛
    العرض الفعلي للجدول بصفحة myschedule.html المستقلة. */
@@ -835,7 +836,7 @@ function headerDateStr(){
 }
 let toastT;
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
-const periodLabel = p=> p==='second'?'الفترة الثانية':'الفترة الأولى';
+const periodLabel = p=> p==='second'?'الفصل الثاني':'الفصل الأول';
 
 /* ---------- Firestore: مراجع ثابتة (لا مجموعات جديدة) ---------- */
 const usersCol   = ()=>db.collection('users');
@@ -1048,14 +1049,29 @@ function authErrMsg(e){
 
 /* بعد نجاح المصادقة: إمّا ندخل مباشرة، أو نطلب إكمال التفعيل */
 /* سبب منع الدخول بحكم حالة المدرسة أو فترة تفعيلها أو الفترة النشطة (بند ٦ و٧) — يُستخدم عند الدخول الطازج واستعادة الجلسة */
-function schoolLoginBlockReason(schoolId, period){
+function todayRiyadh(){ return new Date(Date.now()+3*3600*1000).toISOString().slice(0,10); }
+function schoolLoginBlockReason(schoolId, period, role){
   if(!schoolId || !SCHOOLS[schoolId]) return null;
   const sc = SCHOOLS[schoolId];
   if(sc.active===false) return 'مدرستك موقوفة حالياً من إدارة النظام. تواصل مع المسؤول.';
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = todayRiyadh();
   if(sc.activeFrom && todayStr < sc.activeFrom) return 'لم تبدأ فترة تفعيل مدرستك بعد (تبدأ في '+sc.activeFrom+').';
   if(sc.activeTo && todayStr > sc.activeTo) return 'انتهت فترة تفعيل مدرستك في '+sc.activeTo+'. تواصل مع إدارة النظام.';
-  if(sc.activePeriod && sc.activePeriod!==period) return 'الفترة '+periodLabel(period)+' غير مُفعّلة لمدرستك حالياً';
+  const nm = periodLabel(period);
+  if(sc.semesters){
+    // النمط الجديد: الترخيص من الأدمن، والتفعيل والإغلاق من مدير المدرسة ضمن تواريخ الفصل
+    const st = sc.semesters[period];
+    if(!st || !st.licensed) return nm+' غير مرخَّص لمدرستك. تواصل مع إدارة النظام.';
+    if(st.locked) return nm+' مغلق نهائياً من إدارة النظام.';
+    if(role==='schoolAdmin') return null;   // المدير يدخل ليفعّل الفصل أو يغلقه
+    if(!st.active) return nm+' غير مفعَّل حالياً. يفعّله مدير المدرسة من تبويب «الفصول الدراسية».';
+    const per = (sc.periods||[]).find(x=>x.id===period);
+    if(per && per.to && todayStr > per.to) return 'انتهى '+nm+' بتاريخ '+per.to+'.';
+    if(per && per.from && todayStr < per.from) return 'لم يبدأ '+nm+' بعد (يبدأ في '+per.from+').';
+    return null;
+  }
+  // النمط القديم (قبل ضبط الفصلين): الفصل المحدد في activePeriod فقط
+  if(sc.activePeriod && sc.activePeriod!==period) return nm+' غير مفعَّل لمدرستك حالياً';
   return null;
 }
 // يبني قائمة السياقات المتاحة لشخص من مستنده الموحَّد: كل مدرسة نشطة بخريطة schools، وسياق solo إن وُجد
@@ -1101,7 +1117,7 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
   } else if(ctxKey.indexOf('school:')===0){
     const sid = ctxKey.slice(7);
     if(data.role==='schoolAdmin'){
-      const block = schoolLoginBlockReason(sid, period);
+      const block = schoolLoginBlockReason(sid, period, 'schoolAdmin');
       if(block){ await cleanSignOut(); throw new Error(block); }
       const saPerms = defaultPerms('schoolAdmin');
       const _ps = Array.isArray(data.canManageUserPermsSchools) ? data.canManageUserPermsSchools
@@ -1386,7 +1402,7 @@ async function doStaffActivate(){
     }
     AUTH_JUST_CREATED = false;
     if(ar.kind === 'relink'){
-      // نقل سجلات المعلم القديمة (نفس المدرسة والفترة والعام فقط) — لا يوقف التفعيل لو فشل
+      // نقل سجلات المعلم القديمة (نفس المدرسة والفصل الدراسي والعام فقط) — لا يوقف التفعيل لو فشل
       try{ if(fnTransferTeacherRecords) await fnTransferTeacherRecords({}); }catch(e){ console.warn('transferTeacherRecords', e); }
       $('#staffActivateBox').classList.add('hidden');
       $('#staffSignInBox').classList.remove('hidden');
@@ -1628,10 +1644,11 @@ $('#pwBtn').onclick = async ()=>{
 // «الإرشاد الطلابي» يظهر لمن له الدور أو الصلاحية (حتى لو لم تُخزَّن الصلاحية للمستخدمين القدامى)، ويتطلب مدرسة محددة
 // «المؤشرات» لمدير المدرسة فقط (لا أدمن النظام ولا غيره)
 function visibleTabs(){
-  const base = visibleTabsCore().filter(t=>t.key!=='guidance' && t.key!=='dashboard');
+  const base = visibleTabsCore().filter(t=>t.key!=='guidance' && t.key!=='dashboard' && t.key!=='semesters');
   const extra = [];
   if(CURRENT.schoolId && guideView()) extra.push(INDEX_TABS.find(t=>t.key==='guidance'));
   if(dashVisible()) extra.push(INDEX_TABS.find(t=>t.key==='dashboard'));
+  if(dashVisible()) extra.push(INDEX_TABS.find(t=>t.key==='semesters'));   // «الفصول الدراسية»: لمدير المدرسة
   if(!extra.length) return base;
   const order = INDEX_TABS.map(t=>t.key);
   return base.concat(extra).sort((a,b)=>order.indexOf(a.key)-order.indexOf(b.key));
@@ -2265,7 +2282,7 @@ function guideListRows(){
     if(lastRef) tags.push({ k:'r', html: gChip('↗ محوَّل من '+esc(lastRef.fromName||'الوكيل')+(lastRef.referralReason?(': '+esc(lastRef.referralReason)):''),'#fff1e0','#b45309'), at:lastRef.createdAt||0 });
     if(!tags.length) return;
     const ig = D.ignored[String(r.seat)];
-    if(ig && !(lastRef && (lastRef.createdAt||0) > (ig.at||0))) return;   // متجاهَل هذه الفترة (إلا لو جاء تحويل أحدث)
+    if(ig && !(lastRef && (lastRef.createdAt||0) > (ig.at||0))) return;   // متجاهَل هذا الفصل الدراسي (إلا لو جاء تحويل أحدث)
     rows.push({ seat:String(r.seat), name:stu.name||'', classCode:String(stu.classCode||''), className:cl.name||String(stu.classCode||''), tags, caseObj: openCase[String(r.seat)]||null });
   });
   rows.sort((a,b)=>b.tags.length-a.tags.length || a.name.localeCompare(b.name,'ar'));
@@ -2319,10 +2336,10 @@ function paintGuideList(){
           (recOk?gBtn('سجل الطالب','openStudentRecordIndex(\''+esc(r.seat)+'\',\''+esc(r.classCode)+'\')','ghost'):'')+
           (r.caseObj ? gBtn('عرض الحالة','GUIDE.sub=\'cases\';GUIDE.selCase=\''+esc(r.caseObj.id)+'\';GUIDE.caseFilter=\''+r.caseObj.status+'\';renderGuidance($(\'#content\'))','secondary')
                      : (full?gBtn('فتح حالة','openCaseForm(\''+esc(r.seat)+'\')',''):''))+
-          (full?gBtn('تجاهل لهذه الفترة','guideIgnore(\''+esc(r.seat)+'\')','ghost'):'')+
+          (full?gBtn('تجاهل لهذا الفصل الدراسي','guideIgnore(\''+esc(r.seat)+'\')','ghost'):'')+
         '</div></div>').join('')
       : '<div class="empty"><span class="e-emoji">✅</span>لا يوجد طلاب في قائمة المتابعة'+(GUIDE.filter!=='all'||GUIDE.cls?' بهذا الفلتر':'')+'.</div>')+
-    '<div class="sub-note" style="margin-top:8px">مرتّبة بعدد الأسباب. تُحسب من التحويلات والغياب والاستئذان وحالات الطلاب في الفترة الحالية.</div>';
+    '<div class="sub-note" style="margin-top:8px">مرتّبة بعدد الأسباب. تُحسب من التحويلات والغياب والاستئذان وحالات الطلاب في الفصل الدراسي الحالي.</div>';
 }
 function openGuideThresholds(){
   const t = GUIDE.data.thr;
@@ -2337,7 +2354,7 @@ function openGuideThresholds(){
   };
 }
 async function guideIgnore(seat){
-  if(!await mnConfirm('إخفاء الطالب من قائمة المتابعة لهذه الفترة؟ يعود إن وصل تحويل جديد من الوكيل.')) return;
+  if(!await mnConfirm('إخفاء الطالب من قائمة المتابعة لهذا الفصل الدراسي؟ يعود إن وصل تحويل جديد من الوكيل.')) return;
   try{
     await gSet().doc(CURRENT.schoolId).set({ ignored: { [SESSION.period]: { [seat]: { at:Date.now(), by:CURRENT.id } } }, updatedAt:Date.now() }, {merge:true});
     toast('أُخفي من القائمة'); renderGuidance($('#content'));
@@ -2640,9 +2657,9 @@ function openMyAppointments(){
 
 /* ===================== تنبيه تراكم الغياب (ص-٤) =====================
    ميزة دائمة بالنظام (ليست من «الأدوات الإدارية»). مستوى واحد: حد أيام غياب تحدده المدرسة (افتراضيًا ٥).
-   يُحتسب «غائب» فقط — أيام مميزة لكل طالب في الفترة الحالية (المتأخر والمستأذن لا يُحتسبان).
+   يُحتسب «غائب» فقط — أيام مميزة لكل طالب في الفصل الدراسي الحالي (المتأخر والمستأذن لا يُحتسبان).
    تظهر البطاقة أعلى «تأخر وغياب الطلاب» لصاحب تعديل الغياب فقط. «تم الإشعار» يوثّق من أشعر ومتى، ويُخفي
-   الطالب من البطاقة لهذه الفترة (يبقى في قائمة «تم إشعارهم» مع إمكانية التراجع).
+   الطالب من البطاقة لهذا الفصل الدراسي (يبقى في قائمة «تم إشعارهم» مع إمكانية التراجع).
    البيانات: absNotices — settings_{sid} (الحد) ومستند لكل إشعار {sid}_{period}_{seat}. */
 const absNoticesCol = ()=>db.collection('absNotices');
 const ABS_ACC_DEF = 5;
@@ -2657,7 +2674,7 @@ async function loadAbsAcc(){
   }catch(e){}
   ABS_ACC.loaded = true;
 }
-// كل طالب: أيام غيابه المميزة في الفترة وآخر يوم غياب
+// كل طالب: أيام غيابه المميزة في الفصل الدراسي وآخر يوم غياب
 function absAccAll(){
   const by = {};
   ((ABS_CACHE&&ABS_CACHE.arr)||[]).forEach(a=>{
@@ -2673,7 +2690,7 @@ function absNoticeText(s){
   const school = (SCHOOLS[CURRENT.schoolId]||{}).name || '';
   let last = s.last; try{ last = new Date(s.last+'T00:00:00').toLocaleDateString('ar-SA',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }catch(e){}
   return 'السلام عليكم ورحمة الله وبركاته\nولي أمر الطالب: '+(s.name||'')+' — '+(s.className||'')+
-    '\nنفيدكم بأن ابنكم تغيّب '+absDaysTxt(s.days)+' خلال الفترة الحالية، آخرها يوم '+last+'.\nنأمل متابعته والتواصل مع المدرسة.'+(school?'\n'+school:'');
+    '\nنفيدكم بأن ابنكم تغيّب '+absDaysTxt(s.days)+' خلال الفصل الدراسي الحالي، آخرها يوم '+last+'.\nنأمل متابعته والتواصل مع المدرسة.'+(school?'\n'+school:'');
 }
 function paintAbsAcc(){
   const host = document.getElementById('absAccCard'); if(!host) return;
@@ -2727,7 +2744,7 @@ async function undoAbsNotified(seat){
   catch(e){ toast('خطأ: '+(e.message||e)); }
 }
 function openAbsAccThreshold(){
-  modal('<h2>حد تنبيه الغياب</h2><div class="sub-note">يظهر الطالب في البطاقة عند بلوغ هذا العدد من أيام الغياب في الفترة الحالية.</div>'+
+  modal('<h2>حد تنبيه الغياب</h2><div class="sub-note">يظهر الطالب في البطاقة عند بلوغ هذا العدد من أيام الغياب في الفصل الدراسي الحالي.</div>'+
     '<div class="field"><label>عدد أيام الغياب</label><input id="aaThr" type="number" min="1" max="60" inputmode="numeric" value="'+ABS_ACC.threshold+'"></div>'+
     '<div id="aaAlert"></div><div class="modal-row"><button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" id="aaOk">حفظ</button></div>');
   $('#aaOk').onclick = async()=>{
@@ -2741,6 +2758,75 @@ function openAbsAccThreshold(){
   };
 }
 
+/* ===================== الفصلان الدراسيان: الحالة والتفعيل والإغلاق =====================
+   الأدمن: يرخّص الفصل لمدرسة ويغلقه نهائيًا. المدير: يفعّل ويغلق الفصل المرخَّص لمدرسته ضمن تواريخه.
+   كل التغييرات تمر بدالة الخادم schoolSemester (التحقق من التاريخ بتوقيت الرياض يتم هناك). */
+function semStatus(sc, p){
+  if(!sc.semesters) return { legacy:true, key: (sc.activePeriod||'first')===p ? 'active':'inactive' };
+  const st = sc.semesters[p];
+  if(!st || !st.licensed) return { key:'unlicensed' };
+  if(st.locked) return { key:'locked' };
+  return { key: st.active ? 'active' : 'inactive' };
+}
+const SEM_KEY_AR = { active:'مفعَّل', inactive:'مرخَّص وغير مفعَّل', unlicensed:'غير مرخَّص', locked:'مغلق نهائيًا' };
+function semSummary(sc){
+  return ['first','second'].map(p=>periodLabel(p)+': '+SEM_KEY_AR[semStatus(sc,p).key]).join(' · ');
+}
+function semRender(sid, boxId, isSys){
+  const box = $('#'+boxId); if(!box) return;
+  const sc = SCHOOLS[sid]; if(!sc){ box.innerHTML=''; return; }
+  const today = todayRiyadh();
+  const rows = ['first','second'].map(p=>{
+    const stt = semStatus(sc,p);
+    const per = (sc.periods||[]).find(x=>x.id===p);
+    const dates = per && per.from && per.to ? ('من '+per.from+' إلى '+per.to) : 'التواريخ غير محدّدة بعد';
+    const inRange = !!(per && per.from && per.to && today>=per.from && today<=per.to);
+    let btns = '';
+    if(isSys){
+      btns += stt.key==='unlicensed'
+        ? `<button class="btn sm" data-sem="license" data-p="${p}">ترخيص ${esc(periodLabel(p))}</button>`
+        : (stt.key!=='locked' ? `<button class="btn sm secondary" data-sem="unlicense" data-p="${p}">سحب الترخيص</button>` : '');
+      if(stt.key==='locked') btns += `<button class="btn sm secondary" data-sem="unlock" data-p="${p}">رفع الإغلاق النهائي</button>`;
+      else if(stt.key!=='unlicensed') btns += `<button class="btn sm danger" data-sem="lock" data-p="${p}">إغلاق نهائي</button>`;
+    } else if(!stt.legacy){
+      if(stt.key==='inactive') btns += `<button class="btn sm" data-sem="activate" data-p="${p}" ${inRange?'':'disabled'}>تفعيل ${esc(periodLabel(p))}</button>`;
+      if(stt.key==='active') btns += `<button class="btn sm danger" data-sem="close" data-p="${p}">إغلاق ${esc(periodLabel(p))}</button>`;
+    }
+    const hint = (!isSys && stt.key==='inactive' && !inRange) ? '<div class="sub-note" style="margin-top:4px">التفعيل متاح داخل تواريخ الفصل فقط.</div>' : '';
+    return `<div class="card" style="box-shadow:none;margin-bottom:8px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div><b>${esc(periodLabel(p))}</b> <span class="pill role">${esc(SEM_KEY_AR[stt.key])}</span>
+          <div class="sub-note" style="margin-top:4px">${esc(dates)}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${btns}</div></div>${hint}</div>`;
+  }).join('');
+  const legacyNote = !sc.semesters ? `<div class="sub-note" style="margin-bottom:8px">${isSys?'هذه المدرسة تعمل بالنمط السابق (فصل واحد مُفعَّل). أي إجراء هنا ينقلها إلى النمط الجديد: يُرخَّص لها الفصلان ويبقى المُفعَّل حاليًا كما هو.':'لم يضبط أدمن النظام فصلَي مدرستك بعد، وتعمل المدرسة بالنمط السابق حتى يتم ذلك.'}</div>` : '';
+  box.innerHTML = legacyNote + rows;
+  box.querySelectorAll('[data-sem]').forEach(b=>{
+    b.onclick = ()=>semAct(sid, b.dataset.p, b.dataset.sem, boxId, isSys);
+  });
+}
+async function semAct(sid, p, act, boxId, isSys){
+  const nm = periodLabel(p);
+  const confirms = {
+    close: 'إغلاق '+nm+': سيُمنع مستخدمو المدرسة من الدخول إليه. هل أنت متأكد؟',
+    lock: 'الإغلاق النهائي لـ'+nm+' يمنع تفعيله من مدير المدرسة حتى ترفعه أنت. متابعة؟',
+    unlicense: 'سحب ترخيص '+nm+' يوقفه عن المدرسة فورًا. متابعة؟'
+  };
+  if(confirms[act] && !(await mnConfirm(confirms[act]))) return;
+  const payload = { schoolId:sid, period:p, action: act==='unlicense' ? 'license' : act };
+  if(act==='license') payload.licensed = true;
+  if(act==='unlicense') payload.licensed = false;
+  try{
+    const r = await UsersAPI.call('schoolSemester', payload);
+    SCHOOLS[sid] = Object.assign({}, SCHOOLS[sid], { semesters:r.semesters, activePeriod:r.activePeriod });
+    toast('تم'); semRender(sid, boxId, isSys);
+  }catch(e){ toast(e && e.message ? e.message : 'تعذّر تنفيذ الإجراء'); }
+}
+async function renderSemesters(c){
+  if(!dashVisible()){ c.innerHTML='<div class="empty">هذا التبويب لمدير المدرسة فقط.</div>'; return; }
+  c.innerHTML = '<div class="panel-head"><h2>الفصول الدراسية</h2></div><div class="sub-note">فعّل الفصل الدراسي عند بدايته وأغلقه عند نهايته. الفصل المُغلق لا يدخله مستخدمو مدرستك. التفعيل لا يتم إلا داخل تواريخ الفصل التي حدّدها أدمن النظام.</div><div id="semBoxDir"></div>';
+  semRender(CURRENT.schoolId, 'semBoxDir', false);
+}
 /* ===================== «المؤشرات» — لوحة مؤشرات لمدير المدرسة فقط (ص-٩) =====================
    ميزة دائمة بالنظام. قراءة فقط، بلا طباعة. مصادرها: سجل الغياب، الاستئذان، التحويلات (notes)، الفصول غير المحضَّرة،
    الحالات الإرشادية (العدد والنوع فقط — بلا تفاصيل الجلسات)، والتعاميم (من «الأدوات الإدارية» — تُزال مع إزالتها). */
@@ -2749,7 +2835,7 @@ function dashVisible(){ return !!CURRENT && CURRENT.role==='schoolAdmin' && !!CU
 function dashWeekKey(dk){ const d=new Date(dk+'T00:00:00'); d.setDate(d.getDate()-d.getDay()); return attDateKey(d); }
 async function renderDashboard(c){
   if(!dashVisible()){ c.innerHTML='<div class="empty">هذا التبويب لمدير المدرسة فقط.</div>'; return; }
-  c.innerHTML = '<div class="panel-head"><h2>المؤشرات</h2></div><div class="sub-note">ملخص الفترة الحالية لمدرستك — يُحدَّث عند فتح التبويب.</div><div id="dashRoot"><div class="empty"><span class="spin"></span></div></div>';
+  c.innerHTML = '<div class="panel-head"><h2>المؤشرات</h2></div><div class="sub-note">ملخص الفصل الدراسي الحالي لمدرستك — يُحدَّث عند فتح التبويب.</div><div id="dashRoot"><div class="empty"><span class="spin"></span></div></div>';
   const sid = CURRENT.schoolId, P = SESSION.period;
   const safe = p=>p.then(s=>s.docs.map(d=>({id:d.id,...d.data()}))).catch(()=>[]);
   const [att, leaves, notes, cases, rosterSnap] = await Promise.all([
@@ -2811,7 +2897,7 @@ function paintDashboard(){
     weeks.map(k=>{ const v=byWeek[k]||0; return '<div style="flex:1 0 34px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px"><span style="font-size:12px;font-weight:700;color:var(--muted)">'+v+'</span><div title="'+esc(wLabel(k))+'" style="width:100%;max-width:44px;height:'+Math.round(v/maxW*130)+'px;min-height:'+(v?3:0)+'px;background:'+(k===wk0?'#0f766e':'#5fb3aa')+';border-radius:6px 6px 0 0"></div></div>'; }).join('')+'</div>'+
     '<div style="display:flex;gap:8px;padding:4px 2px 0;overflow-x:hidden">'+weeks.map(k=>'<span style="flex:1 0 34px;text-align:center;font-size:11px;color:var(--muted)">'+esc(wLabel(k))+'</span>').join('')+'</div>';
   const weekCard = '<div class="card" style="margin:0;flex:1 1 440px;min-width:0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><h3 style="margin:0;font-size:15.5px;flex:1">الغياب أسبوعيًا</h3>'+
-    '<select id="dashRange" style="width:auto;padding:5px 8px;font:inherit;font-size:13px;border-radius:9px;border:1px solid var(--line)"><option value="6w"'+(DASH.range==='6w'?' selected':'')+'>آخر ٦ أسابيع</option><option value="all"'+(DASH.range==='all'?' selected':'')+'>الفترة كاملة</option></select></div>'+bars+
+    '<select id="dashRange" style="width:auto;padding:5px 8px;font:inherit;font-size:13px;border-radius:9px;border:1px solid var(--line)"><option value="6w"'+(DASH.range==='6w'?' selected':'')+'>آخر ٦ أسابيع</option><option value="all"'+(DASH.range==='all'?' selected':'')+'>الفصل الدراسي كاملًا</option></select></div>'+bars+
     '<div class="umeta" style="margin-top:6px">عدد أيام الغياب المسجّلة لكل أسبوع (يبدأ الأحد).</div></div>';
   // الفصول الأعلى غيابًا: أيام الغياب ÷ (عدد طلاب الفصل × أيام الدوام المسجّلة)
   const schoolDays = new Set(D.att.map(a=>a.date)).size || 1;
@@ -2827,7 +2913,7 @@ function paintDashboard(){
   const clsCard = '<div class="card" style="margin:0;flex:1 1 300px;min-width:0"><h3 style="margin:0 0 8px;font-size:15.5px">الفصول الأعلى غيابًا</h3>'+
     (topCls.length ? topCls.map(x=>'<div style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin:7px 0"><span style="flex:0 0 38%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.n)+'</span>'+
       '<div style="flex:1;height:10px;background:var(--surface-2);border-radius:6px;overflow:hidden"><div style="height:100%;width:'+Math.round(x.p/maxP*100)+'%;background:var(--bg-b42318,#b42318)"></div></div>'+
-      '<b style="flex:0 0 48px;text-align:left">'+(Math.round(x.p*10)/10)+'٪</b></div>').join('') : '<div class="umeta">لا غياب مسجَّل في هذه الفترة.</div>')+
+      '<b style="flex:0 0 48px;text-align:left">'+(Math.round(x.p*10)/10)+'٪</b></div>').join('') : '<div class="umeta">لا غياب مسجَّل في هذا الفصل الدراسي.</div>')+
     '<div class="umeta" style="margin-top:6px">النسبة = أيام الغياب ÷ (طلاب الفصل × أيام الدوام المسجّلة: '+schoolDays+').</div></div>';
   // التحويلات
   const wkStartMs = new Date(wk0+'T00:00:00').getTime();
@@ -2835,7 +2921,7 @@ function paintDashboard(){
   const rc = {}; D.notes.forEach(n=>{ const r=n.referralReason||'بدون سبب محدد'; rc[r]=(rc[r]||0)+1; });
   const reasons = Object.keys(rc).map(k=>({k,v:rc[k]})).sort((a,b)=>b.v-a.v).slice(0,5);
   const refCard = '<div class="card" style="margin:0;flex:1 1 280px;min-width:0"><h3 style="margin:0 0 8px;font-size:15.5px">التحويلات</h3>'+
-    '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><span style="font-size:30px;font-weight:900;color:var(--fg-1e5aaa,#1e5aaa)">'+D.notes.length+'</span><span class="umeta">تحويل هذه الفترة · '+refWeek+' هذا الأسبوع</span></div>'+
+    '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><span style="font-size:30px;font-weight:900;color:var(--fg-1e5aaa,#1e5aaa)">'+D.notes.length+'</span><span class="umeta">تحويل هذا الفصل الدراسي · '+refWeek+' هذا الأسبوع</span></div>'+
     (reasons.length?'<div style="font-weight:700;font-size:13px;margin-top:8px">أكثر الأسباب</div>'+reasons.map(r=>'<div style="display:flex;justify-content:space-between;font-size:13.5px;border-top:1px solid var(--line);padding:6px 0 0;margin-top:6px"><span>'+esc(r.k)+'</span><b>'+r.v+'</b></div>').join(''):'')+'</div>';
   // التعاميم
   const circCard = D.circs.length ? '<div class="card" style="margin:0;flex:1 1 280px;min-width:0"><h3 style="margin:0 0 8px;font-size:15.5px">توقيع التعاميم</h3>'+
@@ -2850,7 +2936,7 @@ function paintDashboard(){
     (open.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+Object.keys(tc).map(t=>gChip(esc(t)+' '+tc[t],'#e9f1fd','#1e5aaa')).join('')+'</div>':'')+
     '<div class="umeta" style="margin-top:4px">العدد والنوع فقط — بلا تفاصيل الجلسات</div>'+
     '<div style="display:flex;justify-content:space-between;font-size:13.5px;border-top:1px solid var(--line);padding-top:8px;margin-top:8px"><span>استئذانات هذا الأسبوع</span><b>'+leavesWeek+'</b></div>'+
-    '<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:4px"><span>استئذانات الفترة</span><b>'+D.leaves.length+'</b></div></div>';
+    '<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:4px"><span>استئذانات الفصل الدراسي</span><b>'+D.leaves.length+'</b></div></div>';
   root.innerHTML = kpis+
     '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">'+weekCard+clsCard+'</div>'+
     '<div style="display:flex;gap:12px;flex-wrap:wrap">'+refCard+circCard+gCard+'</div>';
@@ -3222,6 +3308,7 @@ function renderPanel(){
   if(activeTab==='absence')    return renderAbsence(c);
   if(activeTab==='guidance')   return renderGuidance(c);
   if(activeTab==='dashboard')  return renderDashboard(c);
+  if(activeTab==='semesters')  return renderSemesters(c);
   if(activeTab==='studentStatus') return renderStudentStatus(c);
   const labels={classes:'الفصول والطلاب',sent:'التحويلات المرسلة',received:'التحويلات الواردة',absence:'غياب الطلاب'};
   c.innerHTML=`<div class="panel-head"><h2>${esc(labels[activeTab]||'')}</h2></div>
@@ -4047,6 +4134,28 @@ async function deleteUser(id,name){
 }
 
 /* ---------------- تبويب إعدادات النظام (للأدمن) ---------------- */
+/* تواريخ الفصلين للمعلم الفردي (مستند عام يكتبه الأدمن عبر دالة الخادم) */
+async function soloSemLoad(){
+  const box=$('#soloSemBox'); if(!box) return;
+  let d={}; try{ const sn=await db.collection('schoolData').doc('soloSemesters').get(); d=sn.exists?sn.data():{}; }catch(e){}
+  const row=(p)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <span style="min-width:96px">${esc(periodLabel(p))}</span>
+      <input type="date" id="soloSem_${p}_from" value="${esc((d[p]||{}).from||'')}" style="flex:1">
+      <span style="color:var(--muted)">إلى</span>
+      <input type="date" id="soloSem_${p}_to" value="${esc((d[p]||{}).to||'')}" style="flex:1"></div>`;
+  box.innerHTML = row('first')+row('second')+'<button class="btn sm" id="soloSemSave">حفظ التواريخ</button><div id="soloSemAlert"></div>';
+  $('#soloSemSave').onclick=async()=>{
+    const dates={};
+    for(const p of ['first','second']){
+      const f=$('#soloSem_'+p+'_from').value, t=$('#soloSem_'+p+'_to').value;
+      if(!f && !t) continue;
+      if(!f||!t||t<f){ alertBox('soloSemAlert','err','حدّد بداية ونهاية صحيحتين لـ'+periodLabel(p)); return; }
+      dates[p]={from:f,to:t};
+    }
+    try{ await UsersAPI.call('schoolSemester',{action:'soloDates',dates}); alertBox('soloSemAlert','ok','تم حفظ التواريخ'); }
+    catch(e){ alertBox('soloSemAlert','err',e.message||'تعذّر الحفظ'); }
+  };
+}
 function renderSettings(c){
   c.innerHTML=`<div class="panel-head"><h2>إعدادات النظام</h2></div>
 
@@ -4067,6 +4176,12 @@ function renderSettings(c){
       <div class="set-block"><h3>المدارس</h3><p>أنشئ المدارس وأدر فتراتها. كل مدرسة معزولة تماماً.</p></div>
       <button class="btn sm" id="addSchoolBtn">+ إضافة مدرسة</button>
       <div id="schoolsList" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <div class="set-block"><h3>تواريخ الفصلين للمعلمين المستقلين</h3>
+        <p>تواريخ عامة للحسابات الفردية (غير المرتبطة بمدرسة): بداية كل فصل دراسي ونهايته.</p></div>
+      <div id="soloSemBox"><div class="empty"><span class="spin"></span></div></div>
     </div>
 
     <div class="card">
@@ -4106,7 +4221,7 @@ function renderSettings(c){
     + (Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`).join('')
        || '');
   $('#wipeBtn').onclick=wipeData;
-  renderSchoolsList();
+  renderSchoolsList(); soloSemLoad();
 }
 /* ---- محرر الصلاحيات الافتراضية للأدوار (لأدمن النظام) ---- */
 let tplRole = 'teacher', tplPerms = {};
@@ -4174,13 +4289,13 @@ function renderSchoolsList(){
     <div class="urow">
       <div class="uavatar">🏫</div>
       <div class="uinfo"><div class="uname">${esc(s.name)} ${s.code?'<span class="pill role">'+esc(s.code)+'</span>':''}</div>
-        <div class="umeta">${esc(s.eduDept||'—')} · ${esc(s.year||'—')} · الفترة المُفعّلة: ${esc(periodLabel(s.activePeriod||'first'))} · فصول: ${esc(s.classCount||'—')}</div></div>
+        <div class="umeta">${esc(s.eduDept||'—')} · ${esc(s.year||'—')} · ${esc(semSummary(s))} · عدد الفصول الدراسية (الشُّعَب): ${esc(s.classCount||'—')}</div></div>
       <div class="row-actions">
         <button class="icon-btn" onclick="openSchoolModal('${esc(id)}')" title="تعديل">✏️</button>
       </div></div></div>`).join('');
 }
 function openSchoolModal(id){
-  const s = id?SCHOOLS[id]:{name:'',eduDept:'',contactNumber:'',year:'',activePeriod:'first',classCount:'',active:true,activeFrom:'',activeTo:''};
+  const s = id?SCHOOLS[id]:{name:'',eduDept:'',contactNumber:'',year:'',classCount:'',active:true,activeFrom:'',activeTo:''};
   modal(`<h2>${id?'تعديل مدرسة':'إضافة مدرسة'}</h2>
     <div id="smAlert"></div>
     <div class="field"><label>حالة المدرسة</label>
@@ -4198,11 +4313,11 @@ function openSchoolModal(id){
         <input id="smYearTo" type="date" value="${esc(s.yearTo||'')}" style="flex:1">
       </div>
       <div class="sub-note" style="margin-top:6px">تُستخدم لتحديد سجلات العام الدراسي الحالي عند إعادة ربط حساب معلم سبق فك ربطه. اختياري الآن.</div></div>
-    <div class="field"><label>عدد الفترات الدراسية</label>
+    <div class="field"><label>عدد الفصول الدراسية</label>
       <select id="smPeriodCount">
         <option value="0" ${!(s.periods&&s.periods.length)?'selected':''}>غير محددة</option>
-        <option value="1" ${(s.periods||[]).length===1?'selected':''}>فترة واحدة</option>
-        <option value="2" ${(s.periods||[]).length===2?'selected':''}>فترتان</option>
+        <option value="1" ${(s.periods||[]).length===1?'selected':''}>فصل دراسي واحد</option>
+        <option value="2" ${(s.periods||[]).length===2?'selected':''}>فصلان</option>
       </select>
       <div id="smPeriodsBox" style="margin-top:8px"></div></div>
     <div class="field"><label>فترة تفعيل المدرسة</label>
@@ -4212,18 +4327,15 @@ function openSchoolModal(id){
         <input id="smActiveTo" type="date" value="${esc(s.activeTo||'')}" style="flex:1">
       </div>
       <div class="sub-note" style="margin-top:6px">اختياري — اتركهما فارغين لتفعيل بلا حدود زمنية.</div></div>
-    <div class="field"><label>الفترة المُفعّلة</label>
-      <select id="smPeriod">
-        <option value="first" ${s.activePeriod!=='second'?'selected':''}>الفترة الأولى</option>
-        <option value="second" ${s.activePeriod==='second'?'selected':''}>الفترة الثانية</option>
-      </select>
-      <div class="sub-note" style="margin-top:6px">تفعيل فترة يمنع غير الأدمن من دخول الأخرى؛ تبقى الفترة السابقة متاحة للأدمن للاطلاع.</div></div>
-    <div class="field"><label>عدد الفصول الدراسية</label><input id="smCount" type="number" inputmode="numeric" value="${esc(s.classCount||'')}" placeholder="مثال: ١٢"></div>
+    ${id?`<div class="field"><label>حالة الفصلين الدراسيين</label><div id="semBox"></div></div>`
+        :`<div class="sub-note" style="margin:8px 0">بعد حفظ المدرسة يمكنك ترخيص الفصل الأول والثاني لها من هذه الشاشة.</div>`}
+    <div class="field"><label>عدد فصول المدرسة (الصفوف والشُّعَب)</label><input id="smCount" type="number" inputmode="numeric" value="${esc(s.classCount||'')}" placeholder="مثال: ١٢"></div>
     <div class="modal-row" style="margin-top:14px">
       <button class="btn secondary" onclick="closeModal()">إلغاء</button>
       <button class="btn" id="smSave">حفظ</button>
     </div>`);
   let smActiveState = s.active!==false;
+  if(id) semRender(id,'semBox',true);
   $('#smActive').onclick=()=>{smActiveState=true;$('#smActive').classList.add('active');$('#smInactive').classList.remove('active');};
   $('#smInactive').onclick=()=>{smActiveState=false;$('#smInactive').classList.add('active');$('#smActive').classList.remove('active');};
   const PER_IDS = ['first','second'];
@@ -4245,7 +4357,7 @@ function openSchoolModal(id){
   $('#smSave').onclick=async()=>{
     const name=$('#smName').value.trim();
     if(!name){ alertBox('smAlert','err','أدخل اسم المدرسة'); return; }
-    // مدة العام والفترات: تحقق من الترتيب وعدم التداخل
+    // مدة العام والفصول الدراسية: تحقق من الترتيب وعدم التداخل
     const yF=$('#smYearFrom').value, yT=$('#smYearTo').value;
     if((yF&&!yT)||(!yF&&yT)||(yF&&yT&&yT<yF)){ alertBox('smAlert','err','حدّد بداية العام الدراسي ونهايته بشكل صحيح'); return; }
     const pCount = parseInt($('#smPeriodCount').value,10)||0;
@@ -4254,7 +4366,7 @@ function openSchoolModal(id){
       const f=$('#smPer'+i+'From').value, t=$('#smPer'+i+'To').value;
       if(!f||!t||t<f){ alertBox('smAlert','err','حدّد تاريخ بداية ونهاية صحيحين لـ'+periodLabel(PER_IDS[i])); return; }
       if(yF && (f<yF||t>yT)){ alertBox('smAlert','err',periodLabel(PER_IDS[i])+' خارج مدة العام الدراسي'); return; }
-      if(periods.length && f<=periods[periods.length-1].to){ alertBox('smAlert','err','الفترتان متداخلتان أو غير مرتبتين'); return; }
+      if(periods.length && f<=periods[periods.length-1].to){ alertBox('smAlert','err','الفصلان متداخلتان أو غير مرتبتين'); return; }
       periods.push({ id:PER_IDS[i], from:f, to:t,
         fromMs:new Date(f+'T00:00:00').getTime(), toMs:new Date(t+'T23:59:59').getTime() });
     }
@@ -4266,13 +4378,13 @@ function openSchoolModal(id){
       Object.values(SCHOOLS).forEach(sc=>{ const m=/^S(\d+)$/.exec(sc.code||''); if(m){ const n=parseInt(m[1],10); if(n>max) max=n; } });
       code = 'S'+(max+1);
     }
-    SCHOOLS[sid]={ name, code, eduDept:$('#smEduDept').value.trim(), contactNumber:$('#smContact').value.trim(),
+    const data={ name, code, eduDept:$('#smEduDept').value.trim(), contactNumber:$('#smContact').value.trim(),
       year:$('#smYear').value.trim(),
       yearFrom:yF||'', yearTo:yT||'',
       yearFromMs: yF ? new Date(yF+'T00:00:00').getTime() : null,
       yearToMs:   yT ? new Date(yT+'T23:59:59').getTime() : null,
       periods,
-      activePeriod:$('#smPeriod').value, classCount:$('#smCount').value.trim(),
+      classCount:$('#smCount').value.trim(),
       active: smActiveState,
       activeFrom: $('#smActiveFrom').value || '',
       activeTo:   $('#smActiveTo').value   || '',
@@ -4282,7 +4394,9 @@ function openSchoolModal(id){
       attFrom: $('#smAttFrom') ? $('#smAttFrom').value : (s.attFrom||'07:40'),
       attTo:   $('#smAttTo')   ? $('#smAttTo').value   : (s.attTo||'10:00'),
       _isSchool: true };
-    try{ await schoolDocById(sid).set(SCHOOLS[sid]); toast(id?'تم تحديث المدرسة':'تمت إضافة المدرسة'); closeModal(); renderSchoolsList(); }
+    if(!id) data.semesters = {};   // مدرسة جديدة: لا فصل مرخَّص حتى يرخّصه الأدمن
+    // حقل semesters (وactivePeriod) تكتبهما دالة الخادم فقط؛ الحفظ هنا بالدمج حتى لا يُمحى شيء
+    try{ await schoolDocById(sid).set(data,{merge:true}); SCHOOLS[sid]=Object.assign({}, SCHOOLS[sid]||{}, data); delete SCHOOLS[sid]._isSchool; toast(id?'تم تحديث المدرسة':'تمت إضافة المدرسة'); closeModal(); renderSchoolsList(); }
     catch(e){ alertBox('smAlert','err',e.message); }
   };
 }

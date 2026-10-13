@@ -178,7 +178,7 @@ async function renderSchedule(){
   if(sched.published) await markSeen(sched.sig);   // تسجيل الاطّلاع فورًا فيختفي الإشعار
 
   if(!sched.lessons.length && !(sched.waits||[]).length){
-    $('#main').innerHTML = `<div class="empty"><span class="e-emoji">📅</span>${sched.published?'لا توجد لك حصص في الجدول المنشور لهذه الفترة.':'لم يُنشر الجدول بعد لهذه الفترة.'}</div>`;
+    $('#main').innerHTML = `<div class="empty"><span class="e-emoji">📅</span>${sched.published?'لا توجد لك حصص في الجدول المنشور لهذا الفصل الدراسي.':'لم يُنشر الجدول بعد لهذا الفصل الدراسي.'}</div>`;
     return;
   }
   // شبكة لكل مرحلة يدرّس فيها (المعلم المشترك: جدول لكل مرحلة بأوقاتها)

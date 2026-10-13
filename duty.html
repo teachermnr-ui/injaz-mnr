@@ -118,7 +118,7 @@ const TIERS = [ {k:'أ', t:'حصة قبلها وفراغ بعدها', bg:'#e7f6e
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const arN = n=>String(n).replace(/\d/g, d=>'٠١٢٣٤٥٦٧٨٩'[d]);
-const periodLabel = p=> p==='second'?'الفترة الثانية':'الفترة الأولى';
+const periodLabel = p=> p==='second'?'الفصل الثاني':'الفصل الأول';
 function toast(m){ const t=document.createElement('div'); t.className='toast'; t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
 function fatal(msg){
   $('#bootView').innerHTML = `<div class="card" style="max-width:460px;text-align:center"><h3>${esc(msg)}</h3>
@@ -329,7 +329,7 @@ function warnings(){
 /* ---------- العرض ---------- */
 function render(){
   const keys = Object.keys(DS.stages);
-  if(!keys.length){ $('#main').innerHTML = '<div class="empty">لا يوجد جدول منشور لهذه الفترة.<br>انشر الجدول أولًا من أداة «بناء الجدول المدرسي» — منه تُؤخذ أوقات الفسحة والصلاة وحصص المعلمين.</div>'; return; }
+  if(!keys.length){ $('#main').innerHTML = '<div class="empty">لا يوجد جدول منشور لهذا الفصل الدراسي.<br>انشر الجدول أولًا من أداة «بناء الجدول المدرسي» — منه تُؤخذ أوقات الفسحة والصلاة وحصص المعلمين.</div>'; return; }
   const p = P();
   const pubTxt = p.pub ? 'معتمد ومرفوع '+(p.pub.circular?('بتعميم رقم '+arN(p.pub.circular.number)):'')+' — '+new Date(p.pub.at).toLocaleDateString('ar-SA') : 'لم يُعتمد بعد';
   $('#main').innerHTML = `

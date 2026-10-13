@@ -5835,7 +5835,7 @@ const firebaseConfig = {
 };
 let db = null, cloudReady = false, rosterLoaded = false;
 
-/* ===== ربط النظام: حارس الدخول + عزل البيانات حسب المدرسة/الفترة/المستخدم ===== */
+/* ===== ربط النظام: حارس الدخول + عزل البيانات حسب المدرسة/الفصل الدراسي/المستخدم ===== */
 let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_ALL_PERMS = {}, CLS_SEC_PERM = {classes:{access:true,edit:true,del:true},design:{access:true,edit:true,del:true},grade:{access:true,edit:true,del:true},results:{access:true,edit:true,del:true},worklog:{access:true,edit:true,del:true}}, CLS_STU_STATUS = {}, CLS_ADMIN_SCHOOL_NAME = '', CLS_ACTIVATED_SEATS = {};
 (function clsAuthGuard(){
   try{ CLS_SESSION = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){ CLS_SESSION = null; }
@@ -5872,7 +5872,7 @@ let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_ALL_PERMS =
         '</nav>'+
         '<span id="ctxSwitchWrap"></span>'+
         '<span class="ijh-spacer"></span>'+
-        '<span class="ijh-period">'+(CLS_SESSION.period==='second'?'الفترة الثانية':'الفترة الأولى')+'</span>'+
+        '<span class="ijh-period">'+(CLS_SESSION.period==='second'?'الفصل الثاني':'الفصل الأول')+'</span>'+
       '</div>'+
       '<div class="ijh-menu" id="omrAccMenu" role="menu" aria-label="قائمة الحساب" hidden>'+
         '<div class="ijh-mhead"><b>'+ escapeHtml(uname) +'</b><span>'+ escapeHtml(IJH_ROLE[CLS_SESSION.role]||'') +'</span></div>'+
@@ -6829,12 +6829,12 @@ async function loadStudentsFromCloud(manual){
         state.mySubjectAssignments = ctx && Array.isArray(ctx.subjectAssignments) ? ctx.subjectAssignments
           : (CLS_USER_ROLE==='soloTeacher' && u.solo && Array.isArray(u.solo.subjectAssignments) ? u.solo.subjectAssignments : []);
         /* [ADMIN-TOOLS:BEGIN] */
-        // إسناد الفترة الحالية المنشور من «الجدول المدرسي» يتقدّم على القائمة العامة (كل فترة مستقلة)
+        // إسناد الفصل الدراسي الحالي المنشور من «الجدول المدرسي» يتقدّم على القائمة العامة (كل فصل دراسي مستقل)
         const _hasByPeriod = !!(ctx && ctx.subjectAssignmentsByPeriod && typeof ctx.subjectAssignmentsByPeriod==='object');
         if(_hasByPeriod){
           const _byP = ctx.subjectAssignmentsByPeriod[(CLS_SESSION && CLS_SESSION.period) || 'first'];
           state.mySubjectAssignments = Array.isArray(_byP) ? _byP : [];
-          // المعلم يرى فصول فترته فقط (ما لم يُمنح «كل الفصول»)
+          // المعلم يرى فصول فصله الدراسي فقط (ما لم يُمنح «كل الفصول»)
           if(CLS_USER_ROLE==='teacher' && !CLS_USER_ASSIGNED.includes('__all__')){
             CLS_USER_ASSIGNED = [...new Set(state.mySubjectAssignments.map(a=>String(a.classCode)))];
           }

@@ -1,4 +1,4 @@
-// إصدار: 2026-10-13.2
+// إصدار: 2026-10-13.3
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -1614,6 +1614,94 @@ exports.adminSoloSubscription = onCall(async (request) => {
   if (typeof d.active === "boolean") solo.active = d.active;
   await ref.update({ solo, updatedAt: Date.now() });
   return { ok: true, ends: solo.subscriptionEnds || null, active: solo.active !== false };
+});
+
+/* ============================================================================================
+   الفصلان الدراسيان (2026-10-13.3): حالة كل فصل على مستند المدرسة schoolData/{sid}.semesters
+     semesters = { first|second : { licensed, active, locked, activatedAt, closedAt, by } }
+   الأدمن العام: يرخّص الفصل للمدرسة (license)، ويغلقه نهائيًا (lock) ويرفع الإغلاق (unlock)، ويضبط تواريخ الفردي (soloDates).
+   مدير المدرسة: يفعّل (activate) ويغلق (close) الفصل المرخّص لمدرسته فقط، وبشرط أن يكون اليوم (بتوقيت الرياض) داخل تواريخ الفصل.
+   التواريخ تُقرأ من school.periods التي يضبطها الأدمن. لا يكتب العميل هذه الحقول إطلاقًا (القواعد تمنع).
+   ============================================================================================ */
+const SEM_IDS = ["first", "second"];
+const SEM_AR = { first: "الفصل الأول", second: "الفصل الثاني" };
+function semTodayRiyadh() { return new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10); }
+const SEM_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+exports.schoolSemester = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  const u = me.data;
+  const d = request.data || {};
+  const action = String(d.action || "");
+  const db = secDb();
+
+  if (action === "soloDates") {
+    if (!secIsAdmin(u)) throw secMsg("permission-denied", "مقصور على أدمن النظام العام.");
+    const out = {};
+    for (const p of SEM_IDS) {
+      const x = (d.dates || {})[p];
+      if (!x) continue;
+      const f = String(x.from || ""), t = String(x.to || "");
+      if (!SEM_DATE_RE.test(f) || !SEM_DATE_RE.test(t) || t < f) throw secMsg("invalid-argument", "تواريخ " + SEM_AR[p] + " غير صحيحة.");
+      out[p] = { from: f, to: t, fromMs: new Date(f + "T00:00:00+03:00").getTime(), toMs: new Date(t + "T23:59:59+03:00").getTime() };
+    }
+    if (out.first && out.second && out.second.from <= out.first.to) throw secMsg("invalid-argument", "الفصلان متداخلان أو غير مرتبين.");
+    await db.collection("schoolData").doc("soloSemesters").set(Object.assign({ updatedAt: Date.now(), updatedBy: me.uid }, out), { merge: true });
+    return { ok: true };
+  }
+
+  const sid = String(d.schoolId || "");
+  const period = String(d.period || "");
+  if (!sid || SEM_IDS.indexOf(period) < 0) throw secMsg("invalid-argument", "حدّد المدرسة والفصل الدراسي.");
+  const isSys = secIsAdmin(u);
+  const isDir = secIsSchoolAdminOf(u, sid);
+  if (!isSys && !isDir) throw secMsg("permission-denied", "هذا الإجراء لأدمن النظام أو لمدير هذه المدرسة فقط.");
+  if (["license", "lock", "unlock"].indexOf(action) >= 0 && !isSys) throw secMsg("permission-denied", "هذا الإجراء مقصور على أدمن النظام العام.");
+  if (["license", "lock", "unlock", "activate", "close"].indexOf(action) < 0) throw secMsg("invalid-argument", "إجراء غير معروف.");
+
+  const ref = db.collection("schoolData").doc(sid);
+  const res = await db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists || s.data()._isSchool !== true) throw secMsg("not-found", "المدرسة غير موجودة.");
+    const sc = s.data();
+    // مدرسة قديمة بلا semesters: يُرخَّص لها الفصلان ويُفعَّل منهما الفصل activePeriod القديم (حفظًا لسلوكها الحالي)
+    const sems = Object.assign({}, sc.semesters || {});
+    if (!sc.semesters) {
+      const ap = sc.activePeriod === "second" ? "second" : "first";
+      SEM_IDS.forEach((p) => { sems[p] = { licensed: true, active: p === ap, locked: false }; });
+    }
+    const cur = Object.assign({ licensed: false, active: false, locked: false }, sems[period] || {});
+    const now = Date.now();
+    if (action === "license") {
+      cur.licensed = d.licensed === true;
+      if (!cur.licensed) cur.active = false;
+    } else if (action === "lock") {
+      cur.locked = true; cur.active = false; cur.closedAt = now; cur.by = me.uid;
+    } else if (action === "unlock") {
+      cur.locked = false;
+    } else if (action === "close") {
+      if (!cur.licensed) throw secMsg("failed-precondition", SEM_AR[period] + " غير مرخّص لهذه المدرسة.");
+      cur.active = false; cur.closedAt = now; cur.by = me.uid;
+    } else if (action === "activate") {
+      if (sc.active === false) throw secMsg("failed-precondition", "المدرسة موقوفة من إدارة النظام.");
+      if (!cur.licensed) throw secMsg("failed-precondition", SEM_AR[period] + " غير مرخّص لمدرستك. تواصل مع إدارة النظام.");
+      if (cur.locked) throw secMsg("failed-precondition", SEM_AR[period] + " مغلق نهائيًا من إدارة النظام.");
+      const per = (sc.periods || []).find((x) => x && x.id === period);
+      if (!per || !per.from || !per.to) throw secMsg("failed-precondition", "لم تُحدَّد تواريخ " + SEM_AR[period] + " لمدرستك. تواصل مع إدارة النظام.");
+      const today = semTodayRiyadh();
+      if (today < per.from) throw secMsg("failed-precondition", "لم يبدأ " + SEM_AR[period] + " بعد (يبدأ في " + per.from + ").");
+      if (today > per.to) throw secMsg("failed-precondition", "انتهى " + SEM_AR[period] + " في " + per.to + ".");
+      cur.active = true; cur.activatedAt = now; cur.by = me.uid;
+    }
+    sems[period] = cur;
+    const upd = { semesters: sems, updatedAt: now };
+    // يبقى الحقل القديم activePeriod صالحًا للإشعارات المجدولة: الفصل المفعّل الوحيد، وإلا يبقى كما هو
+    const act = SEM_IDS.filter((p) => (sems[p] || {}).active === true);
+    if (act.length === 1) upd.activePeriod = act[0];
+    tx.update(ref, upd);
+    return { semesters: sems, activePeriod: upd.activePeriod || sc.activePeriod || "first" };
+  });
+  return Object.assign({ ok: true }, res);
 });
 
 // حذف بيانات الفردي. كاملًا لمن لا سياق مدرسة له، وبيانات الفردي وحدها لمن له سياق مدرسة (لا تُمس أنشطة مدرسته)

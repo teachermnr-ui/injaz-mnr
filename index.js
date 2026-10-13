@@ -1,4 +1,4 @@
-// إصدار: 2026-10-13.1
+// إصدار: 2026-10-13.2
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -61,6 +61,7 @@ exports.unlinkUserAccount = onCall({secrets: [GMAIL_APP_PASSWORD]}, async (reque
     updatedAt: Date.now(),
   });
 
+  let emailSent = false;
   // ٣) إرسال بريد فوري (يتطلب تفعيل امتداد Trigger Email لاحقًا ليعمل فعليًا)
   if (targetEmail) {
     const transporter = nodemailer.createTransport({
@@ -71,18 +72,24 @@ exports.unlinkUserAccount = onCall({secrets: [GMAIL_APP_PASSWORD]}, async (reque
       },
     });
     
-    await transporter.sendMail({
-      from: "awraqaicom@gmail.com",
-      to: targetEmail,
-      subject: "تم فك ربط حسابك",
-      text:
-        "تم فك ربط بريدك القديم بناءً على طلبك.\n" +
-        "كلمة المرور الأولية الجديدة لإعادة التفعيل: " + newPassword + "\n" +
-        "سجّل الدخول من جديد بأي بريد وأدخل رقم هويتك وهذه الكلمة لإكمال التفعيل.",
-    });
+    // (2026-10-13) فك الربط تم فعليًا؛ فشل البريد لا يُظهَر كفشل للعملية بل يُبلَّغ به المدير ليرسل الكلمة بنفسه
+    try {
+      await transporter.sendMail({
+        from: "awraqaicom@gmail.com",
+        to: targetEmail,
+        subject: "تم فك ربط حسابك",
+        text:
+          "تم فك ربط بريدك القديم بناءً على طلبك.\n" +
+          "كلمة المرور الأولية الجديدة لإعادة التفعيل: " + newPassword + "\n" +
+          "سجّل الدخول من جديد بأي بريد وأدخل رقم هويتك وهذه الكلمة لإكمال التفعيل.",
+      });
+      emailSent = true;
+    } catch (e) {
+      console.error("unlinkUserAccount mail", e);
+    }
   }
 
-  return { success: true, email: targetEmail };
+  return { success: true, email: targetEmail, emailSent };
 });
 const db2 = admin.firestore();
 
@@ -92,8 +99,11 @@ exports.requestMergeLink = onCall(
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "يجب تسجيل الدخول أولاً.");
     }
+    if (request.auth.token && request.auth.token.firebase && request.auth.token.firebase.sign_in_provider === "anonymous") {
+      throw new HttpsError("permission-denied", "هذا الإجراء غير متاح لهذا النوع من الدخول.");
+    }
     const callerUid = request.auth.uid;
-    const {loginId, confirmEmail} = request.data;
+    const {loginId, confirmEmail} = request.data || {};
 
     if (!loginId || !/^[0-9]{10,14}$/.test(loginId)) {
       throw new HttpsError("invalid-argument", "رقم هوية غير صالح.");
@@ -102,6 +112,8 @@ exports.requestMergeLink = onCall(
       throw new HttpsError("invalid-argument", "لازم تدخل البريد للتأكيد.");
     }
 
+    // (2026-10-13) حدّ للمحاولات: لا تخمين لرقم الهوية والبريد
+    const gate = await secGate("mrg_" + callerUid, 8, 30 * 60 * 1000);
     // إيجاد الحساب الآخر المطابق (سيرفريًا، لا نثق بأي شيء من المتصفح)
     const q = await db2.collection("users").where("loginId", "==", loginId).get();
     const otherDoc = q.docs.find((d) =>
@@ -111,25 +123,28 @@ exports.requestMergeLink = onCall(
       d.data().role !== "schoolAdmin"
     );
     if (!otherDoc) {
+      await secFail(gate);
       throw new HttpsError("not-found", "لا يوجد رقم سجل مطابق مرتبط بحساب آخر.");
     }
     const otherData = otherDoc.data();
     const realEmail = otherData.email || otherData.googleEmail || "";
-    if (!realEmail || confirmEmail.trim().toLowerCase() !== realEmail.trim().toLowerCase()) {
+    if (!realEmail || String(confirmEmail).trim().toLowerCase() !== realEmail.trim().toLowerCase()) {
+      await secFail(gate);
       throw new HttpsError("permission-denied", "البريد المُدخَل غير صحيح.");
     }
 
-    // كتابة رقم الهوية على حساب المستدعي (الفردي) الآن فقط
-    await db2.collection("users").doc(callerUid).update({
-      loginId: loginId,
-      isSolo: true,
-      updatedAt: Date.now(),
-    });
+    // (2026-10-13) لا نكتب شيئًا على حساب المستدعي هنا؛ يُحفظ الرقم في طلب الدمج وحده. ولا نُنشئ الطلب إن لم نستطع إيصال الكود.
+    const callerDoc = await db2.collection("users").doc(callerUid).get();
+    const callerEmail = callerDoc.exists ?
+      (callerDoc.data().email || callerDoc.data().googleEmail || "") : "";
+    if (!callerEmail) {
+      throw new HttpsError("failed-precondition", "حسابك الحالي بلا بريد لإرسال الكود إليه.");
+    }
 
     // توليد كود ٦ أرقام وحفظ طلب الدمج (صالح ٢٤ ساعة)
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-    await db2.collection("mergeRequests").add({
+    const mrRef = await db2.collection("mergeRequests").add({
       soloUid: callerUid,
       targetUid: otherDoc.id,
       loginId: loginId,
@@ -139,11 +154,8 @@ exports.requestMergeLink = onCall(
       expiresAt: expiresAt,
     });
 
-    // إرسال الكود لبريد الحساب الفردي نفسه
-    const callerDoc = await db2.collection("users").doc(callerUid).get();
-    const callerEmail = callerDoc.exists ?
-      (callerDoc.data().email || callerDoc.data().googleEmail || "") : "";
-    if (callerEmail) {
+    // إرسال الكود لبريد الحساب الفردي نفسه؛ إن فشل الإرسال يُلغى الطلب ويُبلَّغ المستخدم (لا طلب معلّق بلا كود وصل)
+    try {
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
@@ -160,6 +172,10 @@ exports.requestMergeLink = onCall(
           "كود الربط: " + code + "\n" +
           "سجّل الدخول بحسابك الآخر (حساب المدرسة) وأدخل هذا الكود خلال 24 ساعة لإتمام الدمج.",
       });
+    } catch (e) {
+      console.error("requestMergeLink mail", e);
+      await mrRef.delete().catch(() => {});
+      throw new HttpsError("unavailable", "تعذّر إرسال الكود إلى بريدك الآن. أعد المحاولة بعد قليل.");
     }
 
     return {success: true, maskedTarget: maskEmailServer(realEmail)};
@@ -181,14 +197,19 @@ exports.confirmMergeLink = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "يجب تسجيل الدخول أولاً.");
   }
+  if (request.auth.token && request.auth.token.firebase && request.auth.token.firebase.sign_in_provider === "anonymous") {
+    throw new HttpsError("permission-denied", "هذا الإجراء غير متاح لهذا النوع من الدخول.");
+  }
   const callerUid = request.auth.uid;
-  const {code} = request.data;
+  const {code} = request.data || {};
 
   if (!code) {
     throw new HttpsError("invalid-argument", "أدخل الكود.");
   }
 
   const db3 = admin.firestore();
+  // (2026-10-13) حدّ للمحاولات: كود الدمج من ستة أرقام فلا يُترك للتخمين
+  const gate3 = await secGate("mrgc_" + callerUid, 6, 30 * 60 * 1000);
 
   const q = await db3.collection("mergeRequests")
     .where("targetUid", "==", callerUid)
@@ -197,6 +218,7 @@ exports.confirmMergeLink = onCall(async (request) => {
     .get();
 
   if (q.empty) {
+    await secFail(gate3);
     throw new HttpsError("not-found", "الكود غير صحيح.");
   }
 
@@ -561,7 +583,11 @@ exports.deleteMyAccount = onCall({ secrets: [GMAIL_APP_PASSWORD] }, async (reque
           "\nالبريد: " + (me.email || request.auth.token.email || "") + "\nالمدارس: " + schools.join(", ") +
           "\nالتنفيذ: فك الربط (🔓) من إدارة المستخدمين ثم تعطيل الحساب. المعرّف: " + uid,
       });
-    } catch (e) { console.error("deleteMyAccount mail", e); }
+    } catch (e) {
+      console.error("deleteMyAccount mail", e);
+      // (2026-10-13) لا يضيع الطلب: يُعلَّم بفشل البريد ليراه المسؤول في سجل الطلبات
+      await db.collection("deletionRequests").doc(uid).update({ mailFailed: true }).catch(() => {});
+    }
     return { mode: "request" };
   }
   if (!me.solo) throw new HttpsError("failed-precondition", "لا توجد بيانات للحذف على هذا الحساب.");
@@ -1122,6 +1148,17 @@ async function secGate(key, max, windowMs) {
   if (fails.length >= max) throw secMsg("resource-exhausted", "محاولات خاطئة كثيرة. حاول بعد قليل.");
   return { ref, fails, now };
 }
+// هل هذا الدخول/البريد لحساب طالب مسجَّل؟ (يمنع أن يصير الطالب معلمًا بنفس البريد)
+async function secIsStudent(uid, email) {
+  const db = secDb();
+  if ((await db.collection("studentAccounts").doc(uid).get()).exists) return true;
+  const ems = Array.from(new Set([String(email || "").trim(), String(email || "").trim().toLowerCase()])).filter(Boolean);
+  for (const e of ems) {
+    if (!(await db.collection("studentAccounts").where("email", "==", e).limit(1).get()).empty) return true;
+  }
+  return false;
+}
+const SEC_STUDENT_MSG = "هذا البريد مسجَّل كحساب طالب، ولا يمكن استخدامه لحساب معلم أو منسوب مدرسة. استخدم بريدًا آخر.";
 async function secFail(g) { await g.ref.set({ fails: g.fails.concat([g.now]) }); }
 
 // هل يملك المستدعي صلاحية «مدير» على مستخدمي هذه المدرسة (يرى أرقام الهوية والبريد وكلمات المرور الأولية للمعلَّقين)؟
@@ -1239,6 +1276,7 @@ exports.activateStaff = onCall(async (request) => {
   const temp = String(d.temp || "");
   if (!seat || !temp || seat.length > 40) throw secMsg("invalid-argument", "أدخل رقم الهوية وكلمة المرور الأولية");
   const gate = await secGate("act_" + me.uid, 10, 30 * 60 * 1000);
+  if (await secIsStudent(me.uid, tok.email)) throw secMsg("permission-denied", SEC_STUDENT_MSG);
   const db = secDb();
   const users = db.collection("users");
   let qs = await users.where("loginId", "==", seat).get();
@@ -1371,6 +1409,7 @@ async function secNextSoloCode() {
 exports.registerSolo = onCall(async (request) => {
   const me = await secCaller(request);
   if (me.tok.email_verified !== true) throw secMsg("failed-precondition", "يجب تأكيد بريدك أولًا.");
+  if (await secIsStudent(me.uid, me.tok.email)) throw secMsg("permission-denied", SEC_STUDENT_MSG);
   const db = secDb();
   const q = await db.collection("users").where("authUid", "==", me.uid).limit(1).get();
   const now = Date.now();
@@ -1457,6 +1496,53 @@ exports.studentVerify = onCall(async (request) => {
   const payload = { googleUid: me.uid, email, name: me.tok.name || "", seat, linkedRosters: [matched.rosterId], verifiedAt: now, updatedAt: now };
   await db.collection("studentAccounts").doc(me.uid).set(payload);
   return { status: "ok", account: { id: me.uid, seat, name: payload.name } };
+});
+/* (2026-10-13 · المرحلة ٥) قراءة فهرس الطلاب صارت للخادم وحده: الطالب يرى فصوله هو فقط، ولا يصل لمتصفحه
+   رمز دخول أي فصل ولا هوية غيره. رقم الهوية يؤخذ من حساب الطالب المخزَّن لا مما يرسله المتصفح. */
+async function secStudentAccount(me) {
+  const s = await secDb().collection("studentAccounts").doc(me.uid).get();
+  if (!s.exists || !s.data().seat) throw secMsg("permission-denied", "لا يوجد حساب طالب مرتبط بهذا الدخول.");
+  return s;
+}
+exports.studentMemberships = onCall(async (request) => {
+  const me = await secCaller(request);
+  const acc = await secStudentAccount(me);
+  const seat = String(acc.data().seat);
+  const linked = (acc.data().linkedRosters || []).map(String);
+  const snap = await secDb().collection("rosterIndex").where("seatList", "array-contains", seat).get();
+  const approved = [], invites = [];
+  snap.docs.forEach((d) => {
+    const r = d.data();
+    const classCodes = ((r.classBySeat || {})[seat] || []).map(String);
+    if (!classCodes.length) return;
+    if (r.kind === "solo" && !linked.includes(String(r.rosterId))) {
+      invites.push({ rosterId: String(r.rosterId), ownerName: r.ownerName || "معلم",
+        classNames: classCodes.map((cc) => ((r.classMeta || {})[cc] || {}).name || cc) });
+    } else {
+      approved.push({ rosterId: String(r.rosterId), kind: r.kind, classCodes });
+    }
+  });
+  return { approved, invites };
+});
+exports.studentConfirmInvite = onCall(async (request) => {
+  const me = await secCaller(request);
+  const acc = await secStudentAccount(me);
+  const seat = String(acc.data().seat);
+  const d = request.data || {};
+  const rosterId = String(d.rosterId || "").trim();
+  const code = String(d.code || "").trim().toUpperCase();
+  if (!rosterId || !code || rosterId.length > 200 || code.length > 40) throw secMsg("invalid-argument", "أدخل رمز الفصل.");
+  const gate = await secGate("inv_" + me.uid, 8, 30 * 60 * 1000);
+  const rs = await secDb().collection("rosterIndex").doc(rosterId).get();
+  const r = rs.exists ? rs.data() : {};
+  const mine = (r.classBySeat || {})[seat] || [];
+  const ok = r.kind === "solo" && mine.some((cc) => {
+    const lc = ((r.classMeta || {})[cc] || {}).loginCode;
+    return lc && String(lc).toUpperCase() === code;
+  });
+  if (!ok) { await secFail(gate); throw secMsg("permission-denied", "الرمز لا يطابق فصلك لدى هذا المعلم."); }
+  await acc.ref.update({ linkedRosters: admin.firestore.FieldValue.arrayUnion(rosterId), updatedAt: Date.now() });
+  return { ok: true };
 });
 // أرقام هوية طلاب فعّلوا حساباتهم (شارة «مفعَّل» عند المعلم) — بلا أي بيانات أخرى
 exports.activatedSeats = onCall(async (request) => {

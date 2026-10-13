@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-13.3 -->
+<!-- إصدار: 2026-10-13.4 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -401,6 +401,7 @@ input,select{font-family:inherit;font-size:15px}
 <script src="pwa.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="users-api.js"></script>
+<script src="sem-guard.js?v=2026-10-13.4"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 /* =========================================================================
@@ -567,8 +568,14 @@ const ADMIN_TOOLS = [
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
 /* [ADMIN-TOOLS:MOD] ORIG: const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting']; */
 const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting','tools.excellence'];
+/* المدير داخل فصل مغلق: لا يرى إلا تبويب «الفصول الدراسية» (ولا أدوات ولا لوحتي) */
+function semClosedForMe(){
+  return !!CURRENT && CURRENT.role==='schoolAdmin' && !!CURRENT.schoolId && !!SESSION && window.SemGuard
+    && !SemGuard.isOpen(SCHOOLS[CURRENT.schoolId], SESSION.period);
+}
 function visibleTools(){
   if(!CURRENT) return [];
+  if(semClosedForMe()) return [];
   if(CURRENT.role==='admin') return ADMIN_TOOLS.filter(t=>!t.noAdmin);
   if(CURRENT.role==='soloTeacher' || !CURRENT.schoolId) return [];
   const pm = CURRENT.permissions||{};
@@ -578,6 +585,7 @@ function visibleTools(){
    مستقلة تمامًا عن قائمة «أدوات إدارية» (تلك لصاحب الصلاحية لإدارة الأداة؛ هذه لأي موظف عادي كي يرى ما يخصّه شخصيًا).
    كل بند فيها ينقل لصفحته المستقلة (نفس أسلوب «أدوات إدارية» تمامًا)، ويحمل علامة حمراء لو عليه تحديث جديد. */
 function myBoardVisible(){
+  if(semClosedForMe()) return false;
   return !!CURRENT && !!CURRENT.id && CURRENT.role!=='admin' && CURRENT.role!=='soloTeacher' && !!CURRENT.schoolId;
 }
 const MYBOARD_ITEMS = [
@@ -1644,6 +1652,7 @@ $('#pwBtn').onclick = async ()=>{
 // «الإرشاد الطلابي» يظهر لمن له الدور أو الصلاحية (حتى لو لم تُخزَّن الصلاحية للمستخدمين القدامى)، ويتطلب مدرسة محددة
 // «المؤشرات» لمدير المدرسة فقط (لا أدمن النظام ولا غيره)
 function visibleTabs(){
+  if(semClosedForMe()) return [INDEX_TABS.find(t=>t.key==='semesters')];
   const base = visibleTabsCore().filter(t=>t.key!=='guidance' && t.key!=='dashboard' && t.key!=='semesters');
   const extra = [];
   if(CURRENT.schoolId && guideView()) extra.push(INDEX_TABS.find(t=>t.key==='guidance'));
@@ -1672,7 +1681,7 @@ function enterApp(){
   const _dateEl = $('#tbDate'); if(_dateEl) _dateEl.innerHTML = (window.InjazTheme ? InjazTheme.dateHTML() : headerDateStr());
   $('#tbPeriod').textContent = periodLabel(SESSION.period);
   const _omrKeys=['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'];
-  const _ob=$('#tbOmr'); if(_ob) _ob.style.display=(CURRENT.role==='admin'||_omrKeys.some(k=>can(k,'access')))?'flex':'none';
+  const _ob=$('#tbOmr'); if(_ob) _ob.style.display=(!semClosedForMe() && (CURRENT.role==='admin'||_omrKeys.some(k=>can(k,'access'))))?'flex':'none';
   const tabs=visibleTabs();
   const bar=$('#tabbar'); bar.innerHTML='';
 /* [ADMIN-TOOLS:BEGIN] */
@@ -2818,13 +2827,19 @@ async function semAct(sid, p, act, boxId, isSys){
   if(act==='unlicense') payload.licensed = false;
   try{
     const r = await UsersAPI.call('schoolSemester', payload);
+    const wasClosed = !isSys && semClosedForMe();
     SCHOOLS[sid] = Object.assign({}, SCHOOLS[sid], { semesters:r.semesters, activePeriod:r.activePeriod });
     toast('تم'); semRender(sid, boxId, isSys);
+    if(!isSys && wasClosed !== semClosedForMe()) enterApp();   // تغيّرت حالة فصل جلستي: أعد بناء التبويبات
   }catch(e){ toast(e && e.message ? e.message : 'تعذّر تنفيذ الإجراء'); }
 }
 async function renderSemesters(c){
   if(!dashVisible()){ c.innerHTML='<div class="empty">هذا التبويب لمدير المدرسة فقط.</div>'; return; }
   c.innerHTML = '<div class="panel-head"><h2>الفصول الدراسية</h2></div><div class="sub-note">فعّل الفصل الدراسي عند بدايته وأغلقه عند نهايته. الفصل المُغلق لا يدخله مستخدمو مدرستك. التفعيل لا يتم إلا داخل تواريخ الفصل التي حدّدها أدمن النظام.</div><div id="semBoxDir"></div>';
+  if(semClosedForMe()){
+    const w = SemGuard.reason(SCHOOLS[CURRENT.schoolId], SESSION.period);
+    c.insertAdjacentHTML('afterbegin','<div class="alert err" style="margin-bottom:10px"><b>هذا الفصل الدراسي ('+esc(periodLabel(SESSION.period))+') مغلق.</b> '+esc(w)+' لا يمكن العمل في بقية الأقسام فيه. اختر فصلًا آخر عند الدخول، أو فعّله من هنا إن كان ضمن تواريخه.</div>');
+  }
   semRender(CURRENT.schoolId, 'semBoxDir', false);
 }
 /* ===================== «المؤشرات» — لوحة مؤشرات لمدير المدرسة فقط (ص-٩) =====================
@@ -4361,14 +4376,14 @@ function openSchoolModal(id){
     const yF=$('#smYearFrom').value, yT=$('#smYearTo').value;
     if((yF&&!yT)||(!yF&&yT)||(yF&&yT&&yT<yF)){ alertBox('smAlert','err','حدّد بداية العام الدراسي ونهايته بشكل صحيح'); return; }
     const pCount = parseInt($('#smPeriodCount').value,10)||0;
+    if(pCount>0 && !(yF&&yT)){ alertBox('smAlert','err','تاريخ العام الدراسي (بداية ونهاية) إلزامي عند تحديد الفصلين'); return; }
     const periods = [];
     for(let i=0;i<pCount;i++){
       const f=$('#smPer'+i+'From').value, t=$('#smPer'+i+'To').value;
       if(!f||!t||t<f){ alertBox('smAlert','err','حدّد تاريخ بداية ونهاية صحيحين لـ'+periodLabel(PER_IDS[i])); return; }
       if(yF && (f<yF||t>yT)){ alertBox('smAlert','err',periodLabel(PER_IDS[i])+' خارج مدة العام الدراسي'); return; }
       if(periods.length && f<=periods[periods.length-1].to){ alertBox('smAlert','err','الفصلان متداخلتان أو غير مرتبتين'); return; }
-      periods.push({ id:PER_IDS[i], from:f, to:t,
-        fromMs:new Date(f+'T00:00:00').getTime(), toMs:new Date(t+'T23:59:59').getTime() });
+      periods.push({ id:PER_IDS[i], from:f, to:t });
     }
     const sid = id || ('s'+Date.now().toString(36));
     let code = s.code;
@@ -4380,10 +4395,7 @@ function openSchoolModal(id){
     }
     const data={ name, code, eduDept:$('#smEduDept').value.trim(), contactNumber:$('#smContact').value.trim(),
       year:$('#smYear').value.trim(),
-      yearFrom:yF||'', yearTo:yT||'',
-      yearFromMs: yF ? new Date(yF+'T00:00:00').getTime() : null,
-      yearToMs:   yT ? new Date(yT+'T23:59:59').getTime() : null,
-      periods,
+      // تواريخ العام والفصلين (yearFrom/yearTo/periods) تُحفظ عبر دالة الخادم schoolSemester(saveDates) ولا تُكتب هنا
       classCount:$('#smCount').value.trim(),
       active: smActiveState,
       activeFrom: $('#smActiveFrom').value || '',
@@ -4396,7 +4408,16 @@ function openSchoolModal(id){
       _isSchool: true };
     if(!id) data.semesters = {};   // مدرسة جديدة: لا فصل مرخَّص حتى يرخّصه الأدمن
     // حقل semesters (وactivePeriod) تكتبهما دالة الخادم فقط؛ الحفظ هنا بالدمج حتى لا يُمحى شيء
-    try{ await schoolDocById(sid).set(data,{merge:true}); SCHOOLS[sid]=Object.assign({}, SCHOOLS[sid]||{}, data); delete SCHOOLS[sid]._isSchool; toast(id?'تم تحديث المدرسة':'تمت إضافة المدرسة'); closeModal(); renderSchoolsList(); }
+    try{
+      await schoolDocById(sid).set(data,{merge:true});
+      const hadDates = !!(s.yearFrom || (s.periods||[]).length);
+      if(yF || pCount>0 || hadDates){
+        const sems = {}; periods.forEach(p=>{ sems[p.id]={from:p.from,to:p.to}; });
+        await UsersAPI.call('schoolSemester',{ action:'saveDates', schoolId:sid, yearFrom:yF, yearTo:yT, semesters:sems });
+      }
+      const fresh = await schoolDocById(sid).get();
+      SCHOOLS[sid] = Object.assign({}, fresh.data()); delete SCHOOLS[sid]._isSchool;
+      toast(id?'تم تحديث المدرسة':'تمت إضافة المدرسة'); closeModal(); renderSchoolsList(); }
     catch(e){ alertBox('smAlert','err',e.message); }
   };
 }

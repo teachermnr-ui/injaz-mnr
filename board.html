@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-11.1 -->
+<!-- إصدار: 2026-10-15.1 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — شاشة العرض على التلفاز (ص-٣٧). تُحذف عند إزالة الأدوات الإدارية. -->
 <!-- تعمل داخل تطبيق «شاشة التميز» لأندرويد تي في، وتصلح للتجربة في أي متصفح. دخول مجهول فقط: لا حسابات ولا بيانات شخصية. -->
 <html lang="ar" dir="rtl">
@@ -43,7 +43,7 @@ body{font-family:'Tajawal',system-ui,sans-serif;color:#eef5f2}
 </div>
 <script>
 'use strict';
-const BOARD_VERSION='2026-10-11.1';
+const BOARD_VERSION='2026-10-15.1';
 const firebaseConfig = {
   apiKey: "AIzaSyCEW-BTrfkqLUFXj7drtts7GkN6PXpbV4A",
   authDomain: "injaz-classroom.firebaseapp.com",
@@ -85,9 +85,9 @@ function currentMode(){
 const mIn=m=>(m||[]).map(r=>[r.v||'',r.l||'',r.i||'']);
 let lastVer=null;
 function applyBoard(){
-  if(BOARD && BOARD.version!==lastVer){
-    lastVer=BOARD.version;
-    ex.setBoard({ channel:BOARD.channel, schoolName:BOARD.schoolName||'', news:BOARD.news||[],
+  if(BOARD && (BOARD.version+'|'+(BOARD.autoAt||0))!==lastVer){
+    lastVer=BOARD.version+'|'+(BOARD.autoAt||0);
+    ex.setBoard({ channel:BOARD.channel, schoolName:BOARD.schoolName||'', news:BOARD.news||[], extra:BOARD.extra||[],
       items:(BOARD.items||[]).map(i=>Object.assign({},i,{m:mIn(i.m)})) });
   }
   ex.setMode(currentMode());

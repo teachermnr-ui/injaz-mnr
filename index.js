@@ -1,4 +1,4 @@
-// إصدار: 2026-10-14.5
+// إصدار: 2026-10-15.1
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -2141,4 +2141,231 @@ exports.dailyCalendarSweep = onSchedule({ schedule: "0 2 * * *", timeZone: "Asia
     await db.collection("calendarLog").doc(day).set({ at: nowMs, from: { state: prev.state || null, period: prev.period || null }, to: { state, period: r.period || null }, year: cal ? cal.year || null : null });
   }
   console.log("dailyCalendarSweep: state=" + state + " period=" + (r.period || "-"));
+});
+
+/* =========================================================================
+   (2026-10-15.1) شاشة التميز: المحتوى التلقائي والدورة الهجرية الشهرية
+   - شرائح آلية في قناتي المعلمين والإداريين تُكتب في boards/{sid}_{channel}.extra (التلفاز يقرأ اللقطة فقط).
+       المعلمون: التعاميم الجديدة + مناوبة اليوم (بأسماء المناوبين). الإداريون: مؤشرات + تنبيهات.
+       لا إجازات ولا غياب ولا درجات ولا جوالات ولا هويات في أي شريحة. لكل شريحة مفتاح تشغيل في excellence/{sid}.auto.
+   - أرقام الإنجاز لكل مكرَّم مرتبط بحساب (item.uid + item.auto): من بداية الشهر الهجري الحالي فقط، وتبدأ من الصفر كل شهر.
+   - الدورة: excellence/{sid}.cycle (مثل 1448-05). عند تغيّر الشهر تُحفظ لقطة الشهر السابق في excellence/{sid}/archive/{cycle}.
+   ========================================================================= */
+const EXA_DEF = { circ: true, duty: true, ind: true, alerts: true, nums: true };
+function exaHijri(key) {
+  const p = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { timeZone: "UTC", year: "numeric", month: "numeric", day: "numeric" }).formatToParts(new Date(key + "T12:00:00Z"));
+  const g = (t) => +((p.find((x) => x.type === t) || {}).value);
+  return { y: g("year"), m: g("month"), d: g("day") };
+}
+function exaCycle(nowMs) {
+  const todayKey = new Date(nowMs + 3 * 3600e3).toISOString().slice(0, 10);
+  const h = exaHijri(todayKey);
+  const startKey = addDaysKey(todayKey, -(h.d - 1));
+  let endKey = startKey;
+  for (let i = 0; i < 31; i++) { const nx = addDaysKey(endKey, 1); if (exaHijri(nx).m !== h.m) break; endKey = nx; }
+  let name = "";
+  try { name = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { timeZone: "UTC", month: "long" }).format(new Date(startKey + "T12:00:00Z")); } catch (e) { name = String(h.m); }
+  return { id: h.y + "-" + String(h.m).padStart(2, "0"), y: h.y, m: h.m, name, label: name + " " + arNum(h.y) + " هـ", startKey, endKey, todayKey,
+    startMs: Date.parse(startKey + "T00:00:00+03:00"), endMs: Date.parse(endKey + "T23:59:59.999+03:00") };
+}
+const exaPrevCycle = (cyc) => exaCycle(Date.parse(addDaysKey(cyc.startKey, -1) + "T12:00:00+03:00"));
+const exaMs = (x) => (x && typeof x.toMillis === "function") ? x.toMillis() : (+x || 0);
+const exaIn = (ms, cyc) => ms >= cyc.startMs && ms <= cyc.endMs;
+
+/* يحمّل مصادر الأرقام مرة واحدة لمدرسة ودورة */
+async function exaLoad(db, sid, cyc, nowMs, need) {
+  const L = { cyc, nowMs, period: "first", staff: [], circ: [], sigs: {}, wait: {}, waitToday: 0, visits: {}, visitsAll: 0, visitsPlanned: 0, ws: {}, wsAll: 0, refs: {}, duty: [], cal: {} };
+  const sd = await db.collection("schoolData").doc(sid).get();
+  L.period = (sd.exists && sd.data().activePeriod) || "first";
+  L.cal = await getCalendar(db, sid);
+  const us = await db.collection("users").where(new admin.firestore.FieldPath("schools", sid, "role"), ">=", "").get();
+  L.staff = us.docs.map((d) => ({ id: d.id, u: d.data() })).filter((x) => x.u.active !== false && !x.u.migratedTo && ((x.u.schools || {})[sid] || {}).active !== false);
+  const since = Math.min(cyc.startMs, nowMs - 14 * 864e5);
+  const cs = await db.collection("circulars").doc(sid).collection("items").where("createdAt", ">=", since).get();
+  L.circ = cs.docs.map((d) => Object.assign({ id: d.id, ref: d.ref }, d.data())).sort((a, b) => (b.number || 0) - (a.number || 0));
+  // توقيعات الإلزامية الأحدث (للمؤشرات والتنبيهات فقط)
+  if (need.sigs) {
+    for (const c of L.circ.filter((x) => x.mandatory && nowMs - x.createdAt <= 14 * 864e5).slice(0, 10)) {
+      const ss = await c.ref.collection("signatures").get();
+      L.sigs[c.id] = {}; ss.docs.forEach((s) => { L.sigs[c.id][s.id] = exaMs(s.data().signedAt); });
+    }
+  }
+  // انتظار: وثائق الأيام من بداية الشهر حتى اليوم
+  const ttc = db.collection("timetables").doc(sid).collection("data");
+  for (let k = cyc.startKey, i = 0; k <= cyc.todayKey && k <= cyc.endKey && i < 31; k = addDaysKey(k, 1), i++) {
+    const w = parseVal(await ttc.doc(L.period + "_wday_" + k).get());
+    if (!w || !w.sent) continue;
+    (w.items || []).forEach((it) => { if (it.subUid) L.wait[it.subUid] = (L.wait[it.subUid] || 0) + 1; });
+    if (k === cyc.todayKey) L.waitToday = (w.items || []).filter((it) => it.subUid).length;
+  }
+  // الزيارات الصفية
+  const vp = await db.collection("classVisits").where("schoolId", "==", sid).get();
+  vp.docs.map((d) => d.data()).filter((v) => v.kind === "plan" && v.period === L.period).forEach((v) => {
+    [v.v1, v.v2].forEach((x) => {
+      if (!x || !x.date || x.date < cyc.startKey || x.date > cyc.endKey) return;
+      L.visitsPlanned++;
+      if (x.date <= cyc.todayKey && (v.exec === "ok" || v.exec === "mod")) L.visitsAll++;
+      if (x.date <= cyc.todayKey && v.exec === "ok" && v.teacherId) L.visits[v.teacherId] = (L.visits[v.teacherId] || 0) + 1;
+    });
+  });
+  // أوراق العمل المنشورة هذا الشهر
+  const ws = await db.collection("worksheets").where("schoolId", "==", sid).get();
+  ws.docs.map((d) => d.data()).forEach((w) => {
+    if (w.status !== "published" || !exaIn(exaMs(w.publishedAt), cyc)) return;
+    L.wsAll++; if (w.createdBy) L.ws[w.createdBy] = (L.ws[w.createdBy] || 0) + 1;
+  });
+  // الإحالات المغلقة (حالات الإرشاد المفتوحة من تحويل)
+  const gc = await db.collection("guidanceCases").where("schoolId", "==", sid).get();
+  gc.docs.map((d) => d.data()).forEach((c) => {
+    if (c.source === "referral" && c.status === "closed" && exaIn(+c.closedAt || 0, cyc) && c.openedBy) L.refs[c.openedBy] = (L.refs[c.openedBy] || 0) + 1;
+  });
+  // مناوبو اليوم (الأسماء فقط)
+  if (!isHoliday(L.cal, cyc.todayKey)) {
+    const dp = await db.collection("dutyPlans").where("schoolId", "==", sid).get();
+    const seen = new Set();
+    dp.docs.map((d) => d.data()).filter((v) => v.period === L.period && v.pub).forEach((v) => {
+      ((v.pub.dutyDays || {})[cyc.todayKey] || []).forEach((id) => {
+        const key = id + "|" + (v.stageLabel || v.pub.stageLabel || "");
+        if (seen.has(key)) return; seen.add(key);
+        L.duty.push({ id, name: (v.pub.names || {})[id] || "", stage: v.stageLabel || v.pub.stageLabel || "" });
+      });
+    });
+    L.duty = L.duty.filter((x) => x.name);
+  }
+  return L;
+}
+
+/* أرقام مكرَّم واحد (الشهر الهجري الحالي فقط). تُرجع حتى ثلاثة صفوف {v,l,i} بما هو أكبر من صفر */
+async function exaNumsFor(L, uid) {
+  const rows = [];
+  const add = (n, l, i) => { if (n > 0) rows.push({ v: arNum(n), l, i }); };
+  add(L.ws[uid] || 0, "أوراق عمل منشورة هذا الشهر", "book");
+  add(L.visits[uid] || 0, "زيارات صفية نُفِّذت في موعدها", "target");
+  add(L.wait[uid] || 0, "حصص انتظار نفّذها هذا الشهر", "clock");
+  add(L.refs[uid] || 0, "إحالات طلابية أُغلقت", "heart");
+  // سرعة التوقيع: التعاميم الإلزامية الواردة هذا الشهر الموقَّعة خلال ٢٤ ساعة
+  let fast = 0;
+  for (const c of L.circ.filter((x) => x.mandatory && exaIn(x.createdAt || 0, L.cyc) && (x.recipients || []).includes(uid))) {
+    const s = await c.ref.collection("signatures").doc(uid).get();
+    if (s.exists) { const at = exaMs(s.data().signedAt); if (at && at - c.createdAt <= 864e5) fast++; }
+  }
+  add(fast, "تعاميم وقّعها خلال ٢٤ ساعة من وصولها", "sparkle");
+  return rows.slice(0, 3);
+}
+
+/* الشرائح الآلية (type: rows | stats) — كل شريحة لها cat يظهر في الشريط الجانبي */
+function exaSlides(L, sw) {
+  const t = [], a = [];
+  const today = L.cyc.todayKey, staffN = Math.max(1, L.staff.length);
+  if (sw.circ) {
+    const rows = L.circ.filter((c) => c.source !== "duty" && (c.recipients || []).length >= 0.8 * staffN && L.nowMs - c.createdAt <= 7 * 864e5).slice(0, 5)
+      .map((c) => [c.title || "تعميم", "تعميم رقم " + arNum(c.number || 0), c.mandatory ? "إلزامي" : "للاطلاع", c.mandatory ? "warn" : "ok"]);
+    if (rows.length) t.push({ cat: "تعاميم جديدة", type: "rows", title: "التعاميم الجديدة", lead: "وصلت خلال الأيام السبعة الماضية", rows });
+  }
+  if (sw.duty && L.duty.length) {
+    t.push({ cat: "مناوبة اليوم", type: "rows", title: "المناوبة اليوم", lead: hijriDay(today),
+      rows: L.duty.slice(0, 8).map((d) => [d.name, d.stage, "مناوب", ""]) });
+  }
+  if (sw.ind) {
+    const st = [];
+    const mand = L.circ.filter((x) => x.mandatory && L.sigs[x.id]);
+    let need = 0, got = 0;
+    mand.forEach((c) => { const rc = c.recipients || []; need += rc.length; got += rc.filter((u) => L.sigs[c.id][u]).length; });
+    if (need) st.push([arNum(Math.round(got * 100 / need)) + "٪", "نسبة توقيع التعاميم الإلزامية"]);
+    if (L.duty.length) st.push([arNum(L.duty.length), "مناوبون اليوم"]);
+    if (L.waitToday) st.push([arNum(L.waitToday), "حصص انتظار اليوم"]);
+    if (L.wsAll) st.push([arNum(L.wsAll), "أوراق عمل منشورة هذا الشهر"]);
+    if (st.length < 4 && L.visitsAll) st.push([arNum(L.visitsAll) + "/" + arNum(L.visitsPlanned), "زيارات صفية منفّذة من المخطط"]);
+    if (st.length) a.push({ cat: "مؤشرات", type: "stats", title: "مؤشرات الشهر", lead: L.cyc.label, stats: st.slice(0, 4) });
+  }
+  if (sw.alerts) {
+    const rows = [];
+    L.circ.filter((c) => c.mandatory && L.sigs[c.id] && L.nowMs - c.createdAt >= 48 * 3600e3).forEach((c) => {
+      const rc = c.recipients || [], un = rc.filter((u) => !L.sigs[c.id][u]).length;
+      if (un > 0) rows.push([c.title || "تعميم", "تعميم رقم " + arNum(c.number || 0) + " · مضى " + arNum(Math.floor((L.nowMs - c.createdAt) / 864e5)) + " يوم", "لم يوقّع " + arNum(un) + " من " + arNum(rc.length), "warn"]);
+    });
+    if (rows.length) a.push({ cat: "تنبيهات", type: "rows", title: "تنبيهات", lead: "تعاميم إلزامية بانتظار التوقيع", rows: rows.slice(0, 5) });
+  }
+  return { teachers: t, admins: a };
+}
+
+/* لقطة الدورة السابقة للأرشيف */
+async function exaArchive(db, sid, cyc, nowMs, nextStart) {
+  const L = await exaLoad(db, sid, cyc, nowMs, {});
+  const ds = await db.collection("excellence").doc(sid).collection("items").get();
+  const items = [];
+  for (const d of ds.docs) {
+    const v = d.data(); if (v.demo) continue;
+    const stamp = Math.max(+v.createdAt || 0, +v.updatedAt || 0);
+    if (stamp < cyc.startMs || stamp >= nextStart) continue;
+    let m = v.m || [];
+    if (v.auto && v.uid) { const r = await exaNumsFor(L, v.uid); if (r.length) m = r; }
+    items.push({ ch: v.ch, cat: v.cat, name: v.name, sub: v.sub || "", note: v.note || "", m, photo: v.photo || "" });
+  }
+  if (!items.length) return null;
+  if (items.reduce((s, i) => s + (i.photo ? i.photo.length : 0), 0) > 600000) items.forEach((i) => { i.photo = ""; });
+  const doc = { cycle: cyc.id, label: cyc.label, name: cyc.name, y: cyc.y, m: cyc.m, items, savedAt: nowMs, schoolId: sid };
+  await db.collection("excellence").doc(sid).collection("archive").doc(cyc.id).set(doc);
+  return doc;
+}
+
+async function exaRefreshSchool(db, sid, nowMs) {
+  const cyc = exaCycle(nowMs);
+  const exRef = db.collection("excellence").doc(sid);
+  const exS = await exRef.get();
+  const ex = exS.exists ? exS.data() : {};
+  const sw = Object.assign({}, EXA_DEF, ex.auto || {});
+  let archived = null;
+  if (ex.cycle && ex.cycle !== cyc.id) {
+    archived = await exaArchive(db, sid, exaPrevCycle(cyc), nowMs, cyc.startMs);
+  }
+  if (ex.cycle !== cyc.id) await exRef.set({ cycle: cyc.id, cycleLabel: cyc.label, cycleStartMs: cyc.startMs }, { merge: true });
+  const bs = await db.collection("boards").where("schoolId", "==", sid).get();
+  const boards = bs.docs.filter((d) => d.data().live !== false);
+  if (!boards.length) return { cycle: cyc.id, archived: !!archived, boards: 0 };
+  const L = await exaLoad(db, sid, cyc, nowMs, { sigs: sw.ind || sw.alerts });
+  const slides = exaSlides(L, sw);
+  const ds = await exRef.collection("items").get();
+  const drafts = {}; ds.docs.forEach((d) => { drafts[d.id] = d.data(); });
+  const numsCache = {};
+  let n = 0;
+  for (const b of boards) {
+    const v = b.data(), items = (v.items || []).map((i) => Object.assign({}, i));
+    if (sw.nums) {
+      for (const it of items) {
+        const d = drafts[it.id];
+        if (!d || !d.auto || !d.uid) continue;
+        if (Math.max(+d.createdAt || 0, +d.updatedAt || 0) < cyc.startMs) continue;   // بند من دورة سابقة: لا أرقام جديدة له
+        if (!numsCache[d.uid]) numsCache[d.uid] = await exaNumsFor(L, d.uid);
+        if (numsCache[d.uid].length) it.m = numsCache[d.uid].map((r) => ({ v: r.v, l: r.l, i: r.i }));
+      }
+    }
+    const extra = v.channel === "teachers" ? slides.teachers : v.channel === "admins" ? slides.admins : [];
+    await b.ref.update({ items, extra, autoAt: nowMs, autoCycle: cyc.id });
+    n++;
+  }
+  return { cycle: cyc.id, archived: !!archived, boards: n, extra: { teachers: slides.teachers.length, admins: slides.admins.length } };
+}
+
+exports.excellenceAutoRefresh = onCall(async (request) => {
+  const db = admin.firestore();
+  const sid = request.data && request.data.sid;
+  await exAssertManager(db, request, sid);
+  return await exaRefreshSchool(db, sid, Date.now());
+});
+
+exports.excellenceAutoRun = onSchedule({ schedule: "30 6,9,12,15 * * *", timeZone: "Asia/Riyadh", timeoutSeconds: 300, memory: "512MiB" }, async () => {
+  const db = admin.firestore();
+  const schools = await db.collection("schoolData").where("_isSchool", "==", true).get();
+  let done = 0;
+  for (const s of schools.docs) {
+    if (s.data().active === false) continue;
+    try {
+      const has = await db.collection("excellence").doc(s.id).collection("items").limit(1).get();
+      const bd = await db.collection("boards").where("schoolId", "==", s.id).limit(1).get();
+      if (has.empty && bd.empty) continue;
+      await exaRefreshSchool(db, s.id, Date.now()); done++;
+    } catch (e) { console.error("excellenceAutoRun", s.id, e); }
+  }
+  console.log("excellenceAutoRun: schools", done);
 });

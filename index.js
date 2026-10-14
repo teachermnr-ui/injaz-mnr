@@ -1983,3 +1983,22 @@ exports.academicCalendar = onCall(async (request) => {
   const res = await ayApply(db, cal.year, cal.endMs, me.uid);
   return { ok: true, schools, stamped: res.stamped, restamped: res.restamped };
 });
+
+/* ===== (2026-10-14.2) الفصل الحالي بوقت خوادم Google: currentPeriod =====
+   أي مستخدم مسجَّل. يُرجع وقت الخادم (nowMs) والفصل الذي يقع فيه اليوم حسب التقويم المركزي settings/academicCalendar:
+   داخل فصل ← معرّفه (state="during")، قبل بداية العام ← الأول (state="before")، بعد نهايته ← الأخير (state="after")،
+   بلا تقويم ← period=null (state="none"). لا يعتمد على ساعة جهاز المستخدم إطلاقًا. */
+function calPeriodAt(cal, nowMs) {
+  if (!cal || !Array.isArray(cal.periods) || !cal.periods.length) return { period: null, state: "none" };
+  const ps = cal.periods.slice().sort((a, b) => a.fromMs - b.fromMs);
+  for (const p of ps) if (nowMs >= p.fromMs && nowMs <= p.toMs) return { period: p.id, state: "during" };
+  if (nowMs < ps[0].fromMs) return { period: ps[0].id, state: "before" };
+  return { period: ps[ps.length - 1].id, state: "after" };
+}
+exports.currentPeriod = onCall(async (request) => {
+  await secCaller(request);
+  const nowMs = Date.now();
+  const cal = (await secDb().collection("settings").doc("academicCalendar").get()).data() || null;
+  const r = calPeriodAt(cal, nowMs);
+  return { nowMs, period: r.period, state: r.state, year: cal ? cal.year || null : null };
+});

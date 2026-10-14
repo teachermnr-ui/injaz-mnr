@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-14.1 -->
+<!-- إصدار: 2026-10-14.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -4149,54 +4149,76 @@ async function deleteUser(id,name){
 }
 
 /* ---------------- تبويب إعدادات النظام (للأدمن) ---------------- */
-/* تواريخ الفصلين للمعلم الفردي (مستند عام يكتبه الأدمن عبر دالة الخادم) */
-async function soloSemLoad(){
-  const box=$('#soloSemBox'); if(!box) return;
-  let d={}; try{ const sn=await db.collection('schoolData').doc('soloSemesters').get(); d=sn.exists?sn.data():{}; }catch(e){}
-  const row=(p)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-      <span style="min-width:96px">${esc(periodLabel(p))}</span>
-      <input type="date" id="soloSem_${p}_from" value="${esc((d[p]||{}).from||'')}" style="flex:1">
-      <span style="color:var(--muted)">إلى</span>
-      <input type="date" id="soloSem_${p}_to" value="${esc((d[p]||{}).to||'')}" style="flex:1"></div>`;
-  box.innerHTML = row('first')+row('second')+'<button class="btn sm" id="soloSemSave">حفظ التواريخ</button><div id="soloSemAlert"></div>';
-  $('#soloSemSave').onclick=async()=>{
-    const dates={};
-    for(const p of ['first','second']){
-      const f=$('#soloSem_'+p+'_from').value, t=$('#soloSem_'+p+'_to').value;
-      if(!f && !t) continue;
-      if(!f||!t||t<f){ alertBox('soloSemAlert','err','حدّد بداية ونهاية صحيحتين لـ'+periodLabel(p)); return; }
-      dates[p]={from:f,to:t};
-    }
-    try{ await UsersAPI.call('schoolSemester',{action:'soloDates',dates}); alertBox('soloSemAlert','ok','تم حفظ التواريخ'); }
-    catch(e){ alertBox('soloSemAlert','err',e.message||'تعذّر الحفظ'); }
-  };
-}
-/* العام الدراسي الموحَّد لختم بنك الأسئلة (settings/academicYear — يُكتب من دالة الخادم academicYear فقط) */
+/* التقويم الدراسي المركزي (settings/academicCalendar — يُكتب من دالة الخادم academicCalendar فقط) */
 function ayArDigits(v){ return String(v==null?'':v).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]); }
 function ayDateAr(ms){ try{ return new Date(ms).toLocaleDateString('ar-SA-u-ca-gregory',{timeZone:'Asia/Riyadh',year:'numeric',month:'long',day:'numeric'}); }catch(e){ return ''; } }
-async function ayLoad(){
-  const box=$('#ayBox'); if(!box) return;
-  let d={}; try{ const sn=await db.collection('settings').doc('academicYear').get(); d=sn.exists?sn.data():{}; }catch(e){}
-  const expired = !!(d.year && d.endsMs && Date.now()>d.endsMs);
-  const endVal = d.endsMs ? new Date(d.endsMs+3*3600e3).toISOString().slice(0,10) : '';
+let CAL_CACHE = undefined;
+async function calGet(force){
+  if(CAL_CACHE!==undefined && !force) return CAL_CACHE;
+  try{ const sn=await db.collection('settings').doc('academicCalendar').get(); CAL_CACHE = sn.exists?sn.data():null; }
+  catch(e){ CAL_CACHE = null; }
+  return CAL_CACHE;
+}
+function calSummary(c){
+  if(!c || !c.periods) return '';
+  const ar = x=>ayDateAr(x);
+  return c.periods.map(p=>periodLabel(p.id)+': من '+ar(p.fromMs)+' إلى '+ar(p.toMs)).join(' — ');
+}
+async function calLoad(){
+  const box=$('#calBox'); if(!box) return;
+  const d = (await calGet(true)) || {};
+  const expired = !!(d.year && d.endMs && Date.now()>d.endMs);
   box.innerHTML =
-    (d.year ? `<p style="margin:0 0 8px">العام الحالي: <b>${ayArDigits(d.year)}</b>${d.endsMs?` — ينتهي ${esc(ayDateAr(d.endsMs))}`:''}</p>` : `<p style="margin:0 0 8px;color:var(--muted)">لم يُحدَّد عام بعد: الأنشطة التي تُحفظ الآن في البنك تبقى بلا ختم حتى تحدّد عامًا.</p>`)
-    + (expired ? `<div class="alert err" style="margin-bottom:8px">انتهى تاريخ العام ${esc(ayArDigits(d.year))} ولم يُحدَّد العام الجديد؛ الأنشطة المحفوظة الآن تُختم بالعام القديم مؤقتًا. حدّد العام الجديد وسيُصحَّح ختمها تلقائيًا.</div>` : '')
-    + `<div class="field"><label>العام الدراسي (أربع خانات، مثل 1447)</label><input id="ayYear" inputmode="numeric" maxlength="4" value="${esc(d.year||'')}" placeholder="1447"></div>
-       <div class="field"><label>تاريخ نهاية العام (اختياري، لتنبيهك عند انتهائه)</label><input type="date" id="ayEnd" value="${esc(endVal)}"></div>
-       <button class="btn sm" id="aySave">حفظ العام</button><div id="ayAlert"></div>`;
-  $('#aySave').onclick=async()=>{
-    const year=($('#ayYear').value||'').trim().replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c));
-    const endDate=$('#ayEnd').value||'';
-    if(!/^1[34]\d\d$/.test(year)){ alertBox('ayAlert','err','اكتب العام بأربع خانات، مثل 1447'); return; }
+    (d.year ? `<p style="margin:0 0 8px">العام الحالي: <b>${ayArDigits(d.year)}</b> — ${esc(calSummary(d))}</p>` : `<div class="alert err" style="margin-bottom:8px">لم يُحدَّد العام الدراسي بعد: لا يمكن إضافة مدرسة قبل حفظ هذا الإعداد.</div>`)
+    + (expired ? `<div class="alert err" style="margin-bottom:8px">انتهى تاريخ العام ${esc(ayArDigits(d.year))}. حدّد العام الجديد وتواريخ فصوله.</div>` : '')
+    + `<div class="field"><label>العام الدراسي (أربع خانات، مثل 1447)</label><input id="calYear" inputmode="numeric" maxlength="4" value="${esc(d.year||'')}" placeholder="1447"></div>
+       <div class="field"><label>عدد الفصول الدراسية في العام</label>
+         <select id="calCount"><option value="1" ${d.count===1?'selected':''}>فصل دراسي واحد</option><option value="2" ${d.count!==1?'selected':''}>فصلان دراسيان</option></select></div>
+       <div class="field"><label>بداية العام الدراسي (وهي بداية الفصل الأول)</label><input type="date" id="calStart" value="${esc(d.startDate||'')}"></div>
+       <div class="field" id="calMidWrap"><label>نهاية نصف العام (نهاية الفصل الأول، ويبدأ الثاني في اليوم التالي)</label><input type="date" id="calMid" value="${esc(d.midDate||'')}"></div>
+       <div class="field"><label id="calEndLbl">نهاية العام الدراسي</label><input type="date" id="calEnd" value="${esc(d.endDate||'')}"></div>
+       <div class="sub-note" style="margin-bottom:8px">تشمل تواريخ النهاية كامل اليوم بتوقيت الرياض. بعد انتهاء العام يُغلق النظام لكل المستخدمين عدا أدمن النظام حتى يُحفظ العام الجديد.</div>
+       <button class="btn sm" id="calSave">حفظ العام الدراسي والفصول</button><div id="calAlert"></div>`;
+  const sync=()=>{
+    const two = $('#calCount').value==='2';
+    $('#calMidWrap').style.display = two?'':'none';
+    $('#calEndLbl').textContent = two?'نهاية العام الدراسي (وهي نهاية الفصل الثاني)':'نهاية العام الدراسي (وهي نهاية الفصل الأول)';
+  };
+  $('#calCount').onchange=sync; sync();
+  $('#calSave').onclick=async()=>{
+    const year=($('#calYear').value||'').trim().replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c));
+    const count=parseInt($('#calCount').value,10);
+    const startDate=$('#calStart').value, midDate=$('#calMid').value, endDate=$('#calEnd').value;
+    if(!/^1[34]\d\d$/.test(year)){ alertBox('calAlert','err','اكتب العام بأربع خانات، مثل 1447'); return; }
+    if(!startDate||!endDate){ alertBox('calAlert','err','حدّد بداية العام الدراسي ونهايته'); return; }
+    if(endDate<startDate){ alertBox('calAlert','err','نهاية العام الدراسي قبل بدايته'); return; }
+    if(count===2){
+      if(!midDate){ alertBox('calAlert','err','حدّد نهاية نصف العام'); return; }
+      if(midDate<startDate||midDate>=endDate){ alertBox('calAlert','err','نهاية نصف العام يجب أن تقع بين بداية العام ونهايته'); return; }
+    }
     const changing = d.year && d.year!==year;
-    const msg = changing ? `سيتحوّل العام الحالي من ${ayArDigits(d.year)} إلى ${ayArDigits(year)}، وتُصحَّح تلقائيًا أختام الأنشطة التي حُفظت بعد نهاية العام السابق. متابعة؟` : `سيُحفظ العام ${ayArDigits(year)}${d.year?'':'، وتُختم به الأنشطة غير المختومة في البنك'}. متابعة؟`;
+    const msg = (changing ? `سيتحوّل العام الحالي من ${ayArDigits(d.year)} إلى ${ayArDigits(year)}، وتُصحَّح تلقائيًا أختام الأنشطة التي حُفظت بعد نهاية العام السابق. ` : '')
+      + 'سيُعمَّم هذا التقويم على جميع المدارس والمعلمين المستقلين. متابعة؟';
     if(!await mnConfirm(msg)) return;
     try{
-      const r=await UsersAPI.call('academicYear',{action:'set',year,endDate});
-      await ayLoad();
-      alertBox('ayAlert','ok','تم الحفظ'+((r&&(r.stamped||r.restamped))?` (خُتم ${ayArDigits(r.stamped||0)} نشاطًا، وصُحِّح ${ayArDigits(r.restamped||0)})`:''));
-    }catch(e){ alertBox('ayAlert','err',e.message||'تعذّر الحفظ'); }
+      const r=await UsersAPI.call('academicCalendar',{action:'set',year,count,startDate,midDate:count===2?midDate:'',endDate});
+      await calLoad();
+      alertBox('calAlert','ok','تم الحفظ'+((r&&(r.stamped||r.restamped))?` (خُتم ${ayArDigits(r.stamped||0)} نشاطًا، وصُحِّح ${ayArDigits(r.restamped||0)})`:''));
+    }catch(e){ alertBox('calAlert','err',e.message||'تعذّر الحفظ'); }
+  };
+}
+/* الفترة التجريبية للمعلم المستقل (settings/soloTrial.days — الافتراضي ٣٠ يومًا) */
+async function trialLoad(){
+  const box=$('#trialBox'); if(!box) return;
+  let days=30; try{ const sn=await db.collection('settings').doc('soloTrial').get(); if(sn.exists && isFinite(Number(sn.data().days))) days=Number(sn.data().days); }catch(e){}
+  box.innerHTML = `<div class="field"><label>عدد أيام التجربة (٠ = بلا فترة تجريبية)</label><input id="trialDays" type="number" inputmode="numeric" min="0" max="365" value="${esc(days)}"></div>
+    <button class="btn sm" id="trialSave">حفظ الفترة التجريبية</button><div id="trialAlert"></div>`;
+  $('#trialSave').onclick=async()=>{
+    const v=($('#trialDays').value||'').replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c));
+    const n=parseInt(v,10);
+    if(!isFinite(n)||n<0||n>365||String(n)!==v.trim()){ alertBox('trialAlert','err','اكتب عددًا صحيحًا من ٠ إلى ٣٦٥'); return; }
+    try{ await db.collection('settings').doc('soloTrial').set({days:n,updatedAt:Date.now()}); alertBox('trialAlert','ok','تم الحفظ — تسري على الحسابات الجديدة فقط'); }
+    catch(e){ alertBox('trialAlert','err',e.message||'تعذّر الحفظ'); }
   };
 }
 function renderSettings(c){
@@ -4222,15 +4244,15 @@ function renderSettings(c){
     </div>
 
     <div class="card">
-      <div class="set-block"><h3>تواريخ الفصلين للمعلمين المستقلين</h3>
-        <p>تواريخ عامة للحسابات الفردية (غير المرتبطة بمدرسة): بداية كل فصل دراسي ونهايته.</p></div>
-      <div id="soloSemBox"><div class="empty"><span class="spin"></span></div></div>
+      <div class="set-block"><h3>إعداد العام الدراسي والفصول الدراسية</h3>
+        <p>مرجع واحد لكل النظام (المدارس والمعلمون المستقلون). يدخل كل مستخدم الفصل الذي يقع فيه تاريخ اليوم تلقائيًا دون تفعيل. لا يمكن إضافة مدرسة قبل حفظ هذا الإعداد. يُختم بعام الدراسة كل نشاط يُحفظ في بنك الأسئلة.</p></div>
+      <div id="calBox"><div class="empty"><span class="spin"></span></div></div>
     </div>
 
     <div class="card">
-      <div class="set-block"><h3>العام الدراسي (ختم بنك الأسئلة)</h3>
-        <p>قيمة واحدة لكل النظام (مدارس ومعلمون مستقلون): يُختم بها كل نشاط يُحفظ في بنك الأسئلة (مثل ١٤٤٧). حدّد معها تاريخ نهاية العام ليظهر لك تنبيه إذا انتهى ولم يُحدَّث.</p></div>
-      <div id="ayBox"><div class="empty"><span class="spin"></span></div></div>
+      <div class="set-block"><h3>الفترة التجريبية للمعلم المستقل</h3>
+        <p>عدد أيام التجربة المجانية التي تُمنح للحساب الفردي الجديد عند تسجيله. تسري على الحسابات الجديدة فقط ولا تغيّر مدة الحسابات القائمة.</p></div>
+      <div id="trialBox"><div class="empty"><span class="spin"></span></div></div>
     </div>
 
     <div class="card">
@@ -4270,7 +4292,7 @@ function renderSettings(c){
     + (Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`).join('')
        || '');
   $('#wipeBtn').onclick=wipeData;
-  renderSchoolsList(); soloSemLoad(); ayLoad();
+  renderSchoolsList(); calLoad(); trialLoad();
 }
 /* ---- محرر الصلاحيات الافتراضية للأدوار (لأدمن النظام) ---- */
 let tplRole = 'teacher', tplPerms = {};
@@ -4343,7 +4365,8 @@ function renderSchoolsList(){
         <button class="icon-btn" onclick="openSchoolModal('${esc(id)}')" title="تعديل">✏️</button>
       </div></div></div>`).join('');
 }
-function openSchoolModal(id){
+async function openSchoolModal(id){
+  const cal = await calGet();
   const s = id?SCHOOLS[id]:{name:'',eduDept:'',contactNumber:'',year:'',classCount:'',active:true,activeFrom:'',activeTo:''};
   modal(`<h2>${id?'تعديل مدرسة':'إضافة مدرسة'}</h2>
     <div id="smAlert"></div>
@@ -4355,20 +4378,9 @@ function openSchoolModal(id){
     <div class="field"><label>إدارة التعليم</label><input id="smEduDept" value="${esc(s.eduDept||'')}" placeholder="مثال: إدارة التعليم بمنطقة الرياض"></div>
     <div class="field"><label>رقم التواصل</label><input id="smContact" value="${esc(s.contactNumber||'')}" inputmode="tel" placeholder="رقم جوال أو هاتف"></div>
     <div class="field"><label>العام الدراسي</label><input id="smYear" value="${esc(s.year||'')}" placeholder="مثال: ١٤٤٧/١٤٤٨ هـ"></div>
-    <div class="field"><label>مدة العام الدراسي</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="smYearFrom" type="date" value="${esc(s.yearFrom||'')}" style="flex:1">
-        <span style="color:var(--muted)">إلى</span>
-        <input id="smYearTo" type="date" value="${esc(s.yearTo||'')}" style="flex:1">
-      </div>
-      <div class="sub-note" style="margin-top:6px">تُستخدم لتحديد سجلات العام الدراسي الحالي عند إعادة ربط حساب معلم سبق فك ربطه. اختياري الآن.</div></div>
-    <div class="field"><label>عدد الفصول الدراسية</label>
-      <select id="smPeriodCount">
-        <option value="0" ${!(s.periods&&s.periods.length)?'selected':''}>غير محددة</option>
-        <option value="1" ${(s.periods||[]).length===1?'selected':''}>فصل دراسي واحد</option>
-        <option value="2" ${(s.periods||[]).length===2?'selected':''}>فصلان</option>
-      </select>
-      <div id="smPeriodsBox" style="margin-top:8px"></div></div>
+    <div class="field"><label>العام الدراسي والفصول الدراسية</label>
+      ${cal?`<div class="sub-note">${esc(ayArDigits(cal.year))} — ${esc(calSummary(cal))}</div><div class="sub-note" style="margin-top:6px">تُؤخذ تواريخ العام والفصول من «إعدادات النظام» ولا تُعدَّل هنا.</div>`
+           :`<div class="alert err">لم يُحدَّد العام الدراسي والفصول بعد في إعدادات النظام${id?'':'؛ لا يمكن إضافة مدرسة قبل حفظه'}.</div>`}</div>
     <div class="field"><label>فترة تفعيل المدرسة</label>
       <div style="display:flex;gap:8px;align-items:center">
         <input id="smActiveFrom" type="date" value="${esc(s.activeFrom||'')}" style="flex:1">
@@ -4387,38 +4399,10 @@ function openSchoolModal(id){
   if(id) semRender(id,'semBox',true);
   $('#smActive').onclick=()=>{smActiveState=true;$('#smActive').classList.add('active');$('#smInactive').classList.remove('active');};
   $('#smInactive').onclick=()=>{smActiveState=false;$('#smInactive').classList.add('active');$('#smActive').classList.remove('active');};
-  const PER_IDS = ['first','second'];
-  const renderPeriodRows = ()=>{
-    const n = parseInt($('#smPeriodCount').value,10)||0;
-    const old = s.periods||[];
-    $('#smPeriodsBox').innerHTML = PER_IDS.slice(0,n).map((pid,i)=>{
-      const p = old.find(x=>x.id===pid)||{};
-      return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-        <span style="min-width:96px">${esc(periodLabel(pid))}</span>
-        <input type="date" id="smPer${i}From" value="${esc(p.from||'')}" style="flex:1">
-        <span style="color:var(--muted)">إلى</span>
-        <input type="date" id="smPer${i}To" value="${esc(p.to||'')}" style="flex:1">
-      </div>`;
-    }).join('');
-  };
-  $('#smPeriodCount').onchange = renderPeriodRows;
-  renderPeriodRows();
   $('#smSave').onclick=async()=>{
     const name=$('#smName').value.trim();
     if(!name){ alertBox('smAlert','err','أدخل اسم المدرسة'); return; }
-    // مدة العام والفصول الدراسية: تحقق من الترتيب وعدم التداخل
-    const yF=$('#smYearFrom').value, yT=$('#smYearTo').value;
-    if((yF&&!yT)||(!yF&&yT)||(yF&&yT&&yT<yF)){ alertBox('smAlert','err','حدّد بداية العام الدراسي ونهايته بشكل صحيح'); return; }
-    const pCount = parseInt($('#smPeriodCount').value,10)||0;
-    if(pCount>0 && !(yF&&yT)){ alertBox('smAlert','err','تاريخ العام الدراسي (بداية ونهاية) إلزامي عند تحديد الفصلين'); return; }
-    const periods = [];
-    for(let i=0;i<pCount;i++){
-      const f=$('#smPer'+i+'From').value, t=$('#smPer'+i+'To').value;
-      if(!f||!t||t<f){ alertBox('smAlert','err','حدّد تاريخ بداية ونهاية صحيحين لـ'+periodLabel(PER_IDS[i])); return; }
-      if(yF && (f<yF||t>yT)){ alertBox('smAlert','err',periodLabel(PER_IDS[i])+' خارج مدة العام الدراسي'); return; }
-      if(periods.length && f<=periods[periods.length-1].to){ alertBox('smAlert','err','الفصلان متداخلتان أو غير مرتبتين'); return; }
-      periods.push({ id:PER_IDS[i], from:f, to:t });
-    }
+    if(!id && !cal){ alertBox('smAlert','err','حدّد العام الدراسي والفصول الدراسية في إعدادات النظام أولًا'); return; }
     const sid = id || ('s'+Date.now().toString(36));
     let code = s.code;
     if(!code){
@@ -4444,11 +4428,7 @@ function openSchoolModal(id){
     // حقل semesters (وactivePeriod) تكتبهما دالة الخادم فقط؛ الحفظ هنا بالدمج حتى لا يُمحى شيء
     try{
       await schoolDocById(sid).set(data,{merge:true});
-      const hadDates = !!(s.yearFrom || (s.periods||[]).length);
-      if(yF || pCount>0 || hadDates){
-        const sems = {}; periods.forEach(p=>{ sems[p.id]={from:p.from,to:p.to}; });
-        await UsersAPI.call('schoolSemester',{ action:'saveDates', schoolId:sid, yearFrom:yF, yearTo:yT, semesters:sems });
-      }
+      if(cal){ await UsersAPI.call('schoolSemester',{ action:'saveDates', schoolId:sid }); }   // التواريخ من التقويم المركزي على الخادم
       const fresh = await schoolDocById(sid).get();
       SCHOOLS[sid] = Object.assign({}, fresh.data()); delete SCHOOLS[sid]._isSchool;
       toast(id?'تم تحديث المدرسة':'تمت إضافة المدرسة'); closeModal(); renderSchoolsList(); }

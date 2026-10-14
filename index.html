@@ -3748,15 +3748,17 @@ function jumpToPermsEditor(id, schoolId){
 async function deactivateStaffCtx(id, schoolId, name){
   confirmModal('تعطيل حساب', `سيُعطَّل سياق «${name}» بهذه المدرسة (لن يقدر يدخل عبرها). لا يمس أي مدرسة أخرى له. متابعة؟`, async()=>{
     try{
-      await usersCol().doc(id).update({ ['schools.'+schoolId+'.active']: false, updatedAt: Date.now(), _editCtx: schoolId });
+      if(!schoolId){ await UsersAPI.call('adminSoloSubscription', { uid:id, active:false }); }   // (2026-10-14.5) المعلم المستقل بلا مدرسة: عبر دالة الخادم
+      else await usersCol().doc(id).update({ ['schools.'+schoolId+'.active']: false, updatedAt: Date.now(), _editCtx: schoolId });
       toast('تم التعطيل'); loadUsersList();
     }catch(e){ toast('خطأ: '+e.message); }
   }, true);
 }
 async function reactivateStaffCtx(id, schoolId, name){
-  confirmModal('إعادة تفعيل', `سيُعاد تفعيل سياق «${name}» بهذه المدرسة، ويرجع كما كان قبل التعطيل بالضبط (نفس الدور والصلاحيات والفصول). متابعة؟`, async()=>{
+  confirmModal('إعادة تفعيل', `سيُعاد تفعيل سياق «${name}» ${schoolId?'بهذه المدرسة':'الفردي'}، ويرجع كما كان قبل التعطيل بالضبط (نفس الدور والصلاحيات والفصول). متابعة؟`, async()=>{
     try{
-      await usersCol().doc(id).update({ ['schools.'+schoolId+'.active']: true, updatedAt: Date.now(), _editCtx: schoolId });
+      if(!schoolId){ await UsersAPI.call('adminSoloSubscription', { uid:id, active:true }); }   // (2026-10-14.5) المعلم المستقل بلا مدرسة: عبر دالة الخادم
+      else await usersCol().doc(id).update({ ['schools.'+schoolId+'.active']: true, updatedAt: Date.now(), _editCtx: schoolId });
       toast('تمت إعادة التفعيل'); loadUsersList();
     }catch(e){ toast('خطأ: '+e.message); }
   }, true);

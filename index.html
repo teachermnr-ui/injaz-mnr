@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-14.2 -->
+<!-- إصدار: 2026-10-14.3 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -398,7 +398,7 @@ input,select{font-family:inherit;font-size:15px}
 <script src="pwa.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="users-api.js"></script>
-<script src="sem-guard.js?v=2026-10-14.2"></script>
+<script src="sem-guard.js?v=2026-10-14.3"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 /* =========================================================================
@@ -1055,6 +1055,20 @@ function authErrMsg(e){
 /* بعد نجاح المصادقة: إمّا ندخل مباشرة، أو نطلب إكمال التفعيل */
 /* سبب منع الدخول بحكم حالة المدرسة أو فترة تفعيلها أو الفترة النشطة (بند ٦ و٧) — يُستخدم عند الدخول الطازج واستعادة الجلسة */
 function todayRiyadh(){ return new Date((window.SemGuard?SemGuard.now():Date.now())+3*3600*1000).toISOString().slice(0,10); }   // بوقت الخادم (فرق الساعة المحفوظ من currentPeriod)
+/* (2026-10-14.3) نافذة الفصل بعد تمديد الفصل الأول للمدرسة (semExtend.first / firstDate): الأول ينتهي بتاريخ التمديد، والثاني يبدأ في اليوم التالي */
+function dayAfterStr(d){ const x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+1); return x.toISOString().slice(0,10); }
+function semEff(sc, p){
+  const per = ((sc&&sc.periods)||[]).find(x=>x.id===p);
+  if(!per) return null;
+  const ex = sc.semExtend && sc.semExtend.firstDate;
+  const out = { from: per.from, to: per.to };
+  if(ex){
+    const f = ((sc.periods||[]).find(x=>x.id==='first')||{});
+    if(p==='first' && f.to && ex>f.to) out.to = ex;
+    if(p==='second' && f.to && ex>f.to) out.from = dayAfterStr(ex);
+  }
+  return out;
+}
 function schoolLoginBlockReason(schoolId, period, role){
   if(!schoolId || !SCHOOLS[schoolId]) return null;
   const sc = SCHOOLS[schoolId];
@@ -1068,7 +1082,7 @@ function schoolLoginBlockReason(schoolId, period, role){
     const st = sc.semesters[period];
     if(!st || !st.licensed) return nm+' غير مرخَّص لمدرستك. تواصل مع إدارة النظام.';
     if(st.locked) return nm+' مغلق نهائياً من إدارة النظام.';
-    const per = (sc.periods||[]).find(x=>x.id===period);
+    const per = semEff(sc, period);
     if(per && per.to && todayStr > per.to) return 'انتهى '+nm+' بتاريخ '+per.to+'.';
     if(per && per.from && todayStr < per.from) return 'لم يبدأ '+nm+' بعد (يبدأ في '+per.from+').';
     return null;
@@ -1111,14 +1125,18 @@ async function afterAuth(authUser){
 }
 /* (2026-10-14.2) الفصل الحالي تلقائيًا من التقويم المركزي بوقت خوادم Google (لا اختيار عند الدخول، ولا تفعيل).
    لا تقويم محفوظ ← الأول (السلوك القديم). تعذّر الاتصال بالخادم ← يُمنع الدخول برسالة (لا نعتمد ساعة الجهاز). */
-async function autoPeriod(){
+async function autoPeriod(sid){
   let d;
-  try{ d = await SemGuard.fetchPeriod(); }
+  try{ d = await SemGuard.fetchPeriod(sid); }
   catch(e){ throw new Error('تعذّر التحقق من وقت الخادم لتحديد الفصل الدراسي. تحقق من اتصالك بالإنترنت وأعد المحاولة.'); }
+  if(d && d.closed){ const e = new Error('انتهى العام الدراسي'+(d.year?' '+d.year:'')+'، والنظام مغلق إلى حين اعتماد العام الدراسي الجديد. للاستفسار تواصل مع إدارة النظام.'); e.yearClosed = true; throw e; }
   return (d && d.period) || 'first';
 }
 async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
-  if(ctxKey!=='admin') period = await autoPeriod();
+  if(ctxKey!=='admin'){
+    try{ period = await autoPeriod(ctxKey.indexOf('school:')===0 ? ctxKey.slice(7) : ''); }
+    catch(e){ if(e && e.yearClosed){ await cleanSignOut(); } throw e; }
+  }
   let flat;
   if(ctxKey==='admin'){
     flat = { role:'admin', schoolId:null, permissions:null, active:data.active };
@@ -2780,7 +2798,7 @@ function semStatus(sc, p){
   if(!st || !st.licensed) return { key:'unlicensed' };
   if(st.locked) return { key:'locked' };
   // (2026-10-14.2) لا تفعيل يدوي: الحالة من التاريخ (بوقت الخادم) — الحالي، لم يبدأ، انتهى
-  const per = (sc.periods||[]).find(x=>x.id===p);
+  const per = semEff(sc, p);
   const t = todayRiyadh();
   if(per && per.to && t>per.to) return { key:'ended' };
   if(per && per.from && t<per.from) return { key:'upcoming' };
@@ -2796,8 +2814,8 @@ function semRender(sid, boxId, isSys){
   const today = todayRiyadh();
   const rows = ['first','second'].map(p=>{
     const stt = semStatus(sc,p);
-    const per = (sc.periods||[]).find(x=>x.id===p);
-    const dates = per && per.from && per.to ? ('من '+per.from+' إلى '+per.to) : 'التواريخ غير محدّدة بعد';
+    const per = semEff(sc, p);
+    const dates = per && per.from && per.to ? ('من '+per.from+' إلى '+per.to) + ((sc.semExtend&&sc.semExtend.firstDate&&p!==undefined&&((p==='first'&&per.to===sc.semExtend.firstDate)||(p==='second'&&per.from===dayAfterStr(sc.semExtend.firstDate))))?' (بعد التمديد)':'') : 'التواريخ غير محدّدة بعد';
     const inRange = !!(per && per.from && per.to && today>=per.from && today<=per.to);
     let btns = '';
     if(isSys){
@@ -2815,7 +2833,29 @@ function semRender(sid, boxId, isSys){
         <div style="display:flex;gap:6px;flex-wrap:wrap">${btns}</div></div>${hint}</div>`;
   }).join('');
   const legacyNote = !sc.semesters ? `<div class="sub-note" style="margin-bottom:8px">${isSys?'هذه المدرسة تعمل بالنمط السابق (فصل واحد مُفعَّل). أي إجراء هنا ينقلها إلى النمط الجديد: يُرخَّص لها الفصلان ويبقى المُفعَّل حاليًا كما هو.':'لم يضبط أدمن النظام فصلَي مدرستك بعد، وتعمل المدرسة بالنمط السابق حتى يتم ذلك.'}</div>` : '';
-  box.innerHTML = legacyNote + rows;
+  let extBox = '';
+  if(isSys && CAL_CACHE===undefined && !semRender._k){ semRender._k=1; calGet().then(()=>{ semRender._k=0; semRender(sid, boxId, isSys); }); }
+  const cal2 = CAL_CACHE || null;
+  if(isSys && sc.semesters && cal2 && cal2.count===2){
+    const exd = (sc.semExtend && sc.semExtend.firstDate) || '';
+    extBox = `<div class="card" style="box-shadow:none;margin-bottom:8px;padding:12px">
+      <b>تمديد الفصل الأول لهذه المدرسة</b>
+      <div class="sub-note" style="margin:4px 0 8px">يمدّ نهاية الفصل الأول لهذه المدرسة وحدها حتى التاريخ المحدد، ويبدأ فصلها الثاني في اليوم التالي له. الحد الأقصى يوم قبل نهاية العام. لا تمديد بعد نهاية العام.${exd?' <b>التمديد الحالي: حتى '+esc(exd)+'.</b>':''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="semExtDate" value="${esc(exd)}">
+        <button class="btn sm" id="semExtSave">حفظ التمديد</button>
+        ${exd?'<button class="btn sm secondary" id="semExtClear">إلغاء التمديد</button>':''}</div><div id="semExtAlert"></div></div>`;
+  }
+  box.innerHTML = legacyNote + rows + extBox;
+  const _sx = (until)=>async()=>{
+    try{
+      const r = await UsersAPI.call('schoolSemester',{ action:'extend', schoolId:sid, until });
+      const fresh = await schoolDocById(sid).get();
+      SCHOOLS[sid] = Object.assign({}, fresh.data()); delete SCHOOLS[sid]._isSchool;
+      toast(r&&r.cleared?'أُلغي التمديد':'تم حفظ التمديد'); semRender(sid, boxId, isSys);
+    }catch(e){ alertBox('semExtAlert','err',e.message||'تعذّر الحفظ'); }
+  };
+  if($('#semExtSave')) $('#semExtSave').onclick = ()=>{ const v=$('#semExtDate').value; if(!v){ alertBox('semExtAlert','err','حدّد تاريخ التمديد'); return; } _sx(v)(); };
+  if($('#semExtClear')) $('#semExtClear').onclick = _sx('');
   box.querySelectorAll('[data-sem]').forEach(b=>{
     b.onclick = ()=>semAct(sid, b.dataset.p, b.dataset.sem, boxId, isSys);
   });
@@ -4174,10 +4214,10 @@ function calSummary(c){
 async function calLoad(){
   const box=$('#calBox'); if(!box) return;
   const d = (await calGet(true)) || {};
-  const expired = !!(d.year && d.endMs && Date.now()>d.endMs);
+  const expired = !!(d.year && d.endMs && SemGuard.now()>d.endMs);
   box.innerHTML =
     (d.year ? `<p style="margin:0 0 8px">العام الحالي: <b>${ayArDigits(d.year)}</b> — ${esc(calSummary(d))}</p>` : `<div class="alert err" style="margin-bottom:8px">لم يُحدَّد العام الدراسي بعد: لا يمكن إضافة مدرسة قبل حفظ هذا الإعداد.</div>`)
-    + (expired ? `<div class="alert err" style="margin-bottom:8px">انتهى تاريخ العام ${esc(ayArDigits(d.year))}. حدّد العام الجديد وتواريخ فصوله.</div>` : '')
+    + (expired ? `<div class="alert err" style="margin-bottom:8px">انتهى تاريخ العام ${esc(ayArDigits(d.year))}، والنظام <b>مغلق الآن لكل المستخدمين عداك</b>. حدّد العام الجديد وتواريخ فصوله ليُفتح النظام تلقائيًا.</div>` : '')
     + `<div class="field"><label>العام الدراسي (أربع خانات، مثل 1447)</label><input id="calYear" inputmode="numeric" maxlength="4" value="${esc(d.year||'')}" placeholder="1447"></div>
        <div class="field"><label>عدد الفصول الدراسية في العام</label>
          <select id="calCount"><option value="1" ${d.count===1?'selected':''}>فصل دراسي واحد</option><option value="2" ${d.count!==1?'selected':''}>فصلان دراسيان</option></select></div>

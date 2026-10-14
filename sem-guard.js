@@ -1,4 +1,4 @@
-// إصدار: 2026-10-14.2
+// إصدار: 2026-10-14.3
 /* حارس الفصل الدراسي (المرحلة ٢ من الفصلين — 2026-10-13).
    الفصل المغلق (غير مفعَّل، أو مغلق نهائيًا، أو غير مرخَّص، أو انتهى تاريخه بتوقيت الرياض) يختفي عن موظفي المدرسة.
    الحماية الأصلية في firestore.rules (semWritable)؛ هذا الملف:
@@ -28,18 +28,28 @@
     });
   }
   // الفصل الحالي ووقت الخادم من دالة currentPeriod (يحفظ فرق الساعة)
-  async function fetchPeriod(){
+  async function fetchPeriod(sid){
     await loadFns();
-    var r = await firebase.functions().httpsCallable('currentPeriod')({});
+    var r = await firebase.functions().httpsCallable('currentPeriod')(sid ? { schoolId: sid } : {});
     var d = r.data || {};
     if(d.nowMs) setOff(d.nowMs);
     return d;
+  }
+  /* نافذة الفصل بالمللي ثانية مع تمديد الفصل الأول لهذه المدرسة (semExtend.first): الأول ينتهي بالتمديد، والثاني يبدأ في اليوم التالي */
+  function win(sc, period){
+    var w = (sc.semDates || {})[period];
+    if(!w) return null;
+    var e = Number(((sc.semExtend || {}).first) || 0);
+    var f = w.fromMs, t = w.toMs;
+    if(period === 'second' && e && e >= (f || 0)) f = e + 1;
+    if(period !== 'second' && e && e > (t || 0)) t = e;
+    return { fromMs: f, toMs: t };
   }
   function isOpen(sc, period){
     if(!sc || !sc.semesters) return true;
     var st = sc.semesters[period];
     if(!st || !st.licensed || st.locked) return false;
-    var w = (sc.semDates || {})[period];
+    var w = win(sc, period);
     var now_ = now();
     if(w){
       if(w.fromMs && now_ < w.fromMs) return false;
@@ -52,7 +62,7 @@
     var st = sc.semesters[period];
     if(!st || !st.licensed) return nm(period) + ' غير مرخَّص لهذه المدرسة.';
     if(st.locked) return nm(period) + ' مغلق نهائيًا من إدارة النظام.';
-    var w = (sc.semDates || {})[period], now_ = now();
+    var w = win(sc, period), now_ = now();
     if(w && w.toMs && now_ > w.toMs) return 'انتهى ' + nm(period) + '.';
     if(w && w.fromMs && now_ < w.fromMs) return 'لم يبدأ ' + nm(period) + ' بعد.';
     return '';
@@ -79,6 +89,25 @@
     };
   }
 
+  /* (2026-10-14.3) إغلاق كامل بعد نهاية العام: غطاء لكل المستخدمين عدا أدمن النظام */
+  var yShown = false;
+  function yearOverlay(year){
+    if(yShown) return; yShown = true;
+    var d = document.createElement('div');
+    d.id = 'semGuardYearOverlay';
+    d.setAttribute('dir', 'rtl');
+    d.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.97);color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:Tajawal,Tahoma,sans-serif';
+    d.innerHTML = '<div style="max-width:440px"><div style="font-size:42px;margin-bottom:8px">🔒</div>'
+      + '<h2 style="margin:0 0 10px;font-size:20px">انتهى العام الدراسي' + (year ? ' ' + year : '') + '</h2>'
+      + '<p style="margin:0 0 18px;line-height:1.9;font-size:15px;opacity:.92">النظام مغلق إلى حين اعتماد العام الدراسي الجديد.<br>للاستفسار تواصل مع إدارة النظام.</p>'
+      + '<button id="semGuardYearBtn" style="background:#0b7a63;color:#fff;border:0;border-radius:12px;padding:12px 22px;font:inherit;font-size:15px;cursor:pointer">العودة إلى صفحة الدخول</button></div>';
+    document.body.appendChild(d);
+    document.getElementById('semGuardYearBtn').onclick = function(){
+      try{ localStorage.removeItem('cls_session'); }catch(e){}
+      location.href = 'index.html';
+    };
+  }
+
   /* تحويل الجلسة تلقائيًا إلى الفصل الحالي (بوقت الخادم) عند تغيّر الفصل أثناء الجلسة، مع إشعار ثم إعادة تحميل مرة واحدة.
      لا يعمل لأدمن النظام. عند تعذّر الاتصال لا يغيّر شيئًا (القواعد هي الحارس). */
   var syncing = false, lastSync = 0, SYNC_EVERY_MS = 10 * 60 * 1000;
@@ -89,7 +118,8 @@
     lastSync = Date.now();
     syncing = true;
     try{
-      var d = await fetchPeriod();
+      var d = await fetchPeriod(s.schoolId || '');
+      if(d && d.closed){ yearOverlay(d.year); return true; }
       if(!d || !d.period) return false;
       if((s.period || 'first') !== d.period){
         s.period = d.period;
@@ -131,5 +161,5 @@
     }
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
   }
-  window.SemGuard = { isOpen: isOpen, reason: reason, start: start, check: check, sync: sync, fetchPeriod: fetchPeriod, now: now };
+  window.SemGuard = { win: win, yearOverlay: yearOverlay, isOpen: isOpen, reason: reason, start: start, check: check, sync: sync, fetchPeriod: fetchPeriod, now: now };
 })();

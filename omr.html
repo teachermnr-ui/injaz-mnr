@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-13.2 -->
+<!-- إصدار: 2026-10-14.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -3428,7 +3428,41 @@ function renderWlSetup(){
   });
   html += `<button class="ghost" style="margin-top:14px;width:100%" onclick="saveWlCfg()">💾 حفظ إعداد السجل</button>`;
   html += `<button class="ghost" style="margin-top:8px;width:100%;color:var(--bad);border-color:var(--bad)" onclick="restoreDefaultWlCfg()">↩️ استعادة البنود الافتراضية</button>`;
+  html += `<button class="ghost" style="margin-top:8px;width:100%" onclick="copyCfgFromOtherSemester(false)">📥 نسخ إعدادات السجل والملصقات من ${(CLS_SESSION&&CLS_SESSION.period)==='second'?'الفصل الأول':'الفصل الثاني'}</button>`;
   host.innerHTML = html;
+}
+/* (2026-10-14) نسخ إعداد المعلم (بنود سجل الأعمال وأوزانها والملصقات) من الفصل الآخر إلى الفصل الحالي.
+   لا تُنسخ الدرجات ولا الطلاب. auto=true: عرض تلقائي مرة واحدة عند أول دخول للفصل الحالي (حين لا إعداد محفوظًا له). */
+async function copyCfgFromOtherSemester(auto){
+  if(!cloudReady || !CLS_SESSION) return false;
+  const cur = CLS_SESSION.period || 'first', other = cur==='second' ? 'first' : 'second';
+  const lab = p=>p==='second'?'الفصل الثاني':'الفصل الأول';
+  const id = 'teacherCfg_'+(CLS_SESSION.schoolId||'admin')+'_'+other+'_'+CLS_SESSION.userId;
+  let snap = null;
+  try{ snap = await db.collection('exams').doc(id).get(); }catch(e){ snap = null; }
+  let cfg = null;
+  if(snap && snap.exists){ try{ cfg = JSON.parse(snap.data().value); }catch(e){ cfg = null; } }
+  if(!cfg || !cfg.workCfg || !cfg.workCfg.periods){
+    if(!auto) alert('لا توجد إعدادات محفوظة في '+lab(other)+' لنسخها.');
+    return false;
+  }
+  const ok = await mnConfirm(auto
+    ? 'هذا أول دخول لك في '+lab(cur)+'.\nهل تنسخ إعدادات سجل الأعمال والملصقات من '+lab(other)+'؟\n(لا تُنسخ الدرجات ولا الطلاب. وتقدر تفعلها لاحقًا من «إعداد السجل».)'
+    : 'ستحلّ إعدادات '+lab(other)+' (البنود والأوزان والملصقات) محل إعداداتك الحالية في '+lab(cur)+'.\nالدرجات والطلاب لا تتأثر، لكن إن كانت لديك درجات مسجّلة في هذا الفصل لبنود مضافة أو معدّلة فقد لا تظهر لتغيّر البنود.\nمتابعة؟');
+  if(!ok) return false;
+  const defH = defaultWorkCfg().header;
+  const keepTerm = (state.workCfg && state.workCfg.header && state.workCfg.header.term) || '';
+  const wc = JSON.parse(JSON.stringify(cfg.workCfg));
+  wc.header = Object.assign({}, defH, wc.header||{}, { term: keepTerm });   // اسم الفصل في الترويسة لا يُنسخ
+  state.workCfg = wc;
+  state.stickers = Array.isArray(cfg.stickers) ? JSON.parse(JSON.stringify(cfg.stickers)) : [];
+  ensureStickers();
+  await saveTeacherConfigToCloud();
+  try{ renderWlSetup(); }catch(e){}
+  try{ renderWorkLog(); }catch(e){}
+  try{ if(typeof renderWlHeader==='function') renderWlHeader(); }catch(e){}
+  alert('تم نسخ الإعدادات من '+lab(other)+' ✅');
+  return true;
 }
 // استعادة بنود السجل الافتراضية (لا يمسّ درجات الطلاب)
 async function restoreDefaultWlCfg(){
@@ -6874,7 +6908,17 @@ async function loadStudentsFromCloud(manual){
         cfgData.workCfg.header = Object.assign({}, defH, cfgData.workCfg.header||{});
         state.workCfg = cfgData.workCfg;
       }
-    } else { ensureStickers(); }
+    } else {
+      ensureStickers();
+      // أول دخول لهذا الفصل بلا إعداد محفوظ: نعرض نسخ إعداد الفصل الآخر مرة واحدة (إن وُجد له إعداد)
+      try{
+        const _k = 'cfgcopy_asked_'+CLS_NS;
+        if(!localStorage.getItem(_k)){
+          localStorage.setItem(_k,'1');
+          setTimeout(()=>{ copyCfgFromOtherSemester(true); }, 900);
+        }
+      }catch(e){}
+    }
 
     rosterLoaded = true;
     try{ const _fu = await cloudGet('results','followup'); state.followup = (_fu && typeof _fu==='object' && !Array.isArray(_fu)) ? _fu : {}; }catch(e){ state.followup = {}; }

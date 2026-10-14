@@ -1,4 +1,4 @@
-// إصدار: 2026-10-13.4
+// إصدار: 2026-10-14.1
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -1823,4 +1823,63 @@ exports.cleanupExpiredSolo = onSchedule({ schedule: "30 3 * * *", timeZone: "Asi
   const day = new Date(now + 3 * 3600e3).toISOString().slice(0, 10);
   await db.collection("soloCleanupLog").doc(day).set({ at: now, live, candidates: cands });
   console.log("cleanupExpiredSolo: live=" + live + " candidates=" + cands.length);
+});
+
+/* ===== (2026-10-14.1) ختم العام الدراسي الموحَّد لبنك الأسئلة =====
+   قيمة واحدة للنظام كله (مدارس ومستقلون) يضبطها أدمن النظام فقط: settings/academicYear = {year, endsMs, prevYear, prevEndsMs}.
+   الختم يُثبَّت على النشاط عند حفظه في البنك (yearStamp) ولا يتغير بتغيّر العام لاحقًا، إلا في حالتين تصحَّحان هنا:
+   (أ) نشاط بلا ختم (قديم، أو حُفظ قبل أن يُضبط عام) ← يُختم بالعام الجديد.
+   (ب) نشاط حُفظ بعد نهاية العام السابق ولم يُحدَّث العام وقتها (فأخذ العام القديم) ← يُعاد ختمه بالعام الجديد حسب وقت حفظه،
+       إلا ما أعاد المعلم ختمه بنفسه بتعديله (stampMode = "edit") فيبقى. */
+const AY_YEAR_RE = /^1[34]\d\d$/;
+async function ayRestamp(db, year, prevYear, prevEndsMs) {
+  let stamped = 0, restamped = 0, last = null;
+  for (;;) {
+    let q = db.collection("questionBank").orderBy(admin.firestore.FieldPath.documentId()).select("yearStamp", "savedAt", "stampMode").limit(400);
+    if (last) q = q.startAfter(last);
+    const snap = await q.get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    let n = 0;
+    for (const doc of snap.docs) {
+      const d = doc.data() || {};
+      const ys = d.yearStamp == null ? "" : String(d.yearStamp);
+      const sv = d.savedAt && typeof d.savedAt.toMillis === "function" ? d.savedAt.toMillis() : (typeof d.savedAt === "number" ? d.savedAt : 0);
+      if (!ys) {
+        batch.update(doc.ref, { yearStamp: year, stampMode: "auto" }); stamped++; n++;
+      } else if (prevYear && ys === prevYear && d.stampMode !== "edit" && prevEndsMs && sv > prevEndsMs) {
+        batch.update(doc.ref, { yearStamp: year, stampMode: "auto" }); restamped++; n++;
+      }
+    }
+    if (n) await batch.commit();
+    last = snap.docs[snap.docs.length - 1];
+    if (snap.size < 400) break;
+  }
+  return { stamped, restamped };
+}
+
+exports.academicYear = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  if (!secIsAdmin(me.data)) throw secMsg("permission-denied", "مقصور على أدمن النظام العام.");
+  const d = request.data || {};
+  if (String(d.action || "") !== "set") throw secMsg("invalid-argument", "إجراء غير معروف.");
+  const year = String(d.year || "").trim();
+  if (!AY_YEAR_RE.test(year)) throw secMsg("invalid-argument", "اكتب العام الدراسي بأربع خانات، مثل ١٤٤٧.");
+  const endDate = d.endDate ? String(d.endDate) : "";
+  if (endDate && !SEM_DATE_RE.test(endDate)) throw secMsg("invalid-argument", "تاريخ نهاية العام غير صالح.");
+  const endsMs = endDate ? semMs(endDate, true) : null;
+  const db = secDb();
+  const ref = db.collection("settings").doc("academicYear");
+  const cur = (await ref.get()).data() || {};
+  if (cur.year && Number(year) < Number(cur.year)) throw secMsg("failed-precondition", "لا يمكن الرجوع إلى عام أقدم من العام الحالي (" + cur.year + ").");
+  const now = Date.now();
+  if (cur.year && cur.year === year) {
+    await ref.set(Object.assign({}, cur, { endsMs, updatedAt: now, by: me.uid }));
+    return { ok: true, year, stamped: 0, restamped: 0 };
+  }
+  await ref.set({
+    year, endsMs, prevYear: cur.year || null, prevEndsMs: cur.endsMs || null, setAt: now, updatedAt: now, by: me.uid,
+  });
+  const res = await ayRestamp(db, year, cur.year || null, cur.endsMs || null);
+  return { ok: true, year, stamped: res.stamped, restamped: res.restamped };
 });

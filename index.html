@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-14.4 -->
+<!-- إصدار: 2026-10-14.5 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -399,7 +399,7 @@ input,select{font-family:inherit;font-size:15px}
 <script src="pwa.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="users-api.js"></script>
-<script src="sem-guard.js?v=2026-10-14.4"></script>
+<script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 /* =========================================================================
@@ -3784,47 +3784,59 @@ async function hardDeleteUnifiedUser(id, name){
     catch(e){ toast('خطأ: '+e.message); }
   }, true);
 }
-/* إدارة اشتراك المعلم الفردي (تجديد/ضبط التاريخ/تفعيل وإيقاف السياق الفردي) — للأدمن العام، عبر دالة الخادم adminSoloSubscription
-   (2026-10-13: كانت تكتب حقولًا قديمة على جذر المستند ولا تلمس solo.* فعليًا، وقد توقف الحساب كله) */
+/* إدارة اشتراك المعلم الفردي (المرحلة ٥): الاشتراك إما «الفصل الحالي» أو «العام الدراسي كامل»، ويُحسب تاريخه في الخادم من التقويم المركزي وتاريخ اليوم؛
+   لا تاريخ يدوي ولا تمديد بالأيام. التفعيل والإيقاف عبر الدالة نفسها adminSoloSubscription. */
+function soloPlanName(so){
+  const p = so && so.plan;
+  if(p==='year') return 'العام الدراسي كامل';
+  if(p==='semester') return 'فصل دراسي واحد';
+  if(p==='trial') return 'تجربة مجانية';
+  return 'غير محدد (حساب قديم)';
+}
 async function editSoloSubscription(id){
   try{
     const snap = await usersCol().doc(id).get();
     if(!snap.exists) return;
     const u = snap.data(); const so = u.solo || {};
-    const cur = so.subscriptionEnds ? new Date(so.subscriptionEnds).toISOString().slice(0,10) : '';
-    const endTxt = so.subscriptionEnds ? ((Date.now()>so.subscriptionEnds?'انتهى في ':'ينتهي في ')+new Date(so.subscriptionEnds).toLocaleDateString('ar')) : 'بلا تاريخ انتهاء';
+    const cal = await calGet(true);
+    const endTxt = so.subscriptionEnds ? ((Date.now()>so.subscriptionEnds?'انتهى في ':'ينتهي في ')+ayDateAr(so.subscriptionEnds)) : 'بلا تاريخ انتهاء';
+    const cov = Array.isArray(so.coveredPeriods) && so.coveredPeriods.length ? so.coveredPeriods.map(periodLabel).join(' + ') : '—';
+    let cur = null, calOk = !!(cal && Array.isArray(cal.periods) && cal.periods.length && cal.endMs && Date.now()<=cal.endMs);
+    if(calOk){ const ps = cal.periods.slice().sort((x,y)=>x.fromMs-y.fromMs); cur = ps.find(p=>Date.now()<=p.toMs) || null; }
+    let plans = '';
+    if(calOk && cur){
+      const multi = cal.periods.length>1;
+      plans = '<div class="field"><label>منح / تجديد الاشتراك (يبدأ من اليوم)</label><div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        (multi ? '<button class="btn secondary" onclick="grantSolo(\''+id+'\',\'semester\')">'+esc(periodLabel(cur.id))+' — حتى '+esc(ayDateAr(cur.toMs))+'</button>' : '')+
+        '<button class="btn secondary" onclick="grantSolo(\''+id+'\',\'year\')">'+(multi?'العام الدراسي كامل':'العام الدراسي')+' — حتى '+esc(ayDateAr(cal.endMs))+'</button>'+
+        '</div></div>';
+    } else {
+      plans = '<div class="umeta" style="color:#b3261e;margin:8px 0">لا يمكن منح اشتراك الآن: '+(cal?'انتهى العام الدراسي أو التقويم غير مكتمل.':'لم يُضبط التقويم الدراسي المركزي.')+'</div>';
+    }
     modal('<h2>إدارة اشتراك: '+esc(u.username||'')+'</h2>'+
-      '<div class="umeta" style="margin-bottom:8px">الحالة الحالية: <b>'+esc(endTxt)+'</b></div>'+
-      '<div class="field"><label>تجديد (يُضاف إلى الأبعد من اليوم أو تاريخ الانتهاء الحالي)</label>'+
-        '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
-          '<button class="btn secondary" onclick="renewSolo(\''+id+'\',30)">+ ٣٠ يومًا</button>'+
-          '<button class="btn secondary" onclick="renewSolo(\''+id+'\',90)">+ ٩٠ يومًا</button>'+
-          '<button class="btn secondary" onclick="renewSolo(\''+id+'\',180)">+ ١٨٠ يومًا</button>'+
-          '<button class="btn secondary" onclick="renewSolo(\''+id+'\',365)">+ سنة</button>'+
-        '</div></div>'+
-      '<div class="field"><label>أو ضبط تاريخ الانتهاء يدويًا</label><input type="date" id="subEnd" value="'+esc(cur)+'"></div>'+
+      '<div class="umeta" style="margin-bottom:8px">النوع: <b>'+esc(soloPlanName(so))+'</b> — الحالة: <b>'+esc(endTxt)+'</b><br>الفصول المشمولة: <b>'+esc(cov)+'</b></div>'+
+      plans+
       '<div class="field"><label>حالة السياق الفردي</label><select id="subActive">'+
         '<option value="1"'+(so.active!==false?' selected':'')+'>مُفعّل</option>'+
         '<option value="0"'+(so.active===false?' selected':'')+'>موقوف</option>'+
       '</select></div>'+
       '<div style="display:flex;gap:8px;margin-top:12px">'+
-        '<button class="btn" onclick="saveSoloSubscription(\''+id+'\')">حفظ</button>'+
-        '<button class="btn secondary" onclick="closeModal()">إلغاء</button>'+
+        '<button class="btn" onclick="saveSoloSubscription(\''+id+'\')">حفظ الحالة</button>'+
+        '<button class="btn secondary" onclick="closeModal()">إغلاق</button>'+
       '</div>');
   }catch(e){ toast('خطأ: '+e.message); }
 }
-async function renewSolo(id, days){
+async function grantSolo(id, plan){
   try{
-    const r = await UsersAPI.call('adminSoloSubscription', { uid:id, extendDays:days });
-    closeModal(); toast('تم التجديد حتى '+new Date(r.ends).toLocaleDateString('ar')); loadUsersList();
+    const r = await UsersAPI.call('adminSoloSubscription', { uid:id, plan });
+    closeModal(); toast('تم الاشتراك حتى '+ayDateAr(r.ends)); loadUsersList();
   }catch(e){ toast('خطأ: '+(e.message||e)); }
 }
 async function saveSoloSubscription(id){
   try{
-    const d = $('#subEnd').value;
     const active = $('#subActive').value==='1';
-    await UsersAPI.call('adminSoloSubscription', { uid:id, endsMs: d ? new Date(d+'T23:59:59').getTime() : null, active });
-    closeModal(); toast('تم حفظ الاشتراك'); loadUsersList();
+    await UsersAPI.call('adminSoloSubscription', { uid:id, active });
+    closeModal(); toast('تم حفظ الحالة'); loadUsersList();
   }catch(e){ toast('خطأ: '+(e.message||e)); }
 }
 

@@ -1,16 +1,18 @@
-// إصدار: 2026-10-13.1
+// إصدار: 2026-10-14.5
 /* حارس اشتراك المعلم الفردي (المرحلة ٤ من الأمان — 2026-10-13).
    - ينتهي الاشتراك ← «قراءة فقط»: يدخل ويرى بياناته ويصدّرها، لكن تُرفض كل كتابة على Firestore (إلا مستند حسابه ورمز جهاز الإشعارات).
-   - قبل الانتهاء بثلاثة أيام: شريط تنبيه. بعد الانتهاء: شريط دائم.
+   - قبل الانتهاء بخمسة عشر يومًا: شريط تنبيه تجديد (المرحلة ٥). بعد الانتهاء: شريط دائم.
    - يعمل فقط لجلسة سياقها «حساب مستقل» (cls_session.ctxKey==='solo' أو role==='soloTeacher')؛ سياق المدرسة لا علاقة له بالاشتراك الفردي.
    - الحماية الأصلية في firestore.rules (isSolo يشترط عدم الانتهاء)؛ هذا الملف واجهة تمنع الكتابة وتعرض الحالة.
    الاستعمال: SoloGuard.start(async function(){ return <كائن solo من مستند المستخدم أو null> });
    وللصفحات ذات SDK المعيّن (Modular): if(SoloGuard.readOnly()) ... أو SoloGuard.assertWritable(). */
 (function(){
-  var DAY = 86400000, WARN_DAYS = 3, RECHECK_MS = 5 * 60 * 1000;
+  var DAY = 86400000, WARN_DAYS = 15, RECHECK_MS = 5 * 60 * 1000;
   var CONTACT = 'info@awraqai.com';
   var MSG = 'انتهى اشتراكك، وحسابك الآن في وضع القراءة فقط. جدّد اشتراكك لتتمكن من الإضافة والتعديل.';
-  var state = { kind: 'unknown', ends: null, days: null };
+  var state = { kind: 'unknown', ends: null, days: null, plan: null, covered: null };
+  var PLAN_AR = { semester: 'فصل دراسي واحد', year: 'العام الدراسي كامل', trial: 'تجربة مجانية' };
+  var PER_AR = { first: 'الفصل الأول', second: 'الفصل الثاني' };
   var started = false, getter = null, timer = null;
 
   function sess(){ try{ return JSON.parse(localStorage.getItem('cls_session') || 'null'); }catch(e){ return null; } }
@@ -20,16 +22,52 @@
   // الحالة من كائن solo: لا تاريخ = بلا نهاية (للأدمن فقط يُضبط هكذا)
   function compute(solo){
     if(!solo) return { kind: 'none', ends: null, days: null };
-    if(solo.active === false) return { kind: 'disabled', ends: null, days: null };
+    var ex = { plan: solo.plan || null, covered: Array.isArray(solo.coveredPeriods) ? solo.coveredPeriods : null };
+    function mk(o){ o.plan = ex.plan; o.covered = ex.covered; return o; }
+    if(solo.active === false) return mk({ kind: 'disabled', ends: null, days: null });
     var ends = solo.subscriptionEnds;
-    if(!ends) return { kind: 'active', ends: null, days: null };
+    if(!ends) return mk({ kind: 'active', ends: null, days: null });
     var now = Date.now();
-    if(now > ends) return { kind: 'expired', ends: ends, days: -Math.ceil((now - ends) / DAY) };
+    if(now > ends) return mk({ kind: 'expired', ends: ends, days: -Math.ceil((now - ends) / DAY) });
     var d = Math.ceil((ends - now) / DAY);
-    return { kind: d <= WARN_DAYS ? 'warn' : 'active', ends: ends, days: d };
+    return mk({ kind: d <= WARN_DAYS ? 'warn' : 'active', ends: ends, days: d });
   }
 
-  function readOnly(){ return state.kind === 'expired'; }
+  function viewing(){ var s = sess(); return !!(s && s.viewOnly); }
+  function readOnly(){ return state.kind === 'expired' || viewing(); }
+  // الفصل السابق المسموح عرضه: الأول فقط حين نكون في الثاني، وبشرط أن يشمله اشتراكه (الحسابات القديمة بلا قائمة فصول تُسمح احتياطًا)
+  function prevAllowed(){
+    var s = sess();
+    if(!s || s.viewOnly || s.period !== 'second' || state.kind === 'none' || state.kind === 'disabled') return false;
+    return !state.covered || state.covered.indexOf('first') >= 0;
+  }
+  function openPrev(){
+    var s = sess(); if(!s) return;
+    if(!confirm('ستعرض ' + PER_AR.first + ' للقراءة فقط: لا يمكنك التعديل فيه، ويمكنك العودة إلى الفصل الحالي في أي وقت. متابعة؟')) return;
+    s.period = 'first'; s.viewOnly = true;
+    try{ localStorage.setItem('cls_session', JSON.stringify(s)); }catch(e){}
+    location.reload();
+  }
+  function planChip(){
+    var old = document.getElementById('soloPlanChip');
+    var show = !!(document.body && state.kind !== 'none' && state.kind !== 'unknown' && !viewing() && (state.plan || prevAllowed()));
+    if(!show){ if(old) old.remove(); return; }
+    var el = old || document.createElement('div');
+    el.id = 'soloPlanChip';
+    el.setAttribute('dir', 'rtl');
+    el.style.cssText = 'position:fixed;bottom:10px;inset-inline-start:10px;z-index:99980;background:#0f3d33;color:#fff;border-radius:12px;padding:6px 12px;font:600 12px/1.6 Tajawal,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:92vw';
+    var t = document.createElement('span');
+    t.textContent = (state.plan ? 'اشتراكك: ' + (PLAN_AR[state.plan] || state.plan) : 'اشتراكك') + (state.ends ? (state.kind === 'expired' ? ' — انتهى في ' : ' — ينتهي في ') + dstr(state.ends) : '');
+    el.innerHTML = ''; el.appendChild(t);
+    if(prevAllowed()){
+      var b = document.createElement('button');
+      b.textContent = 'عرض ' + PER_AR.first + ' (قراءة فقط)';
+      b.style.cssText = 'background:#fff;color:#0f3d33;border:0;border-radius:8px;padding:3px 10px;font:inherit;cursor:pointer';
+      b.onclick = openPrev;
+      el.appendChild(b);
+    }
+    if(!old) document.body.appendChild(el);
+  }
   function mkErr(){ var e = new Error(MSG); e.code = 'solo-expired'; return e; }
   function assertWritable(){ if(readOnly()) throw mkErr(); }
   function allowedPath(p){ return /^(users|pushTokens)\//.test(p || ''); }
@@ -89,6 +127,7 @@
     state = compute(solo);
     patchCompat();
     renderBanner();
+    planChip();
   }
 
   function start(fn){
@@ -107,6 +146,6 @@
 
   window.SoloGuard = {
     start: start, refresh: refresh, readOnly: readOnly, assertWritable: assertWritable,
-    state: function(){ return state; }, compute: compute, MSG: MSG
+    state: function(){ return state; }, compute: compute, MSG: MSG, prevAllowed: prevAllowed
   };
 })();

@@ -1,4 +1,4 @@
-// إصدار: 2026-10-14.4
+// إصدار: 2026-10-14.5
 /* حارس الفصل الدراسي (المرحلة ٢ من الفصلين — 2026-10-13).
    الفصل المغلق (غير مفعَّل، أو مغلق نهائيًا، أو غير مرخَّص، أو انتهى تاريخه بتوقيت الرياض) يختفي عن موظفي المدرسة.
    الحماية الأصلية في firestore.rules (semWritable)؛ هذا الملف:
@@ -203,7 +203,13 @@
     var btn = document.createElement('button');
     btn.textContent = 'العودة إلى الفصل الحالي';
     btn.style.cssText = 'background:#fff;color:#7a4b00;border:0;border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer';
-    btn.onclick = function(){
+    btn.onclick = async function(){
+      if((s.ctxKey === 'solo' || s.role === 'soloTeacher')){   // (المرحلة ٥) المعلم المستقل: نعيد الجلسة إلى الفصل الحالي (بوقت الخادم) ونبقى في الصفحة
+        var cs = sess() || s; delete cs.viewOnly; delete cs.viewWhy;
+        try{ var dd = await fetchPeriod(''); if(dd && dd.period) cs.period = dd.period; }catch(e){}
+        try{ localStorage.setItem('cls_session', JSON.stringify(cs)); }catch(e){}
+        location.reload(); return;
+      }
       var cur = sess() || s; delete cur.viewOnly; delete cur.viewWhy; cur.period = cur.period === 'first' ? 'second' : (cur.period || 'first');
       try{ localStorage.setItem('cls_session', JSON.stringify(cur)); }catch(e){}
       location.href = 'index.html';

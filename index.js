@@ -1,4 +1,4 @@
-// إصدار: 2026-10-14.4
+// إصدار: 2026-10-14.5
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -1445,12 +1445,14 @@ exports.registerSolo = onCall(async (request) => {
   const q = await db.collection("users").where("authUid", "==", me.uid).limit(1).get();
   const now = Date.now();
   const trialMs = await secSoloTrialMs();
+  const trialCal = await secCalendar(true).catch(() => null);
+  const trialCov = secSoloTrialCovered(trialCal, now);
   if (q.empty) {
     const email = me.tok.email || "";
     const data = {
       username: me.tok.name || (email.split("@")[0] || "مستخدم"),
       email, authUid: me.uid, teacherCode: await secNextSoloCode(), isSolo: true, loginId: null,
-      solo: { active: true, subscribedAt: now, subscriptionEnds: now + trialMs },
+      solo: { active: true, subscribedAt: now, subscriptionEnds: now + trialMs, plan: "trial", coveredPeriods: trialCov.covered, planYear: trialCov.year },
       createdAt: now, updatedAt: now,
     };
     await db.collection("users").doc(me.uid).set(data);
@@ -1459,7 +1461,7 @@ exports.registerSolo = onCall(async (request) => {
   const doc = q.docs[0];
   const data = doc.data();
   if (!data.solo && data.role !== "admin" && data.role !== "schoolAdmin") {
-    const solo = { active: true, subscribedAt: now, subscriptionEnds: now + trialMs };
+    const solo = { active: true, subscribedAt: now, subscriptionEnds: now + trialMs, plan: "trial", coveredPeriods: trialCov.covered, planYear: trialCov.year };
     const teacherCode = data.teacherCode || await secNextSoloCode();
     await doc.ref.update({ solo, teacherCode, isSolo: true, updatedAt: now });
     Object.assign(data, { solo, teacherCode, isSolo: true, updatedAt: now });
@@ -1595,12 +1597,10 @@ exports.activatedSeats = onCall(async (request) => {
    المرحلة ٤ (2026-10-13): اشتراك المعلم الفردي
    - secExtendSolo: نقطة التمديد الوحيدة (الأدمن الآن، وبوابة الدفع الإلكتروني لاحقًا): التاريخ الجديد = (الأبعد من اليوم أو
      تاريخ الانتهاء الحالي) + المدة، فمن يجدّد قبل الانتهاء لا يخسر أيامه. يُفعِّل السياق ويسجّل مصدر التجديد.
-   - adminSoloSubscription: واجهة الأدمن العام (تجديد بالأيام، أو ضبط تاريخ، أو تفعيل/إيقاف السياق الفردي).
-   - cleanupExpiredSolo: يوميًا؛ حذف بيانات الفردي بعد ٩٠ يومًا من الانتهاء. «تسجيل فقط» افتراضيًا حتى يُفعَّل الحذف الفعلي بـ
-     systemCounters/soloCleanup = { live: true } من لوحة Firebase (مجموعة مغلقة على العميل). السجل في soloCleanupLog.
+   - adminSoloSubscription (المرحلة ٥): منح حسب الخطة plan = semester|year عبر secGrantSoloPlan، أو تفعيل/إيقاف active.
+   - لا حذف تلقائي لبيانات المستقل المنتهي (أُلغي cleanupExpiredSolo).
    ============================================================================================ */
 const SEC_DAY_MS = 24 * 60 * 60 * 1000;
-const SEC_SOLO_KEEP_DAYS = 90;
 
 async function secExtendSolo(db, uid, days, source) {
   const n = Number(days);
@@ -1621,6 +1621,53 @@ async function secExtendSolo(db, uid, days, source) {
   });
 }
 
+/* (المرحلة ٥) خطط اشتراك المستقل تُحسب من التقويم المركزي وتاريخ الخادم، بلا تاريخ يدوي:
+   semester = من اليوم إلى نهاية الفصل الحالي (أو القادم إن كنا بين فصلين)، year = من اليوم إلى نهاية العام الدراسي.
+   covered = معرّفات الفصول التي يغطيها الاشتراك (يحق للمشترك عرضها للقراءة فقط بعد انتهائها). */
+function secSoloUpcoming(cal, nowMs) {
+  const ps = (cal.periods || []).slice().sort((x, y) => x.fromMs - y.fromMs);
+  return ps.find((p) => nowMs <= p.toMs) || null;
+}
+function secSoloTrialCovered(cal, nowMs) {
+  if (!cal || !Array.isArray(cal.periods) || !cal.periods.length) return { covered: [], year: null };
+  const p = secSoloUpcoming(cal, nowMs);
+  return { covered: p ? [p.id] : [], year: cal.year || null };
+}
+function secSoloPlan(cal, plan, nowMs) {
+  if (!cal || !Array.isArray(cal.periods) || !cal.periods.length) throw secMsg("failed-precondition", "لم يُضبط التقويم الدراسي المركزي بعد.");
+  if (!cal.endMs || nowMs > cal.endMs) throw secMsg("failed-precondition", "انتهى العام الدراسي الحالي؛ لا يمكن منح اشتراك قبل ضبط العام الجديد.");
+  const p = secSoloUpcoming(cal, nowMs);
+  if (!p) throw secMsg("failed-precondition", "لا يوجد فصل دراسي قائم أو قادم.");
+  if (plan === "semester") return { ends: p.toMs, covered: [p.id], year: cal.year || null, period: p.id };
+  if (plan === "year") return { ends: cal.endMs, covered: cal.periods.map((x) => x.id), year: cal.year || null, period: p.id };
+  throw secMsg("invalid-argument", "نوع الاشتراك غير صالح.");
+}
+/* نقطة المنح الموحَّدة (الأدمن الآن، وبوابة الدفع لاحقًا): تُجدِّد الاشتراك حسب الخطة دون المساس بما سبق دفعه في العام نفسه */
+async function secGrantSoloPlan(db, uid, plan, source) {
+  const cal = await secCalendar(true);
+  const now = Date.now();
+  const pl = secSoloPlan(cal, plan, now);
+  const ref = db.collection("users").doc(uid);
+  return db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists) throw secMsg("not-found", "الحساب غير موجود.");
+    const u = s.data();
+    if (u.role === "admin" || u.role === "schoolAdmin") throw secMsg("failed-precondition", "لا اشتراك فردي لهذا النوع من الحسابات.");
+    if (!u.solo) throw secMsg("failed-precondition", "هذا الحساب بلا سياق فردي.");
+    const old = u.solo;
+    const sameYear = old.planYear && old.planYear === pl.year;
+    let covered = pl.covered.slice();
+    if (sameYear && Array.isArray(old.coveredPeriods)) covered = Array.from(new Set(old.coveredPeriods.concat(covered)));
+    const prevEnd = sameYear && (old.subscriptionEnds || 0) > now ? old.subscriptionEnds : 0;
+    const solo = Object.assign({}, old, {
+      active: true, plan, planYear: pl.year, coveredPeriods: covered,
+      subscriptionEnds: Math.max(pl.ends, prevEnd), lastRenewedAt: now, lastRenewSource: source || "admin",
+    });
+    tx.update(ref, { solo, isSolo: true, updatedAt: now });
+    return { ends: solo.subscriptionEnds, plan, covered, period: pl.period };
+  });
+}
+
 exports.adminSoloSubscription = onCall(async (request) => {
   const me = await secCaller(request, { needDoc: true });
   if (!secIsAdmin(me.data)) throw secMsg("permission-denied", "مقصور على أدمن النظام العام.");
@@ -1628,22 +1675,17 @@ exports.adminSoloSubscription = onCall(async (request) => {
   const uid = String(d.uid || "");
   if (!uid) throw secMsg("invalid-argument", "حدّد الحساب.");
   const db = secDb();
-  if (d.extendDays != null) {
-    const r = await secExtendSolo(db, uid, d.extendDays, "admin:" + me.uid);
-    return { ok: true, ends: r.ends };
+  if (d.plan != null) {
+    const r = await secGrantSoloPlan(db, uid, String(d.plan), "admin:" + me.uid);
+    return { ok: true, ends: r.ends, plan: r.plan, covered: r.covered };
   }
   const ref = db.collection("users").doc(uid);
   const s = await ref.get();
   if (!s.exists) throw secMsg("not-found", "الحساب غير موجود.");
   const u = s.data();
   if (!u.solo || u.role === "admin" || u.role === "schoolAdmin") throw secMsg("failed-precondition", "هذا الحساب بلا سياق فردي.");
-  const solo = Object.assign({}, u.solo);
-  if (d.endsMs !== undefined) {
-    if (d.endsMs === null) solo.subscriptionEnds = null;
-    else if (typeof d.endsMs === "number" && isFinite(d.endsMs) && d.endsMs > 0) solo.subscriptionEnds = d.endsMs;
-    else throw secMsg("invalid-argument", "تاريخ غير صالح.");
-  }
-  if (typeof d.active === "boolean") solo.active = d.active;
+  if (typeof d.active !== "boolean") throw secMsg("invalid-argument", "حدّد نوع الاشتراك أو حالة التفعيل.");
+  const solo = Object.assign({}, u.solo, { active: d.active });
   await ref.update({ solo, updatedAt: Date.now() });
   return { ok: true, ends: solo.subscriptionEnds || null, active: solo.active !== false };
 });
@@ -1906,63 +1948,7 @@ exports.schoolSemester = onCall(async (request) => {
   return Object.assign({ ok: true }, res);
 });
 
-// حذف بيانات الفردي. كاملًا لمن لا سياق مدرسة له، وبيانات الفردي وحدها لمن له سياق مدرسة (لا تُمس أنشطة مدرسته)
-async function secWipeSolo(db, uid, u) {
-  const counts = {};
-  const dual = Object.keys(u.schools || {}).length > 0;
-  await db.collection("schoolData").doc("roster_solo_" + uid).delete().catch(() => {});
-  await db.collection("rosterIndex").doc("solo_" + uid).delete().catch(() => {});
-  const delDocs = async (docs) => {
-    for (let i = 0; i < docs.length; i += 400) {
-      const b = db.batch();
-      docs.slice(i, i + 400).forEach((x) => b.delete(x.ref));
-      await b.commit();
-    }
-    return docs.length;
-  };
-  if (!dual) {
-    for (const [c, f] of [["results", "userId"], ["exams", "userId"], ["studentNotes", "fromUserId"], ["attendance", "markedBy"],
-      ["worksheets", "createdBy"], ["questionBank", "createdBy"], ["submissions", "teacherUid"], ["pushTokens", "authUid"]]) {
-      counts[c] = await delAllWhere(db, c, f, uid);
-    }
-    await db.collection("users").doc(uid).delete();
-    try { await admin.auth().deleteUser(uid); } catch (e) { if (!e || e.code !== "auth/user-not-found") console.error("wipeSolo deleteUser", e); }
-    counts.user = 1;
-    return counts;
-  }
-  const ws = (await db.collection("worksheets").where("createdBy", "==", uid).get()).docs.filter((x) => !x.data().schoolId);
-  const wsIds = new Set(ws.map((x) => x.id));
-  const subs = (await db.collection("submissions").where("teacherUid", "==", uid).get()).docs.filter((x) => wsIds.has(x.data().worksheetId));
-  const sn = (await db.collection("studentNotes").where("fromUserId", "==", uid).get()).docs.filter((x) => x.data().schoolId === "solo_" + uid);
-  counts.submissions = await delDocs(subs);
-  counts.worksheets = await delDocs(ws);
-  counts.studentNotes = await delDocs(sn);
-  await db.collection("users").doc(uid).update({ solo: secFV.delete(), isSolo: secFV.delete(), updatedAt: Date.now() });
-  counts.soloContext = 1;
-  return counts;
-}
-
-exports.cleanupExpiredSolo = onSchedule({ schedule: "30 3 * * *", timeZone: "Asia/Riyadh", timeoutSeconds: 540 }, async () => {
-  const db = secDb();
-  const cfg = await db.collection("systemCounters").doc("soloCleanup").get();
-  const live = !!(cfg.exists && cfg.data().live === true);
-  const now = Date.now();
-  const cutoff = now - SEC_SOLO_KEEP_DAYS * SEC_DAY_MS;
-  const qs = await db.collection("users").where(new admin.firestore.FieldPath("solo", "subscriptionEnds"), "<", cutoff).limit(50).get();
-  const cands = [];
-  for (const d of qs.docs) {
-    const u = d.data();
-    if (u.role === "admin" || u.role === "schoolAdmin" || !u.solo || !u.solo.subscriptionEnds || u.migratedTo) continue;
-    const entry = { uid: d.id, username: u.username || "", email: u.email || "", endedAt: u.solo.subscriptionEnds, hasSchools: Object.keys(u.schools || {}).length > 0 };
-    if (live) {
-      try { entry.counts = await secWipeSolo(db, d.id, u); } catch (e) { entry.error = String(e && e.message || e); console.error("cleanupExpiredSolo", d.id, e); }
-    }
-    cands.push(entry);
-  }
-  const day = new Date(now + 3 * 3600e3).toISOString().slice(0, 10);
-  await db.collection("soloCleanupLog").doc(day).set({ at: now, live, candidates: cands });
-  console.log("cleanupExpiredSolo: live=" + live + " candidates=" + cands.length);
-});
+/* (المرحلة ٥) أُلغي الحذف التلقائي لبيانات المستقلين المنتهين: تبقى محفوظة للقراءة حتى يجدّدوا. */
 
 /* ===== (2026-10-14.1) ختم العام الدراسي الموحَّد لبنك الأسئلة =====
    قيمة واحدة للنظام كله (مدارس ومستقلون) يضبطها أدمن النظام فقط: settings/academicYear = {year, endsMs, prevYear, prevEndsMs}.

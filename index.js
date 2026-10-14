@@ -1,4 +1,4 @@
-// إصدار: 2026-10-14.3
+// إصدار: 2026-10-14.4
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -1771,6 +1771,79 @@ exports.schoolSemester = onCall(async (request) => {
     if (ms >= p2.toMs) throw secMsg("invalid-argument", "تاريخ التمديد يجب أن يسبق نهاية العام الدراسي (" + p2.to + "). لا تمديد بعد نهاية العام.");
     await refE.update({ semExtend: { first: ms, firstDate: until, by: me.uid, at: Date.now() }, updatedAt: Date.now() });
     return { ok: true, until, ms };
+  }
+
+  /* (2026-10-14.4) «نسخ من الفصل الحالي» إلى الفصل التالي (التجهيز المبكر) — يعمل قبل بداية الفصل الثاني فقط، وبشرط أن
+     يكون الفصل الثاني مرخَّصًا من أدمن النظام وغير مقفل. لا يُنسخ إلا ما يملك المستدعي صلاحيته:
+     الجدول المدرسي (مدير المدرسة أو «الجدول المدرسي» تعديل)، خطة المناوبة والإشراف، خطة الزيارات الصفية (مدير المدرسة أو الوكيل بالدور
+     أو صلاحية الأداة تعديل). لا يُنسخ المنشور/المعتمد للمعلمين ولا الأيام المحدَّدة بتواريخ (حصص الانتظار اليومية، توزيع المناوبة، مواعيد الزيارات).
+     ما كان موجودًا في الفصل الثاني لا يُستبدل إلا بـ overwrite=true. */
+  if (action === "copyNext") {
+    const sidC = String(d.schoolId || "");
+    if (!sidC) throw secMsg("invalid-argument", "حدّد المدرسة.");
+    const sysC = secIsAdmin(u), dirC = secIsSchoolAdminOf(u, sidC), ctxC = secStaffCtx(u, sidC);
+    if (!sysC && !dirC && !ctxC) throw secMsg("permission-denied", "ليست لديك صلاحية على هذه المدرسة.");
+    const scS = await db.collection("schoolData").doc(sidC).get();
+    if (!scS.exists || scS.data()._isSchool !== true) throw secMsg("not-found", "المدرسة غير موجودة.");
+    const sc = scS.data();
+    const cal = await secCalendar(true);
+    const p2 = cal && cal.count === 2 && Array.isArray(cal.periods) ? cal.periods.find((x) => x.id === "second") : null;
+    if (!p2) throw secMsg("failed-precondition", "لا يوجد فصل تالٍ في هذا العام الدراسي.");
+    const st2 = (sc.semesters || {}).second;
+    if (!st2 || st2.licensed !== true) throw secMsg("failed-precondition", "الفصل الثاني غير مرخَّص لمدرستك. تواصل مع إدارة النظام للاشتراك.");
+    if (st2.locked === true) throw secMsg("failed-precondition", "الفصل الثاني مغلق نهائيًا من إدارة النظام.");
+    const exC = Number(((sc.semExtend || {}).first) || 0);
+    const startMs = exC && exC >= p2.fromMs ? exC + 1 : p2.fromMs;
+    if (Date.now() >= startMs) throw secMsg("failed-precondition", "بدأ الفصل الثاني؛ النسخ من الفصل الحالي متاح قبل بدايته فقط.");
+    const want = Array.isArray(d.items) ? d.items.map(String) : [];
+    const overwrite = d.overwrite === true;
+    const can = {
+      timetable: sysC || dirC || secPerm(ctxC, "tools.timetable", "edit"),
+      duty: sysC || dirC || (ctxC && ctxC.role === "agent") || secPerm(ctxC, "tools.duty", "edit"),
+      visits: sysC || dirC || (ctxC && ctxC.role === "agent") || secPerm(ctxC, "tools.visits", "edit"),
+    };
+    const items = ["timetable", "duty", "visits"].filter((k) => want.indexOf(k) >= 0);
+    if (!items.length) throw secMsg("invalid-argument", "اختر ما تريد نسخه.");
+    const denied = items.filter((k) => !can[k]);
+    if (denied.length === items.length) throw secMsg("permission-denied", "ليست لديك صلاحية على ما اخترته.");
+    const NOW = Date.now();
+    const copied = { timetable: 0, duty: 0, visits: 0 }, skipped = { timetable: 0, duty: 0, visits: 0 }, refused = denied;
+    const putDoc = async (ref, data, kind) => {
+      if (!overwrite && (await ref.get()).exists) { skipped[kind]++; return; }
+      await ref.set(data); copied[kind]++;
+    };
+    const flipPeriod = (v) => {
+      if (Array.isArray(v)) return v.map(flipPeriod);
+      if (v && typeof v === "object") { const o = {}; Object.keys(v).forEach((k) => { o[k] = (k === "period" && v[k] === "first") ? "second" : flipPeriod(v[k]); }); return o; }
+      return v;
+    };
+    if (items.indexOf("timetable") >= 0 && can.timetable) {
+      const col = db.collection("timetables").doc(sidC).collection("data");
+      const docs = (await col.get()).docs.filter((x) => x.id.indexOf("first_") === 0
+        && !/_published$|_waiting$|_waitpub$/.test(x.id) && x.id.indexOf("_wday_") < 0);
+      for (const x of docs) await putDoc(col.doc("second_" + x.id.slice(6)), flipPeriod(x.data()), "timetable");
+    }
+    const pre = sidC + "_first_";
+    if (items.indexOf("duty") >= 0 && can.duty) {
+      const qs = await db.collection("dutyPlans").where("schoolId", "==", sidC).get();
+      for (const x of qs.docs.filter((y) => y.id.indexOf(pre) === 0)) {
+        const v = x.data() || {};
+        const doc = { kind: "plan", schoolId: sidC, period: "second", stage: v.stage || x.id.slice(pre.length), stageLabel: v.stageLabel || "",
+          participants: v.participants || [], places: v.places || [], perDay: Number(v.perDay) || 1,
+          agentName: v.agentName || "", principalName: v.principalName || "", copiedFrom: x.id, updatedAt: NOW, updatedBy: me.uid };
+        await putDoc(db.collection("dutyPlans").doc(sidC + "_second_" + x.id.slice(pre.length)), doc, "duty");
+      }
+    }
+    if (items.indexOf("visits") >= 0 && can.visits) {
+      const qs = await db.collection("classVisits").where("schoolId", "==", sidC).get();
+      for (const x of qs.docs.filter((y) => y.id.indexOf(pre) === 0 && (y.data() || {}).kind === "plan")) {
+        const v = x.data() || {};
+        const doc = { kind: "plan", schoolId: sidC, period: "second", teacherId: v.teacherId || x.id.slice(pre.length), teacherName: v.teacherName || "",
+          spec: v.spec || "", exec: v.exec || "", v1: null, v2: null, copiedFrom: x.id, updatedAt: NOW, updatedBy: me.uid };
+        await putDoc(db.collection("classVisits").doc(sidC + "_second_" + x.id.slice(pre.length)), doc, "visits");
+      }
+    }
+    return { ok: true, copied, skipped, refused };
   }
 
   const sid = String(d.schoolId || "");

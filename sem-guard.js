@@ -1,4 +1,4 @@
-// إصدار: 2026-10-14.3
+// إصدار: 2026-10-14.4
 /* حارس الفصل الدراسي (المرحلة ٢ من الفصلين — 2026-10-13).
    الفصل المغلق (غير مفعَّل، أو مغلق نهائيًا، أو غير مرخَّص، أو انتهى تاريخه بتوقيت الرياض) يختفي عن موظفي المدرسة.
    الحماية الأصلية في firestore.rules (semWritable)؛ هذا الملف:
@@ -121,6 +121,7 @@
       var d = await fetchPeriod(s.schoolId || '');
       if(d && d.closed){ yearOverlay(d.year); return true; }
       if(!d || !d.period) return false;
+      if(s.viewOnly) return false;   // وضع عرض الفصل السابق: لا نحوّل الجلسة
       if((s.period || 'first') !== d.period){
         s.period = d.period;
         try{ localStorage.setItem('cls_session', JSON.stringify(s)); }catch(e){}
@@ -141,7 +142,7 @@
     var s = sess();
     if(!s) return;
     if(await sync()) return;
-    if(!s.schoolId || s.role === 'admin' || s.role === 'soloTeacher' || s.ctxKey === 'solo') return;
+    if(!s.schoolId || s.role === 'admin' || s.role === 'soloTeacher' || s.ctxKey === 'solo' || s.viewOnly) return;
     if(!(window.firebase && firebase.apps && firebase.apps.length && firebase.firestore)) return;
     try{
       var snap = await firebase.firestore().collection('schoolData').doc(s.schoolId).get();
@@ -161,5 +162,66 @@
     }
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
   }
+  /* (2026-10-14.4) وضع «عرض الفصل السابق (قراءة فقط)»: cls_session.viewOnly = true.
+     - يمنع كل كتابة من هذه الصفحة إلى Firestore (set/update/delete/add وbatch وtransaction) عدا مجموعتي pushTokens وusers (حساب المستخدم نفسه: آخر ظهور وإعدادات العرض).
+       الحماية الفعلية في firestore.rules (الفصل السابق مغلق بتاريخه)، وهذا لإظهار رسالة واضحة بدل خطأ صلاحيات.
+     - شريط ثابت أسفل الصفحة مع زر «العودة إلى الفصل الحالي». */
+  var VO_MSG = 'أنت تعرض فصلًا سابقًا للقراءة فقط، ولا يمكن التعديل فيه. اضغط «العودة إلى الفصل الحالي» للعمل.';
+  function voErr(){ var e = new Error(VO_MSG); e.code = 'permission-denied'; return e; }
+  function voAllowed(ref){ var p = (ref && ref.path) || ''; return p.indexOf('pushTokens/') === 0 || p.indexOf('users/') === 0; }
+  function installWriteGuard(){
+    var F = window.firebase && firebase.firestore;
+    if(!F || F.__voGuarded) return !!(F && F.__voGuarded);
+    var n = 0;
+    function wrap(proto, name, pathOf){
+      if(!proto || typeof proto[name] !== 'function') return;
+      var orig = proto[name];
+      proto[name] = function(){
+        if(pathOf && voAllowed(pathOf(this))) return orig.apply(this, arguments);
+        return Promise.reject(voErr());
+      };
+      n++;
+    }
+    var self = function(x){ return x; };
+    wrap(F.DocumentReference && F.DocumentReference.prototype, 'set', self);
+    wrap(F.DocumentReference && F.DocumentReference.prototype, 'update', self);
+    wrap(F.DocumentReference && F.DocumentReference.prototype, 'delete', self);
+    wrap(F.CollectionReference && F.CollectionReference.prototype, 'add', self);
+    wrap(F.WriteBatch && F.WriteBatch.prototype, 'commit', null);
+    wrap(F.Firestore && F.Firestore.prototype, 'runTransaction', null);
+    F.__voGuarded = n > 0;
+    return n > 0;
+  }
+  function viewBanner(s){
+    if(document.getElementById('semGuardViewBar')) return;
+    var b = document.createElement('div');
+    b.id = 'semGuardViewBar';
+    b.setAttribute('dir', 'rtl');
+    b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99990;background:#7a4b00;color:#fff;padding:8px 12px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;font:600 13px Tajawal,Tahoma,sans-serif;text-align:center';
+    var t = document.createElement('span');
+    t.textContent = 'أنت تعرض ' + nm(s.period) + ' — قراءة فقط.' + (s.viewWhy ? ' (' + s.viewWhy + ')' : '');
+    var btn = document.createElement('button');
+    btn.textContent = 'العودة إلى الفصل الحالي';
+    btn.style.cssText = 'background:#fff;color:#7a4b00;border:0;border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer';
+    btn.onclick = function(){
+      var cur = sess() || s; delete cur.viewOnly; delete cur.viewWhy; cur.period = cur.period === 'first' ? 'second' : (cur.period || 'first');
+      try{ localStorage.setItem('cls_session', JSON.stringify(cur)); }catch(e){}
+      location.href = 'index.html';
+    };
+    b.appendChild(t); b.appendChild(btn);
+    document.body.appendChild(b);
+    document.body.style.paddingBottom = '46px';
+  }
+  function initViewOnly(){
+    var s = sess();
+    if(!s || !s.viewOnly || s.role === 'admin') return;
+    var tries = 0;
+    (function go(){
+      if(installWriteGuard()) {} else if(tries++ < 60) setTimeout(go, 250);
+    })();
+    if(document.body) viewBanner(s); else document.addEventListener('DOMContentLoaded', function(){ viewBanner(s); });
+  }
+  initViewOnly();
+
   window.SemGuard = { win: win, yearOverlay: yearOverlay, isOpen: isOpen, reason: reason, start: start, check: check, sync: sync, fetchPeriod: fetchPeriod, now: now };
 })();

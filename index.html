@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-14.3 -->
+<!-- إصدار: 2026-10-14.4 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -370,6 +370,7 @@ input,select{font-family:inherit;font-size:15px}
       <span id="tbCtxSwitchWrap"></span>
       <span class="ijh-spacer"></span>
       <span class="ijh-period" id="tbPeriod"></span>
+      <button type="button" id="tbViewPrev" hidden style="margin-inline-start:6px;padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.5);background:transparent;color:inherit;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap">عرض فصل سابق (قراءة فقط)</button>
     </div>
     <div class="ijh-menu" id="tbAccMenu" role="menu" aria-label="قائمة الحساب" hidden>
       <div class="ijh-mhead"><b id="tbMenuName"></b><span id="tbMenuSub"></span></div>
@@ -398,7 +399,7 @@ input,select{font-family:inherit;font-size:15px}
 <script src="pwa.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="users-api.js"></script>
-<script src="sem-guard.js?v=2026-10-14.3"></script>
+<script src="sem-guard.js?v=2026-10-14.4"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 /* =========================================================================
@@ -537,6 +538,7 @@ const INDEX_TABS = [
   { key:'studentStatus', perm:'index.studentStatus', label:'حالات الطلاب' },
   { key:'users',    perm:'index.users',    label:'المستخدمون' },
   { key:'userPerms', perm:'index.users.perms', label:'الصلاحيات الخاصة' },
+  { key:'transition', perm:'',           label:'الانتقال إلى الفصل التالي' },
   { key:'semesters', perm:'',            label:'الفصول الدراسية' },
   { key:'settings', perm:'',               label:'إعدادات النظام' },
 ];
@@ -567,7 +569,7 @@ const ADMIN_TOOLS = [
 const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting','tools.excellence'];
 /* المدير داخل فصل مغلق: لا يرى إلا تبويب «الفصول الدراسية» (ولا أدوات ولا لوحتي) */
 function semClosedForMe(){
-  return !!CURRENT && CURRENT.role==='schoolAdmin' && !!CURRENT.schoolId && !!SESSION && window.SemGuard
+  return !!CURRENT && CURRENT.role==='schoolAdmin' && !!CURRENT.schoolId && !!SESSION && !SESSION.viewOnly && window.SemGuard
     && !SemGuard.isOpen(SCHOOLS[CURRENT.schoolId], SESSION.period);
 }
 function visibleTools(){
@@ -1069,7 +1071,7 @@ function semEff(sc, p){
   }
   return out;
 }
-function schoolLoginBlockReason(schoolId, period, role){
+function schoolLoginBlockReason(schoolId, period, role, skipSem){
   if(!schoolId || !SCHOOLS[schoolId]) return null;
   const sc = SCHOOLS[schoolId];
   if(sc.active===false) return 'مدرستك موقوفة حالياً من إدارة النظام. تواصل مع المسؤول.';
@@ -1077,6 +1079,7 @@ function schoolLoginBlockReason(schoolId, period, role){
   if(sc.activeFrom && todayStr < sc.activeFrom) return 'لم تبدأ فترة تفعيل مدرستك بعد (تبدأ في '+sc.activeFrom+').';
   if(sc.activeTo && todayStr > sc.activeTo) return 'انتهت فترة تفعيل مدرستك في '+sc.activeTo+'. تواصل مع إدارة النظام.';
   const nm = periodLabel(period);
+  if(sc.semesters && skipSem) return null;   // (2026-10-14.4) وضع عرض الفصل السابق: لا فحص للفصل
   if(sc.semesters){
     // النمط الجديد: الترخيص من الأدمن، والفصل يُفتح ويُغلق تلقائيًا بتاريخه من التقويم المركزي (بلا تفعيل يدوي، وبلا استثناء للمدير)
     const st = sc.semesters[period];
@@ -1132,10 +1135,31 @@ async function autoPeriod(sid){
   if(d && d.closed){ const e = new Error('انتهى العام الدراسي'+(d.year?' '+d.year:'')+'، والنظام مغلق إلى حين اعتماد العام الدراسي الجديد. للاستفسار تواصل مع إدارة النظام.'); e.yearClosed = true; throw e; }
   return (d && d.period) || 'first';
 }
+/* (2026-10-14.4) مساعدات عرض الفصل السابق */
+function prevPeriodOf(p){ return p==='second' ? 'first' : null; }
+function viewerRoleOk(r){ return r==='schoolAdmin' || r==='agent' || r==='counselor'; }
+function canViewPrev(sid, pv){
+  const sc = SCHOOLS[sid]; const st = sc && sc.semesters && sc.semesters[pv];
+  return !!(st && st.licensed===true && st.locked!==true);
+}
 async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
+  let viewOnly = false, viewWhy = '';
   if(ctxKey!=='admin'){
     try{ period = await autoPeriod(ctxKey.indexOf('school:')===0 ? ctxKey.slice(7) : ''); }
     catch(e){ if(e && e.yearClosed){ await cleanSignOut(); } throw e; }
+    /* (2026-10-14.4) عرض الفصل السابق للقراءة فقط: لمدير المدرسة والوكيل والموجّه. يُفعَّل إذا اختاره المستخدم (يبقى بين الصفحات)،
+       أو تلقائيًا إذا كان الفصل الحالي مغلقًا على مدرستهم (غير مرخَّص/مقفل/منتهٍ) وفصلها السابق مرخَّص. */
+    if(ctxKey.indexOf('school:')===0){
+      const sidV = ctxKey.slice(7);
+      const roleV = data.role==='schoolAdmin' ? 'schoolAdmin' : ((((data.schools||{})[sidV])||{}).role||'');
+      const pv = prevPeriodOf(period);
+      if(pv && viewerRoleOk(roleV) && canViewPrev(sidV, pv)){
+        let prev = null; try{ prev = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){}
+        const wasView = !!(prev && prev.viewOnly && prev.ctxKey===ctxKey && prev.userId===docId);
+        const blockNow = schoolLoginBlockReason(sidV, period, roleV==='schoolAdmin'?'schoolAdmin':undefined);
+        if(wasView || blockNow){ period = pv; viewOnly = true; viewWhy = wasView ? '' : (blockNow||''); }
+      }
+    }
   }
   let flat;
   if(ctxKey==='admin'){
@@ -1147,7 +1171,7 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
   } else if(ctxKey.indexOf('school:')===0){
     const sid = ctxKey.slice(7);
     if(data.role==='schoolAdmin'){
-      const block = schoolLoginBlockReason(sid, period, 'schoolAdmin');
+      const block = schoolLoginBlockReason(sid, period, 'schoolAdmin', viewOnly);
       if(block){ await cleanSignOut(); throw new Error(block); }
       const saPerms = defaultPerms('schoolAdmin');
       const _ps = Array.isArray(data.canManageUserPermsSchools) ? data.canManageUserPermsSchools
@@ -1157,7 +1181,7 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
     } else {
       const ctx = (data.schools||{})[sid];
       if(!ctx || ctx.active===false){ await cleanSignOut(); throw new Error('هذا السياق معطّل. راجع المسؤول'); }
-      const block = schoolLoginBlockReason(sid, period);
+      const block = schoolLoginBlockReason(sid, period, undefined, viewOnly);
       if(block){ await cleanSignOut(); throw new Error(block); }
       /* [ADMIN-TOOLS:MOD] ORIG: flat = { role:ctx.role, schoolId:sid, permissions:ctx.permissions, active:true, assignedClasses:ctx.assignedClasses||[] }; */
       flat = { role:ctx.role, schoolId:sid, permissions:ctx.permissions, active:true, assignedClasses:visibleClassesOf(ctx) };
@@ -1166,6 +1190,7 @@ async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
   AUTH_JUST_CREATED = false;
   CURRENT = { id:docId, ...data, ...flat };
   SESSION = { userId:docId, username:data.username, role:flat.role, schoolId:flat.schoolId, period, ctxKey };
+  if(viewOnly){ SESSION.viewOnly = true; if(viewWhy) SESSION.viewWhy = viewWhy; }
   localStorage.setItem('cls_session', JSON.stringify(SESSION));
   function finishLogin(){
     if(flat.role==='soloTeacher'){ window.location.href='omr.html'; return; }
@@ -1680,6 +1705,7 @@ function visibleTabs(){
   if(CURRENT.schoolId && guideView()) extra.push(INDEX_TABS.find(t=>t.key==='guidance'));
   if(dashVisible()) extra.push(INDEX_TABS.find(t=>t.key==='dashboard'));
   if(dashVisible()) extra.push(INDEX_TABS.find(t=>t.key==='semesters'));   // «الفصول الدراسية»: لمدير المدرسة
+  { const ti = transitionInfo(); if(ti){ const tt = INDEX_TABS.find(t=>t.key==='transition'); extra.push(ti.licensed ? tt : Object.assign({}, tt, { label: tt.label+' ⚠' })); } }
   if(!extra.length) return base;
   const order = INDEX_TABS.map(t=>t.key);
   return base.concat(extra).sort((a,b)=>order.indexOf(a.key)-order.indexOf(b.key));
@@ -1701,7 +1727,20 @@ function enterApp(){
   const school = CURRENT.schoolId && SCHOOLS[CURRENT.schoolId] ? SCHOOLS[CURRENT.schoolId].name : 'لوحة الأدمن';
   $('#tbTitle').textContent = CURRENT.username;
   const _dateEl = $('#tbDate'); if(_dateEl) _dateEl.innerHTML = (window.InjazTheme ? InjazTheme.dateHTML() : headerDateStr());
-  $('#tbPeriod').textContent = periodLabel(SESSION.period);
+  $('#tbPeriod').textContent = periodLabel(SESSION.period) + (SESSION.viewOnly ? ' — قراءة فقط' : '');
+  /* (2026-10-14.4) زر «عرض فصل سابق (قراءة فقط)»: لمدير المدرسة والوكيل والموجّه عندما يكون الفصل الحالي هو الثاني والأول مرخَّصًا */
+  { const vb = $('#tbViewPrev');
+    if(vb){
+      const pv = prevPeriodOf(SESSION.period);
+      const show = !!(pv && !SESSION.viewOnly && CURRENT.schoolId && viewerRoleOk(CURRENT.role) && canViewPrev(CURRENT.schoolId, pv));
+      vb.hidden = !show;
+      vb.onclick = async ()=>{
+        if(!(await mnConfirm('ستعرض '+periodLabel(pv)+' للقراءة فقط: لا يمكنك التعديل فيه. يمكنك العودة إلى الفصل الحالي في أي وقت. متابعة؟'))) return;
+        const ns = Object.assign({}, SESSION, { period:pv, viewOnly:true }); delete ns.viewWhy;
+        try{ localStorage.setItem('cls_session', JSON.stringify(ns)); }catch(e){}
+        location.reload();
+      };
+    } }
   const _omrKeys=['omr.classes','omr.design','omr.grade','omr.results','omr.worklog'];
   const _ob=$('#tbOmr'); if(_ob) _ob.style.display=(!semClosedForMe() && (CURRENT.role==='admin'||_omrKeys.some(k=>can(k,'access'))))?'flex':'none';
   const tabs=visibleTabs();
@@ -2878,6 +2917,73 @@ async function semAct(sid, p, act, boxId, isSys){
     if(!isSys && wasClosed !== semClosedForMe()) enterApp();   // تغيّرت حالة فصل جلستي: أعد بناء التبويبات
   }catch(e){ toast(e && e.message ? e.message : 'تعذّر تنفيذ الإجراء'); }
 }
+/* ===================== «الانتقال إلى الفصل التالي» (2026-10-14.4) =====================
+   يظهر قبل نهاية الفصل الأول بـ ١٥ يومًا (بنهايته الفعلية لمدرستك مع أي تمديد) ويختفي بداية الفصل الثاني.
+   لمدير المدرسة والوكلاء ومن لديه «الجدول المدرسي» تعديل. التجهيز المبكر: «نسخ من الفصل الحالي» يعمل بشرط أن يكون الفصل التالي
+   مرخَّصًا من أدمن النظام (الدالة تتحقق). المدرسة المرخَّصة للأول فقط ترى شارة تنبيه. */
+function transitionInfo(){
+  if(!CURRENT || !CURRENT.schoolId || !SESSION || SESSION.viewOnly || SESSION.period!=='first') return null;
+  const sc = SCHOOLS[CURRENT.schoolId]; if(!sc || !sc.semesters) return null;
+  const e1 = semEff(sc,'first'), e2 = semEff(sc,'second');
+  if(!e1 || !e1.to || !e2 || !e2.from) return null;
+  const pm = CURRENT.permissions||{};
+  const ok = CURRENT.role==='schoolAdmin' || CURRENT.role==='agent' || !!(pm['tools.timetable'] && pm['tools.timetable'].edit);
+  if(!ok) return null;
+  const today = todayRiyadh(); if(today>e1.to) return null;
+  const days = Math.round((Date.parse(e1.to+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000);
+  if(days>15) return null;
+  const st2 = sc.semesters.second;
+  return { sc, days, e1, e2, licensed: !!(st2 && st2.licensed===true), locked: !!(st2 && st2.locked===true) };
+}
+async function renderTransition(c){
+  const ti = transitionInfo();
+  if(!ti){ c.innerHTML='<div class="empty">هذا التبويب يظهر قبل نهاية الفصل الأول بخمسة عشر يومًا، ويختفي عند بداية الفصل التالي.</div>'; return; }
+  const pm = CURRENT.permissions||{}, isDir = CURRENT.role==='schoolAdmin', isAg = CURRENT.role==='agent';
+  const can = {
+    timetable: isDir || !!(pm['tools.timetable']&&pm['tools.timetable'].edit),
+    duty: isDir || isAg || !!(pm['tools.duty']&&pm['tools.duty'].edit),
+    visits: isDir || isAg || !!(pm['tools.visits']&&pm['tools.visits'].edit)
+  };
+  const dis = k=>can[k]?'':'disabled';
+  const left = ti.days>0 ? ('بقي '+ti.days+' يومًا على نهاية الفصل الأول') : 'اليوم آخر أيام الفصل الأول';
+  let status;
+  if(ti.locked) status = `<div class="alert err" style="margin-bottom:10px"><b>الفصل الثاني مغلق نهائيًا من إدارة النظام.</b> لا يمكن التجهيز له.</div>`;
+  else if(!ti.licensed) status = `<div class="alert err" style="margin-bottom:10px"><b>⚠ الفصل التالي غير مفعّل وسيُغلق بتاريخ بدايته (${esc(ti.e2.from)}) ما لم يتم الاشتراك.</b><br>تواصل مع إدارة النظام للاشتراك في الفصل الثاني. لا يمكن النسخ إليه قبل ذلك.</div>`;
+  else status = `<div class="alert ok" style="margin-bottom:10px"><b>الفصل الثاني مرخَّص</b> ويبدأ تلقائيًا في ${esc(ti.e2.from)}.</div>`;
+  const canCopy = ti.licensed && !ti.locked;
+  c.innerHTML = `<div class="panel-head"><h2>الانتقال إلى الفصل التالي</h2></div>
+    <div class="sub-note" style="margin-bottom:8px">${esc(left)} (${esc(ti.e1.to)}). يبدأ الفصل الثاني في ${esc(ti.e2.from)}، وتنتقل مدرستك إليه تلقائيًا دون أي إجراء.</div>
+    ${status}
+    <div class="card" style="box-shadow:none;padding:12px">
+      <b>نسخ من الفصل الحالي</b>
+      <div class="sub-note" style="margin:4px 0 8px">تجهيز مبكر للفصل الثاني: يُنسخ ما اخترته إلى الفصل الثاني دون المساس بالفصل الحالي. لا يُنسخ ما نُشر للمعلمين ولا ما يرتبط بتواريخ الفصل الأول (حصص الانتظار اليومية وتوزيع المناوبة ومواعيد الزيارات).</div>
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="trTT" ${dis('timetable')} ${can.timetable?'checked':''}> الجدول المدرسي (الإعدادات والإسناد والمسودات والمعتمد)</label>
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="trDuty" ${dis('duty')} ${can.duty?'checked':''}> خطة المناوبة والإشراف (المشاركون والأماكن)</label>
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="trVis" ${dis('visits')} ${can.visits?'checked':''}> خطة الزيارات الصفية (قائمة المعلمين والتخصص)</label>
+      <label style="display:flex;gap:8px;align-items:center;margin:10px 0 6px"><input type="checkbox" id="trOver"> استبدال ما سبق تجهيزه في الفصل الثاني (الافتراضي: يُترك ما هو موجود)</label>
+      <button class="btn" id="trGo" ${canCopy?'':'disabled'}>نسخ من الفصل الحالي</button>
+      <div id="trAlert"></div>
+    </div>`;
+  $('#trGo').onclick = async ()=>{
+    const items = [];
+    if($('#trTT').checked) items.push('timetable');
+    if($('#trDuty').checked) items.push('duty');
+    if($('#trVis').checked) items.push('visits');
+    if(!items.length){ alertBox('trAlert','err','اختر ما تريد نسخه.'); return; }
+    const over = $('#trOver').checked;
+    if(over && !(await mnConfirm('سيُستبدل ما جُهِّز سابقًا في الفصل الثاني بنسخة الفصل الحالي. متابعة؟'))) return;
+    const btn = $('#trGo'); btn.disabled = true;
+    try{
+      const r = (await UsersAPI.call('schoolSemester', { action:'copyNext', schoolId:CURRENT.schoolId, items, overwrite:over })) || {};
+      const nm = { timetable:'الجدول المدرسي', duty:'خطة المناوبة', visits:'خطة الزيارات' };
+      const parts = items.filter(k=>!(r.refused||[]).includes(k)).map(k=>`${nm[k]}: نُسخ ${(r.copied||{})[k]||0}${(r.skipped||{})[k]?` وتُرك ${(r.skipped||{})[k]} لوجوده`:''}`);
+      let msg = parts.join(' — ');
+      if((r.refused||[]).length) msg += ' · لا صلاحية لك على: '+r.refused.map(k=>nm[k]).join('، ');
+      alertBox('trAlert','ok', msg||'لا شيء للنسخ');
+    }catch(e){ alertBox('trAlert','err', e.message||'تعذّر النسخ'); }
+    finally{ btn.disabled = false; }
+  };
+}
 async function renderSemesters(c){
   if(!dashVisible()){ c.innerHTML='<div class="empty">هذا التبويب لمدير المدرسة فقط.</div>'; return; }
   c.innerHTML = '<div class="panel-head"><h2>الفصول الدراسية</h2></div><div class="sub-note">حالة الفصلين الدراسيين لمدرستك. يُفتح كل فصل ويُغلق تلقائيًا بتاريخه من تقويم النظام دون تفعيل. يتم الاشتراك في الفصول من إدارة النظام.</div><div id="semBoxDir"></div>';
@@ -3371,6 +3477,7 @@ function renderPanel(){
   if(activeTab==='guidance')   return renderGuidance(c);
   if(activeTab==='dashboard')  return renderDashboard(c);
   if(activeTab==='semesters')  return renderSemesters(c);
+  if(activeTab==='transition') return renderTransition(c);
   if(activeTab==='studentStatus') return renderStudentStatus(c);
   const labels={classes:'الفصول والطلاب',sent:'التحويلات المرسلة',received:'التحويلات الواردة',absence:'غياب الطلاب'};
   c.innerHTML=`<div class="panel-head"><h2>${esc(labels[activeTab]||'')}</h2></div>

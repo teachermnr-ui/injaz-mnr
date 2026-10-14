@@ -1,4 +1,4 @@
-// إصدار: 2026-10-14.2
+// إصدار: 2026-10-14.3
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -1137,7 +1137,29 @@ async function secCaller(request, opts) {
   const s = await secDb().collection("users").doc(request.auth.uid).get();
   const out = { uid: request.auth.uid, tok, ref: s.ref, exists: s.exists, data: s.exists ? s.data() : null };
   if (opts && opts.needDoc && !out.exists) throw secMsg("permission-denied", "لا يوجد حساب مرتبط بهذا الدخول.");
+  // (2026-10-14.3) إغلاق كامل بعد نهاية العام الدراسي: لا يعمل أحد غير أدمن النظام (إلا ما نصّ عليه allowClosed)
+  if (!(opts && opts.allowClosed) && !secIsAdmin(out.data)) {
+    const cal = await secCalendar();
+    if (secYearEnded(cal, Date.now())) throw secYearClosedError(cal);
+  }
   return out;
+}
+/* ===== (2026-10-14.3) الإغلاق الكامل بعد نهاية العام =====
+   settings/academicCalendar.endMs هو آخر لحظة في العام (23:59:59.999 بتوقيت الرياض). بعدها يُغلق النظام لكل المستخدمين
+   عدا أدمن النظام، حتى يُحفظ تقويم عام جديد (endMs أبعد). تُخزَّن قراءة التقويم دقيقة واحدة في ذاكرة الدالة. */
+let SEC_CAL_CACHE = { at: 0, v: null };
+async function secCalendar(force) {
+  const dtc = Date.now() - SEC_CAL_CACHE.at;
+  if (!force && SEC_CAL_CACHE.at && dtc >= 0 && dtc < 60000) return SEC_CAL_CACHE.v;
+  const s = await secDb().collection("settings").doc("academicCalendar").get();
+  SEC_CAL_CACHE = { at: Date.now(), v: s.exists ? s.data() : null };
+  return SEC_CAL_CACHE.v;
+}
+function secYearEnded(cal, nowMs) { return !!cal && typeof cal.endMs === "number" && nowMs > cal.endMs; }
+function secYearClosedError(cal) {
+  return new HttpsError("failed-precondition",
+    "انتهى العام الدراسي" + (cal && cal.year ? " " + cal.year : "") + "، والنظام مغلق إلى حين اعتماد العام الدراسي الجديد. للاستفسار تواصل مع إدارة النظام.",
+    { yearClosed: true, year: (cal && cal.year) || null });
 }
 // محاولات فاشلة محدودة لكل مفتاح (سجل في secAttempts — مغلق على العميل)
 async function secGate(key, max, windowMs) {
@@ -1726,6 +1748,31 @@ exports.schoolSemester = onCall(async (request) => {
 
   if (action === "saveDates") return semSaveDates(me, u, d);
 
+  /* (2026-10-14.3) تمديد نهاية الفصل الأول لمدرسة بعينها (أدمن النظام فقط): حتى تاريخ أقصاه يوم قبل نهاية العام،
+     وتبدأ مدرسة التمديد فصلها الثاني في اليوم التالي. until فارغ ← إلغاء التمديد. لا تمديد بعد نهاية العام. */
+  if (action === "extend") {
+    if (!secIsAdmin(u)) throw secMsg("permission-denied", "مقصور على أدمن النظام العام.");
+    const sidE = String(d.schoolId || "");
+    if (!sidE) throw secMsg("invalid-argument", "حدّد المدرسة.");
+    const refE = db.collection("schoolData").doc(sidE);
+    const sE = await refE.get();
+    if (!sE.exists || sE.data()._isSchool !== true) throw secMsg("not-found", "المدرسة غير موجودة.");
+    const until = String(d.until || "");
+    if (!until) {
+      await refE.update({ semExtend: secFV.delete(), updatedAt: Date.now() });
+      return { ok: true, cleared: true };
+    }
+    if (!SEM_DATE_RE.test(until)) throw secMsg("invalid-argument", "تاريخ التمديد غير صحيح.");
+    const cal = await secCalendar(true);
+    if (!cal || cal.count !== 2 || !Array.isArray(cal.periods) || cal.periods.length < 2) throw secMsg("failed-precondition", "التمديد متاح عندما يكون العام فصلين فقط.");
+    const p1 = cal.periods.find((x) => x.id === "first"), p2 = cal.periods.find((x) => x.id === "second");
+    const ms = semMs(until, true);
+    if (ms <= p1.toMs) throw secMsg("invalid-argument", "تاريخ التمديد يجب أن يكون بعد نهاية الفصل الأول (" + p1.to + ").");
+    if (ms >= p2.toMs) throw secMsg("invalid-argument", "تاريخ التمديد يجب أن يسبق نهاية العام الدراسي (" + p2.to + "). لا تمديد بعد نهاية العام.");
+    await refE.update({ semExtend: { first: ms, firstDate: until, by: me.uid, at: Date.now() }, updatedAt: Date.now() });
+    return { ok: true, until, ms };
+  }
+
   const sid = String(d.schoolId || "");
   const period = String(d.period || "");
   if (!sid || SEM_IDS.indexOf(period) < 0) throw secMsg("invalid-argument", "حدّد المدرسة والفصل الدراسي.");
@@ -1945,11 +1992,15 @@ async function calPropagate(db, cal) {
     sc.docs.slice(i, i + 400).forEach((doc) => {
       const semDates = {};
       cal.periods.forEach((p) => { semDates[p.id] = { fromMs: p.fromMs, toMs: p.toMs }; });
-      batch.update(doc.ref, {
+      const upd0 = {};
+      const ex = ((doc.data() || {}).semExtend || {}).first;
+      const p1 = cal.periods.find((x) => x.id === "first"), p2 = cal.periods.find((x) => x.id === "second");
+      if (ex && !(p1 && p2 && ex > p1.toMs && ex < p2.toMs)) upd0.semExtend = secFV.delete();   // التمديد لم يعد صالحًا مع التقويم الجديد
+      batch.update(doc.ref, Object.assign(upd0, {
         periods: cal.periods.map((p) => ({ id: p.id, from: p.from, to: p.to, fromMs: p.fromMs, toMs: p.toMs })),
         yearFrom: cal.startDate, yearTo: cal.endDate, yearFromMs: cal.startMs, yearToMs: cal.endMs,
         semDates, updatedAt: Date.now(),
-      });
+      }));
       n++;
     });
     await batch.commit();
@@ -1996,9 +2047,39 @@ function calPeriodAt(cal, nowMs) {
   return { period: ps[ps.length - 1].id, state: "after" };
 }
 exports.currentPeriod = onCall(async (request) => {
-  await secCaller(request);
+  const me = await secCaller(request, { allowClosed: true });
   const nowMs = Date.now();
-  const cal = (await secDb().collection("settings").doc("academicCalendar").get()).data() || null;
+  const cal = await secCalendar(true);
   const r = calPeriodAt(cal, nowMs);
-  return { nowMs, period: r.period, state: r.state, year: cal ? cal.year || null : null };
+  let period = r.period;
+  let extended = false;
+  // تمديد الفصل الأول لمدرسة بعينها (semExtend.first): ما دام التمديد قائمًا تبقى المدرسة في الفصل الأول
+  const sid = request.data && request.data.schoolId ? String(request.data.schoolId) : "";
+  if (sid && r.state === "during" && period === "second") {
+    const sc = await secDb().collection("schoolData").doc(sid).get();
+    const e = sc.exists ? Number(((sc.data().semExtend || {}).first) || 0) : 0;
+    if (e && nowMs <= e) { period = "first"; extended = true; }
+  }
+  const closed = secYearEnded(cal, nowMs) && !secIsAdmin(me.data);
+  return { nowMs, period, state: r.state, year: cal ? cal.year || null : null, endMs: cal ? cal.endMs || null : null, closed, extended };
+});
+
+
+/* ===== (2026-10-14.3) الفحص اليومي للتقويم (02:00 بتوقيت الرياض) =====
+   يكتب settings/calendarState = {state: during|before|ended|none, period, year, endMs, checkedAt} لتقرأه الواجهات والإدارة بلا حساب،
+   ويسجّل سطرًا في calendarLog/{yyyy-mm-dd} عند تغيّر الحالة. الإغلاق الفعلي لا يعتمد على هذه الدالة (القواعد والدوال تحسبه من التاريخ مباشرة). */
+exports.dailyCalendarSweep = onSchedule({ schedule: "0 2 * * *", timeZone: "Asia/Riyadh" }, async () => {
+  const db = secDb();
+  const nowMs = Date.now();
+  const cal = await secCalendar(true);
+  const r = calPeriodAt(cal, nowMs);
+  const state = !cal ? "none" : (secYearEnded(cal, nowMs) ? "ended" : (r.state === "before" ? "before" : "during"));
+  const ref = db.collection("settings").doc("calendarState");
+  const prev = (await ref.get()).data() || {};
+  await ref.set({ state, period: r.period || null, year: cal ? cal.year || null : null, endMs: cal ? cal.endMs || null : null, checkedAt: nowMs });
+  if (prev.state !== state || prev.period !== (r.period || null)) {
+    const day = new Date(nowMs + 3 * 3600e3).toISOString().slice(0, 10);
+    await db.collection("calendarLog").doc(day).set({ at: nowMs, from: { state: prev.state || null, period: prev.period || null }, to: { state, period: r.period || null }, year: cal ? cal.year || null : null });
+  }
+  console.log("dailyCalendarSweep: state=" + state + " period=" + (r.period || "-"));
 });

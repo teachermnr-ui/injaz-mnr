@@ -1,4 +1,4 @@
-// إصدار: 2026-10-14.1
+// إصدار: 2026-10-14.2
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -1387,7 +1387,16 @@ exports.skipPending = onCall(async (request) => {
 });
 
 /* إنشاء الحساب الفردي (تجربة ٣٠ يومًا تُحسب هنا لا في المتصفح) أو إضافة سياق الفردي لمستند موجود */
-const SEC_SOLO_TRIAL_MS = 30 * 24 * 60 * 60 * 1000;
+const SEC_SOLO_TRIAL_MS = 30 * 24 * 60 * 60 * 1000;   // الافتراضي إن لم يضبط الأدمن settings/soloTrial
+/* (2026-10-14.2) مدة التجربة بالأيام يضبطها الأدمن في settings/soloTrial = {days}: 0 = بلا تجربة، وتسري على الحسابات الجديدة فقط */
+async function secSoloTrialMs() {
+  try {
+    const s = await secDb().collection("settings").doc("soloTrial").get();
+    const n = s.exists ? Number(s.data().days) : NaN;
+    if (isFinite(n) && n >= 0 && n <= 3650) return Math.floor(n) * 86400000;
+  } catch (e) { /* يبقى الافتراضي */ }
+  return SEC_SOLO_TRIAL_MS;
+}
 async function secNextSoloCode() {
   const db = secDb();
   const ref = db.collection("systemCounters").doc("soloTeacher");
@@ -1413,12 +1422,13 @@ exports.registerSolo = onCall(async (request) => {
   const db = secDb();
   const q = await db.collection("users").where("authUid", "==", me.uid).limit(1).get();
   const now = Date.now();
+  const trialMs = await secSoloTrialMs();
   if (q.empty) {
     const email = me.tok.email || "";
     const data = {
       username: me.tok.name || (email.split("@")[0] || "مستخدم"),
       email, authUid: me.uid, teacherCode: await secNextSoloCode(), isSolo: true, loginId: null,
-      solo: { active: true, subscribedAt: now, subscriptionEnds: now + SEC_SOLO_TRIAL_MS },
+      solo: { active: true, subscribedAt: now, subscriptionEnds: now + trialMs },
       createdAt: now, updatedAt: now,
     };
     await db.collection("users").doc(me.uid).set(data);
@@ -1427,7 +1437,7 @@ exports.registerSolo = onCall(async (request) => {
   const doc = q.docs[0];
   const data = doc.data();
   if (!data.solo && data.role !== "admin" && data.role !== "schoolAdmin") {
-    const solo = { active: true, subscribedAt: now, subscriptionEnds: now + SEC_SOLO_TRIAL_MS };
+    const solo = { active: true, subscribedAt: now, subscriptionEnds: now + trialMs };
     const teacherCode = data.teacherCode || await secNextSoloCode();
     await doc.ref.update({ solo, teacherCode, isSolo: true, updatedAt: now });
     Object.assign(data, { solo, teacherCode, isSolo: true, updatedAt: now });
@@ -1638,10 +1648,19 @@ async function semSaveDates(me, u, d) {
   if (!secIsAdmin(u)) throw secMsg("permission-denied", "مقصور على أدمن النظام العام.");
   const sid = String(d.schoolId || "");
   if (!sid) throw secMsg("invalid-argument", "حدّد المدرسة.");
-  const yF = d.yearFrom ? String(d.yearFrom) : "", yT = d.yearTo ? String(d.yearTo) : "";
+  let yF = d.yearFrom ? String(d.yearFrom) : "", yT = d.yearTo ? String(d.yearTo) : "";
+  /* (2026-10-14.2) التقويم المركزي: متى وُجد settings/academicCalendar فهو المرجع الوحيد لتواريخ المدرسة، ويُتجاهل ما يرسله العميل */
+  const calSnap = await secDb().collection("settings").doc("academicCalendar").get();
+  const calData = calSnap.exists ? calSnap.data() : null;
+  let dSems = d.semesters || {};
+  if (calData && Array.isArray(calData.periods) && calData.periods.length) {
+    yF = calData.startDate; yT = calData.endDate;
+    dSems = {};
+    calData.periods.forEach((x) => { dSems[x.id] = { from: x.from, to: x.to }; });
+  }
   const given = {};
   for (const p of SEM_IDS) {
-    const x = (d.semesters || {})[p];
+    const x = dSems[p];
     if (!x) continue;
     const f = String(x.from || ""), t = String(x.to || "");
     if (!SEM_DATE_RE.test(f) || !SEM_DATE_RE.test(t)) throw secMsg("invalid-argument", "حدّد بداية ونهاية صحيحتين لـ" + SEM_AR[p] + ".");
@@ -1858,6 +1877,22 @@ async function ayRestamp(db, year, prevYear, prevEndsMs) {
   return { stamped, restamped };
 }
 
+/* تطبيق العام الدراسي على settings/academicYear وإعادة ختم البنك (يستعملها academicYear وacademicCalendar) */
+async function ayApply(db, year, endsMs, uid) {
+  const ref = db.collection("settings").doc("academicYear");
+  const cur = (await ref.get()).data() || {};
+  if (cur.year && Number(year) < Number(cur.year)) throw secMsg("failed-precondition", "لا يمكن الرجوع إلى عام أقدم من العام الحالي (" + cur.year + ").");
+  const now = Date.now();
+  if (cur.year && cur.year === year) {
+    await ref.set(Object.assign({}, cur, { endsMs, updatedAt: now, by: uid }));
+    return { stamped: 0, restamped: 0 };
+  }
+  await ref.set({
+    year, endsMs, prevYear: cur.year || null, prevEndsMs: cur.endsMs || null, setAt: now, updatedAt: now, by: uid,
+  });
+  return ayRestamp(db, year, cur.year || null, cur.endsMs || null);
+}
+
 exports.academicYear = onCall(async (request) => {
   const me = await secCaller(request, { needDoc: true });
   if (!secIsAdmin(me.data)) throw secMsg("permission-denied", "مقصور على أدمن النظام العام.");
@@ -1868,18 +1903,83 @@ exports.academicYear = onCall(async (request) => {
   const endDate = d.endDate ? String(d.endDate) : "";
   if (endDate && !SEM_DATE_RE.test(endDate)) throw secMsg("invalid-argument", "تاريخ نهاية العام غير صالح.");
   const endsMs = endDate ? semMs(endDate, true) : null;
-  const db = secDb();
-  const ref = db.collection("settings").doc("academicYear");
-  const cur = (await ref.get()).data() || {};
-  if (cur.year && Number(year) < Number(cur.year)) throw secMsg("failed-precondition", "لا يمكن الرجوع إلى عام أقدم من العام الحالي (" + cur.year + ").");
-  const now = Date.now();
-  if (cur.year && cur.year === year) {
-    await ref.set(Object.assign({}, cur, { endsMs, updatedAt: now, by: me.uid }));
-    return { ok: true, year, stamped: 0, restamped: 0 };
-  }
-  await ref.set({
-    year, endsMs, prevYear: cur.year || null, prevEndsMs: cur.endsMs || null, setAt: now, updatedAt: now, by: me.uid,
-  });
-  const res = await ayRestamp(db, year, cur.year || null, cur.endsMs || null);
+  const res = await ayApply(secDb(), year, endsMs, me.uid);
   return { ok: true, year, stamped: res.stamped, restamped: res.restamped };
+});
+
+/* ===== (2026-10-14.2) التقويم الدراسي المركزي: settings/academicCalendar (أدمن النظام فقط) =====
+   {year, count: 1|2, startDate, midDate (للفصلين: آخر يوم في الأول؛ الثاني يبدأ في اليوم التالي), endDate,
+    periods:[{id,from,to,fromMs,toMs}], startMs, endMs}
+   يُعمَّم من هنا على: كل المدارس (periods/yearFrom/yearTo/semDates) وتواريخ المعلم المستقل (schoolData/soloSemesters)،
+   ويُحدِّث عام ختم البنك (settings/academicYear.endsMs = نهاية العام). الفصل الحالي لأي مستخدم يُحسب من تاريخ اليوم. */
+function calNextDay(dateStr) { return new Date(semMs(dateStr, false) + 86400000 + 3 * 3600 * 1000).toISOString().slice(0, 10); }
+function calBuild(d) {
+  const year = String(d.year || "").trim();
+  if (!AY_YEAR_RE.test(year)) throw secMsg("invalid-argument", "اكتب العام الدراسي بأربع خانات، مثل ١٤٤٧.");
+  const count = Number(d.count);
+  if (count !== 1 && count !== 2) throw secMsg("invalid-argument", "عدد الفصول الدراسية: فصل واحد أو فصلان.");
+  const startDate = String(d.startDate || ""), endDate = String(d.endDate || ""), midDate = String(d.midDate || "");
+  if (!SEM_DATE_RE.test(startDate)) throw secMsg("invalid-argument", "حدّد تاريخ بداية العام الدراسي.");
+  if (!SEM_DATE_RE.test(endDate)) throw secMsg("invalid-argument", "حدّد تاريخ نهاية العام الدراسي.");
+  if (endDate < startDate) throw secMsg("invalid-argument", "نهاية العام الدراسي قبل بدايته.");
+  let periods;
+  if (count === 1) {
+    periods = [{ id: "first", from: startDate, to: endDate }];
+  } else {
+    if (!SEM_DATE_RE.test(midDate)) throw secMsg("invalid-argument", "حدّد تاريخ نهاية نصف العام.");
+    if (midDate < startDate) throw secMsg("invalid-argument", "نهاية نصف العام قبل بداية العام.");
+    if (midDate >= endDate) throw secMsg("invalid-argument", "نهاية نصف العام يجب أن تسبق نهاية العام الدراسي.");
+    periods = [{ id: "first", from: startDate, to: midDate }, { id: "second", from: calNextDay(midDate), to: endDate }];
+  }
+  periods = periods.map((p) => Object.assign({}, p, { fromMs: semMs(p.from, false), toMs: semMs(p.to, true) }));
+  return {
+    year, count, startDate, midDate: count === 2 ? midDate : "", endDate, periods,
+    startMs: semMs(startDate, false), endMs: semMs(endDate, true),
+  };
+}
+async function calPropagate(db, cal) {
+  const sc = await db.collection("schoolData").where("_isSchool", "==", true).get();
+  let n = 0;
+  for (let i = 0; i < sc.docs.length; i += 400) {
+    const batch = db.batch();
+    sc.docs.slice(i, i + 400).forEach((doc) => {
+      const semDates = {};
+      cal.periods.forEach((p) => { semDates[p.id] = { fromMs: p.fromMs, toMs: p.toMs }; });
+      batch.update(doc.ref, {
+        periods: cal.periods.map((p) => ({ id: p.id, from: p.from, to: p.to, fromMs: p.fromMs, toMs: p.toMs })),
+        yearFrom: cal.startDate, yearTo: cal.endDate, yearFromMs: cal.startMs, yearToMs: cal.endMs,
+        semDates, updatedAt: Date.now(),
+      });
+      n++;
+    });
+    await batch.commit();
+  }
+  const solo = { updatedAt: Date.now() };
+  SEM_IDS.forEach((id) => {
+    const p = cal.periods.find((x) => x.id === id);
+    solo[id] = p ? { from: p.from, to: p.to, fromMs: p.fromMs, toMs: p.toMs } : secFV.delete();
+  });
+  await db.collection("schoolData").doc("soloSemesters").set(solo, { merge: true });
+  return n;
+}
+exports.academicCalendar = onCall(async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  if (!secIsAdmin(me.data)) throw secMsg("permission-denied", "مقصور على أدمن النظام العام.");
+  const d = request.data || {};
+  if (String(d.action || "") !== "set") throw secMsg("invalid-argument", "إجراء غير معروف.");
+  const cal = calBuild(d);
+  const db = secDb();
+  if (cal.count === 1) {
+    const lic = (await db.collection("schoolData").where("_isSchool", "==", true).get()).docs
+      .filter((x) => ((x.data().semesters || {}).second || {}).licensed === true).length;
+    if (lic > 0) throw secMsg("failed-precondition", "لا يمكن جعل العام فصلًا واحدًا: يوجد " + lic + " مدرسة مرخَّصة للفصل الثاني. اسحب ترخيصه منها أولًا.");
+  }
+  const cur = (await db.collection("settings").doc("academicYear").get()).data() || {};
+  if (cur.year && Number(cal.year) < Number(cur.year)) throw secMsg("failed-precondition", "لا يمكن الرجوع إلى عام أقدم من العام الحالي (" + cur.year + ").");
+  const now = Date.now();
+  const old = (await db.collection("settings").doc("academicCalendar").get()).data() || {};
+  await db.collection("settings").doc("academicCalendar").set(Object.assign({}, cal, { setAt: old.setAt || now, updatedAt: now, by: me.uid }));
+  const schools = await calPropagate(db, cal);
+  const res = await ayApply(db, cal.year, cal.endMs, me.uid);
+  return { ok: true, schools, stamped: res.stamped, restamped: res.restamped };
 });

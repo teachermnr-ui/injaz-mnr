@@ -296,6 +296,8 @@ async function showManagerList(){
       renderManagerList(items);
     }, e=>{ console.error(e); $('#circList').innerHTML = `<div class="alert err">تعذّر تحميل التعاميم: ${esc(e.message)}</div>`; });
 }
+/* (2026-10-14.6) شارة «من الفصل السابق»: للتعميم الصادر في فصل غير الفصل الحالي (التعاميم القديمة بلا فصل لا شارة لها) */
+function prevBadge(c){ const cur=(CR.session&&CR.session.period)||'first'; return (c.period && c.period!==cur) ? ' <span class="chip" style="background:#eef2f1;color:#5b6f76">من الفصل السابق</span>' : ''; }
 function renderManagerList(items){
   const host = $('#circList'); if(!host) return;
   if(!items.length){ host.innerHTML = '<div class="card"><div class="empty">لا توجد تعاميم بعد.</div></div>'; return; }
@@ -303,7 +305,7 @@ function renderManagerList(items){
     <div class="circ-card" data-id="${esc(c.id)}">
       <div class="nb">${esc(c.number)}</div>
       <div class="info">
-        <div class="ttl">${esc(c.title||'(بدون عنوان)')}</div>
+        <div class="ttl">${esc(c.title||'(بدون عنوان)')}${prevBadge(c)}</div>
         <div class="meta">${esc(c.createdByName||'')} · ${esc(fmtDate(c.createdAt))} · ${c.mandatory?'إلزامي':'اختياري'} · ${esc((c.recipients||[]).length)} مستلم</div>
       </div>
       <span class="chip" id="prog-${esc(c.id)}">…</span>
@@ -432,7 +434,8 @@ async function createCircular({title, mandatory, recipients, pages}){
     tx.set(itemRef, {
       number: next, title: title||'', mandatory: !!mandatory,
       recipients, pageCount: pages.length,
-      createdBy: CR.me.id, createdByName: CR.me.name, createdAt: Date.now()
+      createdBy: CR.me.id, createdByName: CR.me.name, createdAt: Date.now(),
+      period: (CR.session && CR.session.period) || 'first'   // (2026-10-14.6) فصل الإصدار: لشارة «من الفصل السابق»
     });
   });
   await Promise.all(pages.map((dataUrl,i)=> itemRef.collection('pages').doc(String(i)).set({ dataUrl, index:i })));
@@ -459,7 +462,7 @@ async function showMyList(){
       <div class="circ-card" data-id="${esc(c.id)}">
         <div class="nb">${esc(c.number)}</div>
         <div class="info">
-          <div class="ttl">${esc(c.title||'(بدون عنوان)')}</div>
+          <div class="ttl">${esc(c.title||'(بدون عنوان)')}${prevBadge(c)}</div>
           <div class="meta">${esc(fmtDate(c.createdAt))} · ${c.mandatory?'إلزامي':'اختياري'}</div>
         </div>
         <span class="chip ${signed?'ok':'warn'}">${signed?'تم التوقيع':'بانتظار توقيعك'}</span>

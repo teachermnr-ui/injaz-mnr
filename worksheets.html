@@ -1497,6 +1497,7 @@ if(typeof window.mnConfirm!=="function"){ window.mnConfirm=function(m){ return P
       statusEl.style.color = "var(--ink-soft)";
 
       try {
+        if (CLS_SESSION && CLS_SESSION.viewOnly) { statusEl.textContent = "أنت تعرض فصلًا سابقًا للقراءة فقط، ولا يمكن النشر فيه. عُد إلى الفصل الحالي."; statusEl.style.color = "var(--bad)"; return; }
         const dueDateVal = document.getElementById("dueDateInput").value;
         const activityTarget = document.getElementById("activityTargetInput").value || "hw";
         await updateDoc(doc(db, "worksheets", currentPublishId), {

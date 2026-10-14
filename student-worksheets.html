@@ -190,7 +190,30 @@
         const m = approved.find((a) => String(a.rosterId) === rid);
         return !!m && (w.assignedClassIds || []).some((c) => m.classCodes.map(String).includes(String(c)));
       };
-      const uniqueDocs = wDocs.filter(d => (seen.has(d.id) ? false : (seen.add(d.id), true))).filter(d => belongs(d.data()));
+      let uniqueDocs = wDocs.filter(d => (seen.has(d.id) ? false : (seen.add(d.id), true))).filter(d => belongs(d.data()));
+      /* (2026-10-14.6) الفصل الدراسي: الطالب لا يرى إلا أنشطة الفصل الحالي لمدرسته (أو لمعلمه الفردي)؛ كل ما سبق من فصل سابق لا يظهر له.
+         الفصل الحالي يأتي من الخادم (currentPeriod) بوقته هو لا بساعة الجهاز، ومع تمديد المدرسة إن وُجد. عند انتهاء العام تُعرض رسالة بدل القائمة. */
+      {
+        const perCache = {};
+        const curP = (sid) => (perCache[sid || "_"] = perCache[sid || "_"] || httpsCallable(fns, "currentPeriod")(sid ? { schoolId: sid } : {}).then(r => r.data || {}).catch(e => ({ err: e })));
+        const keep = [];
+        let closedYear = false;
+        for (const d of uniqueDocs) {
+          const w = d.data();
+          const r = await curP(w.schoolId ? String(w.schoolId) : "");
+          if (r.err) { const dd = r.err && r.err.details; if (dd && dd.yearClosed) { closedYear = true; continue; } keep.push(d); continue; }
+          if (r.closed) { closedYear = true; continue; }
+          if (!r.period || (w.period || "first") === r.period) keep.push(d);
+        }
+        if (closedYear && !keep.length) {
+          const p = document.createElement("div");
+          p.className = "card";
+          p.innerHTML = `<p style="font-size:13px;color:var(--muted);">انتهى العام الدراسي، ولا توجد أنشطة متاحة حاليًا.</p>`;
+          wrap.appendChild(p);
+          return;
+        }
+        uniqueDocs = keep;
+      }
 
       // تسليماتي: الجديدة بحساب الطالب، والقديمة برقم الهوية إن سمحت بها القواعد
       const submissionByWorksheet = {};

@@ -262,9 +262,6 @@ input,select{font-family:inherit;font-size:15px}
         <button type="button" class="btn" id="liForgot" style="background:transparent;color:var(--brand);margin-top:2px;padding:6px;">نسيت كلمة المرور؟</button>
       </div>
 
-      <div class="field" style="margin-top:14px;text-align:right;"><label>الفصل الدراسي (لمنسوبي المدارس)</label>
-        <select id="liPeriod"><option value="first">الفصل الأول</option><option value="second">الفصل الثاني</option></select>
-      </div>
       <div style="margin:14px 0 10px;text-align:center;color:var(--muted);font-size:12px;">— أو —</div>
       <button class="btn" id="roleStudentBtn" style="background:var(--warn);">دخول الطالب</button>
       <p style="font-size:12px;color:var(--muted);margin:6px 0 0;text-align:center;">للطلاب لعرض أنشطتهم وحل واجباتهم</p>
@@ -401,7 +398,7 @@ input,select{font-family:inherit;font-size:15px}
 <script src="pwa.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="users-api.js"></script>
-<script src="sem-guard.js?v=2026-10-13.4"></script>
+<script src="sem-guard.js?v=2026-10-14.2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 /* =========================================================================
@@ -1057,7 +1054,7 @@ function authErrMsg(e){
 
 /* بعد نجاح المصادقة: إمّا ندخل مباشرة، أو نطلب إكمال التفعيل */
 /* سبب منع الدخول بحكم حالة المدرسة أو فترة تفعيلها أو الفترة النشطة (بند ٦ و٧) — يُستخدم عند الدخول الطازج واستعادة الجلسة */
-function todayRiyadh(){ return new Date(Date.now()+3*3600*1000).toISOString().slice(0,10); }
+function todayRiyadh(){ return new Date((window.SemGuard?SemGuard.now():Date.now())+3*3600*1000).toISOString().slice(0,10); }   // بوقت الخادم (فرق الساعة المحفوظ من currentPeriod)
 function schoolLoginBlockReason(schoolId, period, role){
   if(!schoolId || !SCHOOLS[schoolId]) return null;
   const sc = SCHOOLS[schoolId];
@@ -1067,12 +1064,10 @@ function schoolLoginBlockReason(schoolId, period, role){
   if(sc.activeTo && todayStr > sc.activeTo) return 'انتهت فترة تفعيل مدرستك في '+sc.activeTo+'. تواصل مع إدارة النظام.';
   const nm = periodLabel(period);
   if(sc.semesters){
-    // النمط الجديد: الترخيص من الأدمن، والتفعيل والإغلاق من مدير المدرسة ضمن تواريخ الفصل
+    // النمط الجديد: الترخيص من الأدمن، والفصل يُفتح ويُغلق تلقائيًا بتاريخه من التقويم المركزي (بلا تفعيل يدوي، وبلا استثناء للمدير)
     const st = sc.semesters[period];
     if(!st || !st.licensed) return nm+' غير مرخَّص لمدرستك. تواصل مع إدارة النظام.';
     if(st.locked) return nm+' مغلق نهائياً من إدارة النظام.';
-    if(role==='schoolAdmin') return null;   // المدير يدخل ليفعّل الفصل أو يغلقه
-    if(!st.active) return nm+' غير مفعَّل حالياً. يفعّله مدير المدرسة من تبويب «الفصول الدراسية».';
     const per = (sc.periods||[]).find(x=>x.id===period);
     if(per && per.to && todayStr > per.to) return 'انتهى '+nm+' بتاريخ '+per.to+'.';
     if(per && per.from && todayStr < per.from) return 'لم يبدأ '+nm+' بعد (يبدأ في '+per.from+').';
@@ -1103,7 +1098,7 @@ async function afterAuth(authUser){
   }
   const q = await usersCol().where('authUid','==',authUser.uid).limit(1).get();
   if(q.empty){ showNewAccountChoice(authUser); return; }   // حساب جديد كليًا (ص-١٨): يختار مدرسة/فردي
-  const period = $('#liPeriod') ? $('#liPeriod').value : 'first';
+  const period = 'first';   // (2026-10-14.2) الفصل الفعلي يُحسب تلقائيًا في proceedWithUserDoc من تقويم النظام بوقت الخادم
   const d=q.docs[0], data=d.data();
   const ctxs = availableContexts(data);
   if(ctxs.length===0){ await cleanSignOut(); throw new Error('هذا الحساب معطّل بكل سياقاته. راجع المسؤول'); }
@@ -1114,7 +1109,16 @@ async function afterAuth(authUser){
   }
   await proceedWithUserDoc(authUser, d.id, data, ctxs[0].key, period);
 }
+/* (2026-10-14.2) الفصل الحالي تلقائيًا من التقويم المركزي بوقت خوادم Google (لا اختيار عند الدخول، ولا تفعيل).
+   لا تقويم محفوظ ← الأول (السلوك القديم). تعذّر الاتصال بالخادم ← يُمنع الدخول برسالة (لا نعتمد ساعة الجهاز). */
+async function autoPeriod(){
+  let d;
+  try{ d = await SemGuard.fetchPeriod(); }
+  catch(e){ throw new Error('تعذّر التحقق من وقت الخادم لتحديد الفصل الدراسي. تحقق من اتصالك بالإنترنت وأعد المحاولة.'); }
+  return (d && d.period) || 'first';
+}
 async function proceedWithUserDoc(authUser, docId, data, ctxKey, period){
+  if(ctxKey!=='admin') period = await autoPeriod();
   let flat;
   if(ctxKey==='admin'){
     flat = { role:'admin', schoolId:null, permissions:null, active:data.active };
@@ -2775,9 +2779,14 @@ function semStatus(sc, p){
   const st = sc.semesters[p];
   if(!st || !st.licensed) return { key:'unlicensed' };
   if(st.locked) return { key:'locked' };
-  return { key: st.active ? 'active' : 'inactive' };
+  // (2026-10-14.2) لا تفعيل يدوي: الحالة من التاريخ (بوقت الخادم) — الحالي، لم يبدأ، انتهى
+  const per = (sc.periods||[]).find(x=>x.id===p);
+  const t = todayRiyadh();
+  if(per && per.to && t>per.to) return { key:'ended' };
+  if(per && per.from && t<per.from) return { key:'upcoming' };
+  return { key:'current' };
 }
-const SEM_KEY_AR = { active:'مفعَّل', inactive:'مرخَّص وغير مفعَّل', unlicensed:'غير مرخَّص', locked:'مغلق نهائيًا' };
+const SEM_KEY_AR = { active:'مفعَّل', inactive:'غير مفعَّل', current:'مفتوح (الفصل الحالي)', upcoming:'مرخَّص — لم يبدأ بعد', ended:'مرخَّص — انتهى', unlicensed:'غير مرخَّص', locked:'مغلق نهائيًا' };
 function semSummary(sc){
   return ['first','second'].map(p=>periodLabel(p)+': '+SEM_KEY_AR[semStatus(sc,p).key]).join(' · ');
 }
@@ -2797,11 +2806,8 @@ function semRender(sid, boxId, isSys){
         : (stt.key!=='locked' ? `<button class="btn sm secondary" data-sem="unlicense" data-p="${p}">سحب الترخيص</button>` : '');
       if(stt.key==='locked') btns += `<button class="btn sm secondary" data-sem="unlock" data-p="${p}">رفع الإغلاق النهائي</button>`;
       else if(stt.key!=='unlicensed') btns += `<button class="btn sm danger" data-sem="lock" data-p="${p}">إغلاق نهائي</button>`;
-    } else if(!stt.legacy){
-      if(stt.key==='inactive') btns += `<button class="btn sm" data-sem="activate" data-p="${p}" ${inRange?'':'disabled'}>تفعيل ${esc(periodLabel(p))}</button>`;
-      if(stt.key==='active') btns += `<button class="btn sm danger" data-sem="close" data-p="${p}">إغلاق ${esc(periodLabel(p))}</button>`;
     }
-    const hint = (!isSys && stt.key==='inactive' && !inRange) ? '<div class="sub-note" style="margin-top:4px">التفعيل متاح داخل تواريخ الفصل فقط.</div>' : '';
+    const hint = '';
     return `<div class="card" style="box-shadow:none;margin-bottom:8px;padding:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
         <div><b>${esc(periodLabel(p))}</b> <span class="pill role">${esc(SEM_KEY_AR[stt.key])}</span>
@@ -2817,7 +2823,6 @@ function semRender(sid, boxId, isSys){
 async function semAct(sid, p, act, boxId, isSys){
   const nm = periodLabel(p);
   const confirms = {
-    close: 'إغلاق '+nm+': سيُمنع مستخدمو المدرسة من الدخول إليه. هل أنت متأكد؟',
     lock: 'الإغلاق النهائي لـ'+nm+' يمنع تفعيله من مدير المدرسة حتى ترفعه أنت. متابعة؟',
     unlicense: 'سحب ترخيص '+nm+' يوقفه عن المدرسة فورًا. متابعة؟'
   };
@@ -2835,10 +2840,10 @@ async function semAct(sid, p, act, boxId, isSys){
 }
 async function renderSemesters(c){
   if(!dashVisible()){ c.innerHTML='<div class="empty">هذا التبويب لمدير المدرسة فقط.</div>'; return; }
-  c.innerHTML = '<div class="panel-head"><h2>الفصول الدراسية</h2></div><div class="sub-note">فعّل الفصل الدراسي عند بدايته وأغلقه عند نهايته. الفصل المُغلق لا يدخله مستخدمو مدرستك. التفعيل لا يتم إلا داخل تواريخ الفصل التي حدّدها أدمن النظام.</div><div id="semBoxDir"></div>';
+  c.innerHTML = '<div class="panel-head"><h2>الفصول الدراسية</h2></div><div class="sub-note">حالة الفصلين الدراسيين لمدرستك. يُفتح كل فصل ويُغلق تلقائيًا بتاريخه من تقويم النظام دون تفعيل. يتم الاشتراك في الفصول من إدارة النظام.</div><div id="semBoxDir"></div>';
   if(semClosedForMe()){
     const w = SemGuard.reason(SCHOOLS[CURRENT.schoolId], SESSION.period);
-    c.insertAdjacentHTML('afterbegin','<div class="alert err" style="margin-bottom:10px"><b>هذا الفصل الدراسي ('+esc(periodLabel(SESSION.period))+') مغلق.</b> '+esc(w)+' لا يمكن العمل في بقية الأقسام فيه. اختر فصلًا آخر عند الدخول، أو فعّله من هنا إن كان ضمن تواريخه.</div>');
+    c.insertAdjacentHTML('afterbegin','<div class="alert err" style="margin-bottom:10px"><b>هذا الفصل الدراسي ('+esc(periodLabel(SESSION.period))+') مغلق.</b> '+esc(w)+' لا يمكن العمل في بقية الأقسام فيه. تواصل مع إدارة النظام.</div>');
   }
   semRender(CURRENT.schoolId, 'semBoxDir', false);
 }
@@ -3306,6 +3311,8 @@ function liveTouch(){
 }
 ['pointerdown','keydown','touchstart','scroll'].forEach(ev=>window.addEventListener(ev, liveTouch, {passive:true}));
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') liveTouch(); });
+/* (2026-10-14.2) تحويل الجلسة تلقائيًا إلى الفصل الحالي عند تغيّره أثناء بقاء المستخدم (بوقت الخادم؛ الاستدعاء كل ١٠ دقائق كحد أقصى) */
+setInterval(()=>{ try{ if(SESSION && SESSION.role!=='admin') SemGuard.sync(); }catch(e){} }, 2*60*1000);
 setInterval(()=>{
   if(!LIVE.paused && Object.keys(LIVE.subs).length && Date.now()-LIVE.lastActive > LIVE_IDLE_MS){
     liveOffAll(); LIVE.paused=true;

@@ -1,4 +1,4 @@
-// إصدار: 2026-10-13.4
+// إصدار: 2026-10-14.2
 /* حارس الفصل الدراسي (المرحلة ٢ من الفصلين — 2026-10-13).
    الفصل المغلق (غير مفعَّل، أو مغلق نهائيًا، أو غير مرخَّص، أو انتهى تاريخه بتوقيت الرياض) يختفي عن موظفي المدرسة.
    الحماية الأصلية في firestore.rules (semWritable)؛ هذا الملف:
@@ -11,15 +11,39 @@
   var NAMES = { first: 'الفصل الأول', second: 'الفصل الثاني' };
   function nm(p){ return NAMES[p] || NAMES.first; }
 
+  /* (2026-10-14.2) الوقت بساعة خوادم Google: فرق الساعة (الخادم − الجهاز) يُحفظ في cls_srvoff كلما استُدعيت currentPeriod،
+     فلا تتأثر الحسابات بتاريخ جهاز المستخدم. ولا يوجد «تفعيل يدوي» للفصل: يُفتح تلقائيًا بتاريخه (مرخَّص + غير مقفل + داخل المدة). */
+  var OFF_KEY = 'cls_srvoff';
+  function off(){ try{ var v = parseInt(localStorage.getItem(OFF_KEY) || '0', 10); return isFinite(v) ? v : 0; }catch(e){ return 0; } }
+  function now(){ return Date.now() + off(); }
+  function setOff(serverMs){ try{ localStorage.setItem(OFF_KEY, String(serverMs - Date.now())); }catch(e){} }
+  function loadFns(){
+    return new Promise(function(res, rej){
+      if(window.firebase && firebase.functions) return res();
+      var sc = document.createElement('script');
+      sc.src = 'https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js';
+      sc.onload = function(){ res(); };
+      sc.onerror = function(){ rej(new Error('تعذّر تحميل خدمة الدوال. تحقق من الاتصال بالإنترنت.')); };
+      document.head.appendChild(sc);
+    });
+  }
+  // الفصل الحالي ووقت الخادم من دالة currentPeriod (يحفظ فرق الساعة)
+  async function fetchPeriod(){
+    await loadFns();
+    var r = await firebase.functions().httpsCallable('currentPeriod')({});
+    var d = r.data || {};
+    if(d.nowMs) setOff(d.nowMs);
+    return d;
+  }
   function isOpen(sc, period){
     if(!sc || !sc.semesters) return true;
     var st = sc.semesters[period];
-    if(!st || !st.licensed || st.locked || !st.active) return false;
+    if(!st || !st.licensed || st.locked) return false;
     var w = (sc.semDates || {})[period];
-    var now = Date.now();
+    var now_ = now();
     if(w){
-      if(w.fromMs && now < w.fromMs) return false;
-      if(w.toMs && now > w.toMs) return false;
+      if(w.fromMs && now_ < w.fromMs) return false;
+      if(w.toMs && now_ > w.toMs) return false;
     }
     return true;
   }
@@ -28,10 +52,9 @@
     var st = sc.semesters[period];
     if(!st || !st.licensed) return nm(period) + ' غير مرخَّص لهذه المدرسة.';
     if(st.locked) return nm(period) + ' مغلق نهائيًا من إدارة النظام.';
-    var w = (sc.semDates || {})[period], now = Date.now();
-    if(w && w.toMs && now > w.toMs) return 'انتهى ' + nm(period) + '.';
-    if(w && w.fromMs && now < w.fromMs) return 'لم يبدأ ' + nm(period) + ' بعد.';
-    if(!st.active) return nm(period) + ' غير مفعَّل حاليًا.';
+    var w = (sc.semDates || {})[period], now_ = now();
+    if(w && w.toMs && now_ > w.toMs) return 'انتهى ' + nm(period) + '.';
+    if(w && w.fromMs && now_ < w.fromMs) return 'لم يبدأ ' + nm(period) + ' بعد.';
     return '';
   }
 
@@ -48,17 +71,47 @@
       + '<h2 style="margin:0 0 10px;font-size:20px">هذا الفصل الدراسي مغلق</h2>'
       + '<p style="margin:0 0 18px;line-height:1.9;font-size:15px;opacity:.92">' + (why || '') + '<br>لا يمكن العمل فيه. ' + (isDir ? 'يمكنك إدارة الفصول من تبويب «الفصول الدراسية».' : 'تواصل مع مدير مدرستك.') + '</p>'
       + '<button id="semGuardBtn" style="background:#0b7a63;color:#fff;border:0;border-radius:12px;padding:12px 22px;font:inherit;font-size:15px;cursor:pointer">'
-      + (isDir ? 'الذهاب إلى الفصول الدراسية' : 'العودة إلى صفحة الدخول') + '</button></div>';
+      + 'العودة إلى صفحة الدخول</button></div>';
     document.body.appendChild(d);
     document.getElementById('semGuardBtn').onclick = function(){
-      if(!isDir){ try{ localStorage.removeItem('cls_session'); }catch(e){} }
+      try{ localStorage.removeItem('cls_session'); }catch(e){}
       location.href = 'index.html';
     };
   }
 
+  /* تحويل الجلسة تلقائيًا إلى الفصل الحالي (بوقت الخادم) عند تغيّر الفصل أثناء الجلسة، مع إشعار ثم إعادة تحميل مرة واحدة.
+     لا يعمل لأدمن النظام. عند تعذّر الاتصال لا يغيّر شيئًا (القواعد هي الحارس). */
+  var syncing = false, lastSync = 0, SYNC_EVERY_MS = 10 * 60 * 1000;
+  async function sync(force){
+    var s = sess();
+    if(syncing || !s || !s.userId || s.role === 'admin') return false;
+    if(!force && lastSync && Date.now() - lastSync < SYNC_EVERY_MS) return false;   // لا نستدعي الخادم كل دقيقتين
+    lastSync = Date.now();
+    syncing = true;
+    try{
+      var d = await fetchPeriod();
+      if(!d || !d.period) return false;
+      if((s.period || 'first') !== d.period){
+        s.period = d.period;
+        try{ localStorage.setItem('cls_session', JSON.stringify(s)); }catch(e){}
+        var b = document.createElement('div');
+        b.setAttribute('dir', 'rtl');
+        b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:#0b7a63;color:#fff;padding:14px;text-align:center;font:600 15px Tajawal,Tahoma,sans-serif';
+        b.textContent = 'بدأ ' + nm(d.period) + '، تم تحويلك إليه.';
+        document.body.appendChild(b);
+        setTimeout(function(){ location.reload(); }, 2200);
+        return true;
+      }
+      return false;
+    }catch(e){ return false; }
+    finally{ syncing = false; }
+  }
+
   async function check(){
     var s = sess();
-    if(!s || !s.schoolId || s.role === 'admin' || s.role === 'soloTeacher' || s.ctxKey === 'solo') return;
+    if(!s) return;
+    if(await sync()) return;
+    if(!s.schoolId || s.role === 'admin' || s.role === 'soloTeacher' || s.ctxKey === 'solo') return;
     if(!(window.firebase && firebase.apps && firebase.apps.length && firebase.firestore)) return;
     try{
       var snap = await firebase.firestore().collection('schoolData').doc(s.schoolId).get();
@@ -78,5 +131,5 @@
     }
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
   }
-  window.SemGuard = { isOpen: isOpen, reason: reason, start: start, check: check };
+  window.SemGuard = { isOpen: isOpen, reason: reason, start: start, check: check, sync: sync, fetchPeriod: fetchPeriod, now: now };
 })();

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<!-- إصدار: 2026-10-16.1 -->
+<!-- [ADMIN-TOOLS] صفحة مستقلة — «الأنشطة اللاصفية» للمعلم: تكاليفي، أنشطة متاحة، أنشطتي المنفذة -->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>الأنشطة اللاصفية</title>
+<meta name="theme-color" content="#0f766e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-storage-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="mn-dialog.js?v=2026-10-06.1"></script>
+<script src="users-api.js"></script>
+<script src="form-header.js?v=2026-10-15.3"></script>
+<script src="sem-guard.js?v=2026-10-14.5"></script>
+<script src="dash-base.js?v=2026-10-15.1"></script>
+<script src="activity-core.js?v=2026-10-16.1"></script>
+<script>
+(function(){
+const { esc, arN:N, $ } = ACT;
+const S = { env:null, tab:'mine', assigns:[], opens:[], mine:[], staff:null, roster:null };
+const chip = (t,c)=>'<span class="dh-chip '+(c||'')+'">'+esc(t)+'</span>';
+
+async function load(){
+  const e = S.env, uid = e.me.id, base = c=>e.db.collection(c).where('schoolId','==',e.sid).where('period','==',e.period);
+  const [a,o,m] = await Promise.all([
+    base('actAssignments').where('teacherId','==',uid).where('status','==','approved').get(),
+    base('actOpenEvents').where('status','==','open').get(),
+    base('activityEvents').where('documentedBy','==',uid).get()
+  ]);
+  S.assigns = a.docs.map(d=>Object.assign({id:d.id},d.data()));
+  const t = ACT.today();
+  S.opens = o.docs.map(d=>Object.assign({id:d.id},d.data())).filter(x=>!x.deadline || x.deadline>=t);
+  S.mine = m.docs.map(d=>Object.assign({id:d.id},d.data())).sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+}
+const evOf = (a,i)=>S.mine.find(x=>x.assignmentId===a.id && x.programIdx===i);
+const stepBar = (ev)=>{
+  const s2 = !!ev, s3 = ev && ev.approvalStatus==='approved';
+  return '<div class="ac-steps"><b class="on">● القائد اعتمد</b>—<b class="'+(s2?'on':'')+'">'+(s2?'●':'○')+' المعلم وثّق</b>—<b class="'+(s3?'on':'')+'">'+(s3?'●':'○')+' الرائد اعتمد</b></div>';
+};
+function stateLine(ev){
+  if(!ev) return '';
+  if(ev.approvalStatus==='approved') return '<div class="dh-sub">✅ تم التوثيق والاعتماد</div>';
+  if(ev.approvalStatus==='returned') return '<div style="color:#b42318;font-weight:700">↩ أعاده رائد النشاط للتعديل'+(ev.returnNote?': '+esc(ev.returnNote):'')+'</div>';
+  return '<div class="dh-sub">⏳ بانتظار اعتماد رائد النشاط</div>';
+}
+function vMine(){
+  if(!S.assigns.length) return '<div class="dh-card dh-empty">لا توجد تكليفات معتمدة لك حاليًا.</div>';
+  return S.assigns.map(a=>(a.programs||[]).map((p,i)=>{
+    const ev = evOf(a,i), canDoc = !ev || ev.approvalStatus==='returned';
+    return '<div class="dh-card"><div class="ac-row sb"><b>'+esc(p.name)+'</b>'+chip(a.clubName||'')+'</div>'
+      +'<div class="dh-sub">'+(p.target?'الفئة: '+esc(p.target)+' — ':'')+(p.kpi?'الهدف: '+esc(p.kpi)+' — ':'')+(p.timeline?esc(p.timeline):'')+'</div>'
+      +stepBar(ev)+stateLine(ev)
+      +'<div class="ac-row" style="margin-top:6px">'
+      +(canDoc?'<button class="ac-btn" data-a="doc-asg" data-id="'+a.id+'" data-i="'+i+'">📝 '+(ev?'تعديل التوثيق وإعادة الإرسال':'توثيق التنفيذ')+'</button>':'')
+      +(ev?'<button class="ac-btn sec" data-a="ev-print" data-id="'+ev.id+'">معاينة النموذج</button>':'')+'</div></div>';
+  }).join('')).join('');
+}
+function vOpen(){
+  if(!S.opens.length) return '<div class="dh-card dh-empty">لا توجد أنشطة متاحة حاليًا.</div>';
+  return S.opens.map(o=>{
+    const ev = S.mine.find(x=>x.openEventId===o.id), canDoc = !ev || ev.approvalStatus==='returned';
+    return '<div class="dh-card"><div class="ac-row sb"><b>'+esc(o.title)+'</b>'+(o.domain?chip('المجال: '+o.domain):'')+'</div><div class="dh-sub">'+esc(o.description||'')+'</div>'
+      +'<div class="dh-sub">آخر موعد للتوثيق: '+(o.deadline?ACT.hijri(o.deadline):'غير محدد')+'</div>'+stateLine(ev)
+      +'<div class="ac-row" style="margin-top:6px">'+(canDoc?'<button class="ac-btn" data-a="doc-open" data-id="'+o.id+'">📝 '+(ev?'تعديل التوثيق':'توثيق التنفيذ')+'</button>':'')+(ev?'<button class="ac-btn sec" data-a="ev-print" data-id="'+ev.id+'">معاينة النموذج</button>':'')+'</div></div>';
+  }).join('');
+}
+function vDone(){
+  if(!S.mine.length) return '<div class="dh-card dh-empty">لم توثّق أي نشاط بعد.</div>';
+  return '<div class="dh-card ac-wrap"><table class="ac-tbl"><tr><th>م</th><th>النشاط</th><th>التاريخ</th><th>الحالة</th><th></th></tr>'
+    +S.mine.map((x,i)=>'<tr><td>'+N(i+1)+'</td><td>'+esc(x.title)+'</td><td>'+ACT.hijri(x.date)+'</td><td>'+({approved:'✅ معتمد',pending:'⏳ بانتظار الاعتماد',returned:'↩ أُعيد للتعديل'})[x.approvalStatus]+'</td><td><button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.id+'">معاينة</button></td></tr>').join('')+'</table></div>';
+}
+function paint(){
+  const tabs = [['mine','تكاليفي',S.assigns.reduce((n,a)=>n+(a.programs||[]).filter((p,i)=>!evOf(a,i)).length,0)],['open','أنشطة متاحة',S.opens.filter(o=>!S.mine.find(x=>x.openEventId===o.id)).length],['done','أنشطتي المنفذة',0]];
+  S.env.main.innerHTML = '<div class="ac-tabs">'+tabs.map(t=>'<button class="ac-tab'+(S.tab===t[0]?' on':'')+'" data-a="tab" data-v="'+t[0]+'">'+t[1]+(t[2]?'<span class="n">'+N(t[2])+'</span>':'')+'</button>').join('')+'</div>'+({mine:vMine,open:vOpen,done:vDone}[S.tab])();
+}
+async function people(){ if(!S.staff) S.staff = await ACT.loadStaff(S.env); if(!S.roster) S.roster = await ACT.loadRoster(S.env); }
+async function openDoc(opts){ await people(); ACT.openDocForm(Object.assign({ env:S.env, staff:S.staff, roster:S.roster, onSaved: async ()=>{ await load(); paint(); } }, opts)); }
+const H = {
+  tab: el=>{ S.tab=el.dataset.v; paint(); },
+  'doc-asg': async el=>{
+    const a = S.assigns.find(x=>x.id===el.dataset.id), i = Number(el.dataset.i), p = a.programs[i], ex = evOf(a,i) || null;
+    await openDoc({ existing:ex, prefill:{ title:p.name, beneficiaries:{type:'طلاب',count:''} }, source:{ type:'assignment', assignmentId:a.id, programIdx:i, clubId:a.clubId } });
+  },
+  'doc-open': async el=>{
+    const o = S.opens.find(x=>x.id===el.dataset.id), ex = S.mine.find(x=>x.openEventId===o.id) || null;
+    await openDoc({ existing:ex, prefill:{ title:o.title, domain:o.domain||'' }, source:{ type:'open', openEventId:o.id } });
+  },
+  'ev-print': async el=>{ const ev = S.mine.find(x=>x.id===el.dataset.id); if(ev) await ACT.printDoc(S.env, ev, {}); }
+};
+Dash.boot({
+  title:'الأنشطة اللاصفية',
+  allow:()=>true,
+  render: async env=>{
+    ACT.injectCss(); S.env = env;
+    env.main.innerHTML = '<div class="dh-empty">جارٍ التحميل...</div>';
+    await load(); paint();
+    env.main.addEventListener('click', async e=>{
+      const el = e.target.closest('[data-a]'); if(!el) return; const f = H[el.dataset.a]; if(!f) return;
+      el.disabled = true; try{ await f(el); }catch(err){ console.error(err); ACT.toast(err&&err.message?err.message:'تعذّر تنفيذ العملية'); } el.disabled = false;
+    });
+    window.__MYACT = S;
+  }
+});
+})();
+</script>
+</body>
+</html>

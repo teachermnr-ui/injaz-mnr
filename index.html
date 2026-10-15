@@ -606,15 +606,18 @@ const MYBOARD_ITEMS = [
   { key:'duty',      action:'duty',      icon:'🛡️', label:'مناوبتي',  when:()=>MYBOARD.duty.length>0 },
   // حصص الانتظار اليومية: يظهر لمن حُدِّد بديلًا اليوم أو غدًا (بعد «اعتماد وإرسال» في أداة الجدول)
   { key:'wait',      action:'wait',      icon:'⏳', label:'انتظاري',  when:()=>MYBOARD.wait.length>0 },
+  // الأنشطة اللاصفية (منصة النشاط المدرسي): تظهر لمن لديه تكليف معتمد أو يوجد نشاط متاح، وعلامتها حمراء عند وجود ما لم يُوثَّق بعد
+  { key:'activities', href:'myactivities.html', icon:'🎯', label:'الأنشطة اللاصفية', when:()=>MYBOARD.act.visible },
 ];
-const MYBOARD = { pendingCirculars:0, scheduleChanged:false, apptsToday:0, followupsDue:0, visits:[], visitsSig:'', visitsChanged:false, duty:[], dutySig:'', dutyChanged:false, wait:[], waitSig:'', waitChanged:false };
+const MYBOARD = { pendingCirculars:0, scheduleChanged:false, apptsToday:0, followupsDue:0, visits:[], visitsSig:'', visitsChanged:false, duty:[], dutySig:'', dutyChanged:false, wait:[], waitSig:'', waitChanged:false, act:{ visible:false, pending:0 } };
 const myBoardDotOn = key=> key==='circulars' ? MYBOARD.pendingCirculars>0 : key==='schedule' ? MYBOARD.scheduleChanged
-  : key==='appts' ? MYBOARD.apptsToday>0 : key==='followups' ? MYBOARD.followupsDue>0 : key==='visits' ? MYBOARD.visitsChanged : key==='duty' ? MYBOARD.dutyChanged : key==='wait' ? MYBOARD.waitChanged : false;
+  : key==='appts' ? MYBOARD.apptsToday>0 : key==='followups' ? MYBOARD.followupsDue>0 : key==='visits' ? MYBOARD.visitsChanged : key==='duty' ? MYBOARD.dutyChanged : key==='wait' ? MYBOARD.waitChanged : key==='activities' ? MYBOARD.act.pending>0 : false;
 async function refreshMyBoardAlerts(){
   MYBOARD.pendingCirculars = 0; MYBOARD.scheduleChanged = false; MYBOARD.apptsToday = 0; MYBOARD.followupsDue = 0;
   MYBOARD.visits = []; MYBOARD.visitsSig = ''; MYBOARD.visitsChanged = false;
   MYBOARD.duty = []; MYBOARD.dutySig = ''; MYBOARD.dutyChanged = false;
   MYBOARD.wait = []; MYBOARD.waitSig = ''; MYBOARD.waitChanged = false;
+  MYBOARD.act = { visible:false, pending:0 };
   updateMyBoardBadges();
   if(!myBoardVisible()) return;
   try{
@@ -630,6 +633,21 @@ async function refreshMyBoardAlerts(){
       MYBOARD.pendingCirculars = pending;
     }
   }catch(e){ /* صمت: لا داعي لكسر الدخول لو تعذّرت قراءة التعاميم */ }
+  try{
+    // الأنشطة اللاصفية: تكاليف معتمدة لي (برامج لم أوثّقها) + أنشطة متاحة لم أوثّقها. صمت عند أي فشل.
+    const sidA = CURRENT.schoolId, perA = SESSION.period, uidA = CURRENT.id;
+    const [asg, opn, mine] = await Promise.all([
+      db.collection('actAssignments').where('schoolId','==',sidA).where('period','==',perA).where('teacherId','==',uidA).where('status','==','approved').get(),
+      db.collection('actOpenEvents').where('schoolId','==',sidA).where('period','==',perA).where('status','==','open').get(),
+      db.collection('activityEvents').where('schoolId','==',sidA).where('period','==',perA).where('documentedBy','==',uidA).get()
+    ]);
+    const evs = mine.docs.map(d=>d.data());
+    const tk = new Date(); const todayK = tk.getFullYear()+'-'+String(tk.getMonth()+1).padStart(2,'0')+'-'+String(tk.getDate()).padStart(2,'0');
+    let pend = 0, total = 0;
+    asg.docs.forEach(d=>{ const a=d.data(); (a.programs||[]).forEach((p,i)=>{ total++; const e=evs.find(x=>x.assignmentId===d.id && x.programIdx===i); if(!e || e.approvalStatus==='returned') pend++; }); });
+    opn.docs.forEach(d=>{ const o=d.data(); if(o.deadline && o.deadline<todayK) return; total++; const e=evs.find(x=>x.openEventId===d.id); if(!e || e.approvalStatus==='returned') pend++; });
+    MYBOARD.act = { visible: total>0 || evs.length>0, pending: pend };
+  }catch(e){ /* صمت */ }
   try{
     // الإشعار فقط لمن تغيّرت حصصه هو منذ آخر اطّلاع: توقيع حصصه في النسخة المنشورة مقابل ما شاهده آخر مرة.
     // مدير المدرسة مستنده مستقل بلا خريطة schools[sid]، فيُحفظ اطّلاعه في المتصفح.

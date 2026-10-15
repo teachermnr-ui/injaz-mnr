@@ -1,4 +1,4 @@
-// إصدار: 2026-10-15.1
+// إصدار: 2026-10-16.1
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -868,6 +868,41 @@ async function hAttAlert(db, a, cal) {
   }, cal);
 }
 
+
+/* ===== منصة النشاط المدرسي (البند ٧-ب): إشعارات التكليف والتوثيق والخطة ===== */
+async function schoolAdminIds(db, sid) {
+  const sa = await db.collection("users").where("adminSchools", "array-contains", sid).get();
+  return sa.docs.filter((d) => { const u = d.data(); return u.role === "schoolAdmin" && u.active !== false; }).map((d) => d.id);
+}
+async function actCoordinatorOf(db, sid, period) {
+  try { const c = await db.collection("activityConfig").doc(sid + "_" + (period || "first")).get(); return c.exists ? (c.data().coordinatorId || null) : null; } catch (e) { return null; }
+}
+async function hActAssignment(db, a, cal, kind) {
+  if (kind === "pending") {
+    await notify(db, a.schoolId, await schoolAdminIds(db, a.schoolId), { title: "تكليف نشاط بانتظار اعتمادك", body: (a.teacherName || "") + (a.clubName ? " — " + a.clubName : ""), link: "activity.html", tag: "act" }, cal);
+  } else if (kind === "approved" && a.teacherId) {
+    await notify(db, a.schoolId, [a.teacherId], { title: "كُلِّفت بنشاط", body: (a.clubName || "") + ((a.programs || [])[0] ? " — " + a.programs[0].name : ""), link: "myactivities.html", tag: "act" }, cal);
+  }
+}
+async function hActEvent(db, e, cal, kind) {
+  if (kind === "pending") {
+    const to = uniq([await actCoordinatorOf(db, e.schoolId, e.period)]);
+    if (to.length) await notify(db, e.schoolId, to, { title: "توثيق نشاط بانتظار اعتمادك", body: (e.documentedByName || "") + " — " + (e.title || ""), link: "activity.html", tag: "act" }, cal);
+  } else if (kind === "approved" && e.documentedBy) {
+    await notify(db, e.schoolId, [e.documentedBy], { title: "اعتُمد توثيق نشاطك", body: e.title || "", link: "myactivities.html", tag: "act" }, cal);
+  } else if (kind === "returned" && e.documentedBy) {
+    await notify(db, e.schoolId, [e.documentedBy], { title: "أُعيد توثيق نشاطك للتعديل", body: (e.title || "") + (e.returnNote ? " — " + e.returnNote : ""), link: "myactivities.html", tag: "act" }, cal);
+  }
+}
+async function hActPlan(db, c, cal, kind) {
+  if (kind === "submitted") {
+    await notify(db, c.schoolId, await schoolAdminIds(db, c.schoolId), { title: "الخطة العامة للنشاط بانتظار اعتمادك", body: "قدّمها رائد النشاط", link: "activity.html", tag: "act" }, cal);
+  } else if (kind === "approved") {
+    const to = uniq([c.coordinatorId]);
+    if (to.length) await notify(db, c.schoolId, to, { title: "اعتُمدت الخطة العامة للنشاط", body: "اعتمدها قائد المدرسة", link: "activity.html", tag: "act" }, cal);
+  }
+}
+
 exports.pushWatcher = onSchedule({ schedule: "every 1 minutes", timeZone: "Asia/Riyadh", timeoutSeconds: 180 }, async () => {
   const db = admin.firestore(), ST = db.collection("pushState");
   const t0 = Date.now();
@@ -982,6 +1017,32 @@ exports.pushWatcher = onSchedule({ schedule: "every 1 minutes", timeZone: "Asia/
       if (!baselineOnly) await hAttAlert(db, a, await calOf(a.schoolId));
     }
   } catch (e) { console.error("pushWatcher alerts", e); }
+
+
+  // منصة النشاط المدرسي: تكليفات وتوثيقات واعتماد الخطة (مستند واحد لكل حالة جديدة — mark يمنع التكرار)
+  try {
+    const asq = await db.collection("actAssignments").where("updatedAt", ">", since).get();
+    for (const d of asq.docs) {
+      const a = d.data(); if (!a.schoolId) continue;
+      const kind = a.status === "pending" ? "pending" : (a.status === "approved" ? "approved" : null);
+      if (!kind || !mark("asg_" + kind + "_" + d.id + "_" + (a.updatedAt || 0))) continue;
+      if (!baselineOnly) await hActAssignment(db, a, await calOf(a.schoolId), kind);
+    }
+    const evq = await db.collection("activityEvents").where("updatedAt", ">", since).get();
+    for (const d of evq.docs) {
+      const e = d.data(); if (!e.schoolId || e.sourceType === "club") continue;
+      const kind = e.approvalStatus;
+      if (!["pending", "approved", "returned"].includes(kind) || !mark("aev_" + kind + "_" + d.id + "_" + (e.updatedAt || 0))) continue;
+      if (!baselineOnly) await hActEvent(db, e, await calOf(e.schoolId), kind);
+    }
+    const cfq = await db.collection("activityConfig").where("updatedAt", ">", since).get();
+    for (const d of cfq.docs) {
+      const c = d.data(); if (!c.schoolId) continue;
+      const kind = c.planStatus === "submitted" ? "submitted" : (c.planStatus === "approved" ? "approved" : null);
+      if (!kind || !mark("acf_" + kind + "_" + d.id + "_" + (c.planApprovedAt || c.planSubmittedAt || 0))) continue;
+      if (!baselineOnly) await hActPlan(db, c, await calOf(c.schoolId), kind);
+    }
+  } catch (e) { console.error("pushWatcher activity", e); }
 
   await seenRef.set({ ids: [...seen].slice(-800) });
   await wmRef.set({ at: t0 });

@@ -486,6 +486,8 @@ async function openCircularView(cid, skipHistory){
   const isRecipient = (c.recipients||[]).includes(CR.me.id);
   if(!CR.canManage && !isRecipient){ $('#main').innerHTML = '<div class="card"><div class="alert err">ليست لديك صلاحية الوصول لهذا التعميم.</div></div>'; return; }
 
+  // جدول التعميم الأحدث يُقرأ من النسخة المعتمدة (يحدّثه المدير أو الوكيل عند أي تعديل)
+  if(c.table && c.planId){ try{ const ps = await db.collection('dutyPlans').doc(c.planId).get(); const t = ps.exists && ps.data().pub && (ps.data().pub.tables||{})[c.kind]; if(t) c.table = t; }catch(e){} }
   let pages = [];
   if(!c.table){ const pagesSnap = await itemRef.collection('pages').orderBy('index').get(); pages = pagesSnap.docs.map(d=>d.data().dataUrl); }
 
@@ -509,7 +511,7 @@ async function openCircularView(cid, skipHistory){
         <div class="row" style="margin-top:8px">
           <button class="btn sec sm" id="copyLinkBtn">📋 نسخ الرابط</button>
           <button class="btn sec sm" id="copyMsgBtn">💬 نسخ نص الرسالة</button>
-          <button class="btn sec sm" id="printSigBtn">🖨️ طباعة صفحة التوقيعات</button>
+          ${c.table?'':'<button class="btn sec sm" id="printSigBtn">🖨️ طباعة صفحة التوقيعات</button>'}
           ${c.table?'<button class="btn sec sm" id="printTblBtn">🖨️ طباعة الجدول بالتواقيع</button>':''}
           ${CR.canEdit?'<button class="btn danger sm" id="delCircBtn">حذف التعميم</button>':''}
         </div>
@@ -532,7 +534,7 @@ async function openCircularView(cid, skipHistory){
     if(c.table && $('#printTblBtn')) $('#printTblBtn').onclick = ()=>printLiveTable(c);
     $('#copyLinkBtn').onclick = ()=>copyText(circularLink(c.id), 'نُسخ الرابط');
     $('#copyMsgBtn').onclick = ()=>copyText(circularMessage(c), 'نُسخ نص الرسالة');
-    $('#printSigBtn').onclick = ()=>printSignaturesSheet(c);
+    if($('#printSigBtn')) $('#printSigBtn').onclick = ()=>printSignaturesSheet(c);
     if(CR.canEdit) $('#delCircBtn').onclick = ()=>deleteCircular(c);
     VIEW_UNSUB = itemRef.collection('signatures').onSnapshot(snap=>{
       const sigs = {}; snap.forEach(d=> sigs[d.id]=d.data());

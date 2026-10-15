@@ -323,6 +323,8 @@ function warnings(){
   const noDuty = p.participants.filter(id=>!dutyC[id]), noSup = p.participants.filter(id=>!supC[id]);
   if(hasDuty && noDuty.length) out.push('لم يُكلَّف بمناوبة: '+noDuty.map(uName).join('، '));
   if(hasSup && noSup.length) out.push('لم يُكلَّف بإشراف: '+noSup.map(uName).join('، '));
+  const multi = p.participants.filter(id=>new Set(slotsOf(id).map(x=>x.w)).size>1);
+  if(hasSup && multi.length) out.push('يشرفون أكثر من يوم في الأسبوع: '+multi.map(uName).join('، ')+(allSupIds().length>p.participants.length?' — عدد الخانات الأسبوعية أكبر من عدد المشمولين فلا يكفي كل معلم بيوم واحد.':''));
   const short = dutyDates().filter(k=>((p.dutyDays||{})[k]||[]).length < (+p.perDay||1)).length;
   if(hasDuty && short) out.push('أيام مناوبة ناقصة العدد: '+arN(short)+' — أكملها يدويًا.');
   let supShort = 0;
@@ -471,23 +473,35 @@ function renderSup(body){
     </thead><tbody>${rows}</tbody></table></div></div>`;
   if(DS.canEdit) body.querySelectorAll('[data-sw]').forEach(c=>c.onclick=()=>supMenu(+c.dataset.sw, c.dataset.sp, +c.dataset.si));
 }
-// قائمة تبديل المشرف: اختيار معلم = استبدال (أو تبادل إن كان يشرف في مكان آخر اليوم نفسه)، و«إلغاء الإشراف» = حذفه من الموقع
+// قائمة تبديل المشرف على مستوى الأسبوع كله: اختيار معلم (وموضعه إن كان يشرف) = تبادل، ومعلم بلا إشراف = استبدال، و«إلغاء الإشراف» = حذفه من الموقع
+function slotsOf(id){ const p = P(), out = []; S().days.forEach(w=>p.places.forEach(pl=>supOf(w,pl.id).forEach((x,i)=>{ if(x===id) out.push({ w, plId:pl.id, i }); }))); return out; }
+const onDay = (id, w)=>slotsOf(id).some(x=>x.w===w);
 function supMenu(w, plId, idx){
   const p = P(), pl = p.places.find(x=>x.id===plId), cur = supOf(w, plId), oldId = idx>=0 ? cur[idx] : null;
-  const where = {}; p.places.forEach(x=>supOf(w,x.id).forEach(id=>{ where[id] = x; }));
-  const list = p.participants.filter(id=>id!==oldId && !cur.includes(id) && (idx>=0 || !where[id]))
-    .sort((a,b)=> (where[a]?1:0)-(where[b]?1:0) || uName(a).localeCompare(uName(b),'ar'));
+  const entries = [];
+  p.participants.forEach(id=>{
+    if(id===oldId || cur.includes(id)) return;
+    const sl = slotsOf(id);
+    if(idx<0){ if(!onDay(id,w)) entries.push({ id, tag: sl.length?('يشرف '+sl.map(x=>WEEKDAYS[x.w]).join('، ')):'' }); return; }
+    if(!sl.length){ entries.push({ id, tag:'' }); return; }
+    sl.forEach(x=>{
+      // تبادل مع موضعه: يُمنع إن أدّى لتكرار المعلم في اليوم نفسه
+      if(x.w!==w && (onDay(id,w) || onDay(oldId,x.w))) return;
+      entries.push({ id, slot:x, tag:'يشرف: '+WEEKDAYS[x.w]+' / '+((p.places.find(q=>q.id===x.plId)||{}).name||'')+' (تبادل)' });
+    });
+  });
+  entries.sort((a,b)=>(a.slot?1:0)-(b.slot?1:0) || uName(a.id).localeCompare(uName(b.id),'ar'));
   const o = document.createElement('div'); o.className='overlay'; o.id='ovl';
   o.innerHTML = `<div class="modal"><h2>${esc(WEEKDAYS[w])} — ${esc(pl.name||'')}</h2>
-    <div class="sub" style="margin-bottom:8px">${oldId?('المشرف الحالي: <b>'+esc(uName(oldId))+'</b>. اختر معلمًا ليحل مكانه'+' (من كان يشرف في مكان آخر هذا اليوم يتبادل معه موقعه).'):'اختر المعلم المراد إضافته.'}</div>
-    <div class="ppl" style="max-height:52vh;overflow:auto">${list.map(id=>`<label style="cursor:pointer" data-pk="${esc(id)}"><span style="flex:1">${esc(uName(id))}</span><span class="sub">${where[id]?('يشرف في: '+esc(where[id].name||'')+' (تبادل)'):''}</span></label>`).join('')||'<div class="sub">لا يوجد معلمون متاحون.</div>'}</div>
+    <div class="sub" style="margin-bottom:8px">${oldId?('المشرف الحالي: <b>'+esc(uName(oldId))+'</b>. اختر معلمًا ليحل مكانه، ومن كان يشرف في موضع آخر من الأسبوع (حتى في يوم آخر) يتبادل معه موضعه.'):'اختر المعلم المراد إضافته.'}</div>
+    <div class="ppl" style="max-height:52vh;overflow:auto">${entries.map((e,i)=>`<label style="cursor:pointer" data-pk="${i}"><span style="flex:1">${esc(uName(e.id))}</span><span class="sub">${esc(e.tag)}</span></label>`).join('')||'<div class="sub">لا يوجد معلمون متاحون.</div>'}</div>
     <div class="row" style="margin-top:12px">${oldId?'<button class="btn" id="pkDel" style="border-color:#a32020;color:#a32020">إلغاء الإشراف</button>':''}<button class="btn ghost" id="pkNo">إغلاق</button></div></div>`;
   document.body.appendChild(o);
   $('#pkNo').onclick = ()=>o.remove();
   if($('#pkDel')) $('#pkDel').onclick = ()=>{ o.remove(); changeSup(w, plId, idx, null); };
-  o.querySelectorAll('[data-pk]').forEach(l=>l.onclick=()=>{ o.remove(); changeSup(w, plId, idx, l.dataset.pk); });
+  o.querySelectorAll('[data-pk]').forEach(l=>l.onclick=()=>{ const e = entries[+l.dataset.pk]; o.remove(); changeSup(w, plId, idx, e.id, e.slot); });
 }
-async function changeSup(w, plId, idx, newId){
+async function changeSup(w, plId, idx, newId, slot){
   const p = P(), notes = {};
   const place = id=>((p.places.find(x=>x.id===id)||{}).name||'');
   const day = WEEKDAYS[w];
@@ -498,17 +512,18 @@ async function changeSup(w, plId, idx, newId){
   } else if(idx<0){
     cur.push(newId); setSup(w, plId, cur);
     notes[newId] = 'أُسند إليك إشراف يوم '+day+' في '+place(plId)+'.';
+  } else if(slot){
+    const a = supOf(slot.w, slot.plId).slice();
+    if(slot.w===w && slot.plId===plId){ return; }
+    if(slot.w===w && slot.plId!==plId){ cur[idx] = newId; setSup(w, plId, cur); a[slot.i] = oldId; setSup(slot.w, slot.plId, a); }
+    else { cur[idx] = newId; setSup(w, plId, cur); a[slot.i] = oldId; setSup(slot.w, slot.plId, a); }
+    const d2 = WEEKDAYS[slot.w];
+    notes[newId] = 'تبدّل إشرافك: أصبح يوم '+day+' في '+place(plId)+' بدل يوم '+d2+' في '+place(slot.plId)+'.';
+    notes[oldId] = 'تبدّل إشرافك: أصبح يوم '+d2+' في '+place(slot.plId)+' بدل يوم '+day+' في '+place(plId)+'.';
   } else {
-    let other = null, oi = -1;
-    p.places.forEach(x=>{ if(x.id===plId) return; const j = supOf(w,x.id).indexOf(newId); if(j>=0){ other = x; oi = j; } });
     cur[idx] = newId; setSup(w, plId, cur);
-    if(other){ const a = supOf(w, other.id).slice(); a[oi] = oldId; setSup(w, other.id, a);
-      notes[newId] = 'تبدّل إشرافك يوم '+day+': أصبح في '+place(plId)+' بدل '+place(other.id)+'.';
-      notes[oldId] = 'تبدّل إشرافك يوم '+day+': أصبح في '+place(other.id)+' بدل '+place(plId)+'.';
-    } else {
-      notes[newId] = 'أُسند إليك إشراف يوم '+day+' في '+place(plId)+'.';
-      notes[oldId] = 'أُلغي إشرافك يوم '+day+' في '+place(plId)+'.';
-    }
+    notes[newId] = 'أُسند إليك إشراف يوم '+day+' في '+place(plId)+'.';
+    notes[oldId] = 'أُلغي إشرافك يوم '+day+' في '+place(plId)+'.';
   }
   await commitEdit(notes); render();
 }
@@ -567,14 +582,14 @@ async function openPrint(title, pagesFn){
 }
 const sigBlock = ()=>{ const p = P(); return `<div class="sig"><div>وكيل الشؤون التعليمية: ${esc(p.agentName)||'....................'}<br><br>التوقيع: ....................</div><div>مدير المدرسة: ${esc(principalName())||'....................'}<br><br>التوقيع: ....................</div></div>`; };
 function printDutyRecord(){
-  const weeks = recordWeeks(); const p = P();
-  if(!weeks.length){ toast('حدّد تاريخ البداية والنهاية للمناوبة من «الإعداد»'); return; }
-  openPrint('سجل المناوبة', ctx=>weeks.map((days, wi)=>{
-    const rows = []; days.forEach(k=>{ const ids = (p.dutyDays||{})[k]||[]; const names = ids.length ? ids.map(uName) : ['']; names.forEach((nm,i)=>rows.push({ k, nm, first:i===0, span:names.length })); });
-    const body = rows.map((x,i)=>`<tr>${i===0?`<td rowspan="${rows.length}" class="wk">${ORD[wi]||arN(wi+1)}</td>`:''}${x.first?`<td rowspan="${x.span}" class="b">${esc(WEEKDAYS[wdOf(x.k)])}</td><td rowspan="${x.span}">${esc(hijri(x.k))}</td>`:''}<td>${esc(x.nm)}</td><td></td><td></td></tr>`).join('');
-    return `<section class="pg">${FormHdr.header({ formTitle:'سجل المناوبة', ctx, extra:[['المرحلة', S().label]] })}
-      <table><thead><tr><th style="width:52px">الأسبوع</th><th style="width:70px">اليوم</th><th style="width:90px">التاريخ</th><th>اسم المناوب</th><th style="width:90px">التوقيع</th><th style="width:110px">ملحوظات</th></tr></thead><tbody>${body}</tbody></table>${sigBlock()}</section>`;
-  }).join(''));
+  const p = P(), dates = dutyDates();
+  if(!dates.length){ toast('حدّد تاريخ البداية والنهاية للمناوبة من «الإعداد»'); return; }
+  openPrint('سجل المناوبة', ctx=>{
+    const rows = []; dates.forEach(k=>{ const ids = (p.dutyDays||{})[k]||[]; const names = ids.length ? ids.map(uName) : ['']; names.forEach((nm,i)=>rows.push({ k, nm, first:i===0, span:names.length })); });
+    const body = rows.map(x=>`<tr>${x.first?`<td rowspan="${x.span}" class="b">${esc(WEEKDAYS[wdOf(x.k)])}</td><td rowspan="${x.span}">${esc(hijri(x.k))}</td>`:''}<td>${esc(x.nm)}</td><td></td><td></td></tr>`).join('');
+    return `<section>${FormHdr.header({ formTitle:'سجل المناوبة', ctx, extra:[['المرحلة', S().label]] })}
+      <table><thead><tr><th style="width:80px">اليوم</th><th style="width:100px">التاريخ</th><th>الاسم</th><th style="width:110px">التوقيع</th><th style="width:130px">الملاحظات</th></tr></thead><tbody>${body}</tbody></table>${sigBlock()}</section>`;
+  });
 }
 function supRows(){ // [{day, name, where}] أسبوع واحد
   const p = P(), s = S(), out = [];
@@ -611,7 +626,7 @@ function collectMembers(){
 /* ---------- تعديل بعد الاعتماد: يتحدث النظام ويصل التنبيه للمشمولين بالتعديل دون توقيع جديد ---------- */
 async function commitEdit(notes){
   const p = P(); await savePlan(true);
-  if(!p.pub || !DS.canPublish) return;      // بلا صلاحية التعاميم: يُحفظ التوزيع ويظهر «عُدِّل بعد الاعتماد»
+  if(!p.pub) return;
   try{ await syncPub(notes||{}); }catch(e){ toast('تعذّر تحديث النسخة المعتمدة: '+(e.message||e)); }
 }
 async function syncPub(notes){
@@ -620,9 +635,9 @@ async function syncPub(notes){
   (old.members||[]).forEach(id=>{ if((old.notes||{})[id]) members.add(id); });
   const names = {}; members.forEach(id=>names[id]=uName(id));
   const pn = Object.assign({}, old.notes||{}); Object.entries(notes).forEach(([id,t])=>{ pn[id] = { at, text:t }; });
-  const pub = Object.assign({}, old, { at, names, members:[...members], dutyDays:p.dutyDays||{}, sup:p.sup||{}, places:p.places.map(x=>({id:x.id,name:x.name})), events:[SUP_EV], notes:pn });
+  const pub = Object.assign({}, old, { at, names, members:[...members], dutyDays:p.dutyDays||{}, sup:p.sup||{}, places:p.places.map(x=>({id:x.id,name:x.name})), events:[SUP_EV], notes:pn, tables:{ duty:buildTable('duty'), sup:buildTable('sup') } });
   await col().doc(planId(DS.stage)).set({ pub, members:[...members], updatedAt:at-1 }, { merge:true });
-  for(const ref of [old.circular, old.supCircular]){
+  if(DS.canPublish) for(const ref of [old.circular, old.supCircular]){
     if(ref && ref.live && ref.id && ref.kind){ try{ await db.collection('circulars').doc(DS.sid).collection('items').doc(ref.id).update({ table: buildTable(ref.kind) }); }catch(e){} }
   }
   p.pub = pub; p.members = pub.members; p.updatedAt = at-1;
@@ -653,14 +668,14 @@ async function publish(){
       tx.set(counterRef, { nextNumber: first+kinds.length }, { merge:true });
       kinds.forEach(([kind, set], i)=>{
         tx.set(refs[i], { number:first+i, title:(kind==='duty'?'سجل المناوبة — ':'سجل الإشراف اليومي — ')+S().label, mandatory:true, recipients:[...set], pageCount:0,
-          createdBy:DS.me.id, createdByName:DS.me.name, createdAt:Date.now(), source:'duty', kind, table:buildTable(kind) });
+          createdBy:DS.me.id, createdByName:DS.me.name, createdAt:Date.now(), source:'duty', kind, planId:planId(DS.stage), table:buildTable(kind) });
       });
     });
     const s = S(), circ = {};
     kinds.forEach(([kind], i)=>{ circ[kind] = { id:refs[i].id, number:first+i, live:true, kind }; });
     const pub = { at:Date.now(), by:DS.me.id, byName:DS.me.name, stageLabel:s.label, names, members:[...members],
       dutyDays:p.dutyDays||{}, sup:p.sup||{}, places:p.places.map(x=>({id:x.id,name:x.name})), events:[SUP_EV],
-      circular: circ.duty || circ.sup, supCircular: circ.duty && circ.sup ? circ.sup : null, notes:{} };
+      circular: circ.duty || circ.sup, supCircular: circ.duty && circ.sup ? circ.sup : null, notes:{}, tables:{ duty:buildTable('duty'), sup:buildTable('sup') } };
     await col().doc(planId(DS.stage)).set({ kind:'plan', schoolId:DS.sid, period:DS.period, stage:DS.stage, pub, members:[...members], updatedAt:pub.at-1 }, { merge:true });
     p.pub = pub; p.members = pub.members; p.updatedAt = pub.at-1;
     toast('تم الاعتماد ورفع '+kinds.length+' تعميم'+(kinds.length>1?'ين':'')); DS.tab='recv'; render();

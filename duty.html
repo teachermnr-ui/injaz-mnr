@@ -90,6 +90,7 @@ table.t td.miss{background:var(--bg-fdecec,#fdecec)}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="users-api.js"></script>
+<script src="form-header.js?v=2026-10-15.2"></script>
 <script>
 'use strict';
 /* =========================================================================
@@ -521,26 +522,25 @@ function recordWeeks(){
   return weeks;
 }
 const ORD = ['الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن','التاسع','العاشر','الحادي عشر','الثاني عشر','الثالث عشر','الرابع عشر','الخامس عشر','السادس عشر','السابع عشر','الثامن عشر','التاسع عشر','العشرون'];
-function printRecord(){
+async function printRecord(){
   const p = P(), weeks = recordWeeks();
+  const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
+  const ctx = await FormHdr.resolve({ db, session:DS.session, period:DS.period }); if(!ctx.school) ctx.school = DS.schoolName;
   const page = (days, wi)=>{
     const rows = []; days.forEach(k=>{ const rs = dayRows(k); rs.forEach((r,i)=>rows.push({ k, r, first:i===0, span:rs.length })); });
     const body = rows.map((x,i)=>`<tr>${i===0?`<td rowspan="${rows.length}" class="wk">${ORD[wi]||arN(wi+1)}</td>`:''}${x.first?`<td rowspan="${x.span}" class="b">${esc(WEEKDAYS[wdOf(x.k)])}</td><td rowspan="${x.span}">${esc(hijri(x.k))}</td>`:''}<td>${esc(x.r.duty)}</td><td></td><td>${esc(x.r.sup)}</td><td>${esc(x.r.where)}</td><td></td><td></td></tr>`).join('');
-    return `<section class="pg"><div class="hd">[الترويسة — تُحدَّد لاحقًا] · ${esc(DS.schoolName)}</div><h1>سجل المناوبة والإشراف اليومي</h1>
-      <div class="meta"><span>العام الدراسي: ${esc(hijriYear())}</span><span>الفصل الدراسي: ${esc(periodLabel(DS.period))}</span><span>المرحلة: ${esc(S().label)}</span></div>
+    return `<section class="pg">${FormHdr.header({ formTitle:'سجل المناوبة والإشراف اليومي', ctx, extra:[['المرحلة', S().label]] })}
       <table><thead><tr><th rowspan="2" style="width:52px">الأسبوع</th><th rowspan="2" style="width:62px">اليوم</th><th rowspan="2" style="width:80px">التاريخ</th><th colspan="2">المناوبة</th><th colspan="3">الإشراف</th><th rowspan="2" style="width:70px">ملحوظات</th></tr>
       <tr><th>الاسم</th><th style="width:64px">التوقيع</th><th>الاسم</th><th>الإشراف</th><th style="width:64px">التوقيع</th></tr></thead><tbody>${body}</tbody></table>
       <div class="sig"><div>وكيل الشؤون التعليمية: ${esc(p.agentName)||'....................'}<br><br>التوقيع: ....................</div><div>مدير المدرسة: ${esc(p.principalName)||'....................'}<br><br>التوقيع: ....................</div></div></section>`;
   };
-  const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
   w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سجل المناوبة والإشراف اليومي</title>'+
-    '<style>@page{size:A4 portrait;margin:10mm}body{font-family:Tahoma,Arial;color:var(--fg-111111,#111);margin:0}.pg{page-break-after:always}.pg:last-child{page-break-after:auto}'+
+    '<style>'+FormHdr.css()+'@page{size:A4 portrait;margin:10mm}body{font-family:Tahoma,Arial;color:var(--fg-111111,#111);margin:0;padding:6px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.pg{page-break-after:always}.pg:last-child{page-break-after:auto}'+
     '.hd{border:1px dashed var(--bd-999999,#999);border-radius:8px;padding:14px;text-align:center;color:var(--fg-555555,#555);font-size:12px}h1{text-align:center;font-size:20px;margin:10px 0 6px;color:var(--fg-0c2d48,#0c2d48)}'+
     '.meta{display:flex;justify-content:space-between;font-weight:700;font-size:12.5px;margin:4px 6px 8px}table{width:100%;border-collapse:collapse}'+
     'th,td{border:1px solid var(--bd-222222,#222);padding:5px 4px;text-align:center;font-size:11.5px;height:20px}th{background:var(--bg-eef4f3,#eef4f3)}td.wk{font-weight:800}td.b{font-weight:700}'+
     'tr{page-break-inside:avoid}.sig{display:flex;justify-content:space-between;margin-top:18px;font-weight:700;font-size:13px}</style></head><body>'+
-    weeks.map(page).join('')+
-    '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
+    FormHdr.optionBar()+weeks.map(page).join('')+FormHdr.script()+'</body></html>');
   w.document.close();
 }
 

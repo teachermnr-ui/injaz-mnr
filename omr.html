@@ -775,6 +775,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="users-api.js"></script>
+<script src="form-header.js?v=2026-10-15.3"></script>
 <!-- مولّد رمز QR (لطباعة باركود كل طالب) -->
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <!-- قارئ رمز QR موثوق (لفكّ الباركود أثناء التصحيح) -->
@@ -1381,15 +1382,17 @@ function buildQASheet(L, student){
     const midY = hdr.boxTop + (hdr.boxBottom-hdr.boxTop)/2;
     svg += `<text x="${hdr.leftR}" y="${midY-16}" direction="rtl" text-anchor="start" font-size="15" font-weight="bold" fill="#1a2b33">الطالب: ${escapeXml(nm)}</text>`;
     svg += `<text x="${hdr.leftR}" y="${midY+26}" direction="rtl" text-anchor="start" font-size="15" font-weight="bold" fill="#1a2b33">رقم الجلوس: ${escapeXml(seat)}</text>`;
+    svg += `<text x="${hdr.leftR}" y="${midY+60}" direction="rtl" text-anchor="start" font-size="15" font-weight="bold" fill="#1a2b33">المادة: ${escapeXml((hdr.info[0]&&hdr.info[0].val)||'')}</text>`;
   } else {
     // إزاحة لليمين مع سطر كتابة أطول
     const tR = hdr.leftR;                       // حافة يمنى (أقصى اليمين في منطقة المعلومات)
     const nameLbl='اسم الطالب:', seatLbl='رقم الجلوس:';
     const wN = measureTextW(nameLbl,14), wS = measureTextW(seatLbl,14);
-    svg += `<text x="${tR}" y="${hdr.boxTop+58}" direction="rtl" text-anchor="start" font-size="14" font-weight="bold" fill="#1a2b33">${nameLbl}</text>`;
-    svg += dotted(hdr.leftL, tR-wN-10, hdr.boxTop+60);
-    svg += `<text x="${tR}" y="${hdr.boxTop+108}" direction="rtl" text-anchor="start" font-size="14" font-weight="bold" fill="#1a2b33">${seatLbl}</text>`;
-    svg += dotted(hdr.leftL, tR-wS-10, hdr.boxTop+110);
+    svg += `<text x="${tR}" y="${hdr.boxTop+38}" direction="rtl" text-anchor="start" font-size="14" font-weight="bold" fill="#1a2b33">${nameLbl}</text>`;
+    svg += dotted(hdr.leftL, tR-wN-10, hdr.boxTop+40);
+    svg += `<text x="${tR}" y="${hdr.boxTop+76}" direction="rtl" text-anchor="start" font-size="14" font-weight="bold" fill="#1a2b33">${seatLbl}</text>`;
+    svg += dotted(hdr.leftL, tR-wS-10, hdr.boxTop+78);
+    svg += `<text x="${tR}" y="${hdr.boxTop+114}" direction="rtl" text-anchor="start" font-size="14" font-weight="bold" fill="#1a2b33">المادة: ${escapeXml((hdr.info[0]&&hdr.info[0].val)||'')}</text>`;
     svg += `<text x="${tR}" y="${hdr.boxTop+134}" direction="rtl" text-anchor="start" font-size="10" fill="#9aa7ab">يُكتب بخط واضح</text>`;
   }
 
@@ -3942,7 +3945,14 @@ function moeLogoInline(w){
 }
 
 // ---- التصدير الكامل (شكل النموذج الرسمي) ----
-function openWorkLogExport(code, pal, scope){
+async function getWlCtx(h, subject){
+  // قيم النظام أولاً؛ وإن لم تتوفر تُستعمل القيم اليدوية المحفوظة في الترويسة
+  const c = Object.assign({}, await FormHdr.resolve({ db, session:CLS_SESSION||{}, period:(CLS_SESSION&&CLS_SESSION.period)||'first' }));
+  c.edu = c.edu || h.edu || ''; c.school = c.school || h.school || ''; c.year = c.year || h.year || '';
+  c.teacher = c.teacher || h.teacher || ''; c.principal = c.principal || h.principal || '';
+  return c;
+}
+async function openWorkLogExport(code, pal, scope){
   pal = pal || PALETTES.red;
   const cfg = state.workCfg, h = cfg.header;
   const v = parseVKey(code);
@@ -3980,12 +3990,13 @@ function openWorkLogExport(code, pal, scope){
   const logo = moeLogoInline(150);
   const title = single ? `سجل أعمال السنة (${periods[0].name}) — ${className}` : `سجل أعمال السنة — ${className}`;
   // فترة واحدة (أضيق) → عمودي؛ كامل (أعرض) → أفقي
-  win.document.write(buildExportHTML({ title, pal, logo, h, className, subject: v.subject||'', head1, head2, rows, landscape:!single, subtitle: single?periods[0].name:'' }));
+  const ctx = await getWlCtx(h);
+  win.document.write(buildExportHTML({ title, pal, logo, ctx, h, className, subject: v.subject||'', head1, head2, rows, landscape:!single, subtitle: single?periods[0].name:'' }));
   win.document.close();
 }
 
 // ---- التصدير المفصّل (كل المحاولات لفترة واحدة) ----
-function openDetailedExport(code, periodIdx, pal){
+async function openDetailedExport(code, periodIdx, pal){
   pal = pal || PALETTES.red;
   const cfg = state.workCfg, h = cfg.header, p = cfg.periods[periodIdx];
   const v = parseVKey(code);
@@ -4006,7 +4017,8 @@ function openDetailedExport(code, periodIdx, pal){
     rows += `<tr>${tds}</tr>`;
   });
   const logo = moeLogoInline(150);
-  win.document.write(buildExportHTML({ title:`تفصيل ${p.name} — ${className}`, pal, logo, h, className, subject: v.subject||'', head1, head2, rows, landscape:true, subtitle:`تفصيل الدرجات — ${p.name}` }));
+  const ctx = await getWlCtx(h);
+  win.document.write(buildExportHTML({ title:`تفصيل ${p.name} — ${className}`, pal, logo, ctx, h, className, subject: v.subject||'', head1, head2, rows, landscape:true, detailed:true, subtitle:`تفصيل الدرجات — ${p.name}` }));
   win.document.close();
 }
 
@@ -4015,22 +4027,15 @@ function buildExportHTML(o){
   const pal=o.pal;
   const headBg = pal.plain ? '#fff' : pal.head;
   const headTx = pal.plain ? '#000' : '#fff';
+  const ctx = o.ctx || {};
+  const formTitle = o.subtitle ? (o.detailed ? 'كشف درجات تفصيلي — '+o.subtitle.replace(/^تفصيل الدرجات — /,'') : 'سجل أعمال السنة — '+o.subtitle) : 'سجل أعمال السنة';
   return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
   <title>${escapeHtml(o.title)}</title>
   <style>
     @page{ size:A4 ${o.landscape?'landscape':'portrait'}; margin:6mm; }
-    *{box-sizing:border-box}
+    *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:var(--fg-222222,#222);margin:0;padding:10px}
     .sheet{width:100%;max-width:${o.landscape?'1000px':'720px'};margin:0 auto}
-    .bar{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid ${pal.line};padding-bottom:8px;margin-bottom:8px}
-    .right{font-size:12px;line-height:1.7;text-align:right}
-    .center{text-align:center}
-    .center h1{margin:4px 0 0;font-size:18px;color:${pal.plain?'#000':pal.head}}
-    .center .sub{font-size:12px;color:var(--fg-666666,#666)}
-    .left{font-size:11px;line-height:1.8;text-align:right;min-width:220px}
-    .left .row{display:flex;gap:6px}
-    .left .lbl{color:${pal.plain?'#000':pal.head};font-weight:700;min-width:84px}
-    .left .val{flex:1;border-bottom:1px dotted var(--bd-aaaaaa,#aaa);min-height:16px}
     table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:${o.landscape?'10px':'9px'};margin-top:6px}
     thead{display:table-header-group}
     tbody tr{page-break-inside:avoid}
@@ -4044,30 +4049,25 @@ function buildExportHTML(o){
     td.nm{text-align:right;font-weight:600;width:${o.landscape?'15%':'22%'};font-size:9px}
     td.num{width:4%;color:var(--fg-888888,#888)}
     td[contenteditable]:focus{outline:2px solid ${pal.line};background:var(--bg-fffef7,#fffef7)}
-    .toolbar{position:sticky;top:0;background:var(--bg-ffffff,#fff);padding:8px 0;margin-bottom:6px;display:flex;gap:8px;border-bottom:1px solid var(--bd-eeeeee,#eee);flex-wrap:wrap}
+    .toolbar{position:sticky;top:0;background:var(--bg-ffffff,#fff);padding:8px 0;margin-bottom:6px;display:flex;gap:8px;border-bottom:1px solid var(--bd-eeeeee,#eee);flex-wrap:wrap;z-index:5}
     .toolbar button{padding:9px 16px;border:none;border-radius:8px;font:inherit;font-weight:700;cursor:pointer;background:${pal.plain?'#444':pal.head};color:var(--fg-ffffff,#fff)}
     .toolbar .hint{font-size:12px;color:var(--fg-777777,#777);align-self:center}
+    .fh{font-size:13px}.fh .fh-r,.fh .fh-l{font-size:13px}.fh .fh-c img{height:${o.landscape?'64px':'56px'}}
+    .fh-sig{margin-top:22px;page-break-inside:avoid}
     @media print{ .toolbar{display:none} body{padding:0} .sheet{max-width:none} }
+    ${FormHdr.css()}
   </style></head><body>
   <div class="toolbar">
     <button onclick="window.print()">🖨️ تصدير / طباعة PDF</button>
     <span class="hint">من نافذة الطباعة اختر الاتجاه «${o.landscape?'أفقي / Landscape':'عمودي / Portrait'}» ومقاس A4. الجدول مضبوط ليملأ الورقة دون تقطيع، ويتوزّع تلقائياً على عدّة صفحات عند الحاجة مع تكرار الرأس.</span>
   </div>
   <div class="sheet">
-  <div class="bar">
-    <div class="right">المملكة العربية السعودية<br>وزارة التعليم<br>${escapeHtml(o.h.edu||'')}<br>${escapeHtml(o.h.school||'')}</div>
-    <div class="center">${o.logo}<h1>سجل أعمال السنة</h1>${o.subtitle?`<div class="sub">${escapeHtml(o.subtitle)}</div>`:''}</div>
-    <div class="left">
-      <div class="row"><span class="lbl">المادة</span><span class="val">${escapeHtml(o.subject||'')}</span></div>
-      <div class="row"><span class="lbl">الصف</span><span class="val">${escapeHtml(o.className)}</span></div>
-      <div class="row"><span class="lbl">معلم المادة</span><span class="val">${escapeHtml(o.h.teacher||'')}</span></div>
-      <div class="row"><span class="lbl">العام الدراسي</span><span class="val">${escapeHtml(o.h.year||'')}</span></div>
-      <div class="row"><span class="lbl">الفصل الدراسي</span><span class="val">${escapeHtml(o.h.term||'')}</span></div>
-      <div class="row"><span class="lbl">قائد المدرسة</span><span class="val">${escapeHtml(o.h.principal||'')}</span></div>
-    </div>
-  </div>
+  ${FormHdr.optionBar(true)}
+  ${FormHdr.header({ formTitle, ctx, extra:[['المادة', o.subject||''],['الصف', o.className||'']] })}
   <table><thead><tr>${o.head1}</tr><tr>${o.head2}</tr></thead><tbody>${o.rows}</tbody></table>
+  ${FormHdr.signatures(ctx,'معلم المادة')}
   </div>
+  ${FormHdr.script()}
   </body></html>`;
 }
 

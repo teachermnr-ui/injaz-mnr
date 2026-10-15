@@ -84,6 +84,7 @@ table.v tbody tr:hover{background:var(--bg-e6f3f1,#e6f3f1)}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="users-api.js"></script>
+<script src="form-header.js?v=2026-10-15.2"></script>
 <script>
 'use strict';
 /* =========================================================================
@@ -342,7 +343,7 @@ async function savePlan(){
 }
 
 /* ---------- طباعة النموذج (٤٩) ---------- */
-function printForm(){
+async function printForm(){
   const T = VS.teachers;
   const cells = v=> v && v.date
     ? `<td>${esc(dayName(v.date))}</td><td>${esc(hijri(v.date))}</td><td>${esc(v.unit||'')}</td><td>${esc(v.activity||'')}</td><td>${esc(v.cls||'')}</td>`
@@ -351,23 +352,20 @@ function printForm(){
   const rows = T.map((t,i)=>{ const p = VS.plans[t.id]||{};
     return `<tr><td>${arN(i+1)}</td><td class="nm">${esc(t.name)}</td><td>${esc(p.spec||t.spec||'')}</td><td class="ex">${box(p.exec==='ok')} في الموعد<br>${box(p.exec==='mod')} تعديل</td>${cells(p.v1)}${cells(p.v2)}</tr>`; }).join('');
   const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
-  w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>نموذج (٤٩) خطة الزيارات الصفية</title>'+
-    '<style>@page{size:A4 landscape;margin:12mm}body{font-family:Tahoma,Arial;color:var(--fg-111111,#111);margin:0}'+
-    '.hd{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;font-size:13px}.hd b{font-size:15px}'+
-    '.meta{display:flex;justify-content:space-between;font-weight:700;font-size:13px;margin:6px 0 10px}'+
-    'table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--bd-333333,#333);padding:6px 4px;text-align:center;font-size:12px}'+
-    'thead th{background:var(--bg-0d9488,#0d9488);color:var(--fg-ffffff,#fff)}thead tr.s th{background:var(--bg-2f6fb3,#2f6fb3)}td.nm{text-align:right;font-weight:700}td.ex{font-size:11px;white-space:nowrap}'+
-    'tbody tr:nth-child(even){background:var(--bg-eeeeee,#eee)}thead{display:table-header-group}tr{page-break-inside:avoid}'+
-    '.notes{font-size:12px;margin-top:10px;line-height:1.8}.sig{display:flex;justify-content:space-between;margin-top:22px;font-weight:700;font-size:14px}'+
-    '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>'+
-    '<div class="hd"><b>مدرسة: '+esc(VS.schoolName)+'</b><span>'+esc(periodLabel(VS.period))+'</span></div>'+
-    '<div class="meta"><span>نموذج رقم '+FORM_META.no+' &nbsp; اسم النموذج: '+FORM_META.name+'</span><span>رمز النموذج: '+FORM_META.code+'</span></div>'+
+  const ctx = await FormHdr.resolve({ db, session:VS.session, period:VS.period });
+  if(!ctx.school) ctx.school = VS.schoolName;
+  const css = 'table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:6px 4px;text-align:center;font-size:12px}'+
+    'thead th{background:#0d9488;color:#fff}thead tr.s th{background:#2f6fb3}td.nm{text-align:right;font-weight:700}td.ex{font-size:11px;white-space:nowrap}'+
+    'tbody tr:nth-child(even){background:#eee}thead{display:table-header-group}tr{page-break-inside:avoid}'+
+    '.notes{font-size:12px;margin-top:10px;line-height:1.8}.sig{display:flex;justify-content:space-between;margin-top:22px;font-weight:700;font-size:14px}.fmeta{margin-top:14px;font-size:11px;color:#666;display:flex;justify-content:space-between}';
+  const body = ''+
     '<table><thead><tr><th rowspan="2">م</th><th rowspan="2">اسم المعلم</th><th rowspan="2">التخصص</th><th rowspan="2">التنفيذ</th><th colspan="5">الزيارة الأولى</th><th colspan="5">الزيارة الثانية</th></tr>'+
     '<tr class="s"><th>اليوم</th><th>التاريخ</th><th>الوحدة</th><th>النشاط</th><th>الفصل</th><th>اليوم</th><th>التاريخ</th><th>الوحدة</th><th>النشاط</th><th>الفصل</th></tr></thead>'+
     '<tbody>'+(rows||'<tr><td colspan="14">لا يوجد معلمون.</td></tr>')+'</tbody></table>'+
     '<div class="notes"><b>ملاحظات:</b><br>- يعبأ هذا الجدول بداية كل فصل دراسي.<br>- يفضل أن تكون الزيارة الأولى في الأسبوعين الثالث والرابع، والزيارة الثانية بعد شهر من انتهاء الزيارة الأولى.</div>'+
-    '<div class="sig"><span>الوكيل المسند للمتابعة: '+(esc(VS.settings.agentName)||'..............................')+'</span><span style="text-align:center">مدير المدرسة<br>الاسم: '+(esc(VS.settings.principalName)||'....................')+'</span></div>'+
-    '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
+    '<div class="sig"><span>الوكيل المسند للمتابعة: '+(esc(VS.settings.agentName)||'..............................')+'</span><span style="text-align:center">مدير المدرسة<br>الاسم: '+(esc(VS.settings.principalName)||'....................')+'</span></div>'
+    +'<div class="fmeta"><span>نموذج رقم '+FORM_META.no+'</span><span>رمز النموذج: '+FORM_META.code+'</span></div>';
+  w.document.write(FormHdr.doc({ title:'خطة الزيارات الصفية', formTitle:'خطة الزيارات الصفية', ctx, landscape:true, margin:'10mm', extraCss:css, body }));
   w.document.close();
 }
 </script>

@@ -290,6 +290,7 @@ table.tt td.nm.nm-sel{background:var(--bg-cfe3ff,#cfe3ff);box-shadow:inset 0 0 0
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="users-api.js"></script>
+<script src="form-header.js?v=2026-10-15.2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="timetable-engine.js"></script>
 <script>
@@ -2887,16 +2888,15 @@ function wPickSub(i){
 }
 function wHijriYear(){ try{ const p=new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-latn',{year:'numeric'}).formatToParts(new Date()); return ((p.find(x=>x.type==='year')||{}).value||'')+'هـ'; }catch(e){ return ''; } }
 // «سجل توزيع حصص الانتظار» (نموذج رقم ٧) — فقرة وجدول لكل معلم غائب
-function wDailyHtml(date){
+function wDailyHtml(date, ctx, light){
   const DY = TT.wdayCache[date] || { items:[] };
   const w = new Date(date+'T12:00:00').getDay();
   const now = new Date(), printDate = now.getFullYear()+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+String(now.getDate()).padStart(2,'0');
   const groups = []; (DY.items||[]).forEach(it=>{ let g = groups.find(x=>x.tid===it.absentTid); if(!g){ g = { tid:it.absentTid, name:it.absentName, items:[] }; groups.push(g); } g.items.push(it); });
-  return `<div class="wf-page" style="direction:rtl;font-family:Tahoma,Arial;color:var(--fg-111111,#111);background:var(--bg-ffffff,#fff);padding:24px;width:760px;box-sizing:border-box">
-    <div style="display:flex;justify-content:space-between;font-size:13px;line-height:1.9">
-      <div>المملكة العربية السعودية<br>وزارة التعليم<br>${esc(TT.schoolName)}<br>نموذج رقم (7)</div>
-      <div>سجل توزيع حصص الانتظار<br>تاريخ الطباعة: ${printDate}<br>اليوم: ${WEEKDAYS[w]}</div></div>
-    <div style="font-weight:700;margin:12px 0 4px">العام الدراسي ${esc(wHijriYear())} / الفصل (${esc(PERIOD_LABEL[TT.period])})</div>
+  const hc = Object.assign({}, ctx||{}); if(!hc.school) hc.school = TT.schoolName; if(!hc.term) hc.term = PERIOD_LABEL[TT.period]||'';
+  return `<div class="wf-page" style="direction:rtl;font-family:Tahoma,Arial;color:var(--fg-111111,#111);background:var(--bg-ffffff,#fff);padding:24px;width:760px;box-sizing:border-box"><style>${FormHdr.css()}</style>
+    ${FormHdr.header({ formTitle:'سجل توزيع حصص الانتظار', ctx:hc, light })}
+    <div style="display:flex;justify-content:space-between;font-weight:700;font-size:13px;margin:0 0 4px"><span>اليوم: ${WEEKDAYS[w]}</span><span>تاريخ الطباعة: ${printDate}</span></div>
     ${groups.map(g=>`<div style="margin-top:14px;font-weight:700;font-size:13.5px;line-height:1.8">زملائي المعلمين / نظراً لغياب الزميل: ${esc(g.name)} لهذا اليوم ${WEEKDAYS[w]}<br>الموافق ${esc(date)} آمل تسديد مكانه حسب الجدول الموضح والتوقيع بالعلم ،، ولكم جزيل الشكر</div>
       <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px">
         <tr>${['الحصة','الصف','المادة','اسم المعلم للانتظار','ملاحظة','ما تم تنفيذه في حصة الانتظار','التوقيع','ملحوظات'].map(h=>`<th style="border:1px solid var(--bd-333333,#333);padding:5px;background:var(--bg-f1f1f1,#f1f1f1)">${h}</th>`).join('')}</tr>
@@ -2907,10 +2907,12 @@ function wDailyHtml(date){
 }
 function wLoadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('تعذّر تحميل مكتبة PDF')); document.head.appendChild(s); }); }
 async function wPrintDaily(asPdf){
-  const date = TT.wdate; const html = wDailyHtml(date);
+  const date = TT.wdate;
   if(!asPdf){
     const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة'); return; }
-    w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سجل توزيع حصص الانتظار '+esc(date)+'</title><style>@page{size:A4 portrait;margin:8mm}body{margin:0}.wf-page{width:auto!important}tr{page-break-inside:avoid}</style></head><body>'+html+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr'+'ipt></body></html>');
+    const fhCtx = await FormHdr.resolve({ db, session:TT.session, period:TT.period });
+    const html = wDailyHtml(date, fhCtx, false);
+    w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سجل توزيع حصص الانتظار '+esc(date)+'</title><style>@page{size:A4 portrait;margin:8mm}body{margin:0;padding:6px}.wf-page{width:auto!important}tr{page-break-inside:avoid}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>'+FormHdr.optionBar()+html+FormHdr.script()+'</body></html>');
     w.document.close(); return;
   }
   // PDF للإرسال بالواتساب: صورة الصفحة ← jsPDF، ثم المشاركة (الجوال) أو التنزيل (الكمبيوتر)
@@ -2918,6 +2920,8 @@ async function wPrintDaily(asPdf){
     toast('جارٍ تجهيز ملف PDF…');
     if(!window.html2canvas) await wLoadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
     if(!(window.jspdf && window.jspdf.jsPDF)) await wLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    const fhCtx = await FormHdr.resolve({ db, session:TT.session, period:TT.period });
+    const html = wDailyHtml(date, fhCtx, FormHdr.lightPref());
     const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1'; host.innerHTML = html; document.body.appendChild(host);
     const canvas = await window.html2canvas(host.firstElementChild, { scale:2, backgroundColor:'#ffffff' });
     host.remove();

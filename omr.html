@@ -3959,7 +3959,7 @@ async function openWorkLogExport(code, pal, scope){
   const studs = state.students.filter(s=>s.classCode===v.classCode);
   if(!studs.length){ alert('لا يوجد طلاب في هذا الصف.'); return; }
   const log = state.workLog[code]||{};
-  const className = (classNameByCode(v.classCode)||'') + (v.subject?(' - '+v.subject):'');
+  const className = (classNameByCode(v.classCode)||'');   // اسم الصف فقط؛ المادة سطر مستقل في الترويسة
   // نطاق الفترات: كامل أو فترة واحدة
   let periods = cfg.periods, single=false;
   if(scope!=null && scope!=='all'){ const i=+scope; if(cfg.periods[i]){ periods=[cfg.periods[i]]; single=true; } }
@@ -4003,7 +4003,7 @@ async function openDetailedExport(code, periodIdx, pal){
   const studs = state.students.filter(s=>s.classCode===v.classCode);
   if(!studs.length){ alert('لا يوجد طلاب في هذا الصف.'); return; }
   const log = state.workLog[code]||{};
-  const className = (classNameByCode(v.classCode)||'') + (v.subject?(' - '+v.subject):'');
+  const className = (classNameByCode(v.classCode)||'');   // اسم الصف فقط؛ المادة سطر مستقل في الترويسة
   const win = window.open('', '_blank');
   if(!win){ alert('فضلاً اسمح بالنوافذ المنبثقة للتصدير.'); return; }
   const vis = p.items.filter(it=>!it.hidden);

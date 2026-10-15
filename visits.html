@@ -165,6 +165,7 @@ async function boot(au){
   try{ const sd = await db.collection('schoolData').doc(VS.sid).get(); VS.schoolName = sd.exists ? (sd.data().name||VS.sid) : VS.sid; }catch(e){ VS.schoolName = VS.sid; }
   $('#tbSchool').textContent = VS.schoolName;
   $('#bootView').classList.add('hidden'); $('#app').classList.remove('hidden');
+  try{ VS.principal = (await FormHdr.resolve({ db, session:VS.session, period:VS.period })).principal || ''; }catch(e){ VS.principal = ''; }
   await loadAll();
   render();
 }
@@ -217,10 +218,10 @@ function render(){
   }).join('');
   $('#main').innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      <span style="font-size:13.5px;font-weight:700">نموذج رقم ${FORM_META.no} · اسم النموذج: ${FORM_META.name} · رمز النموذج: ${FORM_META.code}</span>
+      <span style="font-size:13.5px;font-weight:700">خطة الزيارات الصفية</span>
       <span class="tb-spacer" style="flex:1"></span>
       ${VS.canEdit?'<button class="btn pri" id="btnNew">+ جدولة زيارة</button>':''}
-      <button class="btn" id="btnPrint">🖨️ طباعة النموذج (٤٩)</button>
+      <button class="btn" id="btnPrint">🖨️ طباعة الخطة</button>
     </div>
     <div class="card" style="padding:10px">
       ${T.length?`<div class="tbl-wrap"><table class="v">
@@ -235,7 +236,7 @@ function render(){
     <div class="card">
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
         <div class="field" style="flex:1 1 220px;margin:0"><label>الوكيل المسند للمتابعة</label><input id="sgAgent" value="${esc(VS.settings.agentName)}" ${VS.canEdit?'':'disabled'} maxlength="80"></div>
-        <div class="field" style="flex:1 1 220px;margin:0"><label>مدير المدرسة (الاسم)</label><input id="sgPrin" value="${esc(VS.settings.principalName)}" ${VS.canEdit?'':'disabled'} maxlength="80"></div>
+        <div class="field" style="flex:1 1 220px;margin:0"><label>مدير المدرسة (من بيانات المدرسة)</label><input id="sgPrin" value="${esc(VS.principal||'')}" disabled></div>
         ${VS.canEdit?'<button class="btn" id="sgSave">حفظ الأسماء</button>':''}
       </div>
     </div>`;
@@ -248,7 +249,7 @@ function render(){
 }
 
 async function saveSettings(){
-  const agentName = ($('#sgAgent').value||'').trim(), principalName = ($('#sgPrin').value||'').trim();
+  const agentName = ($('#sgAgent').value||'').trim(), principalName = VS.settings.principalName||'';
   try{
     await col().doc('settings_'+VS.sid).set({ kind:'settings', schoolId:VS.sid, agentName, principalName, updatedAt:Date.now(), updatedBy:VS.me.id });
     VS.settings = { agentName, principalName }; toast('تم الحفظ');
@@ -363,8 +364,7 @@ async function printForm(){
     '<tr class="s"><th>اليوم</th><th>التاريخ</th><th>الوحدة</th><th>النشاط</th><th>الفصل</th><th>اليوم</th><th>التاريخ</th><th>الوحدة</th><th>النشاط</th><th>الفصل</th></tr></thead>'+
     '<tbody>'+(rows||'<tr><td colspan="14">لا يوجد معلمون.</td></tr>')+'</tbody></table>'+
     '<div class="notes"><b>ملاحظات:</b><br>- يعبأ هذا الجدول بداية كل فصل دراسي.<br>- يفضل أن تكون الزيارة الأولى في الأسبوعين الثالث والرابع، والزيارة الثانية بعد شهر من انتهاء الزيارة الأولى.</div>'+
-    '<div class="sig"><span>الوكيل المسند للمتابعة: '+(esc(VS.settings.agentName)||'..............................')+'</span><span style="text-align:center">مدير المدرسة<br>الاسم: '+(esc(VS.settings.principalName)||'....................')+'</span></div>'
-    +'<div class="fmeta"><span>نموذج رقم '+FORM_META.no+'</span><span>رمز النموذج: '+FORM_META.code+'</span></div>';
+    '<div class="sig"><span>الوكيل المسند للمتابعة: '+(esc(VS.settings.agentName)||'..............................')+'</span><span style="text-align:center">مدير المدرسة<br>الاسم: '+(esc(ctx.principal||VS.principal)||'....................')+'</span></div>';
   w.document.write(FormHdr.doc({ title:'خطة الزيارات الصفية', formTitle:'خطة الزيارات الصفية', ctx, landscape:true, margin:'10mm', extraCss:css, body }));
   w.document.close();
 }

@@ -131,6 +131,7 @@ main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="users-api.js"></script>
+<script src="form-header.js?v=2026-10-15.3"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 'use strict';
@@ -485,15 +486,15 @@ async function openCircularView(cid, skipHistory){
   const isRecipient = (c.recipients||[]).includes(CR.me.id);
   if(!CR.canManage && !isRecipient){ $('#main').innerHTML = '<div class="card"><div class="alert err">ليست لديك صلاحية الوصول لهذا التعميم.</div></div>'; return; }
 
-  const pagesSnap = await itemRef.collection('pages').orderBy('index').get();
-  const pages = pagesSnap.docs.map(d=>d.data().dataUrl);
+  let pages = [];
+  if(!c.table){ const pagesSnap = await itemRef.collection('pages').orderBy('index').get(); pages = pagesSnap.docs.map(d=>d.data().dataUrl); }
 
   let html = `
     <div class="card">
       <button class="btn sec sm" id="backBtn">→ رجوع للقائمة</button>
       <h3 style="margin:10px 0 2px">تعميم رقم ${esc(c.number)}${c.title?' — '+esc(c.title):''}</h3>
       <div class="sub">${esc(c.createdByName||'')} · ${esc(fmtDate(c.createdAt))} · ${c.mandatory?'<b>التوقيع إلزامي</b>':'التوقيع اختياري'}</div>
-      <div class="pagewrap" style="margin-top:10px">${pages.map(p=>`<img src="${p}">`).join('')}</div>
+      ${c.table?'<div id="liveTbl" style="margin-top:12px"></div>':`<div class="pagewrap" style="margin-top:10px">${pages.map(p=>`<img src="${p}">`).join('')}</div>`}
     </div>`;
 
   if(isRecipient){
@@ -509,6 +510,7 @@ async function openCircularView(cid, skipHistory){
           <button class="btn sec sm" id="copyLinkBtn">📋 نسخ الرابط</button>
           <button class="btn sec sm" id="copyMsgBtn">💬 نسخ نص الرسالة</button>
           <button class="btn sec sm" id="printSigBtn">🖨️ طباعة صفحة التوقيعات</button>
+          ${c.table?'<button class="btn sec sm" id="printTblBtn">🖨️ طباعة الجدول بالتواقيع</button>':''}
           ${CR.canEdit?'<button class="btn danger sm" id="delCircBtn">حذف التعميم</button>':''}
         </div>
       </div>
@@ -521,7 +523,13 @@ async function openCircularView(cid, skipHistory){
   $('#backBtn').onclick = ()=>{ CR.cid=null; history.replaceState(null,'',location.pathname+'?sid='+encodeURIComponent(CR.sid)); CR.canManage ? showManagerList() : showMyList(); };
 
   if(isRecipient) renderMySignCard(c);
+  if(c.table){
+    const host = $('#liveTbl'); CR._drawLive = sigs=>{ if(host) host.innerHTML = liveTableHtml(c, sigs); };
+    if(CR.canManage) CR._drawLive({});
+    else itemRef.collection('signatures').doc(CR.me.id).get().then(d=>{ const o = {}; if(d.exists) o[CR.me.id] = d.data(); CR._drawLive(o); }).catch(()=>CR._drawLive({}));
+  } else CR._drawLive = null;
   if(CR.canManage){
+    if(c.table && $('#printTblBtn')) $('#printTblBtn').onclick = ()=>printLiveTable(c);
     $('#copyLinkBtn').onclick = ()=>copyText(circularLink(c.id), 'نُسخ الرابط');
     $('#copyMsgBtn').onclick = ()=>copyText(circularMessage(c), 'نُسخ نص الرسالة');
     $('#printSigBtn').onclick = ()=>printSignaturesSheet(c);
@@ -529,6 +537,7 @@ async function openCircularView(cid, skipHistory){
     VIEW_UNSUB = itemRef.collection('signatures').onSnapshot(snap=>{
       const sigs = {}; snap.forEach(d=> sigs[d.id]=d.data());
       CR._lastSigs = sigs;
+      if(CR._drawLive) CR._drawLive(sigs);
       renderSigTable(c, sigs);
     });
   }
@@ -649,6 +658,40 @@ function renderSigTable(c, sigs){
 }
 
 /* ---------- الطباعة: صفحة توقيعات بعمودين ---------- */
+/* ---------- جدول التعميم الحيّ (المناوبة / الإشراف اليومي) مع عمود التوقيع ---------- */
+function liveSigCell(c, uid, sigs){
+  if(!(c.recipients||[]).includes(uid)) return '<span style="color:#888">—</span>';
+  const s = sigs[uid];
+  if(s && s.image) return '<img src="'+s.image+'" style="height:30px;max-width:100%;vertical-align:middle">';
+  return s ? '✔' : '';
+}
+function liveTableInner(c, sigs){
+  const t = c.table, isSup = t.kind==='sup', rows = t.rows||[];
+  const head = isSup ? ['اليوم','المشرف','الموقع','ملاحظات','التوقيع'] : ['اليوم','التاريخ','المناوب','التوقيع'];
+  let out = '', i = 0;
+  while(i<rows.length){
+    let j = i; while(j<rows.length && rows[j].day===rows[i].day && (isSup || rows[j].date===rows[i].date)) j++;
+    for(let k=i;k<j;k++){
+      const r = rows[k];
+      out += '<tr>'+(k===i ? '<td rowspan="'+(j-i)+'" class="lt-b">'+esc(r.day)+'</td>'+(isSup?'':'<td rowspan="'+(j-i)+'">'+esc(r.date)+'</td>') : '')
+        + '<td>'+esc(r.name)+'</td>'+(isSup?'<td>'+esc(r.where)+'</td><td></td>':'')+'<td class="lt-s">'+liveSigCell(c, r.uid, sigs)+'</td></tr>';
+    }
+    i = j;
+  }
+  return '<table class="lt"><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+out+'</tbody></table>';
+}
+const LT_CSS = '.lt{width:100%;border-collapse:collapse;margin-top:6px}.lt th,.lt td{border:1px solid #222;padding:5px 4px;text-align:center;font-size:12px;height:22px}.lt th{background:#eef4f3}.lt-b{font-weight:800}.lt-s{width:110px}';
+function liveTableHtml(c, sigs){
+  const t = c.table;
+  return '<style>'+FormHdr.css()+LT_CSS+'</style><div style="overflow-x:auto">'+FormHdr.header({ formTitle:t.formTitle, ctx:t.ctx, extra:[['المرحلة', t.stage]] })+liveTableInner(c, sigs)+'</div>';
+}
+function printLiveTable(c){
+  const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
+  const t = c.table, sigs = CR._lastSigs || {};
+  const sg = '<div class="fh-sig"><span>وكيل الشؤون التعليمية: '+(esc(t.agent)||'....................')+'</span><span>مدير المدرسة: '+(esc((t.ctx||{}).principal)||'....................')+'</span></div>';
+  w.document.write(FormHdr.doc({ title:t.formTitle, formTitle:t.formTitle, ctx:t.ctx, extra:[['المرحلة', t.stage]], body:liveTableInner(c, sigs)+sg, extraCss:LT_CSS+'.lt tr{page-break-inside:avoid}' }));
+  w.document.close();
+}
 function printSignaturesSheet(c){
   const sigs = CR._lastSigs || {};
   const recips = c.recipients||[];

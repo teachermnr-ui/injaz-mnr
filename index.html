@@ -662,8 +662,9 @@ async function refreshMyBoardAlerts(){
   try{
     const ds = await db.collection('dutyPlans').where('members','array-contains',CURRENT.id).get();
     MYBOARD.duty = ds.docs.map(d=>d.data()).filter(v=>v.schoolId===CURRENT.schoolId && v.period===SESSION.period && v.pub).map(v=>myDutyOf(v.pub));
-    MYBOARD.duty = MYBOARD.duty.filter(x=>x.duty.length || x.sup.length);
-    MYBOARD.dutySig = MYBOARD.duty.map(x=>x.at).join(';');
+    MYBOARD.duty = MYBOARD.duty.filter(x=>x.duty.length || x.sup.length || x.note);
+    // التنبيه يخص المتأثر بالتعديل فقط: بصمة تكليفاته وملاحظة التعديل الموجّهة له (لا وقت الاعتماد العام)
+    MYBOARD.dutySig = MYBOARD.duty.map(x=>x.stage+'|'+x.duty.join(',')+'|'+x.sup.map(t=>t.day+t.place).join(',')+'|'+(x.note?x.note.at:'')).join(';');
     let seen = ''; try{ seen = localStorage.getItem(myDutySeenKey()) || ''; }catch(e){}
     MYBOARD.dutyChanged = !!MYBOARD.dutySig && MYBOARD.dutySig !== seen;
   }catch(e){}
@@ -709,7 +710,8 @@ function myDutyOf(pub){
   Object.keys(pub.sup||{}).sort((a,b)=>a-b).forEach(w=>Object.keys(pub.sup[w]||{}).forEach(ev=>Object.keys(pub.sup[w][ev]||{}).forEach(pl=>{
     if((pub.sup[w][ev][pl]||[]).includes(me)) sup.push({ day:W[+w]||'', ev:evL[ev]||'', place:plL[pl]||'' });
   })));
-  return { stage:pub.stageLabel||'', at:pub.at||0, duty, sup, circular:pub.circular||null };
+  const note = (pub.notes||{})[me] || null;
+  return { stage:pub.stageLabel||'', at:pub.at||0, duty, sup, note, circular:pub.circular||null, supCircular:pub.supCircular||null };
 }
 function openMyDuty(){
   const W = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
@@ -723,8 +725,9 @@ function openMyDuty(){
       (up.length ? up.map(k=>'<div style="margin-top:4px">'+esc(W[new Date(k+'T12:00:00').getDay()]||'')+' '+esc(hij(k))+(k===today?' <b style="color:var(--fg-b45309,#b45309)">اليوم</b>':k===tomorrow?' <b style="color:var(--fg-b45309,#b45309)">غدًا</b>':'')+'</div>').join('') : '<div class="umeta">لا مناوبات قادمة.</div>')+
       (past?'<div class="umeta" style="margin-top:4px">مضت: '+past+'</div>':'')+'</div>'+
       '<div class="card" style="margin:8px 0;padding:12px"><div style="font-weight:800">الإشراف — كل أسبوع</div>'+
-      (x.sup.length ? x.sup.map(s=>'<div style="margin-top:4px">'+esc(s.day)+': '+esc(s.ev)+' — '+esc(s.place)+'</div>').join('') : '<div class="umeta">لا إشراف.</div>')+'</div>'+
-      (x.circular?'<a class="btn" style="display:flex;justify-content:center;text-decoration:none" href="circulars.html">التوقيع على التعميم رقم '+x.circular.number+' (الاستلام)</a>':'');
+      (x.sup.length ? x.sup.map(s=>'<div style="margin-top:4px">'+esc(s.day)+': '+(s.ev?esc(s.ev)+' — ':'')+esc(s.place)+'</div>').join('') : '<div class="umeta">لا إشراف.</div>')+'</div>'+
+      (x.note?'<div class="card" style="margin:8px 0;padding:12px;background:var(--bg-fff7e6,#fff7e6)"><div style="font-weight:800">تعديل على تكليفك</div><div style="margin-top:4px">'+esc(x.note.text)+'</div></div>':'')+
+      [x.circular, x.supCircular].filter(c=>c && (c.kind==='sup' ? x.sup.length : c.kind==='duty' ? x.duty.length : true)).map(c=>'<a class="btn" style="display:flex;justify-content:center;text-decoration:none;margin-top:6px" href="circulars.html">التوقيع على التعميم رقم '+c.number+(c.kind==='sup'?' — الإشراف اليومي':c.kind==='duty'?' — المناوبة':'')+' (الاستلام)</a>').join('');
   }).join('');
   modal('<h2>مناوبتي وإشرافي</h2>'+(html||'<div class="empty">لا توجد تكليفات.</div>')+'<div class="modal-row"><button class="btn secondary" onclick="closeModal()">إغلاق</button></div>');
   try{ localStorage.setItem(myDutySeenKey(), MYBOARD.dutySig); }catch(e){}

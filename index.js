@@ -425,7 +425,9 @@ exports.reclaimTeacherContent = onCall(async (request) => {
    ما عداها (فترات/أعوام سابقة) يبقى على الحساب القديم كأرشيف ولا يُحذف.
    مصدر الحدود: schoolData/{sid} → yearFromMs/yearToMs و periods[{id,fromMs,toMs}] (إعدادات المدرسة).
    لا حدود معرّفة للعام ⇒ لا يُنقل شيء (الأمان أولًا). سجلات المعلم القديم تُعلَّم transferredTo ولا تُحذف.
-   لا يشمل: الجدول المدرسي وخطط المناوبة والزيارات الصفية (يعيد المدير إسنادها).
+   (2026-10-15، البند ٦) يشمل كذلك: الزيارات الصفية (نسخ إلى معرّف جديد) وخطط المناوبة والإشراف (استبدال المعرّف داخل الخطة والنسخة المعتمدة)
+   والجدول المنشور والانتظار المنشور («جدولي» و«انتظاري») — كلها للمدرسة والفترة والعام الحاليين فقط.
+   لا يشمل إشعارات الغياب (سجلات للطلاب لا للمعلم).
    ========================================================================= */
 const TR_REC_COLS = [
   ["attendance", "markedBy"], ["attAlerts", "byUserId"], ["leaves", "byUserId"], ["prepOverrides", "byUserId"],
@@ -453,6 +455,29 @@ function trEligible(v, sid, period, school) {
     if (p && p.fromMs != null && (t < p.fromMs || t > p.toMs)) return false;
   }
   return true;
+}
+/** يستبدل معرّف الحساب القديم بالجديد داخل كائن/مصفوفة (قيمًا ومفاتيح)؛ يُسقط التكرار الناتج في المصفوفات. */
+function trSwapId(v, oldId, newId) {
+  let n = 0;
+  const walk = (x) => {
+    if (typeof x === "string") { if (x === oldId) { n++; return newId; } return x; }
+    if (Array.isArray(x)) {
+      const out = x.map(walk);
+      if (out.length && out.every((e) => typeof e === "string")) return out.filter((e, i) => out.indexOf(e) === i);
+      return out;
+    }
+    if (x && typeof x === "object") {
+      const out = {};
+      for (const k of Object.keys(x)) {
+        const nk = k === oldId ? (n++, newId) : k;
+        out[nk] = (nk in out && nk !== k) ? out[nk] : walk(x[k]);
+      }
+      return out;
+    }
+    return x;
+  };
+  const value = walk(v);
+  return { value, changed: n };
 }
 exports.transferTeacherRecords = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول أولاً.");
@@ -532,6 +557,51 @@ exports.transferTeacherRecords = onCall(async (request) => {
         }
         await it.ref.update({ recipients: rec.map((x) => (x === oldId ? uid : x)) });
         bump("circular-recipients");
+      }
+
+      // (هـ) الزيارات الصفية: خطة المعلم مستند معرّفه يتضمن رقم الحساب ⇒ نسخ بمعرّف جديد (الأصل يبقى أرشيفًا)
+      {
+        const vq = await db.collection("classVisits").where("teacherId", "==", oldId).get();
+        for (const d of vq.docs) {
+          const v = d.data();
+          if (v.schoolId !== sid || v.period !== period || v.transferredTo) continue;
+          if (typeof v.updatedAt !== "number" || v.updatedAt < school.yearFromMs || v.updatedAt > school.yearToMs) continue;
+          const newRef = db.collection("classVisits").doc(sid + "_" + period + "_" + uid);
+          if ((await newRef.get()).exists) { out.conflicts++; continue; }
+          await newRef.set(Object.assign({}, v, { teacherId: uid, transferredFrom: oldId }));
+          await d.ref.update({ transferredTo: uid });
+          bump("classVisits");
+        }
+      }
+
+      // (و) خطط المناوبة والإشراف: استبدال المعرّف القديم بالجديد في الخطة والنسخة المعتمدة (المكلَّفون، الأماكن، القائمة، الملاحظات)
+      {
+        const dq = await db.collection("dutyPlans").where("schoolId", "==", sid).get();
+        for (const d of dq.docs) {
+          const v = d.data();
+          if (v.period !== period) continue;
+          if (typeof v.updatedAt !== "number" || v.updatedAt < school.yearFromMs || v.updatedAt > school.yearToMs) continue;
+          const { reassignedFrom: _rf, reassignedAt: _ra, ...rest } = v;   // حقلا التتبّع لا يدخلان في الاستبدال (يبقى التشغيل المتكرر بلا أثر)
+          const r = trSwapId(rest, oldId, uid);
+          if (!r.changed) continue;
+          await d.ref.set(Object.assign({}, r.value, { reassignedFrom: oldId, reassignedAt: now }));
+          bump("dutyPlans");
+        }
+      }
+
+      // (ز) الجدول المنشور والانتظار المنشور: المفتاح byUser = معرّف الحساب ⇒ يُعاد ربطه ليظهر «جدولي»/«انتظاري» فورًا
+      for (const suffix of ["_published", "_waitpub"]) {
+        const tr = db.collection("timetables").doc(sid).collection("data").doc(period + suffix);
+        const ts = await tr.get();
+        if (!ts.exists) continue;
+        const tv = ts.data();
+        let pv; try { pv = JSON.parse(tv.value); } catch (e) { continue; }
+        if (!pv || !pv.byUser || !(oldId in pv.byUser)) continue;
+        if (typeof pv.publishedAt === "number" && (pv.publishedAt < school.yearFromMs || pv.publishedAt > school.yearToMs)) continue;
+        if (!(uid in pv.byUser)) pv.byUser[uid] = pv.byUser[oldId];
+        delete pv.byUser[oldId];
+        await tr.update({ value: JSON.stringify(pv), rev: now, updatedAt: now });
+        bump("timetable" + suffix);
       }
     }
   }

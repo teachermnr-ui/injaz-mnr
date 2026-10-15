@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-11.1 -->
+<!-- إصدار: 2026-10-15.1 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -7,22 +7,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
 <title>الموجه الطلابي</title>
+<meta name="theme-color" content="#0f766e">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box}
-body{margin:0;font-family:'Tajawal',system-ui,sans-serif;background:#f4f7f6;color:#15242b;min-height:100vh}
-.top{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fff;border-bottom:1px solid #d8e2e0}
-.top a{color:#0f766e;font-weight:800;text-decoration:none}
-.top h1{margin:0;font-size:18px}
-.box{max-width:560px;margin:40px auto;padding:28px 20px;background:#fff;border:1px solid #d8e2e0;border-radius:14px;text-align:center}
-.box .ic{font-size:44px}
-.box p{color:#5b6f76;line-height:1.8}
-</style>
 </head>
 <body>
-<div class="top"><a href="index.html">← الموقع</a><h1>الموجه الطلابي</h1></div>
-<div class="box"><div class="ic">🤝</div><h2>الموجه الطلابي</h2><p>هذه الصفحة قيد الإعداد، وسيُحدَّد محتواها لاحقًا.</p></div>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
+<script src="sem-guard.js?v=2026-10-14.5"></script>
+<script src="dash-base.js?v=2026-10-15.1"></script>
+<script>
+const {esc, arN, dk, dayLabel, stat, link} = Dash;
+Dash.boot({
+  title:'الموجه الطلابي',
+  allow:(u,ctx)=> (ctx && (ctx.role==='counselor' || ((ctx.permissions||{})['index.guidance']||{}).edit===true)) ? true : 'هذه الصفحة لدور الموجه الطلابي فقط.',
+  render: async env=>{
+    const {db, sid, me, period} = env, today = dk(new Date());
+    const safe = p=>p.then(s=>s.docs.map(d=>({id:d.id,...d.data()}))).catch(()=>[]);
+    const [cases, appts] = await Promise.all([
+      safe(db.collection('guidanceCases').where('schoolId','==',sid).get()),
+      safe(db.collection('guidanceAppointments').where('byUserId','==',me.id).get())
+    ]);
+    const C = cases.filter(c=>c.period===period);
+    const open = C.filter(c=>c.status==='open'), watch = C.filter(c=>c.status==='watch'), closed = C.filter(c=>c.status==='closed');
+    const live = C.filter(c=>c.status!=='closed');
+    const due = live.filter(c=>c.nextFollowUp && c.nextFollowUp<=today).sort((a,b)=>String(a.nextFollowUp).localeCompare(String(b.nextFollowUp)));
+    const week = new Date(); week.setDate(week.getDate()+7); const wk = dk(week);
+    const soonF = live.filter(c=>c.nextFollowUp && c.nextFollowUp>today && c.nextFollowUp<=wk).sort((a,b)=>String(a.nextFollowUp).localeCompare(String(b.nextFollowUp)));
+    const stale = live.filter(c=>!c.nextFollowUp && (c.lastSessionAt||c.openedAt||0) < Date.now()-14*864e5);
+    const myAppts = appts.filter(a=>a.period===period && a.status==='scheduled' && a.date>=today).sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+    const apptsToday = myAppts.filter(a=>a.date===today).length;
+    const caseRow = c=>'<div class="dh-item"><span><b>'+esc(c.name)+'</b> <span class="m">'+esc(c.className||'')+' · '+esc(c.type||'')+'</span></span><span>'
+      + (c.nextFollowUp?'<span class="dh-chip'+(c.nextFollowUp<=today?' bad':'')+'">'+esc(c.nextFollowUp<=today?'متابعة مستحقة':dayLabel(c.nextFollowUp))+'</span> ':'')
+      + '<span class="dh-chip">'+arN(c.sessionsCount||0)+' جلسة</span></span></div>';
+    env.main.innerHTML =
+      '<div class="dh-stats">'
+      + stat('حالات مفتوحة', arN(open.length), 'index.html?tab=guidance', '')
+      + stat('تحت المتابعة', arN(watch.length), 'index.html?tab=guidance', '')
+      + stat('متابعات مستحقة', arN(due.length), 'index.html?tab=guidance', due.length?'bad':'')
+      + stat('مواعيد اليوم', arN(apptsToday), 'index.html?tab=guidance', apptsToday?'warn':'')
+      + stat('حالات مغلقة', arN(closed.length), 'index.html?tab=guidance', '')
+      + '</div>'
+      + '<div class="dh-grid">'
+      + '<section class="dh-card"><h3>متابعات مستحقة</h3>'
+        + (due.length?'<div class="dh-list">'+due.slice(0,10).map(caseRow).join('')+'</div>':'<div class="dh-empty">لا توجد متابعة مستحقة الآن.</div>')
+        + '<div class="dh-links" style="margin-top:10px">'+link('index.html?tab=guidance','🤝 الإرشاد الطلابي')+'</div></section>'
+      + '<section class="dh-card"><h3>المواعيد القادمة</h3>'
+        + (myAppts.length?'<div class="dh-list">'+myAppts.slice(0,8).map(a=>'<div class="dh-item"><span><b>'+esc(a.name)+'</b> <span class="m">'+esc(a.reason||'')+'</span></span><span class="dh-chip'+(a.date===today?' warn':'')+'">'+esc(a.date===today?'اليوم':dayLabel(a.date))+(a.time?' · '+esc(a.time):'')+'</span></div>').join('')+'</div>':'<div class="dh-empty">لا توجد مواعيد قادمة.</div>')
+        + '</section>'
+      + '</div>'
+      + '<div class="dh-grid">'
+      + '<section class="dh-card"><h3>متابعات هذا الأسبوع</h3>'+(soonF.length?'<div class="dh-list">'+soonF.slice(0,8).map(caseRow).join('')+'</div>':'<div class="dh-empty">لا توجد متابعات مجدولة خلال سبعة أيام.</div>')+'</section>'
+      + '<section class="dh-card"><h3>حالات بلا متابعة محددة</h3><div class="dh-sub" style="margin-bottom:6px">حالات مفتوحة ليس لها موعد متابعة وآخر نشاط فيها قبل أكثر من ١٤ يومًا.</div>'
+        + (stale.length?'<div class="dh-list">'+stale.slice(0,8).map(caseRow).join('')+'</div>':'<div class="dh-empty">لا توجد حالات منسيّة.</div>')+'</section>'
+      + '</div>'
+      + '<section class="dh-card"><h3>روابط سريعة</h3><div class="dh-links">'
+        + link('index.html?tab=guidance','🤝 الإرشاد الطلابي')+link('index.html?tab=received','📥 التحويلات الواردة')+link('index.html?tab=studentStatus','🧾 حالات الطلاب')
+        + link('circulars.html','✍️ التعاميم')
+      + '</div></section>';
+  }
+});
+</script>
 </body>
 </html>

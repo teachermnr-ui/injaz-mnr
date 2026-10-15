@@ -4357,7 +4357,7 @@ function biCounts(extra){
 function biExtract(b){
   const out=[];
   (b.exercises||[]).forEach((ex,ei)=>{
-    (ex.items||[]).forEach((it,ii)=>{
+    ((ex.data&&ex.data.items)||ex.items||[]).forEach((it,ii)=>{
       const id=b.id+'|'+ei+'|'+ii;
       if(ex.type==='mcq'){
         const text=String(it.prompt||'').trim();
@@ -4384,7 +4384,7 @@ async function openBankImport(){
   document.getElementById('biBody').innerHTML='<div class="empty">جارٍ تحميل بنك الأسئلة...</div>';
   BI.sel=[]; BI.open={};
   try{
-    const snap = await db.collection('questionBank').where('createdBy','==',firebase.auth().currentUser.uid).get();
+    const snap = await db.collection('questionBank').where('createdBy','==',CLS_SESSION.userId).get();
     BI.items = snap.docs.map(d=>{ const o=Object.assign({id:d.id},d.data()); o.qs=biExtract(o); return o; }).filter(o=>o.qs.length);
   }catch(e){
     document.getElementById('biBody').innerHTML='<div class="empty">تعذّر تحميل البنك: '+escapeHtml(e.message||'')+'</div>'; return;

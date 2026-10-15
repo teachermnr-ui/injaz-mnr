@@ -23,7 +23,7 @@
 <script src="form-header.js?v=2026-10-15.3"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-16.2"></script>
+<script src="activity-core.js?v=2026-10-16.3"></script>
 <script>
 (function(){
 const { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS } = ACT;
@@ -67,19 +67,28 @@ function tabsDef(){
   const badge = S.isSA ? pendingAssigns().length : (S.canEdit ? pendingDocs().length : 0);
   return [['summary','الملخص'],['council','مجلس النشاط'],['clubs','الأندية'],['plan','الخطة العامة'],['general','المسار العام'],['assign','التكليف والتوثيق',badge],['broadcast','الإذاعة'],['reports','التقارير']];
 }
+function barHtml(){
+  return tabsDef().map(x=>'<button class="ac-tab'+(S.tab===x[0]?' on':'')+'" data-a="tab" data-v="'+x[0]+'">'+x[1]+(x[2]?'<span class="n">'+N(x[2])+'</span>':'')+'</button>').join('');
+}
 function shell(){
-  const t = tabsDef();
-  return '<div class="ac-tabs">'+t.map(x=>'<button class="ac-tab'+(S.tab===x[0]?' on':'')+'" data-a="tab" data-v="'+x[0]+'">'+x[1]+(x[2]?'<span class="n">'+N(x[2])+'</span>':'')+'</button>').join('')+'</div>'
+  return '<div class="ac-tabs" id="acMainBar">'+barHtml()+'</div>'
     +(S.canEdit?'':'<div class="dh-card" style="background:#fff8e6;border-color:#f0d9a0">وضع الاطلاع: لديك صلاحية العرض فقط دون التعديل.</div>')
     +'<div id="acBody"></div>';
 }
+function saveUi(){ ACT.saveState(S.env,'main',{ tab:S.tab, clubId:S.clubId, clubTab:S.clubTab, asTab:S.asTab }); }
 function paint(){
-  S.env.main.innerHTML = shell();
+  /* شريط التبويبات الرئيسي يُرسم مرة واحدة ثم يُحدَّث موضعه فقط، فلا يرجع إلى بدايته */
+  let bar = document.getElementById('acMainBar');
+  if(!bar || !S.env.main.contains(bar)){ S.env.main.innerHTML = shell(); bar = document.getElementById('acMainBar'); S._ctab = null; }
+  else { const sl = bar.scrollLeft; bar.innerHTML = barHtml(); bar.scrollLeft = sl; }
+  if(S._ctab !== S.tab){ ACT.centerTab(bar, S._ctab !== null); S._ctab = S.tab; }
   const body = $('#acBody');
   if(!S.cfg || !S.cfg.active){ body.innerHTML = activationView(); return; }
   const fn = { summary:vSummary, council:vCouncil, clubs:vClubs, plan:vPlan, general:vGeneral, assign:vAssign, broadcast:vBroadcast, reports:vReports }[S.tab];
   body.innerHTML = fn();
+  $$('#acBody .ac-tabs').forEach(b=>ACT.centerTab(b,false));
   if(S.tab==='clubs' && S.clubId) afterClubPaint();
+  saveUi();
 }
 async function refresh(parts){ await load(parts); paint(); }
 
@@ -233,7 +242,7 @@ function vClubDetail(c){
   return '<div class="dh-card"><div class="ac-row sb"><div><button class="ac-btn sec sm" data-a="club-back">← رجوع</button> <b style="font-size:16px">'+esc(c.icon||'')+' '+esc(c.name)+'</b> '+(c.status==='inactive'?chip('موقوف','warn'):'')+'</div>'
     +E('<div class="ac-row"><button class="ac-btn sec sm" data-a="club-edit" data-id="'+c.id+'">✏ تعديل البيانات</button><button class="ac-btn bad sm" data-a="club-del" data-id="'+c.id+'">'+(clubUsed(c)?'⏸ إيقاف النادي':'🗑 حذف النادي')+'</button>'+(c.status==='inactive'?'<button class="ac-btn sm" data-a="club-react" data-id="'+c.id+'">▶ إعادة تفعيل</button>':'')+'</div>')+'</div>'
     +'<div class="dh-sub" style="margin-top:6px">المجال: '+esc(c.domain||'—')+' — المشرف: '+esc(c.headName||'—')+' — المناوبون: '+esc((c.supervisors||[]).map(x=>x.name).join('، ')||'—')+'</div></div>'
-    +'<div class="ac-tabs">'+CT.map(t=>'<button class="ac-tab'+(S.clubTab===t[0]?' on':'')+'" data-a="club-tab" data-v="'+t[0]+'">'+t[1]+'</button>').join('')+'</div>'
+    +'<div class="ac-tabs sub">'+CT.map(t=>'<button class="ac-tab'+(S.clubTab===t[0]?' on':'')+'" data-a="club-tab" data-v="'+t[0]+'">'+t[1]+'</button>').join('')+'</div>'
     +'<div id="clubBody">'+({members:cMembers,plan:cPlan,exec:cExec,att:cAtt}[S.clubTab])(c)+'</div>';
 }
 function afterClubPaint(){}
@@ -412,7 +421,7 @@ async function genExec(id){
 /* ====================== التكليف والتوثيق ====================== */
 function vAssign(){
   const subs = [['assign','التكليفات'],['open','الأنشطة المتاحة'],['docs','التوثيقات'+(pendingDocs().length&&S.canEdit?' ('+N(pendingDocs().length)+')':'')]];
-  return '<div class="ac-tabs">'+subs.map(t=>'<button class="ac-tab'+(S.asTab===t[0]?' on':'')+'" data-a="as-tab" data-v="'+t[0]+'">'+t[1]+'</button>').join('')+'</div>'
+  return '<div class="ac-tabs sub">'+subs.map(t=>'<button class="ac-tab'+(S.asTab===t[0]?' on':'')+'" data-a="as-tab" data-v="'+t[0]+'">'+t[1]+'</button>').join('')+'</div>'
     + ({assign:aAssign,open:aOpen,docs:aDocs}[S.asTab])();
 }
 const asStChip = a=>({pending:chip('بانتظار اعتماد قائد المدرسة','warn'),approved:chip('معتمد','ok'),cancelled:chip('ملغى','bad')})[a.status]||'';
@@ -510,15 +519,15 @@ async function bcEdit(wi, di){
 
 /* ====================== التقارير ====================== */
 function vReports(){
-  const copt = '<select class="ac-sel" id="rp_club" style="max-width:260px">'+activeClubs().map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('')+'</select>';
+  const copt = '<select class="ac-sel" id="rp_club">'+activeClubs().map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('')+'</select>';
   const teachers = {};
   S.assigns.filter(a=>a.status==='approved').forEach(a=>{ const t = teachers[a.teacherId]=teachers[a.teacherId]||{name:a.teacherName,asg:[],open:[]}; (a.programs||[]).forEach((p,i)=>t.asg.push({a,p,i,ev:progDone(a,i)})); });
   S.events.filter(x=>x.sourceType==='open' && x.approvalStatus!=='returned').forEach(x=>{ const t = teachers[x.documentedBy]=teachers[x.documentedBy]||{name:x.documentedByName,asg:[],open:[]}; t.open.push(x); });
   const tl = Object.keys(teachers).map(id=>Object.assign({id},teachers[id])).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
-  return '<div class="dh-card"><h3>القرارات</h3><div class="ac-row"><button class="ac-btn sec" data-a="print-council">🖨 قرار تشكيل مجلس النشاط</button><button class="ac-btn sec" data-a="print-clubsdec">🖨 قرار تشكيل الأندية وتعيين المشرفين</button></div></div>'
-    +'<div class="dh-card"><h3>الخطط والتقارير</h3><div class="ac-row" style="margin-bottom:8px"><button class="ac-btn sec" data-a="print-genplan">🖨 الخطة العامة للنشاط</button><button class="ac-btn sec" data-a="print-genreport">🖨 التقرير العام للنشاط</button></div>'
-    +'<div class="ac-row">اختيار النادي: '+copt+'<button class="ac-btn sec" data-a="rp-clubplan">🖨 خطة النادي</button><button class="ac-btn sec" data-a="rp-clubreport">🖨 تقرير النادي</button></div></div>'
-    +'<div class="dh-card"><h3>توثيقات المعلمين</h3>'+(tl.length?tl.map(t=>{
+  return '<div class="dh-card"><h3>📄 القرارات</h3><div class="ac-row ac-rep"><button class="ac-btn sec" data-a="print-council">🖨 قرار تشكيل مجلس النشاط</button><button class="ac-btn sec" data-a="print-clubsdec">🖨 قرار تشكيل الأندية وتعيين المشرفين</button></div></div>'
+    +'<div class="dh-card"><h3>📋 الخطط والتقارير</h3><div class="ac-row ac-rep" style="margin-bottom:8px"><button class="ac-btn sec" data-a="print-genplan">🖨 الخطة العامة للنشاط</button><button class="ac-btn sec" data-a="print-genreport">🖨 التقرير العام للنشاط</button></div>'
+    +'<div class="ac-row ac-rep"><label class="dh-sub" style="width:100%">اختيار النادي:</label>'+copt+'<button class="ac-btn sec" data-a="rp-clubplan">🖨 خطة النادي</button><button class="ac-btn sec" data-a="rp-clubreport">🖨 تقرير النادي</button></div></div>'
+    +'<div class="dh-card"><h3>📝 توثيقات المعلمين</h3>'+(tl.length?tl.map(t=>{
       const done = t.asg.filter(x=>x.ev).length + t.open.length, miss = t.asg.filter(x=>!x.ev).length;
       return '<details class="ac-acc"><summary><span>'+esc(t.name)+'</span><span>'+chip('موثّق: '+N(done),'ok')+' '+chip('غير منفّذ: '+N(miss), miss?'bad':'')+'</span></summary><div class="in">'
         +'<b>أنشطة مكلّف بها</b>'+(t.asg.length?t.asg.map(x=>'<div class="dh-item" style="margin-top:4px"><span>'+(x.ev?'✅':'❌')+' '+esc(x.p.name)+'</span>'+(x.ev?'<button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.ev.id+'">👁 معاينة</button>':'<span class="dh-sub">غير موثّق</span>')+'</div>').join(''):'<div class="dh-empty">لا توجد تكليفات معتمدة.</div>')
@@ -646,6 +655,11 @@ Dash.boot({
     env.main.innerHTML = '<div class="dh-empty">جارٍ التحميل...</div>';
     await load();
     await ensurePeople().catch(()=>{});
+    const u = ACT.loadState(env,'main');
+    if(u.tab && tabsDef().some(t=>t[0]===u.tab)) S.tab = u.tab;
+    if(u.clubTab && CT.some(t=>t[0]===u.clubTab)) S.clubTab = u.clubTab;
+    if(['assign','open','docs'].includes(u.asTab)) S.asTab = u.asTab;
+    if(S.tab==='clubs' && u.clubId && S.clubs.some(c=>c.id===u.clubId)) S.clubId = u.clubId;
     bind(); paint();
     window.__ACT = S;
   }

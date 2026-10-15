@@ -23,7 +23,7 @@
 <script src="form-header.js?v=2026-10-15.3"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-16.2"></script>
+<script src="activity-core.js?v=2026-10-16.3"></script>
 <script>
 (function(){
 const { esc, arN:N, $ } = ACT;
@@ -81,7 +81,13 @@ function vDone(){
 }
 function paint(){
   const tabs = [['mine','تكاليفي',S.assigns.reduce((n,a)=>n+(a.programs||[]).filter((p,i)=>!evOf(a,i)).length,0)],['open','أنشطة متاحة',S.opens.filter(o=>!S.mine.find(x=>x.openEventId===o.id)).length],['done','أنشطتي المنفذة',0]];
-  S.env.main.innerHTML = '<div class="ac-tabs">'+tabs.map(t=>'<button class="ac-tab'+(S.tab===t[0]?' on':'')+'" data-a="tab" data-v="'+t[0]+'">'+t[1]+(t[2]?'<span class="n">'+N(t[2])+'</span>':'')+'</button>').join('')+'</div>'+({mine:vMine,open:vOpen,done:vDone}[S.tab])();
+  const barH = tabs.map(t=>'<button class="ac-tab'+(S.tab===t[0]?' on':'')+'" data-a="tab" data-v="'+t[0]+'">'+t[1]+(t[2]?'<span class="n">'+N(t[2])+'</span>':'')+'</button>').join('');
+  let bar = document.getElementById('acMainBar');
+  if(!bar || !S.env.main.contains(bar)){ S.env.main.innerHTML = '<div class="ac-tabs" id="acMainBar">'+barH+'</div><div id="acBody"></div>'; bar = document.getElementById('acMainBar'); S._ctab = null; }
+  else { const sl = bar.scrollLeft; bar.innerHTML = barH; bar.scrollLeft = sl; }
+  if(S._ctab !== S.tab){ ACT.centerTab(bar, S._ctab !== null); S._ctab = S.tab; }
+  document.getElementById('acBody').innerHTML = ({mine:vMine,open:vOpen,done:vDone}[S.tab])();
+  ACT.saveState(S.env,'mine',{ tab:S.tab });
 }
 async function people(){ if(!S.staff) S.staff = await ACT.loadStaff(S.env); if(!S.roster) S.roster = await ACT.loadRoster(S.env); }
 async function openDoc(opts){ await people(); ACT.openDocForm(Object.assign({ env:S.env, staff:S.staff, roster:S.roster, onSaved: async ()=>{ await load(); paint(); } }, opts)); }
@@ -103,7 +109,9 @@ Dash.boot({
   render: async env=>{
     ACT.injectCss(); S.env = env;
     env.main.innerHTML = '<div class="dh-empty">جارٍ التحميل...</div>';
-    await load(); paint();
+    await load();
+    const u = ACT.loadState(env,'mine'); if(['mine','open','done'].includes(u.tab)) S.tab = u.tab;
+    paint();
     env.main.addEventListener('click', async e=>{
       const el = e.target.closest('[data-a]'); if(!el) return; const f = H[el.dataset.a]; if(!f) return;
       el.disabled = true; try{ await f(el); }catch(err){ console.error(err); ACT.toast(err&&err.message?err.message:'تعذّر تنفيذ العملية'); } el.disabled = false;

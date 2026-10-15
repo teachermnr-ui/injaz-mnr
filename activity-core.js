@@ -1,4 +1,4 @@
-// إصدار: 2026-10-16.2
+// إصدار: 2026-10-16.3
 /* نواة منصة النشاط المدرسي — مشتركة بين activity.html (الرائد والمدير) وmyactivities.html (المعلم).
    تحوي: الثوابت (الأندية الوزارية، قالب المسار العام)، التاريخ الهجري (أم القرى)، تحميل البيانات وحفظها،
    النوافذ والاختيار المتعدد، ضغط الصور ورفعها إلى Firebase Storage، ونموذج توثيق التنفيذ المطبوع (QR + شواهد). */
@@ -100,8 +100,103 @@ details.ac-acc .in{padding:4px 12px 12px}
 .ac-ph{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.ac-ph .p{position:relative;width:84px;height:84px;border-radius:9px;overflow:hidden;border:1px solid var(--line)}
 .ac-ph .p img{width:100%;height:100%;object-fit:cover}
 .ac-ph .p button{position:absolute;top:2px;left:2px;background:#b42318;color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;line-height:20px;padding:0}
+/* ===== مظهر منصة النشاط (مستوحى من تصميم النموذج المعتمد) — يخص صفحات النشاط وحدها ===== */
+body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;--surface:#fff;--surface-alt:#f0eee9;--ink:#1a1917;--muted:#6b6860;--line:#e2dfd8;--r:10px;--shadow:0 1px 3px rgba(26,25,23,.06);--shadow-md:0 4px 12px rgba(26,25,23,.08);
+  background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans Arabic',Tajawal,system-ui,sans-serif;line-height:1.7}
+.act-skin .dh-top{padding:16px 20px;border-radius:0 0 10px 10px;margin-bottom:6px}
+.act-skin .dh-top h1{font-family:Tajawal,sans-serif;font-size:1.2rem;font-weight:700}
+.act-skin .dh-badge{background:rgba(255,255,255,.2);padding:4px 14px;font-size:.82rem;font-weight:500}
+.act-skin .dh-btn{background:rgba(255,255,255,.2);border-radius:20px;font-weight:600}
+.act-skin .dh-main{padding:6px 16px 60px}
+/* التبويبات الرئيسية: حبوب مفرغة */
+.act-skin .ac-tabs{gap:4px;padding:8px 0 4px;margin-bottom:8px;border-bottom:0;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.act-skin .ac-tabs::-webkit-scrollbar{display:none}
+.act-skin .ac-tab{background:transparent;color:var(--muted);border:1.5px solid var(--line);padding:8px 16px;border-radius:20px;font:500 .85rem 'IBM Plex Sans Arabic',Tajawal,sans-serif;transition:all .2s}
+@media(hover:hover){.act-skin .ac-tab:hover{border-color:var(--brand);color:var(--brand)}.act-skin .ac-tab.on:hover{color:#fff}.act-skin .ac-btn:hover{background:var(--brand-2)}.act-skin .ac-btn.sec:hover{background:var(--brand-l)}.act-skin .ac-club:hover{border-color:var(--brand);box-shadow:var(--shadow-md);transform:translateY(-1px)}.act-skin .ac-club .ac-btn:hover{background:var(--brand);color:#fff}.act-skin .ac-rep .ac-btn:hover{border-color:var(--brand);background:var(--brand-l)}}
+.act-skin .ac-tab.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.act-skin .ac-tab .n{background:#c0392b}
+/* التبويبات الفرعية: شريط مجزَّأ */
+.act-skin .ac-tabs.sub{background:var(--surface-alt);border-radius:6px;padding:3px;gap:2px;margin:4px 0 14px}
+.act-skin .ac-tabs.sub .ac-tab{flex:1 0 auto;border:0;border-radius:4px;padding:8px 12px;font-size:.8rem;text-align:center;background:transparent;color:var(--muted)}
+.act-skin .ac-tabs.sub .ac-tab.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+/* البطاقات والأرقام */
+.act-skin .dh-card{padding:20px;border-radius:var(--r);margin-bottom:12px}
+.act-skin .dh-card h3{font-family:Tajawal,sans-serif;font-size:1rem;font-weight:700}
+.act-skin .dh-stats{grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:12px;margin-bottom:16px}
+.act-skin .dh-stat{padding:20px 16px;border-radius:var(--r)}
+.act-skin .dh-stat b{font-family:Tajawal,sans-serif;font-size:2rem;font-weight:800;line-height:1.2}
+.act-skin .dh-stat span{font-size:.82rem;font-weight:400;display:block;margin-top:4px}
+.act-skin .dh-chip{padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600}
+.act-skin .dh-chip.ok{background:#e8f8ef;color:#27ae60}.act-skin .dh-chip.warn{background:#fef3e0;color:#c4760e}.act-skin .dh-chip.bad{background:#fdecea;color:#c0392b}
+.act-skin .dh-item{border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 0}.act-skin .dh-item:last-child{border-bottom:0}
+.act-skin .dh-link{border-radius:6px;font-weight:600}
+/* الأندية */
+.act-skin .ac-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+.act-skin .ac-club{padding:20px 16px;border-radius:var(--r);transition:all .2s}
+.act-skin .ac-club .ic{font-size:1.8rem;margin-bottom:8px}.act-skin .ac-club h4{font-family:Tajawal,sans-serif;font-size:.95rem;font-weight:700;margin:0 0 6px}
+.act-skin .ac-club .ac-btn{display:block;width:100%;margin-top:4px;background:var(--brand-l);color:var(--brand);border-radius:6px;font-weight:600}
+/* الأزرار */
+.act-skin .ac-btn{border-radius:6px;font:600 .85rem 'IBM Plex Sans Arabic',Tajawal,sans-serif;padding:9px 18px;transition:all .15s}
+.act-skin .ac-btn.sec{background:transparent;color:var(--brand);border:1.5px solid var(--brand)}
+.act-skin .ac-btn.bad{background:#c0392b}.act-skin .ac-btn.sm{padding:6px 14px;font-size:.8rem}
+/* الجداول */
+.act-skin .ac-tbl{font-size:.85rem}
+.act-skin .ac-tbl th{background:var(--surface-alt);color:var(--muted);font-size:.8rem;font-weight:600;border:0;border-bottom:2px solid var(--line);padding:10px 12px}
+.act-skin .ac-tbl td{border:0;border-bottom:1px solid var(--line);padding:10px 12px}
+.act-skin .ac-tbl tr:hover td{background:var(--surface-alt)}
+/* النماذج والنوافذ */
+.act-skin .ac-in,.act-skin .ac-sel,.act-skin .ac-ta{border:1.5px solid var(--line);border-radius:6px;background:var(--surface-alt);padding:10px 14px;font-size:.85rem}
+.act-skin .ac-in:focus,.act-skin .ac-sel:focus,.act-skin .ac-ta:focus{outline:0;border-color:var(--brand)}
+.act-skin .ac-f>label{font-weight:600;color:var(--muted)}
+.act-skin .ac-ov{background:rgba(0,0,0,.55);padding:24px 12px}
+.act-skin .ac-md{border-radius:var(--r);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.act-skin .ac-md>h3{background:var(--surface);color:var(--ink);font-family:Tajawal,sans-serif;font-size:1rem;font-weight:700;padding:16px 20px;border-bottom:1px solid var(--line)}
+.act-skin .ac-md .bd{padding:20px}.act-skin .ac-md .ft{background:var(--surface);padding:12px 20px}
+.act-skin .ac-bar{height:10px;border-radius:8px;background:var(--surface-alt)}.act-skin .ac-bar>i{border-radius:8px}
+.act-skin details.ac-acc{border-radius:var(--r);border-color:var(--line)}
+.act-skin .ac-steps b{background:var(--surface-alt)}
+/* أزرار التقارير: صفوف كاملة العرض كالنموذج */
+.act-skin .ac-rep{display:block}
+.act-skin .ac-rep .ac-btn{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px;margin-bottom:6px;background:var(--surface);color:var(--ink);border:1px solid var(--line);font-weight:500;text-align:right}
+.act-skin .ac-rep .ac-sel{display:block;width:100%;margin-bottom:10px}
+/* المعاينة فوق الصفحة (لا تخرجك من المنصة) */
+.ac-pv{position:fixed;inset:0;z-index:1000;background:#fff;display:flex;flex-direction:column}
+.ac-pvbar{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e2dfd8;background:#f8f7f4;font-family:Tajawal,system-ui,sans-serif}
+.ac-pvbar b{font-size:.95rem;flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ac-pvf{flex:1;width:100%;border:0;background:#fff}
 `;
-  function injectCss(){ if(document.getElementById('acCss')) return; const s=document.createElement('style'); s.id='acCss'; s.textContent=CSS; document.head.appendChild(s); }
+  function injectCss(){ try{ document.body.classList.add('act-skin'); }catch(e){} if(!document.getElementById('acFont')){ const l=document.createElement('link'); l.id='acFont'; l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap'; document.head.appendChild(l); } if(document.getElementById('acCss')) return; const s=document.createElement('style'); s.id='acCss'; s.textContent=CSS; document.head.appendChild(s); }
+
+
+  /* ---------- معاينة داخل الصفحة (بدل نافذة جديدة تُخرج المستخدم من المنصة) ---------- */
+  function openPreview(title){
+    injectCss();
+    const ov = document.createElement('div'); ov.className='ac-pv';
+    ov.innerHTML = '<div class="ac-pvbar"><button class="ac-btn sec sm" data-x>← رجوع</button><b>'+esc(title||'معاينة')+'</b><button class="ac-btn sm" data-p>🖨️ طباعة</button></div><iframe class="ac-pvf" title="معاينة"></iframe>';
+    document.body.appendChild(ov);
+    const prevOv = document.body.style.overflow; document.body.style.overflow='hidden';
+    const fr = ov.querySelector('iframe'); let closed = false, pushed = false;
+    const cleanup = ()=>{ if(closed) return; closed = true; window.removeEventListener('popstate', onPop); ov.remove(); document.body.style.overflow = prevOv; };
+    const onPop = ()=>cleanup();
+    try{ history.pushState({ acPv:1 }, ''); pushed = true; }catch(e){}
+    if(pushed) window.addEventListener('popstate', onPop);
+    const close = ()=>{ if(closed) return; if(pushed && history.state && history.state.acPv) history.back(); else cleanup(); };
+    ov.querySelector('[data-x]').onclick = close;
+    ov.querySelector('[data-p]').onclick = ()=>{ try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ toast('تعذّرت الطباعة من هذه المعاينة'); } };
+    fr.srcdoc = '<!doctype html><meta charset="utf-8"><p style="font-family:Tahoma;padding:20px">جارٍ تجهيز النموذج...</p>';
+    return { setHtml:h=>{ if(!closed) fr.srcdoc = h; }, close, isClosed:()=>closed };
+  }
+  /* توسيط التبويب النشط في شريطه دون تحريك الصفحة */
+  function centerTab(bar, smooth){
+    const a = bar && bar.querySelector('.ac-tab.on'); if(!a) return;
+    const br = bar.getBoundingClientRect(), ar = a.getBoundingClientRect();
+    const d = (ar.left+ar.width/2) - (br.left+br.width/2); if(Math.abs(d) < 2) return;
+    try{ bar.scrollTo({ left:bar.scrollLeft+d, behavior:smooth?'smooth':'auto' }); }catch(e){ bar.scrollLeft += d; }
+  }
+  /* حفظ آخر موضع بالتبويبات (تفضيل عرض خاص بهذا المتصفح) */
+  const stKey = (env,page)=>'act.ui.'+env.sid+'.'+env.period+'.'+page;
+  function loadState(env,page){ try{ return JSON.parse(localStorage.getItem(stKey(env,page))||'null')||{}; }catch(e){ return {}; } }
+  function saveState(env,page,o){ try{ localStorage.setItem(stKey(env,page), JSON.stringify(o)); }catch(e){} }
 
   /* ---------- نافذة منبثقة ---------- */
   function modal(o){
@@ -370,26 +465,24 @@ ${ev.evidenceUrl?'<div class="dfq">'+(qr?'<img src="'+qr+'" alt="QR">':'')+'<div
 <div class="fh-sig" style="margin-top:28px"><span>رائد النشاط: ${esc(o.coordinator||'')}<br><br>التوقيع: ____________</span><span>قائد المدرسة: ${esc(o.principal||'')}<br><br>التوقيع: ____________</span></div>`;
   }
   async function printDoc(env, ev, o){
-    const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
-    w.document.write('<p style="font-family:Tahoma;padding:20px">جارٍ تجهيز النموذج...</p>');
+    const w = openPreview('نموذج توثيق تنفيذ برنامج / مبادرة');
     const ctx = await g.FormHdr.resolve({ db:env.db, session:env.session, period:env.period });
     const coord = ev.approvedByName || (o&&o.coordinator) || '';
     const html = g.FormHdr.doc({ title:'نموذج توثيق تنفيذ برنامج / مبادرة', formTitle:'نموذج توثيق تنفيذ برنامج / مبادرة', ctx, body:docFormBody(ev,{coordinator:coord, principal:ctx.principal}) });
-    w.document.open(); w.document.write(html); w.document.close();
+    w.setHtml(html);
   }
   /* طباعة جدول عام بترويسة النموذج الموحدة */
   async function printPage(env, formTitle, body, opts){
-    const w = window.open('','_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
-    w.document.write('<p style="font-family:Tahoma;padding:20px">جارٍ تجهيز النموذج...</p>');
+    const w = openPreview(formTitle);
     const ctx = await g.FormHdr.resolve({ db:env.db, session:env.session, period:env.period });
     const css = '.pt{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0}.pt th,.pt td{border:1.5px solid #17475e;padding:6px 9px;text-align:right}.pt th{background:#eaf2f4}.pp{font-size:15px;line-height:2;margin:8px 4px}';
     const html = g.FormHdr.doc(Object.assign({ title:formTitle, formTitle, ctx, body, extraCss:css }, opts||{}));
-    w.document.open(); w.document.write(html); w.document.close();
+    w.setHtml(html);
     return ctx;
   }
 
   g.ACT = { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS, ROLE_NAMES,
-    today, addDays, hijri, dayName, injectCss, modal, toast, confirmBox, pickHtml, pickInit, pickGet,
+    today, addDays, hijri, dayName, injectCss, openPreview, centerTab, loadState, saveState, modal, toast, confirmBox, pickHtml, pickInit, pickGet,
     keyOf, list, getDoc, create, patch, by, loadStaff, loadRoster, classLabel,
     compress, compressFit, uploadPhoto, openDocForm, docFormBody, printDoc, printPage, qrImg };
 })(window);

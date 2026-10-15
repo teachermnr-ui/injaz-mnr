@@ -1,4 +1,4 @@
-// إصدار: 2026-10-16.1
+// إصدار: 2026-10-16.2
 /* نواة منصة النشاط المدرسي — مشتركة بين activity.html (الرائد والمدير) وmyactivities.html (المعلم).
    تحوي: الثوابت (الأندية الوزارية، قالب المسار العام)، التاريخ الهجري (أم القرى)، تحميل البيانات وحفظها،
    النوافذ والاختيار المتعدد، ضغط الصور ورفعها إلى Firebase Storage، ونموذج توثيق التنفيذ المطبوع (QR + شواهد). */
@@ -166,8 +166,10 @@ details.ac-acc .in{padding:4px 12px 12px}
     return s.docs.map(d=>Object.assign({ id:d.id }, d.data()));
   }
   async function getDoc(env, col, id){
-    const s = await env.db.collection(col).doc(id).get();
-    return s.exists ? Object.assign({ id:s.id }, s.data()) : null;
+    /* استعلام بدل get مفرد: قراءة مستند غير موجود تُرفض بالقواعد (resource فارغ)، أما الاستعلام فيرجع فارغًا بسلام */
+    const s = await env.db.collection(col).where('schoolId','==',env.sid).where('period','==',env.period).get();
+    const d = s.docs.find(x=>x.id===id);
+    return d ? Object.assign({ id:d.id }, d.data()) : null;
   }
   /* إنشاء (id فارغ → معرّف تلقائي) */
   async function create(env, col, data, id){

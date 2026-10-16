@@ -1,4 +1,4 @@
-// إصدار: 2026-10-16.3
+// إصدار: 2026-10-16.8
 /* نواة منصة النشاط المدرسي — مشتركة بين activity.html (الرائد والمدير) وmyactivities.html (المعلم).
    تحوي: الثوابت (الأندية الوزارية، قالب المسار العام)، التاريخ الهجري (أم القرى)، تحميل البيانات وحفظها،
    النوافذ والاختيار المتعدد، ضغط الصور ورفعها إلى Firebase Storage، ونموذج توثيق التنفيذ المطبوع (QR + شواهد). */
@@ -354,7 +354,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
       <div class="ac-f"><label>اسم البرنامج / المبادرة *</label><input class="ac-in" id="d_title" value="${esc(pre.title)}"${LK}></div>
       <div class="ac-2c">
         <div class="ac-f"><label>المجال *</label><select class="ac-sel" id="d_domain"${opts.lockTitleDomain?' disabled':''}><option value="">— اختر —</option>${DOMAINS.map(d=>'<option'+(pre.domain===d?' selected':'')+'>'+d+'</option>').join('')}</select></div>
-        <div class="ac-f"><label>تاريخ التنفيذ *</label><input type="date" class="ac-in" id="d_date" value="${esc(pre.date)}"></div>
+        <div class="ac-f"><label>تاريخ التنفيذ *</label><input type="date" class="ac-in" id="d_date" value="${esc(pre.date)}"${opts.dateMin?' min="'+esc(opts.dateMin)+'"':''}${opts.dateMax?' max="'+esc(opts.dateMax)+'"':''}>${(opts.dateMin||opts.dateMax)?'<div class="dh-sub">يجب أن يقع التنفيذ بين يوم نشر النشاط وآخر موعد للتوثيق.</div>':''}</div>
         <div class="ac-f"><label>مكان التنفيذ *</label><input class="ac-in" id="d_loc" value="${esc(pre.location)}"></div>
         <div class="ac-f"><label>مدة التنفيذ *</label><input class="ac-in" id="d_dur" placeholder="مثال: يوم واحد" value="${esc(pre.duration)}"></div>
       </div>
@@ -383,6 +383,9 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
           const execIds = OPEN ? [env.me.id] : pickGet(api.el,'d_exec'); if(!execIds.length) miss.push('المنفِّذون');
           if(photos.length+newFiles.length<1) miss.push('صورة الشاهد الأول');
           if(miss.length){ toast('أكمل الحقول: '+miss.join('، ')); return false; }
+          { const dv = v('d_date');
+            if(opts.dateMin && dv < opts.dateMin){ toast('لا يمكن أن يسبق تاريخ التنفيذ يوم نشر النشاط ('+hijri(opts.dateMin)+').'); return false; }
+            if(opts.dateMax && dv > opts.dateMax){ toast('لا يمكن أن يتجاوز تاريخ التنفيذ آخر موعد للتوثيق ('+hijri(opts.dateMax)+').'); return false; } }
           const url = v('d_url'); if(url && !/^https?:\/\//i.test(url)){ toast('رابط الشواهد يجب أن يبدأ بـ http:// أو https://'); return false; }
           const nameOf = id=>id===env.me.id ? env.me.name : ((staff.find(s=>s.id===id)||{}).name||'');
           const stuName = seat=>(roster.students.find(s=>s.seat===seat)||{}).name||'';
@@ -454,6 +457,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     const parts = [stuN?('طلاب (عددهم '+arN(stuN)+')'):'', stfNames].filter(Boolean).join(' — ') || '—';
     const ph = (ev.photos||[]).slice(0,2);
     const qr = qrImg(ev.evidenceUrl);
+    const sg = o.sig || {};
     const row = (k,v)=>'<tr><th style="width:30%">'+esc(k)+'</th><td>'+esc(v||'—')+'</td></tr>';
     return `<style>
 .df{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}.df th,.df td{border:1.5px solid #17475e;padding:7px 10px;text-align:right}.df th{background:#eaf2f4}
@@ -472,9 +476,10 @@ ${row('المستفيدون / عددهم', ((ev.beneficiaries||{}).type||'')+' �
 <tr><th colspan="2">خطوات التنفيذ / الوصف</th></tr><tr><td colspan="2" class="big">${esc(ev.executionSteps||ev.description)}</td></tr>
 <tr><th colspan="2">الشواهد</th></tr>
 <tr><td colspan="2"><div class="dfp">${[0,1].map(i=>'<div class="ph">'+(ph[i]?'<img src="'+esc(ph[i].url)+'">':(i===0?'صورة الشاهد الأول':'صورة الشاهد الثاني (اختياري)'))+'</div>').join('')}</div>
-${ev.evidenceUrl?'<div class="dfq">'+(qr?'<img src="'+qr+'" alt="QR">':'')+'<div>رابط الشواهد:<br>'+esc(ev.evidenceUrl)+'</div></div>':''}</td></tr>
+${(ev.evidenceUrl && qr)?'<div class="dfq"><img src="'+qr+'" alt="QR"><div>امسح الرمز للاطلاع على الشواهد</div></div>':''}</td></tr>
 </table>
-<div class="fh-sig" style="margin-top:28px"><span>رائد النشاط: ${esc(o.coordinator||'')}<br><br>التوقيع: ____________</span><span>قائد المدرسة: ${esc(o.principal||'')}<br><br>التوقيع: ____________</span></div>`;
+<div class="fh-sig" style="margin-top:28px"><span>رائد النشاط: ${esc(o.coordinator||'')}<br><br>التوقيع: ${sg.coord?'<img src="'+sg.coord+'" style="height:58px;vertical-align:middle">':'____________'}</span><span>قائد المدرسة: ${esc(o.principal||'')}<br><br>التوقيع: ${sg.principal?'<img src="'+sg.principal+'" style="height:58px;vertical-align:middle">':'____________'}</span></div>
+${sg.stamp?'<div style="text-align:center;margin-top:8px"><img src="'+sg.stamp+'" style="height:110px"></div>':''}`;
   }
   async function printDoc(env, ev, o){
     const w = openPreview('نموذج توثيق تنفيذ برنامج / مبادرة');
@@ -487,7 +492,8 @@ ${ev.evidenceUrl?'<div class="dfq">'+(qr?'<img src="'+qr+'" alt="QR">':'')+'<div
         conf = new Set(q.docs.map(d=>d.data()).filter(m=>m.openEventId===ev.openEventId && (m.role||'owner')==='participant' && m.confirm==='confirmed').map(m=>m.uid));
       }catch(e){ conf = null; }
     }
-    const html = g.FormHdr.doc({ title:'نموذج توثيق تنفيذ برنامج / مبادرة', formTitle:'نموذج توثيق تنفيذ برنامج / مبادرة', ctx, noPrintBtn:true, body:docFormBody(ev,{coordinator:coord, principal:ctx.principal, conf, viewerUid:(o&&o.viewerUid)||''}) });
+    const sig = ev.approvalStatus==='approved' ? await sigSnapshot(env, ev) : {};
+    const html = g.FormHdr.doc({ title:'نموذج توثيق تنفيذ برنامج / مبادرة', formTitle:'نموذج توثيق تنفيذ برنامج / مبادرة', ctx, noPrintBtn:true, body:docFormBody(ev,{coordinator:coord, principal:ev.principalName||ctx.principal, conf, sig, viewerUid:(o&&o.viewerUid)||''}) });
     w.setHtml(html);
   }
   /* طباعة جدول عام بترويسة النموذج الموحدة */
@@ -500,8 +506,98 @@ ${ev.evidenceUrl?'<div class="dfq">'+(qr?'<img src="'+qr+'" alt="QR">':'')+'<div
     return ctx;
   }
 
+
+  /* ---------- الختم والتوقيعان (صور محفوظة بنسخ ثابتة لا تتغير) ----------
+     activitySigns/{مؤشر}: الحالي لكل نوع (coord لكل فصل، principal و stamp للمدرسة).
+     activitySignVers/{نسخة}: نسخة ثابتة لا تُعدَّل؛ تُنسخ إشارتها داخل الفعالية لحظة الاعتماد فتبقى النماذج القديمة كما هي. */
+  const sigPtrId = (env,kind)=> kind==='coord' ? env.sid+'_'+env.period+'_coord' : env.sid+'_'+kind;
+  async function sigPointers(env){
+    const q = await env.db.collection('activitySigns').where('schoolId','==',env.sid).get();
+    const out = {}; q.docs.forEach(d=>{ const x=Object.assign({id:d.id},d.data()); if(x.kind==='coord'){ if(x.period===env.period) out.coord=x; } else out[x.kind]=x; });
+    return out;
+  }
+  async function sigSave(env, kind, mode, dataUrl){
+    const now = Date.now(), vid = env.sid+'_'+kind+'_'+now;
+    const base = { schoolId:env.sid, kind, uid:env.me.id, name:env.me.name||'', mode, createdAt:now };
+    if(kind==='coord') base.period = env.period;
+    await env.db.collection('activitySignVers').doc(vid).set(Object.assign({ data:dataUrl }, base));
+    await env.db.collection('activitySigns').doc(sigPtrId(env,kind)).set(Object.assign({ verId:vid, updatedAt:now }, base));
+    return vid;
+  }
+  async function sigClear(env, kind){ await env.db.collection('activitySigns').doc(sigPtrId(env,kind)).delete(); }
+  async function sigVerData(env, vid){
+    if(!vid) return '';
+    try{ const d = await env.db.collection('activitySignVers').doc(vid).get(); return d.exists ? (d.data().data||'') : ''; }catch(e){ return ''; }
+  }
+  async function sigSnapshot(env, ev){
+    const v = ev.sigVers || {}; if(!v.coord && !v.principal && !v.stamp) return {};
+    const [coord, principal, stamp] = await Promise.all([sigVerData(env,v.coord), sigVerData(env,v.principal), sigVerData(env,v.stamp)]);
+    return { coord, principal, stamp };
+  }
+  /* نسخة الاعتماد: لا يُنسخ إلا توقيع صاحبه الحالي — أمين السر الحالي، وقائد المدرسة المسجَّل رئيسًا للمجلس */
+  async function sigForApproval(env, council){
+    let p = {}; try{ p = await sigPointers(env); }catch(e){ return {}; }
+    const out = {};
+    if(p.coord && p.coord.uid===env.me.id && (!council || council.secretaryId===env.me.id)) out.coord = p.coord.verId;
+    if(p.principal && p.principal.verId && (!council || !council.chairId || p.principal.uid===council.chairId)) out.principal = p.principal.verId;
+    if(p.stamp && p.stamp.verId) out.stamp = p.stamp.verId;
+    return out;
+  }
+  function loadImg(file){
+    return new Promise((res,rej)=>{ const r=new FileReader(); r.onerror=rej; r.onload=()=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=r.result; }; r.readAsDataURL(file); });
+  }
+  /* صورة → PNG شفاف الخلفية بحجم محدود (تُزال الخلفية البيضاء/الفاتحة) */
+  async function sigFromFile(file, maxW, maxH, keepBg){
+    const im = await loadImg(file), k = Math.min(1, maxW/im.width, maxH/im.height);
+    const c = document.createElement('canvas'); c.width = Math.max(1,Math.round(im.width*k)); c.height = Math.max(1,Math.round(im.height*k));
+    const x = c.getContext('2d'); x.drawImage(im,0,0,c.width,c.height);
+    if(!keepBg){
+      const d = x.getImageData(0,0,c.width,c.height), a = d.data;
+      for(let i=0;i<a.length;i+=4){ const m = Math.min(a[i],a[i+1],a[i+2]); if(m>225) a[i+3]=0; else if(m>180) a[i+3]=Math.round(a[i+3]*(225-m)/45); }
+      x.putImageData(d,0,0);
+    }
+    return c.toDataURL('image/png');
+  }
+  const SIG_NAMES = { coord:'توقيع رائد النشاط', principal:'توقيع قائد المدرسة', stamp:'ختم المدرسة' };
+  /* نافذة رفع: صورة أو رسم باليد (واحد فقط)، والختم صورة فقط */
+  function sigDialog(env, kind, onDone){
+    const stamp = kind==='stamp';
+    const body = (stamp?'<div class="dh-sub">ارفع صورة واضحة للختم (يُفضَّل ختم على ورقة بيضاء). تُزال الخلفية تلقائيًا.</div>'
+      : '<div class="ac-row" style="margin-bottom:8px"><label><input type="radio" name="sg_m" value="image" checked> رفع صورة التوقيع</label><label style="margin-inline-start:14px"><input type="radio" name="sg_m" value="draw"> رسم باليد</label></div>')
+      +'<div id="sg_img"><input type="file" accept="image/*" id="sg_file" class="ac-in"></div>'
+      +(stamp?'':'<div id="sg_drw" style="display:none"><canvas id="sg_cv" width="360" height="160" style="width:100%;max-width:360px;height:auto;background:#fff;border:1.5px dashed #17475e;border-radius:8px;touch-action:none"></canvas><div class="ac-row" style="margin-top:6px"><button type="button" class="ac-btn sec sm" id="sg_clr">مسح</button></div></div>')
+      +'<div style="margin-top:10px"><div class="dh-sub">المعاينة:</div><div style="background:#fff;border:1px solid #cfd8dc;border-radius:8px;min-height:70px;display:flex;align-items:center;justify-content:center;padding:6px"><img id="sg_prev" alt="" style="max-height:110px;display:none"><span id="sg_none" class="dh-sub">لا شيء بعد</span></div></div>'
+      +'<div class="dh-sub" style="margin-top:6px">يُحفظ خيار واحد فقط، ويحلّ الجديد محل السابق.</div>';
+    let dataUrl = '', mode = 'image', drew = false;
+    const setPrev = (api,u)=>{ dataUrl=u; const im=api.q('#sg_prev'), no=api.q('#sg_none'); im.src=u||''; im.style.display=u?'':'none'; no.style.display=u?'none':''; };
+    modal({ title: SIG_NAMES[kind], body, noDismiss:true, onOpen: api=>{
+      const file = api.q('#sg_file');
+      file.addEventListener('change', async ()=>{ if(!file.files[0]) return; try{ setPrev(api, await sigFromFile(file.files[0], stamp?260:360, stamp?260:160, false)); }catch(e){ toast('تعذّر قراءة الصورة.'); } });
+      if(stamp) return;
+      const cv = api.q('#sg_cv'), cx = cv.getContext('2d'); cx.lineWidth=2.6; cx.lineCap='round'; cx.lineJoin='round'; cx.strokeStyle='#10243a';
+      let on=false, lx=0, ly=0;
+      const pt = e=>{ const r=cv.getBoundingClientRect(); return [ (e.clientX-r.left)*cv.width/r.width, (e.clientY-r.top)*cv.height/r.height ]; };
+      cv.addEventListener('pointerdown', e=>{ on=true; [lx,ly]=pt(e); cv.setPointerCapture&&cv.setPointerCapture(e.pointerId); e.preventDefault(); });
+      cv.addEventListener('pointermove', e=>{ if(!on) return; const [x,y]=pt(e); cx.beginPath(); cx.moveTo(lx,ly); cx.lineTo(x,y); cx.stroke(); lx=x; ly=y; drew=true; e.preventDefault(); });
+      const up = ()=>{ if(on){ on=false; if(mode==='draw' && drew) setPrev(api, cv.toDataURL('image/png')); } };
+      cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+      api.q('#sg_clr').addEventListener('click', ()=>{ cx.clearRect(0,0,cv.width,cv.height); drew=false; if(mode==='draw') setPrev(api,''); });
+      api.el.querySelectorAll('input[name="sg_m"]').forEach(r=>r.addEventListener('change', ()=>{
+        mode = r.value; if(!r.checked) return;
+        api.q('#sg_img').style.display = mode==='image'?'':'none'; api.q('#sg_drw').style.display = mode==='draw'?'':'none';
+        setPrev(api, mode==='draw' ? (drew?cv.toDataURL('image/png'):'') : '');
+        if(mode==='image') file.value='';
+      }));
+    }, buttons:[{ label:'حفظ', onClick: async api=>{
+      if(!dataUrl){ toast(mode==='draw'?'ارسم توقيعك أولًا.':'اختر صورة أولًا.'); return false; }
+      if(dataUrl.length>190000){ toast('الصورة كبيرة، جرّب صورة أصغر.'); return false; }
+      try{ await sigSave(env, kind, stamp?'image':mode, dataUrl); }catch(e){ console.warn('sigSave',e); toast('تعذّر الحفظ، تأكد من الصلاحية.'); return false; }
+      toast('تم حفظ '+SIG_NAMES[kind]); if(onDone) await onDone(); return true; } },{ label:'إلغاء', cls:'sec' }] });
+  }
+
   g.ACT = { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS, ROLE_NAMES,
     today, addDays, hijri, dayName, injectCss, openPreview, centerTab, loadState, saveState, modal, toast, confirmBox, pickHtml, pickInit, pickGet,
     keyOf, list, getDoc, create, patch, by, loadStaff, loadRoster, classLabel,
-    compress, compressFit, uploadPhoto, openDocForm, docFormBody, printDoc, printPage, qrImg, markDone, markPartPending };
+    compress, compressFit, uploadPhoto, openDocForm, docFormBody, printDoc, printPage, qrImg, markDone, markPartPending,
+    SIG_NAMES, sigPointers, sigSave, sigClear, sigVerData, sigSnapshot, sigForApproval, sigDialog };
 })(window);

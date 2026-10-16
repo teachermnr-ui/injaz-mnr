@@ -23,7 +23,7 @@
 <script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-16.5"></script>
+<script src="activity-core.js?v=2026-10-16.8"></script>
 <script>
 (function(){
 const { esc, arN:N, $ } = ACT;
@@ -142,6 +142,7 @@ const H = {
       execStatus:S.staff.filter(s=>s.id!==me.id).map(s=>({ name:s.name, on:done.has(s.id) })),
       infoHtml:'<b>بيانات النشاط من رائد النشاط (للاطلاع فقط):</b><br>'+esc(o.description||'')+'<br>آخر موعد للتوثيق: '+(o.deadline?ACT.hijri(o.deadline):'—'),
       prefill:{ title:o.title, domain:o.domain||'' }, source:{ type:'open', openEventId:o.id },
+      dateMin:(o.publishDate || (o.ts ? new Date(o.ts+3*3600000).toISOString().slice(0,10) : '')) || '', dateMax:o.deadline||'',
       afterSave: async (evId, data)=>{
         const db = S.env.db, now = Date.now(), col = db.collection('actOpenMarks'), nm = id=>((S.staff||[]).find(s=>s.id===id)||{}).name||'';
         await col.doc(o.id+'_'+me.id).set({ schoolId:S.env.sid, period:S.env.period, openEventId:o.id, uid:me.id, name:me.name, state:'pending', role:'owner', confirm:'none', evId, updatedAt:now },{ merge:true });

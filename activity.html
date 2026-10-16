@@ -24,13 +24,13 @@
 <script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-16.5"></script>
+<script src="activity-core.js?v=2026-10-16.8"></script>
 <script src="ai-fill.js?v=2026-10-16.7"></script>
 <script>
 (function(){
 const { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS } = ACT;
 const N = arN;
-const S = { env:null, canEdit:false, isSA:false, isCoord:false, tab:'summary', clubId:null, clubTab:'members', asTab:'assign', genTab:'events', marks:[],
+const S = { env:null, canEdit:false, isSA:false, isCoord:false, tab:'summary', clubId:null, clubTab:'members', asTab:'assign', genTab:'events', marks:[], signs:{}, sigImg:{},
   cfg:null, council:null, meetings:[], clubs:[], events:[], general:[], broadcast:null, assigns:[], opens:[], staff:null, roster:null };
 
 /* ====================== التحميل ====================== */
@@ -48,6 +48,7 @@ async function load(parts){
   if(has('assigns')) jobs.push(ACT.list(e,'actAssignments').then(v=>{ S.assigns=v; }));
   if(has('opens')) jobs.push(ACT.list(e,'actOpenEvents').then(v=>{ S.opens=v; }));
   if(has('marks')) jobs.push(ACT.list(e,'actOpenMarks').then(v=>{ S.marks=v; }));
+  if(has('signs')) jobs.push(ACT.sigPointers(e).then(async v=>{ S.signs=v; S.sigImg={}; for(const k of Object.keys(v)){ S.sigImg[k]=await ACT.sigVerData(e, v[k].verId); } }).catch(()=>{ S.signs={}; S.sigImg={}; }));
   await Promise.all(jobs);
 }
 async function ensurePeople(){
@@ -159,10 +160,33 @@ function vCouncil(){
     +'<div class="dh-item"><span>المقرر</span><b>'+esc(c.secretaryName||'—')+'</b>'+chip('رائد النشاط')+'</div>'
     +(c.members||[]).map(m=>'<div class="dh-item"><span>عضو</span><b>'+esc(m.name)+'</b>'+chip(m.role||'عضو')+'</div>').join('')+'</div></div>'
     +'<div class="dh-card"><div class="ac-row sb"><h3 style="margin:0">محاضر الاجتماعات</h3>'+E('<button class="ac-btn sm" data-a="meeting-add">+ إضافة اجتماع</button>')+'</div>'
-    +(S.meetings.length?S.meetings.map(m=>'<div class="dh-card" style="margin:8px 0 0"><div class="ac-row sb"><b>الاجتماع '+N(m.meetingNumber)+' — '+fmtD(m.date)+'</b><div class="ac-row"><button class="ac-btn sec sm" data-a="meeting-print" data-id="'+m.id+'">🖨 طباعة المحضر</button>'+E('<button class="ac-btn sec sm" data-a="meeting-edit" data-id="'+m.id+'">تعديل</button>')+'</div></div>'
+    +(S.meetings.length?meetingGroups().map(gr=>'<h4 style="margin:14px 0 2px;color:#17475e">'+esc(gr.title||'بدون عنوان')+' <span class="dh-sub">('+N(gr.list.length)+' اجتماع)</span></h4>'+gr.list.map(m=>'<div class="dh-card" style="margin:8px 0 0"><div class="ac-row sb"><b>الاجتماع '+N(m.meetingNumber)+' — '+fmtD(m.date)+'</b><div class="ac-row"><button class="ac-btn sec sm" data-a="meeting-print" data-id="'+m.id+'">🖨 طباعة المحضر</button>'+E('<button class="ac-btn sec sm" data-a="meeting-edit" data-id="'+m.id+'">تعديل</button>')+'</div></div>'
       +'<p style="margin:6px 0">'+esc(m.summary)+'</p>'
       +((m.decisions||[]).length?'<ol style="margin:0 18px">'+(m.decisions||[]).map(d=>'<li>'+esc(d)+'</li>').join('')+'</ol>':'')
-      +'<div class="dh-sub">الحضور: '+N((m.attendees||[]).length)+' من '+N((m.attendees||[]).length+(m.absentees||[]).length)+'</div></div>').join(''):'<div class="dh-empty">لا توجد محاضر بعد.</div>')+'</div>';
+      +'<div class="dh-sub">الحضور: '+N((m.attendees||[]).length)+' من '+N((m.attendees||[]).length+(m.absentees||[]).length)+'</div></div>').join('')).join(''):'<div class="dh-empty">لا توجد محاضر بعد.</div>')+'</div>'
+    +sigCard();
+}
+/* الاجتماعات مجمَّعة تحت عنوانها (العنوان الواحد يضم أكثر من اجتماع)، والترقيم متسلسل للمجلس */
+function meetingGroups(){
+  const map = new Map();
+  S.meetings.forEach(m=>{ const k=(m.title||'').trim(); if(!map.has(k)) map.set(k,[]); map.get(k).push(m); });
+  return Array.from(map, ([title,list])=>({ title, list:list.sort((a,b)=>(a.meetingNumber||0)-(b.meetingNumber||0)) }))
+    .sort((a,b)=>Math.max(...b.list.map(m=>m.meetingNumber||0))-Math.max(...a.list.map(m=>m.meetingNumber||0)));
+}
+/* الختم والتوقيعان: لكل مدرسة ثلاث خانات؛ تُنسخ لحظة الاعتماد فتبقى النماذج القديمة ثابتة */
+function sigCard(){
+  const p = S.signs||{}, img = S.sigImg||{}, c = S.council;
+  const isSecretary = !!(c && c.secretaryId===S.env.me.id);
+  const rows = [['coord',isSecretary,'يرفعه رائد النشاط من حسابه'],['principal',S.isSA,'يرفعه قائد المدرسة من حسابه'],['stamp',S.isSA,'يرفعه قائد المدرسة']].map(([k,can,hint])=>{
+    let x = p[k], stale = false;
+    if(k==='coord' && x && c && x.uid!==c.secretaryId){ stale = true; }
+    if(k==='principal' && x && c && c.chairId && x.uid!==c.chairId){ stale = true; }
+    const ok = x && !stale && img[k];
+    return '<div class="dh-item" style="align-items:center"><div style="flex:1"><b>'+esc(ACT.SIG_NAMES[k])+'</b><div class="dh-sub">'+(stale?(k==='coord'?'مرتبط برائد سابق ولن يُستعمل — يرفع الرائد الحالي توقيعه':'مرتبط بقائد سابق ولن يُستعمل — يرفع القائد الحالي توقيعه'):(ok?'مرفوع'+(x.name?' — '+esc(x.name):'')+' ('+(x.mode==='draw'?'رسم باليد':'صورة')+')':'غير مرفوع — '+hint))+'</div></div>'
+      +(ok?'<img src="'+img[k]+'" alt="" style="height:44px;background:#fff;border:1px solid #dde4e7;border-radius:6px;padding:2px;margin:0 8px">':'')
+      +(can?'<button class="ac-btn sec sm" data-a="sig-set" data-k="'+k+'">'+(ok?'استبدال':'رفع')+'</button>'+(ok?'<button class="ac-btn bad sm" data-a="sig-clear" data-k="'+k+'" style="margin-inline-start:6px">حذف</button>':''):'')+'</div>';
+  }).join('');
+  return '<div class="dh-card"><h3 style="margin:0 0 4px">الختم والتوقيعان</h3><div class="dh-sub" style="margin-bottom:6px">تُطبع تلقائيًا في نماذج التوثيق بعد اعتماد رائد النشاط. تبقى النماذج المعتمدة سابقًا بتواقيعها كما اعتُمدت ولو تغيّر الشخص.</div><div class="dh-list">'+rows+'</div></div>';
 }
 async function councilForm(){
   await ensurePeople();
@@ -194,19 +218,22 @@ async function meetingForm(id){
   const mem = S.council ? [{id:S.council.chairId,name:S.council.chairName},{id:S.council.secretaryId,name:S.council.secretaryName}].concat(S.council.members||[]) : [];
   const seen = new Set(); const people = mem.filter(m=>m.id && !seen.has(m.id) && seen.add(m.id));
   const att = new Set(ex?ex.attendees:people.map(p=>p.id));
-  const body = '<div class="ac-2c"><div class="ac-f"><label>رقم الاجتماع</label><input type="number" class="ac-in" id="mt_no" value="'+(ex?ex.meetingNumber:(S.meetings.length+1))+'"></div><div class="ac-f"><label>التاريخ *</label><input type="date" class="ac-in" id="mt_date" value="'+esc(ex?ex.date:ACT.today())+'"></div></div>'
+  const titles = Array.from(new Set(S.meetings.map(m=>(m.title||'').trim()).filter(Boolean)));
+  const body = '<div class="ac-f"><label>عنوان الاجتماع *</label><input class="ac-in" id="mt_title" list="mt_titles" maxlength="80" placeholder="اكتب عنوانًا جديدًا أو اختر عنوانًا سابقًا" value="'+esc(ex?(ex.title||''):'')+'"><datalist id="mt_titles">'+titles.map(x=>'<option value="'+esc(x)+'"></option>').join('')+'</datalist></div>'
+    +'<div class="ac-2c"><div class="ac-f"><label>رقم الاجتماع</label><input type="number" class="ac-in" id="mt_no" value="'+(ex?ex.meetingNumber:(S.meetings.length+1))+'"></div><div class="ac-f"><label>التاريخ *</label><input type="date" class="ac-in" id="mt_date" value="'+esc(ex?ex.date:ACT.today())+'"></div></div>'
     +'<div class="ac-f"><label>الملخص *</label><textarea class="ac-ta" id="mt_sum">'+esc(ex?ex.summary:'')+'</textarea></div>'
     +'<div class="ac-f"><label>القرارات (قرار في كل سطر)</label><textarea class="ac-ta" id="mt_dec">'+esc(ex?(ex.decisions||[]).join('\n'):'')+'</textarea></div>'
     +'<div class="ac-f"><label>الحضور</label>'+people.map(p=>'<label style="display:block"><input type="checkbox" data-att="'+esc(p.id)+'"'+(att.has(p.id)?' checked':'')+'> '+esc(p.name)+'</label>').join('')+'</div>';
   ACT.modal({ title: ex?'تعديل الاجتماع':'إضافة اجتماع', body, noDismiss:true, onOpen: api=>{
     if(!window.AIFill) return;
-    AIFill.attach({ field:api.q('#mt_sum'), kind:'meeting_summary', schoolId:S.env.sid, title:'اقترح ملخصًا بالذكاء الاصطناعي', getCtx:()=>({ number: (api.q('#mt_no')||{}).value||'' }) });
-    AIFill.attach({ field:api.q('#mt_dec'), kind:'meeting_decisions', schoolId:S.env.sid, title:'اقترح قرارات من الملخص بالذكاء الاصطناعي', getCtx:()=>({ summary: (api.q('#mt_sum')||{}).value||'' }),
+    AIFill.attach({ field:api.q('#mt_sum'), kind:'meeting_summary', schoolId:S.env.sid, title:'اقترح ملخصًا بالذكاء الاصطناعي', getCtx:()=>({ number: (api.q('#mt_no')||{}).value||'', title: (api.q('#mt_title')||{}).value||'' }),
+      need:c=>!!String(c.title).trim(), needMsg:'اكتب عنوان الاجتماع أولًا.' });
+    AIFill.attach({ field:api.q('#mt_dec'), kind:'meeting_decisions', schoolId:S.env.sid, title:'اقترح قرارات من الملخص بالذكاء الاصطناعي', getCtx:()=>({ summary: (api.q('#mt_sum')||{}).value||'', title: (api.q('#mt_title')||{}).value||'' }),
       need:c=>!!String(c.summary).trim(), needMsg:'اكتب ملخص الاجتماع أولًا ليُستخرج منه القرارات.' });
   }, buttons:[{ label:'حفظ', onClick: async api=>{
-    const date = api.q('#mt_date').value, sum = api.q('#mt_sum').value.trim(); if(!date||!sum){ ACT.toast('أكمل التاريخ والملخص'); return false; }
+    const mtitle = api.q('#mt_title').value.trim(), date = api.q('#mt_date').value, sum = api.q('#mt_sum').value.trim(); if(!mtitle||!date||!sum){ ACT.toast('أكمل العنوان والتاريخ والملخص'); return false; }
     const present = ACT.$$('[data-att]',api.el).filter(c=>c.checked).map(c=>c.dataset.att), absent = people.map(p=>p.id).filter(i=>!present.includes(i));
-    const data = { meetingNumber:Number(api.q('#mt_no').value)||1, date, summary:sum, decisions:api.q('#mt_dec').value.split('\n').map(s=>s.trim()).filter(Boolean), attendees:present, absentees:absent };
+    const data = { title:mtitle, meetingNumber:Number(api.q('#mt_no').value)||1, date, summary:sum, decisions:api.q('#mt_dec').value.split('\n').map(s=>s.trim()).filter(Boolean), attendees:present, absentees:absent };
     if(ex) await ACT.patch(S.env,'activityMeetings',ex.id,data); else await ACT.create(S.env,'activityMeetings',data);
     await refresh(['meetings']); return true; } },{ label:'إلغاء', cls:'sec' }] });
 }
@@ -436,7 +463,7 @@ async function genPublish(id){
     const dom = preDom || (api.q('#pb_m')||{}).value, desc = api.q('#pb_d').value.trim(), dl = api.q('#pb_dl').value;
     if(!dom || !desc || !dl){ ACT.toast('أكمل المجال والوصف وآخر موعد'); return false; }
     if(dl < ACT.today()){ ACT.toast('آخر موعد لا يمكن أن يكون في الماضي'); return false; }
-    const oid = await ACT.create(S.env,'actOpenEvents',{ title:g.title, description:desc, domain:dom, deadline:dl, deadlineMs:endOfDayMs(dl), status:'open', generalEventId:g.id, clubId:g.responsibleClubId||null, ts:Date.now(), createdByName:S.env.me.name });
+    const oid = await ACT.create(S.env,'actOpenEvents',{ title:g.title, description:desc, domain:dom, deadline:dl, deadlineMs:endOfDayMs(dl), status:'open', generalEventId:g.id, clubId:g.responsibleClubId||null, ts:Date.now(), publishDate:ACT.today(), createdByName:S.env.me.name });
     await ACT.patch(S.env,'activityGeneralEvents',g.id,{ openEventId:oid });
     S.genTab = 'open'; ACT.toast('نُشر النشاط وأصبح متاحًا للمعلمين');
     await refresh(['general','opens']); return true; } },{ label:'إلغاء', cls:'sec' }] });
@@ -512,12 +539,23 @@ function partLine(x){
   const byU = {}; ms.forEach(m=>{ byU[m.uid]=m; });
   return '<div class="dh-sub">المشاركون: '+(x.participants||[]).filter(p=>p.type==='staff').map(p=>{ const m = byU[p.uid]; const cf = m?m.confirm:''; return esc(p.name)+' '+chip(cf==='confirmed'?'أكّد':(cf==='invited'?'لم يؤكد':(cf==='declined'?'اعتذر':'—')), cf==='confirmed'?'ok':(cf==='invited'?'warn':'bad')); }).join(' ')+'</div>';
 }
+/* شروط اعتماد توثيق نشاط متاح فيه معلمون مشاركون: لا ينتظر أحد ردًّا، أو انتهى آخر موعد للتوثيق */
+function approveGate(x){
+  if(x.sourceType!=='open') return { ok:true };
+  const stf = (x.participants||[]).filter(p=>p.type==='staff');
+  if(!stf.length) return { ok:true };
+  const byU = {}; S.marks.filter(m=>m.openEventId===x.openEventId && (m.role||'owner')==='participant' && m.evId===x.id).forEach(m=>{ byU[m.uid]=m; });
+  const waiting = stf.filter(p=>{ const m = byU[p.uid]; return !m || m.confirm==='invited'; });
+  const o = S.opens.find(v=>v.id===x.openEventId), expired = !!(o && o.deadline && o.deadline < ACT.today());
+  return { ok: !waiting.length || expired, waiting, expired };
+}
 function aDocs(){
   const ev = S.events.filter(x=>x.sourceType==='assignment'||x.sourceType==='open').sort((a,b)=>(a.approvalStatus==='pending'?0:1)-(b.approvalStatus==='pending'?0:1)||(b.date||'').localeCompare(a.date||''));
   return '<h3 style="margin:0 0 8px">توثيقات المعلمين</h3>'+(ev.length?ev.map(x=>'<div class="dh-card" style="margin-bottom:8px"><div class="ac-row sb"><div><b>'+esc(x.title)+'</b><div class="dh-sub">'+esc(x.documentedByName||'')+' — '+fmtD(x.date)+' — '+(x.sourceType==='assignment'?'تكليف':'نشاط متاح')+'</div>'+partLine(x)+'</div>'
     +({pending:chip('بانتظار الاعتماد','warn'),approved:chip('معتمد','ok'),returned:chip('أُعيد للتعديل','bad')})[x.approvalStatus]+'</div>'
     +'<div class="ac-row" style="margin-top:6px"><button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.id+'">معاينة النموذج</button>'
-    +(S.canEdit && x.approvalStatus==='pending' ? '<button class="ac-btn sm" data-a="ev-approve" data-id="'+x.id+'">اعتماد</button><button class="ac-btn bad sm" data-a="ev-return" data-id="'+x.id+'">إعادة للتعديل</button>':'')+'</div></div>').join(''):'<div class="dh-empty">لم يوثّق أحد بعد.</div>');
+    +(S.canEdit && x.approvalStatus==='pending' ? (approveGate(x).ok ? '<button class="ac-btn sm" data-a="ev-approve" data-id="'+x.id+'">اعتماد</button>' : '<button class="ac-btn sm" disabled style="opacity:.45;cursor:not-allowed">اعتماد</button>')+'<button class="ac-btn bad sm" data-a="ev-return" data-id="'+x.id+'">إعادة للتعديل</button>':'')+'</div>'
+    +(S.canEdit && x.approvalStatus==='pending' && !approveGate(x).ok ? '<div class="dh-sub" style="color:#b45309;margin-top:4px">يتفعّل الاعتماد عند رد جميع المشاركين أو بعد آخر موعد للتوثيق. بانتظار: '+approveGate(x).waiting.map(p=>esc(p.name)).join('، ')+'</div>':'')+'</div>').join(''):'<div class="dh-empty">لم يوثّق أحد بعد.</div>');
 }
 
 /* ====================== الإذاعة ====================== */
@@ -589,7 +627,7 @@ async function printKind(kind, id, evId){
     const m = S.meetings.find(x=>x.id===id); if(!m) return;
     const c = S.council||{}, ppl = [{id:c.chairId,name:c.chairName,role:'رئيس المجلس'},{id:c.secretaryId,name:c.secretaryName,role:'المقرر (رائد النشاط)'}].concat((c.members||[]).map(x=>({id:x.id,name:x.name,role:x.role||'عضو'}))).filter(x=>x.id);
     const seen = new Set(), list = ppl.filter(x=>!seen.has(x.id)&&seen.add(x.id));
-    await pr('محضر اجتماع مجلس النشاط الطلابي','<p class="pp">الاجتماع رقم <b>'+N(m.meetingNumber)+'</b> — بتاريخ <b>'+ACT.hijri(m.date)+'</b> (الموافق '+N(m.date)+')</p>'
+    await pr('محضر اجتماع مجلس النشاط الطلابي',(m.title?'<p class="pp">العنوان: <b>'+esc(m.title)+'</b></p>':'')+'<p class="pp">الاجتماع رقم <b>'+N(m.meetingNumber)+'</b> — بتاريخ <b>'+ACT.hijri(m.date)+'</b> (الموافق '+N(m.date)+')</p>'
       +'<h3 style="margin:10px 0 2px">ملخص الاجتماع</h3><p class="pp">'+esc(m.summary).replace(/\n/g,'<br>')+'</p>'
       +((m.decisions||[]).length?'<h3 style="margin:10px 0 2px">القرارات والتوصيات</h3><ol class="pp">'+(m.decisions||[]).map(d=>'<li>'+esc(d)+'</li>').join('')+'</ol>':'')
       +'<h3 style="margin:10px 0 2px">الحضور</h3>'+tbl(['م','الاسم','الصفة','الحضور'],list.map((x,i)=>[N(i+1),x.name,x.role,(m.attendees||[]).includes(x.id)?'حاضر':'غائب']))
@@ -659,7 +697,22 @@ async function planWrite(keys, mode, note){
 async function reviewDoc(id, st, note){
   const x = S.events.find(v=>v.id===id); if(!x) return;
   const me = S.env.me;
-  if(st==='approved') await ACT.patch(S.env,'activityEvents',id,{ approvalStatus:'approved', approvedBy:me.id, approvedByName:me.name, approvedAt:Date.now(), returnNote:'' });
+  if(st==='approved'){
+    if(!approveGate(x).ok){ ACT.toast('لا يمكن الاعتماد قبل رد المشاركين أو انتهاء آخر موعد للتوثيق'); return; }
+    // المشاركون المعتمدون: المؤكِّدون فقط؛ يُحذف من اعتذر أو لم يؤكد من النموذج ويتحدّث عند الجميع دون إشعار
+    let extra = {};
+    if(x.sourceType==='open' && (x.partUids||[]).length){
+      const conf = new Set(S.marks.filter(m=>m.openEventId===x.openEventId && (m.role||'owner')==='participant' && m.evId===id && m.confirm==='confirmed').map(m=>m.uid));
+      const keep = (x.participants||[]).filter(p=>p.type!=='staff' || conf.has(p.uid));
+      extra = { participants:keep, partUids:keep.filter(p=>p.type==='staff').map(p=>p.uid) };
+      for(const m of S.marks.filter(m=>m.openEventId===x.openEventId && (m.role||'owner')==='participant' && m.evId===id && m.confirm==='invited')){
+        try{ await S.env.db.collection('actOpenMarks').doc(m.id).update({ confirm:'released', updatedAt:Date.now() }); }catch(err){ console.warn('release mark', err); }
+      }
+    }
+    let pn = ''; try{ const cx = await FormHdr.resolve({ db:S.env.db, session:S.env.session, period:S.env.period }); pn = cx.principal||''; }catch(e){}
+    const sv = await ACT.sigForApproval(S.env, S.council);
+    await ACT.patch(S.env,'activityEvents',id,Object.assign({ approvalStatus:'approved', approvedBy:me.id, approvedByName:me.name, approvedAt:Date.now(), returnNote:'', sigVers:sv, principalName:pn }, extra));
+  }
   else await ACT.patch(S.env,'activityEvents',id,{ approvalStatus:'returned', returnNote:note||'' });
   if(x.sourceType==='open' && x.openEventId){
     for(const m of S.marks.filter(m=>m.openEventId===x.openEventId && (m.role||'owner')==='participant' && m.evId===id && m.confirm==='confirmed')){
@@ -675,6 +728,8 @@ const H = {
   'tab': el=>{ S.tab=el.dataset.v; S.clubId = S.tab==='clubs'?S.clubId:null; paint(); },
   'activate': activate,
   'council-form': councilForm,
+  'sig-set': el=>ACT.sigDialog(S.env, el.dataset.k, ()=>refresh(['signs'])),
+  'sig-clear': async el=>{ if(!await ACT.confirmBox('حذف '+ACT.SIG_NAMES[el.dataset.k]+'؟ لا يؤثر على النماذج المعتمدة سابقًا.')) return; try{ await ACT.sigClear(S.env, el.dataset.k); }catch(e){ ACT.toast('تعذّر الحذف'); return; } await refresh(['signs']); },
   'meeting-add': ()=>meetingForm(null), 'meeting-edit': el=>meetingForm(el.dataset.id), 'meeting-print': el=>printKind('meeting',el.dataset.id),
   'print-council': ()=>printKind('council'), 'print-clubsdec': ()=>printKind('clubsdec'), 'print-genplan': ()=>printKind('genplan'), 'print-genreport': ()=>printKind('genreport'),
   'club-add': ()=>clubForm(null), 'club-edit': el=>clubForm(el.dataset.id), 'club-del': el=>clubDelete(el.dataset.id),

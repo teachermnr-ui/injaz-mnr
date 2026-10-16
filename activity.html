@@ -17,6 +17,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="mn-dialog.js?v=2026-10-06.1"></script>
 <script src="users-api.js"></script>
@@ -24,6 +25,7 @@
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
 <script src="activity-core.js?v=2026-10-16.5"></script>
+<script src="ai-fill.js?v=2026-10-16.5"></script>
 <script>
 (function(){
 const { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS } = ACT;
@@ -422,7 +424,10 @@ async function genPublish(id){
     +'<div class="ac-f"><label>المجال'+(preDom?'':' *')+'</label>'+(preDom?'<div class="ac-in" style="background:#f1f5f7">'+esc(preDom)+'</div>':'<select class="ac-sel" id="pb_m"><option value="">— اختر —</option>'+DOMAINS.map(d=>'<option>'+d+'</option>').join('')+'</select>')+'</div>'
     +'<div class="ac-f"><label>الوصف *</label><textarea class="ac-ta" id="pb_d" placeholder="ما المطلوب من المعلم تنفيذه وتوثيقه؟"></textarea></div>'
     +'<div class="ac-f"><label>آخر موعد للتوثيق *</label><input type="date" class="ac-in" id="pb_dl" min="'+ACT.today()+'"><div class="dh-sub">بعد هذا الموعد يُغلق التوثيق على المعلمين تلقائيًا.</div></div>';
-  ACT.modal({ title:'نشر نشاط متاح', body, noDismiss:true, buttons:[{ label:'نشر للمعلمين', onClick: async api=>{
+  const mAi = ACT.modal({ title:'نشر نشاط متاح', body, noDismiss:true, onOpen: api=>{
+    if(window.AIFill) AIFill.attach({ field:api.q('#pb_d'), kind:'open_activity_description', schoolId:S.env.sid, label:'✨ اقترح وصفًا',
+      getCtx:()=>({ title:g.title, domain: preDom || (api.q('#pb_m')||{}).value || '' }) });
+  }, buttons:[{ label:'نشر للمعلمين', onClick: async api=>{
     const dom = preDom || (api.q('#pb_m')||{}).value, desc = api.q('#pb_d').value.trim(), dl = api.q('#pb_dl').value;
     if(!dom || !desc || !dl){ ACT.toast('أكمل المجال والوصف وآخر موعد'); return false; }
     if(dl < ACT.today()){ ACT.toast('آخر موعد لا يمكن أن يكون في الماضي'); return false; }

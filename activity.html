@@ -25,7 +25,7 @@
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
 <script src="activity-core.js?v=2026-10-16.5"></script>
-<script src="ai-fill.js?v=2026-10-16.5"></script>
+<script src="ai-fill.js?v=2026-10-16.7"></script>
 <script>
 (function(){
 const { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS } = ACT;
@@ -198,7 +198,12 @@ async function meetingForm(id){
     +'<div class="ac-f"><label>الملخص *</label><textarea class="ac-ta" id="mt_sum">'+esc(ex?ex.summary:'')+'</textarea></div>'
     +'<div class="ac-f"><label>القرارات (قرار في كل سطر)</label><textarea class="ac-ta" id="mt_dec">'+esc(ex?(ex.decisions||[]).join('\n'):'')+'</textarea></div>'
     +'<div class="ac-f"><label>الحضور</label>'+people.map(p=>'<label style="display:block"><input type="checkbox" data-att="'+esc(p.id)+'"'+(att.has(p.id)?' checked':'')+'> '+esc(p.name)+'</label>').join('')+'</div>';
-  ACT.modal({ title: ex?'تعديل الاجتماع':'إضافة اجتماع', body, noDismiss:true, buttons:[{ label:'حفظ', onClick: async api=>{
+  ACT.modal({ title: ex?'تعديل الاجتماع':'إضافة اجتماع', body, noDismiss:true, onOpen: api=>{
+    if(!window.AIFill) return;
+    AIFill.attach({ field:api.q('#mt_sum'), kind:'meeting_summary', schoolId:S.env.sid, title:'اقترح ملخصًا بالذكاء الاصطناعي', getCtx:()=>({ number: (api.q('#mt_no')||{}).value||'' }) });
+    AIFill.attach({ field:api.q('#mt_dec'), kind:'meeting_decisions', schoolId:S.env.sid, title:'اقترح قرارات من الملخص بالذكاء الاصطناعي', getCtx:()=>({ summary: (api.q('#mt_sum')||{}).value||'' }),
+      need:c=>!!String(c.summary).trim(), needMsg:'اكتب ملخص الاجتماع أولًا ليُستخرج منه القرارات.' });
+  }, buttons:[{ label:'حفظ', onClick: async api=>{
     const date = api.q('#mt_date').value, sum = api.q('#mt_sum').value.trim(); if(!date||!sum){ ACT.toast('أكمل التاريخ والملخص'); return false; }
     const present = ACT.$$('[data-att]',api.el).filter(c=>c.checked).map(c=>c.dataset.att), absent = people.map(p=>p.id).filter(i=>!present.includes(i));
     const data = { meetingNumber:Number(api.q('#mt_no').value)||1, date, summary:sum, decisions:api.q('#mt_dec').value.split('\n').map(s=>s.trim()).filter(Boolean), attendees:present, absentees:absent };
@@ -425,7 +430,7 @@ async function genPublish(id){
     +'<div class="ac-f"><label>الوصف *</label><textarea class="ac-ta" id="pb_d" placeholder="ما المطلوب من المعلم تنفيذه وتوثيقه؟"></textarea></div>'
     +'<div class="ac-f"><label>آخر موعد للتوثيق *</label><input type="date" class="ac-in" id="pb_dl" min="'+ACT.today()+'"><div class="dh-sub">بعد هذا الموعد يُغلق التوثيق على المعلمين تلقائيًا.</div></div>';
   const mAi = ACT.modal({ title:'نشر نشاط متاح', body, noDismiss:true, onOpen: api=>{
-    if(window.AIFill) AIFill.attach({ field:api.q('#pb_d'), kind:'open_activity_description', schoolId:S.env.sid, label:'✨ اقترح وصفًا',
+    if(window.AIFill) AIFill.attach({ field:api.q('#pb_d'), kind:'open_activity_description', schoolId:S.env.sid, title:'اقترح وصفًا بالذكاء الاصطناعي',
       getCtx:()=>({ title:g.title, domain: preDom || (api.q('#pb_m')||{}).value || '' }) });
   }, buttons:[{ label:'نشر للمعلمين', onClick: async api=>{
     const dom = preDom || (api.q('#pb_m')||{}).value, desc = api.q('#pb_d').value.trim(), dl = api.q('#pb_dl').value;
@@ -494,7 +499,9 @@ async function openForm(id){
   const body = '<div class="ac-f"><label>اسم النشاط</label><div class="ac-in" style="background:#f1f5f7">'+esc(ex.title)+'</div></div><div class="ac-f"><label>المجال</label><div class="ac-in" style="background:#f1f5f7">'+esc(ex.domain||'—')+'</div></div>'
     +'<div class="ac-f"><label>الوصف *</label><textarea class="ac-ta" id="op_d">'+esc(ex.description||'')+'</textarea></div>'
     +'<div class="ac-f"><label>آخر موعد للتوثيق *</label><input type="date" class="ac-in" id="op_dl" value="'+esc(ex.deadline||'')+'"></div>';
-  ACT.modal({ title:'تعديل النشاط المتاح', body, noDismiss:true, buttons:[{ label:'حفظ', onClick: async api=>{
+  ACT.modal({ title:'تعديل النشاط المتاح', body, noDismiss:true, onOpen: api=>{
+    if(window.AIFill) AIFill.attach({ field:api.q('#op_d'), kind:'open_activity_description', schoolId:S.env.sid, title:'اقترح وصفًا بالذكاء الاصطناعي', getCtx:()=>({ title:ex.title, domain:ex.domain||'' }) });
+  }, buttons:[{ label:'حفظ', onClick: async api=>{
     const d = api.q('#op_d').value.trim(), dl = api.q('#op_dl').value; if(!d||!dl){ ACT.toast('أكمل الوصف وآخر موعد'); return false; }
     await ACT.patch(S.env,'actOpenEvents',ex.id,{ description:d, deadline:dl, deadlineMs:endOfDayMs(dl) });
     await refresh(['opens']); return true; } },{ label:'إلغاء', cls:'sec' }] });

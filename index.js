@@ -1,4 +1,4 @@
-// إصدار: 2026-10-16.5
+// إصدار: 2026-10-16.7
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -2536,7 +2536,30 @@ const AI_KINDS = {
     fields: ["title", "domain"],
     system: "أنت مساعد لرائد النشاط في مدرسة سعودية. تكتب بالعربية الفصحى فقط دون أي لهجة عامية ودون رموز تنسيق أو قوائم أو عناوين، وتلتزم بالإيجاز.",
     user: "اسم النشاط: {title}\nالمجال: {domain}\nاكتب وصفًا لهذا النشاط من جملتين إلى ثلاث جمل موجّهًا للمعلم، يبيّن المطلوب منه تنفيذه (فقرة أو مبادرة أو برنامج مناسب لطلاب المدرسة) وما يلزم توثيقه (صور الشواهد وعدد المستفيدين). لا تذكر أسماء أشخاص ولا تواريخ. أعد الوصف فقط.",
+    req: "title", reqMsg: "اكتب اسم النشاط أولًا.", lim: { title: 120 },
     maxTokens: 260, maxLen: 600
+  },
+  meeting_summary: {
+    perm: "activity",
+    fields: ["number"],
+    system: "أنت مساعد لأمين سر مجلس النشاط في مدرسة سعودية. تكتب بالعربية الفصحى فقط دون لهجة عامية ودون رموز تنسيق أو قوائم أو عناوين، وتلتزم بالإيجاز والدقة ولا تختلق أسماء أو أرقامًا أو تواريخ.",
+    user: "اكتب ملخصًا موجزًا من ثلاث إلى أربع جمل لاجتماع مجلس النشاط رقم {number}، يتناول المحاور المعتادة: متابعة تنفيذ خطة النشاط، واستعراض الفعاليات المنفذة والمتاحة، وتوثيق الشواهد، وما يلزم من تحسين. لا تذكر أسماء أشخاص ولا أرقامًا ولا تواريخ. أعد الملخص فقط.",
+    lim: { number: 6 }, maxTokens: 300, maxLen: 700
+  },
+  meeting_decisions: {
+    perm: "activity",
+    fields: ["summary"],
+    system: "أنت مساعد لأمين سر مجلس النشاط في مدرسة سعودية. تكتب بالعربية الفصحى فقط دون لهجة عامية ودون ترقيم أو رموز أو عناوين، وتلتزم بالإيجاز ولا تختلق أسماء أو أرقامًا أو تواريخ.",
+    user: "ملخص الاجتماع: {summary}\nاستخرج منه من ثلاثة إلى أربعة قرارات عملية قصيرة، قرارًا في كل سطر، وكل قرار جملة واحدة تبدأ بفعل. لا تضف ما لم يرد في الملخص. أعد القرارات فقط.",
+    req: "summary", reqMsg: "اكتب ملخص الاجتماع أولًا.", lim: { summary: 600 },
+    keepLines: true, maxTokens: 260, maxLen: 600
+  },
+  excellence_note: {
+    perm: "any",
+    fields: ["cat"],
+    system: "أنت مساعد في مدرسة سعودية يكتب عبارات تكريم قصيرة بالعربية الفصحى فقط دون لهجة عامية ودون رموز تنسيق أو علامات تنصيص، ولا يذكر أسماء.",
+    user: "فئة التكريم: {cat}\nاكتب عبارة واحدة قصيرة (لا تتجاوز عشر كلمات) تصلح سببًا للتكريم في لوحة العرض. لا تذكر أسماء ولا أرقامًا. أعد العبارة فقط.",
+    req: "cat", reqMsg: "اختر فئة التكريم أولًا.", lim: { cat: 60 }, maxTokens: 60, maxLen: 130
   }
 };
 let AI_CACHE = { at: 0, cfg: null, prompts: {} };
@@ -2555,8 +2578,14 @@ async function aiConfig(db, kind) {
 function aiClean(v, max) {
   return String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/[{}<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
-function aiTidy(text, maxLen) {
-  let t = String(text || "").replace(/[*_#`>~]+/g, "").replace(/^\s*["«“]+|["»”]+\s*$/g, "").replace(/\s+/g, " ").trim();
+function aiTidy(text, maxLen, keepLines) {
+  if (keepLines) {
+    const lines = String(text || "").split(/\r?\n/).map((l) => l.replace(/[*_#`>~]+/g, "").replace(/^\s*(?:[-•\u2022]|\d+[.)\-]|[٠-٩]+[.)\-])\s*/, "").replace(/\s+/g, " ").trim()).filter(Boolean);
+    let out = lines.join("\n");
+    if (out.length > maxLen) { const cut = out.slice(0, maxLen), i = cut.lastIndexOf("\n"); out = i > 20 ? cut.slice(0, i) : cut; }
+    return out;
+  }
+  let t = String(text || "").replace(/[*_#`>~]+/g, "").replace(/^\s*["«“]+|["»”]+[.\s]*$/g, "").replace(/\s+/g, " ").trim();
   if (t.length > maxLen) {
     const cut = t.slice(0, maxLen), i = Math.max(cut.lastIndexOf("."), cut.lastIndexOf("،"), cut.lastIndexOf("؛"));
     t = i > maxLen * 0.5 ? cut.slice(0, i + 1) : cut;
@@ -2634,8 +2663,8 @@ exports.aiSuggest = onCall({ secrets: [CF_ACCOUNT_ID, CF_API_TOKEN], timeoutSeco
   const { cfg, over } = await aiConfig(db, kind);
   if (cfg.enabled === false || (over && over.enabled === false)) throw secMsg("failed-precondition", "خدمة الاقتراح موقوفة حاليًا.");
   const ctx = {};
-  for (const f of def.fields) ctx[f] = aiClean(d[f], f === "title" ? 120 : 60);
-  if (!ctx.title) throw secMsg("invalid-argument", "اكتب اسم النشاط أولًا.");
+  for (const f of def.fields) ctx[f] = aiClean(d[f], (def.lim && def.lim[f]) || 60);
+  if (def.req && !ctx[def.req]) throw secMsg("invalid-argument", def.reqMsg || "أكمل البيانات المطلوبة أولًا.");
   const sys = (over && over.system) || def.system;
   let usr = (over && over.user) || def.user;
   def.fields.forEach((f) => { usr = usr.split("{" + f + "}").join(ctx[f] || "غير محدد"); });
@@ -2644,7 +2673,7 @@ exports.aiSuggest = onCall({ secrets: [CF_ACCOUNT_ID, CF_API_TOKEN], timeoutSeco
   const rs = await aiReserve(db, sid, day, cfg);
   try {
     const raw = await aiCallModel(cfg, sys, usr, maxTokens);
-    const text = aiTidy(raw, def.maxLen);
+    const text = aiTidy(raw, def.maxLen, def.keepLines);
     if (text.length < 10) throw secMsg("unavailable", "لم يُنتج النموذج اقتراحًا مناسبًا، أعد المحاولة.");
     return { text, remainingToday: rs.left };
   } catch (e) {

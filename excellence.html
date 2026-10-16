@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-15.1 -->
+<!-- إصدار: 2026-10-16.7 -->
 <!-- (2026-10-15.1) المحتوى التلقائي (شرائح المعلمين والإداريين + أرقام المكرَّمين من النظام للشهر الهجري الحالي) والدورة الهجرية والأرشيف وبطاقة المشاركة -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <!-- ص-٣٧: لوحة التعبئة (مسودة على Firestore: excellence/{sid})، الشاشات المرتبطة، معاينة ثم اعتماد ونشر (boards/{sid}_{channel}). وضع ?local=1 للتجربة بلا اتصال. -->
@@ -118,6 +118,7 @@ textarea{min-height:60px;resize:vertical}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
+<script src="ai-fill.js?v=2026-10-16.7"></script>
 <script src="users-api.js?v=2026-10-12.1"></script>
 <script src="ex-render.js?v=2026-10-11.1"></script>
 </head>
@@ -461,6 +462,8 @@ function bindForm(){
   $('#fFile').onchange=onPhoto;
   $('#fRm').onclick=()=>{ FORM.photo=''; $('#fAv').innerHTML=STAR; $('#fFile').value=''; };
   $('#fSave').onclick=saveForm;
+  if(!LOCAL && window.AIFill && $('#fNote')) AIFill.attach({ field:$('#fNote'), kind:'excellence_note', schoolId:SID, title:'اقترح عبارة تكريم بالذكاء الاصطناعي',
+    getCtx:()=>({ cat:($('#fCat')||{}).value||'' }) });
   $('#fCat').onchange=()=>{ collectForm(); renderPanel(); };
   document.querySelectorAll('#panel select[data-ic]').forEach(sel=>sel.onchange=()=>{ sel.parentNode.querySelector('svg').outerHTML=ico(sel.value); });
   const c=$('#fCancel'); if(c) c.onclick=()=>{ FORM=null; renderPanel(); };

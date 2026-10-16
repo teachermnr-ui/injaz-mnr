@@ -1,4 +1,4 @@
-// إصدار: 2026-10-16.9
+// إصدار: 2026-10-17.1
 /* نواة منصة النشاط المدرسي — مشتركة بين activity.html (الرائد والمدير) وmyactivities.html (المعلم).
    تحوي: الثوابت (الأندية الوزارية، قالب المسار العام)، التاريخ الهجري (أم القرى)، تحميل البيانات وحفظها،
    النوافذ والاختيار المتعدد، ضغط الصور ورفعها إلى Firebase Storage، ونموذج توثيق التنفيذ المطبوع (QR + شواهد). */
@@ -90,6 +90,7 @@
 .ac-pick label{display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:7px;font-size:13px}
 .ac-pick label:hover{background:#f1f6f5}
 .ac-pick .cnt{font-size:12px;color:var(--muted)}
+.ac-pick .gh{position:sticky;top:0;background:#e3eef0;color:#17475e;font:800 12.5px Tajawal,system-ui;padding:4px 8px;border-radius:7px;margin-top:4px}
 .ac-steps{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap;margin:6px 0}
 .ac-steps b{padding:2px 9px;border-radius:12px;background:#eef2f1}.ac-steps b.on{background:var(--brand-l);color:var(--brand-2)}
 .ac-ro .ac-edit{display:none !important}
@@ -244,7 +245,12 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     o = o||{}; const sel = new Set(selected||[]);
     return '<div class="ac-pick" id="'+pid+'" data-pick="1"><input class="ac-in" placeholder="'+esc(o.ph||'بحث بالاسم...')+'" data-pick-q>'
       +'<div class="cnt" data-pick-cnt></div><div class="list">'
-      + items.map(it=>'<label data-n="'+esc((it.name||'')+' '+(it.sub||''))+'"><input type="checkbox" value="'+esc(it.id)+'"'+(sel.has(it.id)?' checked':'')+(o.single?' data-single':'')+'><span>'+esc(it.name)+(it.sub?' <span class="cnt">'+esc(it.sub)+'</span>':'')+'</span></label>').join('')
+      + (function(){ let last = null, out = '';
+          items.forEach(it=>{
+            if(it.grp!=null && it.grp!==last){ last = it.grp; out += '<div class="gh" data-gh="'+esc(it.grp)+'">'+esc(it.grp)+'</div>'; }
+            out += '<label data-n="'+esc((it.name||'')+' '+(it.sub||''))+'"'+(it.grp!=null?' data-g="'+esc(it.grp)+'"':'')+'><input type="checkbox" value="'+esc(it.id)+'"'+(sel.has(it.id)?' checked':'')+(o.single?' data-single':'')+'><span>'+esc(it.name)+(it.sub?' <span class="cnt">'+esc(it.sub)+'</span>':'')+'</span></label>';
+          });
+          return out; })()
       + (items.length?'':'<div class="cnt">لا توجد خيارات.</div>')+'</div></div>';
   }
   function pickInit(root, pid){
@@ -253,6 +259,8 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     $('[data-pick-q]',box).addEventListener('input', e=>{
       const q = e.target.value.trim();
       $$('label',box).forEach(l=>{ l.style.display = (!q || l.dataset.n.includes(q)) ? '' : 'none'; });
+      /* عناوين الفصول: يبقى عنوان الفصل ظاهرًا ما دام فيه اسم مطابق، ويختفي إن لم يتبقَّ فيه أحد */
+      $$('.gh',box).forEach(h=>{ const gname = h.dataset.gh; h.style.display = $$('label',box).some(l=>l.dataset.g===gname && l.style.display!=='none') ? '' : 'none'; });
     });
     box.addEventListener('change', e=>{
       if(e.target.hasAttribute('data-single') && e.target.checked) $$('input[type=checkbox]',box).forEach(c=>{ if(c!==e.target) c.checked=false; });
@@ -315,6 +323,13 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     }catch(e){ return { classes:[], students:[] }; }
   }
   const classLabel = (roster,code)=>{ const c=roster.classes.find(x=>x.code===String(code)); return c ? (c.name||c.code) : String(code); };
+  /* طلاب المدرسة مرتَّبون بالفصول (بترتيب الفصول في السجل) ثم بالاسم، مع عنوان فصل لكل مجموعة */
+  function studentItems(roster, o){
+    o = o||{}; const skip = o.skip||null, tag = o.tag||{}, order = {}; roster.classes.forEach((c,i)=>{ order[c.code]=i; });
+    return roster.students.filter(s=>!(skip && skip.has(s.seat)))
+      .slice().sort((a,b)=>((order[a.classCode]==null?9999:order[a.classCode])-(order[b.classCode]==null?9999:order[b.classCode])) || (a.name||'').localeCompare(b.name||'','ar'))
+      .map(s=>({ id:s.seat, name:s.name, grp:classLabel(roster,s.classCode), sub:tag[s.seat]||'' }));
+  }
 
   /* ---------- الصور: ضغط في المتصفح ثم رفع ---------- */
   const MAX_BYTES = 900*1024;
@@ -357,25 +372,32 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     const pStu = (pre.participants||[]).filter(p=>p.type==='student').map(p=>p.uid);
     const pStf = (pre.participants||[]).filter(p=>p.type==='staff').map(p=>p.uid);
     const exSel = (pre.executors||[]).map(p=>p.uid);
-    const stuItems = roster.students.map(s=>({ id:s.seat, name:s.name, sub:classLabel(roster,s.classCode) }));
+    /* نادٍ: أعضاء النادي من الطلاب محدَّدون مسبقًا في أول توثيق، ويمكن إضافة طلاب آخرين من المدرسة */
+    const memSeats = new Set(opts.clubMemberSeats||[]);
+    const tagMap = {}; memSeats.forEach(s=>{ tagMap[s]='⭐ عضو'; });
+    const stuItems = studentItems(roster, { tag:tagMap });
+    const stuSel = ex ? pStu : Array.from(new Set(pStu.concat(Array.from(memSeats))));
     const stfItems = staff.map(s=>({ id:s.id, name:s.name, sub:ROLE_NAMES[s.role]||'' }));
-    const OPEN = !!opts.openMode;
-    const LK = opts.lockTitleDomain ? ' readonly style="background:#f1f5f7"' : '';
+    const OPEN = !!opts.openMode, CLUB = !!opts.clubMode;
+    const LKT = opts.lockTitleDomain || opts.lockTitle, LKD = opts.lockTitleDomain || opts.lockDomain;
+    const LK = LKT ? ' readonly style="background:#f1f5f7"' : '';
+    const extX = pre.extExecutor || {};
     const body = `${opts.infoHtml?'<div class="ac-f" style="background:#eef6f8;border:1px solid #cfe2e8;border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.8">'+opts.infoHtml+'</div>':''}
       <div class="ac-f"><label>اسم البرنامج / المبادرة *</label><input class="ac-in" id="d_title" value="${esc(pre.title)}"${LK}></div>
       <div class="ac-2c">
-        <div class="ac-f"><label>المجال *</label><select class="ac-sel" id="d_domain"${opts.lockTitleDomain?' disabled':''}><option value="">— اختر —</option>${DOMAINS.map(d=>'<option'+(pre.domain===d?' selected':'')+'>'+d+'</option>').join('')}</select></div>
+        <div class="ac-f"><label>المجال *</label><select class="ac-sel" id="d_domain"${LKD?' disabled':''}><option value="">— اختر —</option>${DOMAINS.map(d=>'<option'+(pre.domain===d?' selected':'')+'>'+d+'</option>').join('')}</select></div>
         <div class="ac-f"><label>تاريخ التنفيذ *</label><input type="date" class="ac-in" id="d_date" value="${esc(pre.date)}"${opts.dateMin?' min="'+esc(opts.dateMin)+'"':''}${opts.dateMax?' max="'+esc(opts.dateMax)+'"':''}>${(opts.dateMin||opts.dateMax)?'<div class="dh-sub">يجب أن يقع التنفيذ بين يوم نشر النشاط وآخر موعد للتوثيق.</div>':''}</div>
         <div class="ac-f"><label>مكان التنفيذ *</label><input class="ac-in" id="d_loc" value="${esc(pre.location)}"></div>
         <div class="ac-f"><label>مدة التنفيذ *</label><input class="ac-in" id="d_dur" placeholder="مثال: يوم واحد" value="${esc(pre.duration)}"></div>
       </div>
       ${OPEN?`<div class="ac-f"><label>المنفِّذون من موظفي المدرسة (للاطلاع فقط)</label><div class="ac-in" style="height:auto;max-height:190px;overflow:auto;background:#f6f8f9;padding:4px 10px">${(opts.execStatus||[]).length?(opts.execStatus||[]).map(x=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #e6ecee"><span>'+esc(x.name)+'</span><span style="font-weight:700;color:'+(x.on?'#0a7a3d':'#8a949a')+'">'+(x.on?'☑ مفعّل':'☐ لم يوثّق')+'</span></div>').join(''):'<div style="padding:8px;color:#777">لا يوجد موظفون آخرون.</div>'}</div></div>`
       :`<div class="ac-f"><label>المنفِّذون (من موظفي المدرسة) *</label>${pickHtml('d_exec', stfItems, exSel)}</div>`}
+      ${CLUB?`<div class="ac-f"><label>منفِّذ من خارج المدرسة (اختياري)</label><div class="ac-2c"><input class="ac-in" id="d_xn" placeholder="اسم المنفِّذ" value="${esc(extX.name||'')}"><input class="ac-in" id="d_xe" placeholder="الجهة" value="${esc(extX.entity||'')}"></div><div class="dh-sub">يُطبع بعد أسماء المنفِّذين.</div></div>`:''}
       <div class="ac-2c">
         <div class="ac-f"><label>نوع المستفيدين</label><select class="ac-sel" id="d_btype">${['طلاب','معلمون','أولياء أمور','مجتمع'].map(t=>'<option'+((pre.beneficiaries||{}).type===t?' selected':'')+'>'+t+'</option>').join('')}</select></div>
         <div class="ac-f"><label>عدد المستفيدين *</label><input type="number" min="0" class="ac-in" id="d_bcount" value="${esc((pre.beneficiaries||{}).count)}"></div>
       </div>
-      <div class="ac-f"><label>الطلاب المشاركون (اختياري)</label>${pickHtml('d_stu', stuItems, pStu)}</div>
+      <div class="ac-f"><label>${CLUB?'الطلاب المشاركون':'الطلاب المشاركون (اختياري)'}</label>${CLUB?'<div class="dh-sub" style="margin-bottom:4px">أعضاء النادي محدَّدون تلقائيًا (يمكنك إلغاء من لم يشارك)، ويمكنك إضافة طلاب آخرين من المدرسة. الطلاب مرتَّبون بالفصول ويمكن البحث بالاسم.</div>':''}${pickHtml('d_stu', stuItems, stuSel)}</div>
       <div class="ac-f"><label>المعلمون المشاركون (اختياري)</label>${OPEN?'<div class="dh-sub" style="margin-bottom:4px">يصل كل معلم تختاره إشعار داخل صفحته ليؤكد مشاركته، ولا يُحسب موثّقًا إلا بعد تأكيده.</div>':''}${pickHtml('d_stf', stfItems.filter(x=>!OPEN||x.id!==env.me.id), pStf)}</div>
       <div class="ac-f"><label>الأهداف *</label><textarea class="ac-ta" id="d_obj">${esc(pre.objectives)}</textarea></div>
       <div class="ac-f"><label>خطوات التنفيذ / الوصف *</label><textarea class="ac-ta" id="d_steps">${esc(pre.executionSteps)}</textarea></div>
@@ -385,7 +407,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
       <div class="ac-f"><label>رابط الشواهد (اختياري — يُولَّد منه رمز QR في النسخة المطبوعة)</label><input class="ac-in" id="d_url" placeholder="https://" value="${esc(pre.evidenceUrl)}"></div>`;
     const m = modal({ title: ex?'تعديل توثيق التنفيذ':'توثيق التنفيذ', body, wide:true, noDismiss:true,
       buttons:[
-        { label: ex?'حفظ التعديل':'إرسال التوثيق للاعتماد', onClick: async api=>{
+        { label: ex?'حفظ التعديل':(opts.autoApprove?'حفظ التوثيق':'إرسال التوثيق للاعتماد'), onClick: async api=>{
           const v = id=>api.q('#'+id).value.trim();
           const miss = [];
           if(!v('d_title')) miss.push('اسم البرنامج'); if(!v('d_domain')) miss.push('المجال'); if(!v('d_date')) miss.push('التاريخ');
@@ -403,7 +425,8 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
           const execs = execIds.map(id=>({ uid:id, name:nameOf(id), type:'staff' }));
           const parts = pickGet(api.el,'d_stu').map(s=>({ uid:s, name:stuName(s), type:'student' }))
             .concat(pickGet(api.el,'d_stf').map(s=>({ uid:s, name:nameOf(s), type:'staff' })));
-          const base = ex ? ex.id : env.db.collection('activityEvents').doc().id;
+          const base = ex ? ex.id : (opts.eventId || env.db.collection('activityEvents').doc().id);
+          if(opts.beforeSave){ const bad = await opts.beforeSave(); if(bad){ toast(bad); return false; } }
           const up = [];
           for(const f of newFiles){ up.push(await uploadPhoto(env, base, f)); }
           const data = {
@@ -414,6 +437,8 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
             executedBy:env.me.id, executedByName:env.me.name, description:v('d_steps')
           };
           if(OPEN) data.partUids = parts.filter(p=>p.type==='staff').map(p=>p.uid);
+          if(CLUB){ const xn = (api.q('#d_xn').value||'').trim(), xe = (api.q('#d_xe').value||'').trim(); data.extExecutor = xn ? { name:xn, entity:xe } : null; }
+          if(opts.autoApprove && !ex) Object.assign(data, await approvalStamp(env, opts.council));
           if(ex){ await patch(env,'activityEvents',ex.id, Object.assign(data,{ approvalStatus: (opts.autoApprove?ex.approvalStatus:'pending'), returnNote:'' })); }
           else {
             const s = opts.source||{};
@@ -421,7 +446,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
               clubId:s.clubId||null, planItemId:s.planItemId||null, track:s.track||'specialized', sourceType:s.type||'open',
               generalEventId:s.generalEventId||null,
               assignmentId:s.assignmentId||null, programIdx:(s.programIdx==null?null:s.programIdx), openEventId:s.openEventId||null,
-              documentedBy:env.me.id, documentedByName:env.me.name, status:'done',
+              documentedBy:env.me.id, documentedByName:env.me.name, status:'done', viaTeacher:!!s.viaTeacher,
               approvalStatus: opts.autoApprove?'approved':'pending',
               approvedBy: opts.autoApprove?env.me.id:null, approvedByName: opts.autoApprove?env.me.name:null, approvedAt: opts.autoApprove?Date.now():null
             }), base);
@@ -468,7 +493,9 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
   }
   function docFormBody(ev, o){
     o = o||{};
-    const names = a=>(a||[]).map(x=>ustaz(x.name)).filter(Boolean).join('، ');
+    const names0 = a=>(a||[]).map(x=>ustaz(x.name)).filter(Boolean);
+    const xe = ev.extExecutor && ev.extExecutor.name ? (ev.extExecutor.name+(ev.extExecutor.entity?' ('+ev.extExecutor.entity+')':'')) : '';
+    const names = a=>names0(a).concat(xe?[xe]:[]).join('، ');
     const stuN = (ev.participants||[]).filter(p=>p.type==='student').length;
     /* النموذج واحد عند كل من يفتحه: لا يتغير بحسب المشاهد. من اعتذر أو رُفعت مشاركته لا يظهر */
     const conf = o.conf || null, gone = o.gone || null;
@@ -565,6 +592,12 @@ ${sg.stamp?'<div style="text-align:center;margin-top:8px"><img src="'+sg.stamp+'
     if(p.stamp && p.stamp.verId) out.stamp = p.stamp.verId;
     return out;
   }
+  /* ختم الاعتماد للنموذج: نسخ التواقيع والختم الثابتة + اسم قائد المدرسة وقت الاعتماد */
+  async function approvalStamp(env, council){
+    let pn = ''; try{ const cx = await g.FormHdr.resolve({ db:env.db, session:env.session, period:env.period }); pn = cx.principal||''; }catch(e){}
+    let sv = {}; try{ sv = await sigForApproval(env, council); }catch(e){}
+    return { sigVers:sv, principalName:pn };
+  }
   function loadImg(file){
     return new Promise((res,rej)=>{ const r=new FileReader(); r.onerror=rej; r.onload=()=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=r.result; }; r.readAsDataURL(file); });
   }
@@ -621,5 +654,5 @@ ${sg.stamp?'<div style="text-align:center;margin-top:8px"><img src="'+sg.stamp+'
     today, addDays, hijri, dayName, injectCss, openPreview, centerTab, loadState, saveState, modal, toast, confirmBox, pickHtml, pickInit, pickGet,
     keyOf, list, getDoc, create, patch, by, loadStaff, loadRoster, classLabel,
     compress, compressFit, uploadPhoto, openDocForm, docFormBody, printDoc, ustaz, foldCard, printPage, qrImg, markDone, markPartPending,
-    SIG_NAMES, sigPointers, sigSave, sigClear, sigVerData, sigSnapshot, sigForApproval, sigDialog };
+    SIG_NAMES, sigPointers, sigSave, sigClear, sigVerData, sigSnapshot, sigForApproval, sigDialog, approvalStamp, studentItems };
 })(window);

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-16.10 -->
+<!-- إصدار: 2026-10-17.1 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة — «الأنشطة اللاصفية» للمعلم: تكاليفي، أنشطة متاحة، أنشطتي المنفذة -->
 <html lang="ar" dir="rtl">
 <head>
@@ -23,11 +23,11 @@
 <script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-16.9"></script>
+<script src="activity-core.js?v=2026-10-17.1"></script>
 <script>
 (function(){
 const { esc, arN:N, $ } = ACT;
-const S = { env:null, tab:'mine', assigns:[], opens:[], mine:[], marks:[], joined:[], staff:null, roster:null };
+const S = { env:null, tab:'mine', assigns:[], opens:[], mine:[], marks:[], joined:[], clubs:[], staff:null, roster:null };
 const isExpired = o=>o.deadlineMs ? o.deadlineMs < Date.now() : (o.deadline ? o.deadline < ACT.today() : false);
 const chip = (t,c)=>'<span class="dh-chip '+(c||'')+'">'+esc(t)+'</span>';
 
@@ -43,6 +43,9 @@ async function load(){
   S.assigns = a.docs.map(d=>Object.assign({id:d.id},d.data()));
   S.opens = o.docs.map(d=>Object.assign({id:d.id},d.data())).sort((x,y)=>(y.ts||0)-(x.ts||0));
   S.mine = m.docs.map(d=>Object.assign({id:d.id},d.data())).sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+  /* أندية فيها بنود أنا مسؤول عنها (تصلني مباشرة من رائد النشاط دون اعتماد قائد) */
+  S.clubs = [];
+  try{ const cs = await base('activityClubs').where('respUids','array-contains',uid).get(); S.clubs = cs.docs.map(d=>Object.assign({id:d.id},d.data())).filter(c=>c.status!=='inactive'); }catch(err){ console.warn('clubs', err); }
   // توثيقات اختارني فيها زملائي مشاركًا (مدعو أو مؤكِّد)
   const mp = S.marks.filter(x=>x.uid===uid && x.role==='participant' && (x.confirm==='invited'||x.confirm==='confirmed') && x.evId);
   S.joined = [];
@@ -61,9 +64,26 @@ function stateLine(ev){
   if(ev.approvalStatus==='returned') return '<div style="color:#b42318;font-weight:700">↩ أعاده رائد النشاط للتعديل'+(ev.returnNote?': '+esc(ev.returnNote):'')+'</div>';
   return '<div class="dh-sub">⏳ بانتظار اعتماد رائد النشاط</div>';
 }
+/* بنود خطط الأندية المسندة إليّ */
+const clubItems = ()=>{ const out = []; S.clubs.forEach(c=>(c.plan||[]).forEach(it=>{ if(it.responsibleId===S.env.me.id && it.status!=='cancelled') out.push({ c, it }); })); return out.sort((a,b)=>(a.it.expectedDate||'9').localeCompare(b.it.expectedDate||'9')); };
+const evOfClub = (c,it)=>S.mine.find(x=>x.sourceType==='club' && x.clubId===c.id && x.planItemId===it.id);
+const clubNeedsDoc = ({c,it})=>{ const ev = evOfClub(c,it); return it.status==='planned' && (!ev || ev.approvalStatus==='returned'); };
+function vClubItems(){
+  return clubItems().filter(({c,it})=>{ const ev = evOfClub(c,it); return !(ev && ev.approvalStatus==='approved'); }).map(({c,it})=>{
+    const ev = evOfClub(c,it), others = it.status==='executed' && !ev;
+    const steps = '<div class="ac-steps"><b class="on">● كلّفك رائد النشاط</b>—<b class="'+(ev?'on':'')+'">'+(ev?'●':'○')+' وثّقت</b>—<b class="">○ الرائد يعتمد</b></div>';
+    return '<div class="dh-card"><div class="ac-row sb"><b>'+esc(it.title)+'</b><span>'+chip('فعالية نادٍ')+' '+chip(c.name||'')+'</span></div>'
+      +'<div class="dh-sub">'+(it.expectedDate?'التاريخ المتوقع: '+ACT.hijri(it.expectedDate):'')+'</div>'
+      +(others ? '<div class="dh-sub" style="margin-top:6px">✔ نُفِّذ من رائد النشاط ولا يحتاج توثيقًا منك.</div>' : steps+stateLine(ev))
+      +'<div class="ac-row" style="margin-top:6px">'
+      +(clubNeedsDoc({c,it})?'<button class="ac-btn" data-a="doc-club" data-id="'+c.id+'" data-pid="'+it.id+'">📝 '+(ev?'تعديل التوثيق وإعادة الإرسال':'توثيق التنفيذ')+'</button>':'')
+      +(ev?'<button class="ac-btn sec" data-a="ev-print" data-id="'+ev.id+'">معاينة النموذج</button>':'')+'</div></div>';
+  }).join('');
+}
 function vMine(){
-  if(!S.assigns.length) return '<div class="dh-card dh-empty">لا توجد تكليفات معتمدة لك حاليًا.</div>';
-  return S.assigns.map(a=>(a.programs||[]).map((p,i)=>{
+  const cl = vClubItems();
+  if(!S.assigns.length) return cl || '<div class="dh-card dh-empty">لا توجد تكليفات معتمدة لك حاليًا.</div>';
+  return cl + S.assigns.map(a=>(a.programs||[]).map((p,i)=>{
     const ev = evOf(a,i), canDoc = !ev || ev.approvalStatus==='returned';
     return '<div class="dh-card"><div class="ac-row sb"><b>'+esc(p.name)+'</b>'+chip(a.clubName||'')+'</div>'
       +'<div class="dh-sub">'+(p.target?'الفئة: '+esc(p.target)+' — ':'')+(p.kpi?'الهدف: '+esc(p.kpi)+' — ':'')+(p.timeline?esc(p.timeline):'')+'</div>'
@@ -122,7 +142,7 @@ function vDone(){
     +rows.map((r,i)=>'<tr><td>'+N(i+1)+'</td><td>'+esc(r.t)+r.n+'</td><td>'+ACT.hijri(r.d)+'</td><td>'+r.st+'</td><td><button class="ac-btn sec sm" data-a="'+r.a+'" data-id="'+r.x.id+'">معاينة</button></td></tr>').join('')+'</table></div>';
 }
 function paint(){
-  const tabs = [['mine','تكاليفي',S.assigns.reduce((n,a)=>n+(a.programs||[]).filter((p,i)=>!evOf(a,i)).length,0)],['open','أنشطة متاحة',S.opens.filter(o=>{ const pm = partMark(o); return pm ? pm.confirm==='invited' : (o.status==='open' && !isExpired(o) && !S.mine.find(x=>x.openEventId===o.id)); }).length],['done','أنشطتي المنفذة',0]];
+  const tabs = [['mine','تكاليفي',S.assigns.reduce((n,a)=>n+(a.programs||[]).filter((p,i)=>!evOf(a,i)).length,0)+clubItems().filter(clubNeedsDoc).length],['open','أنشطة متاحة',S.opens.filter(o=>{ const pm = partMark(o); return pm ? pm.confirm==='invited' : (o.status==='open' && !isExpired(o) && !S.mine.find(x=>x.openEventId===o.id)); }).length],['done','أنشطتي المنفذة',0]];
   const barH = tabs.map(t=>'<button class="ac-tab'+(S.tab===t[0]?' on':'')+'" data-a="tab" data-v="'+t[0]+'">'+t[1]+(t[2]?'<span class="n">'+N(t[2])+'</span>':'')+'</button>').join('');
   let bar = document.getElementById('acMainBar');
   if(!bar || !S.env.main.contains(bar)){ S.env.main.innerHTML = '<div class="ac-tabs" id="acMainBar">'+barH+'</div><div id="acBody"></div>'; bar = document.getElementById('acMainBar'); S._ctab = null; }
@@ -167,6 +187,25 @@ const H = {
       },
       onSaved: async ()=>{ await load(); paint(); } });
   },
+  'doc-club': async el=>{
+    await load(); paint();                                   // قراءة حديثة: قد يكون الرائد غيّر البند أو نفّذه
+    const me = S.env.me, c = S.clubs.find(x=>x.id===el.dataset.id), it = c && (c.plan||[]).find(x=>x.id===el.dataset.pid);
+    if(!c || !it || it.responsibleId!==me.id || it.status==='cancelled'){ ACT.toast('تغيّر هذا البند أو لم تعد مسؤولًا عنه.'); return; }
+    if(it.status==='executed'){ ACT.toast('نُفِّذ هذا البند من رائد النشاط ولا يحتاج توثيقًا منك.'); return; }
+    const ex = evOfClub(c,it) || null; await people();
+    const domOk = ACT.DOMAINS.includes(c.dom);
+    await ACT.openDocForm({ env:S.env, staff:S.staff, roster:S.roster, existing:ex, clubMode:true, lockTitle:true, lockDomain:domOk,
+      clubMemberSeats:(c.members||[]).filter(m=>m.type!=='staff').map(m=>m.seat), eventId:'cl_'+c.id+'_'+it.id,
+      prefill:{ title:it.title, domain:domOk?c.dom:'', date:it.expectedDate||ACT.today() },
+      source:{ type:'club', clubId:c.id, planItemId:it.id, viaTeacher:true },
+      beforeSave: async ()=>{
+        const cs = await S.env.db.collection('activityClubs').where('schoolId','==',S.env.sid).where('period','==',S.env.period).where('respUids','array-contains',me.id).get();
+        const d = cs.docs.find(x=>x.id===c.id), cur = d && (d.data().plan||[]).find(x=>x.id===it.id);
+        if(!cur || cur.responsibleId!==me.id || cur.status==='cancelled') return 'تغيّر هذا البند أو أُلغي أو لم تعد مسؤولًا عنه — لم يُحفظ التوثيق.';
+        if(cur.status==='executed' && !ex) return 'نُفِّذ هذا البند من رائد النشاط قبل حفظك — لم يُحفظ توثيقك.';
+        return null; },
+      onSaved: async ()=>{ await load(); paint(); } });
+  },
   'part-view': async el=>{
     const ev = S.joined.find(x=>x.id===el.dataset.id); if(!ev){ ACT.toast('تعذّر فتح الملف'); return; }
     await ACT.printDoc(S.env, ev, {});
@@ -194,6 +233,10 @@ Dash.boot({
     people().then(()=>paint()).catch(()=>{});
     const u = ACT.loadState(env,'mine'); if(['mine','open','done'].includes(u.tab)) S.tab = u.tab;
     paint();
+    /* تحديث حي خفيف: عند عودة الصفحة للواجهة وكل دقيقة (دون مقاطعة نافذة مفتوحة) */
+    const live = async ()=>{ if(document.querySelector('.ac-ov')) return; try{ await load(); paint(); }catch(err){} };
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) live(); });
+    setInterval(live, 60000);
     env.main.addEventListener('click', async e=>{
       const el = e.target.closest('[data-a]'); if(!el) return; const f = H[el.dataset.a]; if(!f) return;
       el.disabled = true; try{ await f(el); }catch(err){ console.error(err); ACT.toast(err&&err.message?err.message:'تعذّر تنفيذ العملية'); } el.disabled = false;

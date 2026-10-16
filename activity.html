@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-16.1 -->
+<!-- إصدار: 2026-10-16.10 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -24,7 +24,7 @@
 <script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-16.8"></script>
+<script src="activity-core.js?v=2026-10-16.9"></script>
 <script src="ai-fill.js?v=2026-10-16.7"></script>
 <script>
 (function(){
@@ -124,14 +124,20 @@ const PS_NAME = {draft:'مسودة',submitted:'مُقدَّمة للاعتماد
 const PS_CLS = {draft:'',submitted:'warn',approved:'ok',returned:'bad'};
 const psChip = (st,ret)=>chip(PS_NAME[ret?'returned':st]||'مسودة', PS_CLS[ret?'returned':st]);
 
+/* معلمو التوثيق المعتمد: الموثِّق + المشاركون المعلمون (يبقى بعد الاعتماد المؤكِّدون فقط) — كلهم يُحسب لهم التوثيق بالصيغة نفسها */
+function evTeachers(x){
+  const out = [{ uid:x.documentedBy, name:x.documentedByName||'' }];
+  (x.participants||[]).filter(p=>p.type==='staff' && p.uid && p.uid!==x.documentedBy).forEach(p=>out.push({ uid:p.uid, name:p.name||'' }));
+  return out;
+}
 function vSummary(){
   const ac = activeClubs(), ps = planStats();
   const students = ac.reduce((n,c)=>n+(c.members||[]).length,0);
   const evs = approvedEvents().length;
   // ملخص الأنشطة الموثّقة: باسم النشاط وعدد المعلمين
   const grp = {};
-  S.events.filter(x=>(x.sourceType==='assignment'||x.sourceType==='open') && x.approvalStatus!=='returned').forEach(x=>{
-    const k = (x.title||'').trim(); (grp[k]=grp[k]||new Set()).add(x.documentedBy);
+  S.events.filter(x=>(x.sourceType==='assignment'||x.sourceType==='open') && x.approvalStatus==='approved').forEach(x=>{
+    const k = (x.title||'').trim(); evTeachers(x).forEach(u=>{ (grp[k]=grp[k]||new Set()).add(u.uid); });
   });
   const docs = Object.keys(grp).map(k=>[k,grp[k].size]).sort((a,b)=>b[1]-a[1]);
   const todayK = ACT.today(), in14 = ACT.addDays(todayK,14);
@@ -514,12 +520,15 @@ function aOpen(){
     +'<div class="dh-sub" style="margin-bottom:8px">تُنشر من «فعاليات المسار العام» بزر «نشر نشاط متاح»، وتظهر لجميع موظفي المدرسة ليوثّق كلٌّ منهم عن نفسه حتى آخر موعد.</div>'
     +(S.opens.length?S.opens.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).map(o=>{
       const allMk = S.marks.filter(m=>m.openEventId===o.id), mk = allMk.filter(ACT.markDone), inv = allMk.filter(ACT.markPartPending), exp = isExpired(o);
-      const st = o.status!=='open' ? chip('مغلق','bad') : exp ? chip('انتهى الموعد','bad') : chip('متاح','ok');
-      const names = mk.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','ar')).map(m=>'<div class="dh-item"><span>✅ '+esc(m.name||'')+((m.role||'owner')==='participant'?' <span class="dh-sub">(مشارك مع '+esc(m.ownerName||'')+')</span>':'')+'</span>'+chip(fmtMark[m.state]||'', m.state==='approved'?'ok':(m.state==='returned'?'bad':'warn'))+'</div>').join('')
-        +inv.map(m=>'<div class="dh-item"><span>○ '+esc(m.name||'')+' <span class="dh-sub">(مدعو مشاركًا مع '+esc(m.ownerName||'')+' — لم يؤكد)</span></span></div>').join('');
-      return '<div class="dh-card" style="margin-bottom:8px"><div class="ac-row sb"><b>'+esc(o.title)+'</b>'+st+'</div><div class="dh-sub">'+esc(o.description||'')+'</div><div class="dh-sub">المجال: '+esc(o.domain||'—')+' — آخر موعد: '+(o.deadline?ACT.hijri(o.deadline):'غير محدد')+' — وثّقه '+N(mk.length)+' من العاملين</div>'
-      +((mk.length||inv.length)?'<details class="ac-acc" style="margin-top:6px"><summary><span>من وثّق</span></summary><div class="in">'+names+'</div></details>':'')
-      +E('<div class="ac-row" style="margin-top:6px"><button class="ac-btn sec sm" data-a="open-edit" data-id="'+o.id+'">تعديل الوصف والموعد</button><button class="ac-btn sec sm" data-a="open-toggle" data-id="'+o.id+'">'+(o.status==='open'?'إغلاق':'إعادة فتح')+'</button></div>')+'</div>'; }).join(''):'<div class="dh-empty">لا توجد أنشطة متاحة. انشر فعالية من تبويب «فعاليات المسار العام».</div>');
+      const U = ACT.ustaz;
+      const names = mk.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','ar')).map(m=>'<div class="dh-item"><span>✅ '+esc(U(m.name||''))+((m.role||'owner')==='participant'?' <span class="dh-sub">(مشارك مع '+esc(U(m.ownerName||''))+')</span>':'')+'</span>'+chip(fmtMark[m.state]||'', m.state==='approved'?'ok':(m.state==='returned'?'bad':'warn'))+'</div>').join('')
+        +inv.map(m=>'<div class="dh-item"><span>○ '+esc(U(m.name||''))+' <span class="dh-sub">(مدعو مشاركًا مع '+esc(U(m.ownerName||''))+' — لم يؤكد)</span></span></div>').join('');
+      const tone = o.status!=='open' ? 'mute' : exp ? 'bad' : 'ok';
+      const status = (o.status!=='open' ? 'مغلق' : exp ? 'انتهى الموعد' : 'متاح')+' — وثّقه '+N(mk.length)+' من العاملين'+(inv.length?' ('+N(inv.length)+' بانتظار تأكيد المشاركة)':'');
+      const body = '<div>'+esc(o.description||'')+'</div><div class="dh-sub">المجال: '+esc(o.domain||'—')+' — آخر موعد: '+(o.deadline?ACT.hijri(o.deadline):'غير محدد')+'</div>'
+        +((mk.length||inv.length)?'<details class="ac-acc" style="margin-top:6px"><summary><span>من وثّق</span></summary><div class="in">'+names+'</div></details>':'');
+      const actions = E('<button class="ac-btn sec sm" data-a="open-edit" data-id="'+o.id+'">تعديل الوصف والموعد</button><button class="ac-btn sec sm" data-a="open-toggle" data-id="'+o.id+'">'+(o.status==='open'?'إغلاق':'إعادة فتح')+'</button>');
+      return ACT.foldCard({ title:o.title, tone, status, body, actions }); }).join(''):'<div class="dh-empty">لا توجد أنشطة متاحة. انشر فعالية من تبويب «فعاليات المسار العام».</div>');
 }
 async function openForm(id){
   const ex = S.opens.find(x=>x.id===id); if(!ex) return;
@@ -537,7 +546,7 @@ function partLine(x){
   if(x.sourceType!=='open' || !(x.partUids||[]).length) return '';
   const ms = S.marks.filter(m=>m.openEventId===x.openEventId && (m.role||'owner')==='participant' && m.evId===x.id);
   const byU = {}; ms.forEach(m=>{ byU[m.uid]=m; });
-  return '<div class="dh-sub">المشاركون: '+(x.participants||[]).filter(p=>p.type==='staff').map(p=>{ const m = byU[p.uid]; const cf = m?m.confirm:''; return esc(p.name)+' '+chip(cf==='confirmed'?'أكّد':(cf==='invited'?'لم يؤكد':(cf==='declined'?'اعتذر':'—')), cf==='confirmed'?'ok':(cf==='invited'?'warn':'bad')); }).join(' ')+'</div>';
+  return '<div class="dh-sub">المشاركون: '+(x.participants||[]).filter(p=>p.type==='staff').map(p=>{ const m = byU[p.uid]; const cf = m?m.confirm:''; return esc(ACT.ustaz(p.name))+' '+chip(cf==='confirmed'?'أكّد':(cf==='invited'?'لم يؤكد':(cf==='declined'?'اعتذر':'—')), cf==='confirmed'?'ok':(cf==='invited'?'warn':'bad')); }).join(' ')+'</div>';
 }
 /* شروط اعتماد توثيق نشاط متاح فيه معلمون مشاركون: لا ينتظر أحد ردًّا، أو انتهى آخر موعد للتوثيق */
 function approveGate(x){
@@ -551,7 +560,7 @@ function approveGate(x){
 }
 function aDocs(){
   const ev = S.events.filter(x=>x.sourceType==='assignment'||x.sourceType==='open').sort((a,b)=>(a.approvalStatus==='pending'?0:1)-(b.approvalStatus==='pending'?0:1)||(b.date||'').localeCompare(a.date||''));
-  return '<h3 style="margin:0 0 8px">توثيقات المعلمين</h3>'+(ev.length?ev.map(x=>'<div class="dh-card" style="margin-bottom:8px"><div class="ac-row sb"><div><b>'+esc(x.title)+'</b><div class="dh-sub">'+esc(x.documentedByName||'')+' — '+fmtD(x.date)+' — '+(x.sourceType==='assignment'?'تكليف':'نشاط متاح')+'</div>'+partLine(x)+'</div>'
+  return '<h3 style="margin:0 0 8px">توثيقات المعلمين</h3>'+(ev.length?ev.map(x=>'<div class="dh-card" style="margin-bottom:8px"><div class="ac-row sb"><div><b>'+esc(x.title)+'</b><div class="dh-sub">'+esc(ACT.ustaz(x.documentedByName||''))+' — '+fmtD(x.date)+' — '+(x.sourceType==='assignment'?'تكليف':'نشاط متاح')+'</div>'+partLine(x)+'</div>'
     +({pending:chip('بانتظار الاعتماد','warn'),approved:chip('معتمد','ok'),returned:chip('أُعيد للتعديل','bad')})[x.approvalStatus]+'</div>'
     +'<div class="ac-row" style="margin-top:6px"><button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.id+'">معاينة النموذج</button>'
     +(S.canEdit && x.approvalStatus==='pending' ? (approveGate(x).ok ? '<button class="ac-btn sm" data-a="ev-approve" data-id="'+x.id+'">اعتماد</button>' : '<button class="ac-btn sm" disabled style="opacity:.45;cursor:not-allowed">اعتماد</button>')+'<button class="ac-btn bad sm" data-a="ev-return" data-id="'+x.id+'">إعادة للتعديل</button>':'')+'</div>'
@@ -599,16 +608,18 @@ function vReports(){
   const copt = '<select class="ac-sel" id="rp_club">'+activeClubs().map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('')+'</select>';
   const teachers = {};
   S.assigns.filter(a=>a.status==='approved').forEach(a=>{ const t = teachers[a.teacherId]=teachers[a.teacherId]||{name:a.teacherName,asg:[],open:[]}; (a.programs||[]).forEach((p,i)=>t.asg.push({a,p,i,ev:progDone(a,i)})); });
-  S.events.filter(x=>x.sourceType==='open' && x.approvalStatus!=='returned').forEach(x=>{ const t = teachers[x.documentedBy]=teachers[x.documentedBy]||{name:x.documentedByName,asg:[],open:[]}; t.open.push(x); });
-  const tl = Object.keys(teachers).map(id=>Object.assign({id},teachers[id])).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  /* الأنشطة المتاحة اختيارية: يظهر المعتمد فقط، للموثِّق وللمشاركين المعلمين بالصيغة نفسها */
+  S.events.filter(x=>x.sourceType==='open' && x.approvalStatus==='approved').forEach(x=>{ evTeachers(x).forEach(u=>{ const t = teachers[u.uid]=teachers[u.uid]||{name:u.name,asg:[],open:[]}; t.open.push(x); }); });
+  const tl = Object.keys(teachers).map(id=>Object.assign({id},teachers[id])).filter(t=>t.asg.length||t.open.length).sort((a,b)=>(a.name||'').localeCompare(b.name||'','ar'));
   return '<div class="dh-card"><h3>📄 القرارات</h3><div class="ac-row ac-rep"><button class="ac-btn sec" data-a="print-council">🖨 قرار تشكيل مجلس النشاط</button><button class="ac-btn sec" data-a="print-clubsdec">🖨 قرار تشكيل الأندية وتعيين المشرفين</button></div></div>'
     +'<div class="dh-card"><h3>📋 الخطط والتقارير</h3><div class="ac-row ac-rep" style="margin-bottom:8px"><button class="ac-btn sec" data-a="print-genplan">🖨 الخطة العامة للنشاط</button><button class="ac-btn sec" data-a="print-genreport">🖨 التقرير العام للنشاط</button></div>'
     +'<div class="ac-row ac-rep"><label class="dh-sub" style="width:100%">اختيار النادي:</label>'+copt+'<button class="ac-btn sec" data-a="rp-clubplan">🖨 خطة النادي</button><button class="ac-btn sec" data-a="rp-clubreport">🖨 تقرير النادي</button></div></div>'
     +'<div class="dh-card"><h3>📝 توثيقات المعلمين</h3>'+(tl.length?tl.map(t=>{
-      const done = t.asg.filter(x=>x.ev).length + t.open.length, miss = t.asg.filter(x=>!x.ev).length;
-      return '<details class="ac-acc"><summary><span>'+esc(t.name)+'</span><span>'+chip('موثّق: '+N(done),'ok')+' '+chip('تكليف غير موثّق: '+N(miss), miss?'bad':'')+'</span></summary><div class="in">'
-        +'<b>أنشطة مكلّف بها</b>'+(t.asg.length?t.asg.map(x=>'<div class="dh-item" style="margin-top:4px"><span>'+(x.ev?'✅':'❌')+' '+esc(x.p.name)+'</span>'+(x.ev?'<button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.ev.id+'">👁 معاينة</button>':'<span class="dh-sub">غير موثّق</span>')+'</div>').join(''):'<div class="dh-empty">لا توجد تكليفات معتمدة.</div>')
-        +'<div style="margin-top:8px"><b>أنشطة متاحة وثّقها</b></div>'+(t.open.length?t.open.map(x=>'<div class="dh-item" style="margin-top:4px"><span>✅ '+esc(x.title)+'</span><button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.id+'">👁 معاينة</button></div>').join(''):'<div class="dh-empty">لم يوثّق أنشطة متاحة.</div>')+'</div></details>';
+      const apr = x=>x.ev && x.ev.approvalStatus==='approved';
+      const done = t.asg.filter(apr).length + t.open.length, miss = t.asg.filter(x=>!x.ev).length;
+      return '<details class="ac-acc"><summary><span>'+esc(ACT.ustaz(t.name))+'</span><span>'+chip('موثّق: '+N(done),'ok')+' '+chip('تكليف غير موثّق: '+N(miss), miss?'bad':'')+'</span></summary><div class="in">'
+        +'<b>أنشطة مكلّف بها</b>'+(t.asg.length?t.asg.map(x=>'<div class="dh-item" style="margin-top:4px"><span>'+(apr(x)?'✅':(x.ev?'⏳':'❌'))+' '+esc(x.p.name)+'</span>'+(x.ev?'<button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.ev.id+'">👁 معاينة</button>':'<span class="dh-sub">غير موثّق</span>')+(x.ev&&!apr(x)?'<span class="dh-sub">بانتظار الاعتماد</span>':'')+'</div>').join(''):'<div class="dh-empty">لا توجد تكليفات معتمدة.</div>')
+        +'<div style="margin-top:8px"><b>أنشطة متاحة معتمدة</b></div>'+(t.open.length?t.open.map(x=>'<div class="dh-item" style="margin-top:4px"><span>✅ '+esc(x.title)+'</span><button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.id+'">👁 معاينة</button></div>').join(''):'<div class="dh-empty">لا توجد أنشطة متاحة معتمدة.</div>')+'</div></details>';
     }).join(''):'<div class="dh-empty">لا توجد تكليفات أو توثيقات بعد.</div>')+'</div>';
 }
 
@@ -649,7 +660,7 @@ async function printKind(kind, id, evId){
       +'<h3>الفعاليات المنفَّذة</h3>'+tbl(['م','الفعالية','التاريخ','المشاركون','الصور'],ev.map((x,i)=>[N(i+1),x.title,ACT.hijri(x.date),N(x.participantCount||0),N((x.photos||[]).length)]))+sigBlock('رائد النشاط','قائد المدرسة'));
   } else if(kind==='genreport'){
     const ps = planStats(), gi = genItems(), docsEv = S.events.filter(x=>(x.sourceType==='assignment'||x.sourceType==='open') && x.approvalStatus==='approved');
-    const teachersN = new Set(docsEv.map(x=>x.documentedBy)).size;
+    const teachersN = new Set([].concat(...docsEv.map(x=>evTeachers(x).map(u=>u.uid)))).size;
     await pr('التقرير العام للنشاط الطلابي','<p class="pp">عدد الأندية: <b>'+N(activeClubs().length)+'</b> — الطلاب المسجَّلون: <b>'+N(activeClubs().reduce((n,c)=>n+(c.members||[]).length,0))+'</b> — الفعاليات المعتمدة: <b>'+N(approvedEvents().length)+'</b></p>'
       +'<h3>الأندية</h3>'+tbl(['النادي','المشرف','الأعضاء','بنود الخطة','المنفَّذ','الفعاليات'],activeClubs().map(c=>{ const p=(c.plan||[]).filter(x=>x.status!=='cancelled'); return [c.name,c.headName||'—',N((c.members||[]).length),N(p.length),N(p.filter(x=>x.status==='executed').length),N(approvedEvents().filter(x=>x.clubId===c.id).length)]; }))
       +'<h3>ملخص رقمي</h3>'+tbl(['المؤشر','القيمة'],[

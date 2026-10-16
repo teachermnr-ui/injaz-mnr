@@ -1,4 +1,4 @@
-// إصدار: 2026-10-16.8
+// إصدار: 2026-10-16.9
 /* نواة منصة النشاط المدرسي — مشتركة بين activity.html (الرائد والمدير) وmyactivities.html (المعلم).
    تحوي: الثوابت (الأندية الوزارية، قالب المسار العام)، التاريخ الهجري (أم القرى)، تحميل البيانات وحفظها،
    النوافذ والاختيار المتعدد، ضغط الصور ورفعها إلى Firebase Storage، ونموذج توثيق التنفيذ المطبوع (QR + شواهد). */
@@ -154,6 +154,17 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
 .act-skin .ac-bar{height:10px;border-radius:8px;background:var(--surface-alt)}.act-skin .ac-bar>i{border-radius:8px}
 .act-skin details.ac-acc{border-radius:var(--r);border-color:var(--line)}
 .act-skin .ac-steps b{background:var(--surface-alt)}
+/* بطاقة مطويّة بلون حالتها: العنوان + الحالة الأخيرة + أزرار صغيرة، والتفاصيل تُفتح بالضغط على العنوان */
+.ac-fold{background:#fff;border:1px solid #e2dfd8;border-inline-start:5px solid var(--fc,#9aa3ab);border-radius:12px;padding:10px 14px 12px;margin-bottom:10px}
+.ac-fold>details>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;font-size:1rem;padding:2px 0}
+.ac-fold>details>summary::-webkit-details-marker{display:none}
+.ac-fold .ac-car{font-size:.8rem;color:#6b7280;transition:transform .15s;flex:none}
+.ac-fold>details[open] .ac-car{transform:rotate(180deg)}
+.ac-fold .ac-fin{padding:6px 0 4px;line-height:1.9;font-size:.9rem}
+.ac-fold .ac-fst{display:inline-block;margin-top:4px;padding:3px 11px;border-radius:14px;font-size:.82rem;font-weight:600;background:var(--fb,#eef0f2);color:var(--fc,#5b6670)}
+.ac-fold .ac-fact{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ac-fold .ac-fact .ac-btn{padding:4px 11px;font-size:.78rem;border-radius:6px}
+.ac-fold.t-ok{--fc:#1e8449;--fb:#e8f8ef}.ac-fold.t-warn{--fc:#b45309;--fb:#fef3e0}.ac-fold.t-bad{--fc:#c0392b;--fb:#fdecea}.ac-fold.t-info{--fc:#1d5fa8;--fb:#e8f1fb}.ac-fold.t-mute{--fc:#5b6670;--fb:#eef0f2}
 /* أزرار التقارير: صفوف كاملة العرض كالنموذج */
 .act-skin .ac-rep{display:block}
 .act-skin .ac-rep .ac-btn{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px;margin-bottom:6px;background:var(--surface);color:var(--ink);border:1px solid var(--line);font-weight:500;text-align:right}
@@ -438,6 +449,15 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     return m;
   }
 
+  /* أ/ قبل أسماء المعلمين (لا تتكرر إن وُجدت) */
+  const ustaz = n => { n = String(n||'').trim(); return !n ? '' : (/^أ\s*[\/.]/.test(n) ? n : 'أ/'+n); };
+  /* بطاقة مطويّة افتراضيًا: عنوان + حالة ملوّنة + أزرار صغيرة ظاهرة؛ التفاصيل (body) داخل الطيّ.
+     tone: ok | warn | bad | info | mute */
+  function foldCard(o){
+    return '<div class="ac-fold t-'+(o.tone||'mute')+'"><details><summary><span>'+esc(o.title)+'</span><span class="ac-car">▾</span></summary><div class="ac-fin">'+(o.body||'')+'</div></details>'
+      +'<span class="ac-fst">'+(o.status||'')+'</span>'+(o.actions?'<div class="ac-fact">'+o.actions+'</div>':'')+'</div>';
+  }
+
   /* علامة «وثّق»: صاحب التوثيق، أو مشارك أكّد مشاركته. المدعو غير المؤكِّد لا يُحسب */
   const markDone = m => (m.role||'owner')!=='participant' || m.confirm==='confirmed';
   const markPartPending = m => (m.role||'owner')==='participant' && m.confirm==='invited';
@@ -448,12 +468,12 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
   }
   function docFormBody(ev, o){
     o = o||{};
-    const names = a=>(a||[]).map(x=>x.name).filter(Boolean).join('، ');
+    const names = a=>(a||[]).map(x=>ustaz(x.name)).filter(Boolean).join('، ');
     const stuN = (ev.participants||[]).filter(p=>p.type==='student').length;
-    const conf = o.conf || null, viewer = o.viewerUid || '';
-    let stfList = (ev.participants||[]).filter(p=>p.type==='staff' && p.uid!==viewer);
-    if(viewer && ev.documentedBy && ev.documentedBy!==viewer) stfList = [{uid:ev.documentedBy,name:ev.documentedByName||''}].concat(stfList);
-    const stfNames = stfList.map(x=>(x.name||'')+((conf && x.uid!==ev.documentedBy && !conf.has(x.uid))?' (لم يؤكد بعد)':'')).filter(Boolean).join('، ');
+    /* النموذج واحد عند كل من يفتحه: لا يتغير بحسب المشاهد. من اعتذر أو رُفعت مشاركته لا يظهر */
+    const conf = o.conf || null, gone = o.gone || null;
+    const stfList = (ev.participants||[]).filter(p=>p.type==='staff' && !(gone && gone.has(p.uid)));
+    const stfNames = stfList.map(x=>ustaz(x.name)+((conf && x.uid!==ev.documentedBy && !conf.has(x.uid))?' (لم يؤكد بعد)':'')).filter(s=>s.trim()).join('، ');
     const parts = [stuN?('طلاب (عددهم '+arN(stuN)+')'):'', stfNames].filter(Boolean).join(' — ') || '—';
     const ph = (ev.photos||[]).slice(0,2);
     const qr = qrImg(ev.evidenceUrl);
@@ -485,15 +505,17 @@ ${sg.stamp?'<div style="text-align:center;margin-top:8px"><img src="'+sg.stamp+'
     const w = openPreview('نموذج توثيق تنفيذ برنامج / مبادرة');
     const ctx = await g.FormHdr.resolve({ db:env.db, session:env.session, period:env.period });
     const coord = ev.approvedByName || (o&&o.coordinator) || '';
-    let conf = null;
+    let conf = null, gone = null;
     if(ev.openEventId && (ev.partUids||[]).length){
       try{
         const q = await env.db.collection('actOpenMarks').where('schoolId','==',env.sid).where('period','==',env.period).get();
-        conf = new Set(q.docs.map(d=>d.data()).filter(m=>m.openEventId===ev.openEventId && (m.role||'owner')==='participant' && m.confirm==='confirmed').map(m=>m.uid));
-      }catch(e){ conf = null; }
+        const ms = q.docs.map(d=>d.data()).filter(m=>m.openEventId===ev.openEventId && (m.role||'owner')==='participant');
+        conf = new Set(ms.filter(m=>m.confirm==='confirmed').map(m=>m.uid));
+        gone = new Set(ms.filter(m=>m.confirm==='declined' || m.confirm==='released').map(m=>m.uid));
+      }catch(e){ conf = null; gone = null; }
     }
     const sig = ev.approvalStatus==='approved' ? await sigSnapshot(env, ev) : {};
-    const html = g.FormHdr.doc({ title:'نموذج توثيق تنفيذ برنامج / مبادرة', formTitle:'نموذج توثيق تنفيذ برنامج / مبادرة', ctx, noPrintBtn:true, body:docFormBody(ev,{coordinator:coord, principal:ev.principalName||ctx.principal, conf, sig, viewerUid:(o&&o.viewerUid)||''}) });
+    const html = g.FormHdr.doc({ title:'نموذج توثيق تنفيذ برنامج / مبادرة', formTitle:'نموذج توثيق تنفيذ برنامج / مبادرة', ctx, noPrintBtn:true, body:docFormBody(ev,{coordinator:coord, principal:ev.principalName||ctx.principal, conf, gone, sig}) });
     w.setHtml(html);
   }
   /* طباعة جدول عام بترويسة النموذج الموحدة */
@@ -598,6 +620,6 @@ ${sg.stamp?'<div style="text-align:center;margin-top:8px"><img src="'+sg.stamp+'
   g.ACT = { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS, ROLE_NAMES,
     today, addDays, hijri, dayName, injectCss, openPreview, centerTab, loadState, saveState, modal, toast, confirmBox, pickHtml, pickInit, pickGet,
     keyOf, list, getDoc, create, patch, by, loadStaff, loadRoster, classLabel,
-    compress, compressFit, uploadPhoto, openDocForm, docFormBody, printDoc, printPage, qrImg, markDone, markPartPending,
+    compress, compressFit, uploadPhoto, openDocForm, docFormBody, printDoc, ustaz, foldCard, printPage, qrImg, markDone, markPartPending,
     SIG_NAMES, sigPointers, sigSave, sigClear, sigVerData, sigSnapshot, sigForApproval, sigDialog };
 })(window);

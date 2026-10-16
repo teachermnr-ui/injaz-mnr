@@ -2529,7 +2529,7 @@ exports.excellenceAutoRun = onSchedule({ schedule: "30 6,9,12,15 * * *", timeZon
    - إضافة نوع حقل جديد: مدخل واحد في AI_KINDS، أو مستند aiPrompts/{النوع} في Firestore بلا نشر.
    - الإعدادات (اختيارية) بمستند aiConfig/main: enabled, model, dailySchool, dailyGlobal.
    ============================================================================================ */
-const AI_DEFAULTS = { enabled: true, model: "@cf/google/gemma-3-12b-it", dailySchool: 30, dailyGlobal: 150 };
+const AI_DEFAULTS = { enabled: true, model: "@cf/meta/llama-3.1-8b-instruct", dailySchool: 30, dailyGlobal: 150 };
 const AI_KINDS = {
   open_activity_description: {
     perm: "activity",

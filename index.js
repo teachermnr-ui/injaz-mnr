@@ -1,10 +1,12 @@
-// إصدار: 2026-10-16.4
+// إصدار: 2026-10-16.5
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
 const nodemailer = require("nodemailer");
 const {defineSecret} = require("firebase-functions/params");
 const GMAIL_APP_PASSWORD = defineSecret("GMAIL_APP_PASSWORD");
+const CF_ACCOUNT_ID = defineSecret("CF_ACCOUNT_ID");
+const CF_API_TOKEN = defineSecret("CF_API_TOKEN");
 /**
  * فك ربط حساب مستخدم فعليًا:
  * - تعطيل حساب Firebase Auth (منع دخول حقيقي فوري)
@@ -2515,4 +2517,141 @@ exports.excellenceAutoRun = onSchedule({ schedule: "30 6,9,12,15 * * *", timeZon
     } catch (e) { console.error("excellenceAutoRun", s.id, e); }
   }
   console.log("excellenceAutoRun: schools", done);
+});
+
+
+/* ============================================================================================
+   (2026-10-16.5) الاقتراح بالذكاء الاصطناعي — خدمة عامة aiSuggest (Cloudflare Workers AI، الخطة المجانية)
+   - مجانية بالكامل: السقف الصلب من Cloudflare (10,000 وحدة يوميًا؛ عند النفاد تفشل الطلبات ولا تُحاسب)،
+     ونوقف نحن قبله بحدٍّ عام وحدٍّ لكل مدرسة. اليوم = يوم UTC (يتجدد ٣ فجرًا بتوقيت الرياض) ليطابق تجدد Cloudflare.
+   - المفتاح والحساب سرّان في الخادم (CF_API_TOKEN / CF_ACCOUNT_ID). المجموعتان aiUsage / aiPrompts / aiConfig مغلقتان على العميل.
+   - لا تُرسل للنموذج أسماء ولا بيانات شخصية: عنوان النشاط والمجال فقط.
+   - إضافة نوع حقل جديد: مدخل واحد في AI_KINDS، أو مستند aiPrompts/{النوع} في Firestore بلا نشر.
+   - الإعدادات (اختيارية) بمستند aiConfig/main: enabled, model, dailySchool, dailyGlobal.
+   ============================================================================================ */
+const AI_DEFAULTS = { enabled: true, model: "@cf/google/gemma-3-12b-it", dailySchool: 30, dailyGlobal: 150 };
+const AI_KINDS = {
+  open_activity_description: {
+    perm: "activity",
+    fields: ["title", "domain"],
+    system: "أنت مساعد لرائد النشاط في مدرسة سعودية. تكتب بالعربية الفصحى فقط دون أي لهجة عامية ودون رموز تنسيق أو قوائم أو عناوين، وتلتزم بالإيجاز.",
+    user: "اسم النشاط: {title}\nالمجال: {domain}\nاكتب وصفًا لهذا النشاط من جملتين إلى ثلاث جمل موجّهًا للمعلم، يبيّن المطلوب منه تنفيذه (فقرة أو مبادرة أو برنامج مناسب لطلاب المدرسة) وما يلزم توثيقه (صور الشواهد وعدد المستفيدين). لا تذكر أسماء أشخاص ولا تواريخ. أعد الوصف فقط.",
+    maxTokens: 260, maxLen: 600
+  }
+};
+let AI_CACHE = { at: 0, cfg: null, prompts: {} };
+async function aiConfig(db, kind) {
+  const now = Date.now();
+  if (!AI_CACHE.at || now - AI_CACHE.at > 60000) {
+    const c = await db.collection("aiConfig").doc("main").get();
+    AI_CACHE = { at: now, cfg: Object.assign({}, AI_DEFAULTS, c.exists ? c.data() : {}), prompts: {} };
+  }
+  if (!(kind in AI_CACHE.prompts)) {
+    const p = await db.collection("aiPrompts").doc(kind).get();
+    AI_CACHE.prompts[kind] = p.exists ? p.data() : null;
+  }
+  return { cfg: AI_CACHE.cfg, over: AI_CACHE.prompts[kind] };
+}
+function aiClean(v, max) {
+  return String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/[{}<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+}
+function aiTidy(text, maxLen) {
+  let t = String(text || "").replace(/[*_#`>~]+/g, "").replace(/^\s*["«“]+|["»”]+\s*$/g, "").replace(/\s+/g, " ").trim();
+  if (t.length > maxLen) {
+    const cut = t.slice(0, maxLen), i = Math.max(cut.lastIndexOf("."), cut.lastIndexOf("،"), cut.lastIndexOf("؛"));
+    t = i > maxLen * 0.5 ? cut.slice(0, i + 1) : cut;
+  }
+  return t;
+}
+async function aiAllowed(db, u, uid, sid, perm) {
+  if (secIsAdmin(u)) return true;
+  const ctx = secStaffCtx(u, sid);
+  if (perm === "any") return !!(ctx || secIsSchoolAdminOf(u, sid));
+  if (perm === "activity") {
+    if (!ctx) return false;
+    if (secPerm(ctx, "tools.activity", "edit")) return true;
+    for (const per of ["first", "second"]) {
+      const c = await db.collection("activityCouncil").doc(sid + "_" + per).get();
+      if (c.exists && c.data().secretaryId === uid) return true;
+    }
+    return false;
+  }
+  return false;
+}
+async function aiReserve(db, sid, day, cfg) {
+  const sRef = db.collection("aiUsage").doc(sid + "_" + day), gRef = db.collection("aiUsage").doc("_all_" + day);
+  return db.runTransaction(async (tx) => {
+    const [s, g] = await Promise.all([tx.get(sRef), tx.get(gRef)]);
+    const sc = s.exists ? (s.data().count || 0) : 0, gc = g.exists ? (g.data().count || 0) : 0;
+    if (gc >= cfg.dailyGlobal) throw secMsg("resource-exhausted", "بلغت خدمة الاقتراح حدها اليومي العام، جرّب بعد الثالثة فجرًا.");
+    if (sc >= cfg.dailySchool) throw secMsg("resource-exhausted", "بلغت مدرستك الحد اليومي لاقتراحات الذكاء الاصطناعي (" + cfg.dailySchool + ")، يتجدد بعد الثالثة فجرًا.");
+    tx.set(sRef, { schoolId: sid, day, count: sc + 1, updatedAt: Date.now() }, { merge: true });
+    tx.set(gRef, { day, count: gc + 1, updatedAt: Date.now() }, { merge: true });
+    return { used: sc + 1, left: cfg.dailySchool - sc - 1 };
+  });
+}
+async function aiRefund(db, sid, day) {
+  const inc = admin.firestore.FieldValue.increment(-1);
+  try {
+    await db.collection("aiUsage").doc(sid + "_" + day).set({ count: inc }, { merge: true });
+    await db.collection("aiUsage").doc("_all_" + day).set({ count: inc }, { merge: true });
+  } catch (e) { console.warn("aiRefund", e && e.message); }
+}
+async function aiCallModel(cfg, system, user, maxTokens) {
+  const acc = CF_ACCOUNT_ID.value(), tok = CF_API_TOKEN.value();
+  if (!acc || !tok) throw secMsg("failed-precondition", "خدمة الاقتراح غير مهيّأة بعد.");
+  const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 25000);
+  let resp, body;
+  try {
+    resp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(acc) + "/ai/run/" + cfg.model, {
+      method: "POST", signal: ac.signal,
+      headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: maxTokens, temperature: 0.6 })
+    });
+    body = await resp.json().catch(() => ({}));
+  } catch (e) {
+    throw secMsg("unavailable", "تعذّر الوصول لخدمة الاقتراح الآن، حاول لاحقًا.");
+  } finally { clearTimeout(timer); }
+  const errs = JSON.stringify(body && body.errors || "");
+  if (resp.status === 429 || /daily free allocation|neurons|quota|rate/i.test(errs)) {
+    const e = secMsg("resource-exhausted", "انتهت الحصة اليومية المجانية للذكاء الاصطناعي، جرّب بعد الثالثة فجرًا.");
+    e.aiQuotaExhausted = true; throw e;
+  }
+  if (!resp.ok || body.success === false) { console.warn("aiCallModel", resp.status, errs.slice(0, 300)); throw secMsg("unavailable", "تعذّر توليد الاقتراح الآن، حاول لاحقًا."); }
+  const r = body.result || {};
+  const text = typeof r.response === "string" ? r.response : (r.choices && r.choices[0] && r.choices[0].message && r.choices[0].message.content) || "";
+  return text;
+}
+exports.aiSuggest = onCall({ secrets: [CF_ACCOUNT_ID, CF_API_TOKEN], timeoutSeconds: 40 }, async (request) => {
+  const me = await secCaller(request, { needDoc: true });
+  const d = request.data || {};
+  const kind = String(d.kind || ""), sid = String(d.schoolId || "");
+  const def = AI_KINDS[kind];
+  if (!def) throw secMsg("invalid-argument", "نوع الاقتراح غير معروف.");
+  if (!sid) throw secMsg("invalid-argument", "حدّد المدرسة.");
+  const db = secDb();
+  if (!(await aiAllowed(db, me.data, me.uid, sid, def.perm))) throw secMsg("permission-denied", "ليست لديك صلاحية استعمال الاقتراح هنا.");
+  const { cfg, over } = await aiConfig(db, kind);
+  if (cfg.enabled === false || (over && over.enabled === false)) throw secMsg("failed-precondition", "خدمة الاقتراح موقوفة حاليًا.");
+  const ctx = {};
+  for (const f of def.fields) ctx[f] = aiClean(d[f], f === "title" ? 120 : 60);
+  if (!ctx.title) throw secMsg("invalid-argument", "اكتب اسم النشاط أولًا.");
+  const sys = (over && over.system) || def.system;
+  let usr = (over && over.user) || def.user;
+  def.fields.forEach((f) => { usr = usr.split("{" + f + "}").join(ctx[f] || "غير محدد"); });
+  const maxTokens = Math.min(Number((over && over.maxTokens) || def.maxTokens) || 260, 400);
+  const day = new Date().toISOString().slice(0, 10);
+  const rs = await aiReserve(db, sid, day, cfg);
+  try {
+    const raw = await aiCallModel(cfg, sys, usr, maxTokens);
+    const text = aiTidy(raw, def.maxLen);
+    if (text.length < 10) throw secMsg("unavailable", "لم يُنتج النموذج اقتراحًا مناسبًا، أعد المحاولة.");
+    return { text, remainingToday: rs.left };
+  } catch (e) {
+    await aiRefund(db, sid, day);
+    if (e && e.aiQuotaExhausted) {
+      try { await db.collection("aiUsage").doc("_all_" + day).set({ count: cfg.dailyGlobal, exhaustedAt: Date.now() }, { merge: true }); } catch (x) { /* لا شيء */ }
+    }
+    throw e;
+  }
 });

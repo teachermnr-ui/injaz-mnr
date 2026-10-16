@@ -23,7 +23,7 @@
 <script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-16.4"></script>
+<script src="activity-core.js?v=2026-10-16.5"></script>
 <script>
 (function(){
 const { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS } = ACT;
@@ -476,11 +476,12 @@ function aOpen(){
   return '<div class="ac-row sb" style="margin-bottom:8px"><h3 style="margin:0">الأنشطة المتاحة للتوثيق</h3></div>'
     +'<div class="dh-sub" style="margin-bottom:8px">تُنشر من «فعاليات المسار العام» بزر «نشر نشاط متاح»، وتظهر لجميع موظفي المدرسة ليوثّق كلٌّ منهم عن نفسه حتى آخر موعد.</div>'
     +(S.opens.length?S.opens.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).map(o=>{
-      const mk = S.marks.filter(m=>m.openEventId===o.id), exp = isExpired(o);
+      const allMk = S.marks.filter(m=>m.openEventId===o.id), mk = allMk.filter(ACT.markDone), inv = allMk.filter(ACT.markPartPending), exp = isExpired(o);
       const st = o.status!=='open' ? chip('مغلق','bad') : exp ? chip('انتهى الموعد','bad') : chip('متاح','ok');
-      const names = mk.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','ar')).map(m=>'<div class="dh-item"><span>✅ '+esc(m.name||'')+'</span>'+chip(fmtMark[m.state]||'', m.state==='approved'?'ok':(m.state==='returned'?'bad':'warn'))+'</div>').join('');
+      const names = mk.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','ar')).map(m=>'<div class="dh-item"><span>✅ '+esc(m.name||'')+((m.role||'owner')==='participant'?' <span class="dh-sub">(مشارك مع '+esc(m.ownerName||'')+')</span>':'')+'</span>'+chip(fmtMark[m.state]||'', m.state==='approved'?'ok':(m.state==='returned'?'bad':'warn'))+'</div>').join('')
+        +inv.map(m=>'<div class="dh-item"><span>○ '+esc(m.name||'')+' <span class="dh-sub">(مدعو مشاركًا مع '+esc(m.ownerName||'')+' — لم يؤكد)</span></span></div>').join('');
       return '<div class="dh-card" style="margin-bottom:8px"><div class="ac-row sb"><b>'+esc(o.title)+'</b>'+st+'</div><div class="dh-sub">'+esc(o.description||'')+'</div><div class="dh-sub">المجال: '+esc(o.domain||'—')+' — آخر موعد: '+(o.deadline?ACT.hijri(o.deadline):'غير محدد')+' — وثّقه '+N(mk.length)+' من العاملين</div>'
-      +(mk.length?'<details class="ac-acc" style="margin-top:6px"><summary><span>من وثّق</span></summary><div class="in">'+names+'</div></details>':'')
+      +((mk.length||inv.length)?'<details class="ac-acc" style="margin-top:6px"><summary><span>من وثّق</span></summary><div class="in">'+names+'</div></details>':'')
       +E('<div class="ac-row" style="margin-top:6px"><button class="ac-btn sec sm" data-a="open-edit" data-id="'+o.id+'">تعديل الوصف والموعد</button><button class="ac-btn sec sm" data-a="open-toggle" data-id="'+o.id+'">'+(o.status==='open'?'إغلاق':'إعادة فتح')+'</button></div>')+'</div>'; }).join(''):'<div class="dh-empty">لا توجد أنشطة متاحة. انشر فعالية من تبويب «فعاليات المسار العام».</div>');
 }
 async function openForm(id){
@@ -493,9 +494,15 @@ async function openForm(id){
     await ACT.patch(S.env,'actOpenEvents',ex.id,{ description:d, deadline:dl, deadlineMs:endOfDayMs(dl) });
     await refresh(['opens']); return true; } },{ label:'إلغاء', cls:'sec' }] });
 }
+function partLine(x){
+  if(x.sourceType!=='open' || !(x.partUids||[]).length) return '';
+  const ms = S.marks.filter(m=>m.openEventId===x.openEventId && (m.role||'owner')==='participant' && m.evId===x.id);
+  const byU = {}; ms.forEach(m=>{ byU[m.uid]=m; });
+  return '<div class="dh-sub">المشاركون: '+(x.participants||[]).filter(p=>p.type==='staff').map(p=>{ const m = byU[p.uid]; const cf = m?m.confirm:''; return esc(p.name)+' '+chip(cf==='confirmed'?'أكّد':(cf==='invited'?'لم يؤكد':(cf==='declined'?'اعتذر':'—')), cf==='confirmed'?'ok':(cf==='invited'?'warn':'bad')); }).join(' ')+'</div>';
+}
 function aDocs(){
   const ev = S.events.filter(x=>x.sourceType==='assignment'||x.sourceType==='open').sort((a,b)=>(a.approvalStatus==='pending'?0:1)-(b.approvalStatus==='pending'?0:1)||(b.date||'').localeCompare(a.date||''));
-  return '<h3 style="margin:0 0 8px">توثيقات المعلمين</h3>'+(ev.length?ev.map(x=>'<div class="dh-card" style="margin-bottom:8px"><div class="ac-row sb"><div><b>'+esc(x.title)+'</b><div class="dh-sub">'+esc(x.documentedByName||'')+' — '+fmtD(x.date)+' — '+(x.sourceType==='assignment'?'تكليف':'نشاط متاح')+'</div></div>'
+  return '<h3 style="margin:0 0 8px">توثيقات المعلمين</h3>'+(ev.length?ev.map(x=>'<div class="dh-card" style="margin-bottom:8px"><div class="ac-row sb"><div><b>'+esc(x.title)+'</b><div class="dh-sub">'+esc(x.documentedByName||'')+' — '+fmtD(x.date)+' — '+(x.sourceType==='assignment'?'تكليف':'نشاط متاح')+'</div>'+partLine(x)+'</div>'
     +({pending:chip('بانتظار الاعتماد','warn'),approved:chip('معتمد','ok'),returned:chip('أُعيد للتعديل','bad')})[x.approvalStatus]+'</div>'
     +'<div class="ac-row" style="margin-top:6px"><button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.id+'">معاينة النموذج</button>'
     +(S.canEdit && x.approvalStatus==='pending' ? '<button class="ac-btn sm" data-a="ev-approve" data-id="'+x.id+'">اعتماد</button><button class="ac-btn bad sm" data-a="ev-return" data-id="'+x.id+'">إعادة للتعديل</button>':'')+'</div></div>').join(''):'<div class="dh-empty">لم يوثّق أحد بعد.</div>');
@@ -643,6 +650,9 @@ async function reviewDoc(id, st, note){
   if(st==='approved') await ACT.patch(S.env,'activityEvents',id,{ approvalStatus:'approved', approvedBy:me.id, approvedByName:me.name, approvedAt:Date.now(), returnNote:'' });
   else await ACT.patch(S.env,'activityEvents',id,{ approvalStatus:'returned', returnNote:note||'' });
   if(x.sourceType==='open' && x.openEventId){
+    for(const m of S.marks.filter(m=>m.openEventId===x.openEventId && (m.role||'owner')==='participant' && m.evId===id && m.confirm==='confirmed')){
+      try{ await S.env.db.collection('actOpenMarks').doc(m.id).update({ state:st, updatedAt:Date.now() }); }catch(err){ console.warn('part mark', err); }
+    }
     await S.env.db.collection('actOpenMarks').doc(x.openEventId+'_'+x.documentedBy).set({ schoolId:S.env.sid, period:S.env.period, openEventId:x.openEventId, uid:x.documentedBy, name:x.documentedByName||'', state:st, updatedAt:Date.now() },{ merge:true });
     const o = S.opens.find(v=>v.id===x.openEventId), g = o && o.generalEventId ? S.general.find(v=>v.id===o.generalEventId) : null;
     if(st==='approved' && g && g.status!=='executed') await ACT.patch(S.env,'activityGeneralEvents',g.id,{ status:'executed', executionEventId:id });

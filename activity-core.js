@@ -348,6 +348,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     const exSel = (pre.executors||[]).map(p=>p.uid);
     const stuItems = roster.students.map(s=>({ id:s.seat, name:s.name, sub:classLabel(roster,s.classCode) }));
     const stfItems = staff.map(s=>({ id:s.id, name:s.name, sub:ROLE_NAMES[s.role]||'' }));
+    const OPEN = !!opts.openMode;
     const LK = opts.lockTitleDomain ? ' readonly style="background:#f1f5f7"' : '';
     const body = `${opts.infoHtml?'<div class="ac-f" style="background:#eef6f8;border:1px solid #cfe2e8;border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.8">'+opts.infoHtml+'</div>':''}
       <div class="ac-f"><label>اسم البرنامج / المبادرة *</label><input class="ac-in" id="d_title" value="${esc(pre.title)}"${LK}></div>
@@ -357,16 +358,18 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
         <div class="ac-f"><label>مكان التنفيذ *</label><input class="ac-in" id="d_loc" value="${esc(pre.location)}"></div>
         <div class="ac-f"><label>مدة التنفيذ *</label><input class="ac-in" id="d_dur" placeholder="مثال: يوم واحد" value="${esc(pre.duration)}"></div>
       </div>
-      <div class="ac-f"><label>المنفِّذون (من موظفي المدرسة) *</label>${pickHtml('d_exec', stfItems, exSel)}</div>
+      ${OPEN?`<div class="ac-f"><label>المنفِّذون من موظفي المدرسة (للاطلاع فقط)</label><div class="ac-in" style="height:auto;max-height:190px;overflow:auto;background:#f6f8f9;padding:4px 10px">${(opts.execStatus||[]).length?(opts.execStatus||[]).map(x=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #e6ecee"><span>'+esc(x.name)+'</span><span style="font-weight:700;color:'+(x.on?'#0a7a3d':'#8a949a')+'">'+(x.on?'☑ مفعّل':'☐ لم يوثّق')+'</span></div>').join(''):'<div style="padding:8px;color:#777">لا يوجد موظفون آخرون.</div>'}</div></div>`
+      :`<div class="ac-f"><label>المنفِّذون (من موظفي المدرسة) *</label>${pickHtml('d_exec', stfItems, exSel)}</div>`}
       <div class="ac-2c">
         <div class="ac-f"><label>نوع المستفيدين</label><select class="ac-sel" id="d_btype">${['طلاب','معلمون','أولياء أمور','مجتمع'].map(t=>'<option'+((pre.beneficiaries||{}).type===t?' selected':'')+'>'+t+'</option>').join('')}</select></div>
         <div class="ac-f"><label>عدد المستفيدين *</label><input type="number" min="0" class="ac-in" id="d_bcount" value="${esc((pre.beneficiaries||{}).count)}"></div>
       </div>
       <div class="ac-f"><label>الطلاب المشاركون (اختياري)</label>${pickHtml('d_stu', stuItems, pStu)}</div>
-      <div class="ac-f"><label>المعلمون المشاركون (اختياري)</label>${pickHtml('d_stf', stfItems, pStf)}</div>
+      <div class="ac-f"><label>المعلمون المشاركون (اختياري)</label>${OPEN?'<div class="dh-sub" style="margin-bottom:4px">يصل كل معلم تختاره إشعار داخل صفحته ليؤكد مشاركته، ولا يُحسب موثّقًا إلا بعد تأكيده.</div>':''}${pickHtml('d_stf', stfItems.filter(x=>!OPEN||x.id!==env.me.id), pStf)}</div>
       <div class="ac-f"><label>الأهداف *</label><textarea class="ac-ta" id="d_obj">${esc(pre.objectives)}</textarea></div>
       <div class="ac-f"><label>خطوات التنفيذ / الوصف *</label><textarea class="ac-ta" id="d_steps">${esc(pre.executionSteps)}</textarea></div>
       <div class="ac-f"><label>صور الشواهد * (الأولى إلزامية، وحد أقصى صورتان — تُضغط تلقائيًا)</label>
+        <div class="dh-sub" style="color:#b45309;font-weight:700;margin:0 0 4px">⚠ اختر الصور التي تثبت وجود الموثَّقين (المنفِّذين والمشاركين).</div>
         <input type="file" accept="image/*" id="d_file" multiple><div class="ac-ph" id="d_ph"></div></div>
       <div class="ac-f"><label>رابط الشواهد (اختياري — يُولَّد منه رمز QR في النسخة المطبوعة)</label><input class="ac-in" id="d_url" placeholder="https://" value="${esc(pre.evidenceUrl)}"></div>`;
     const m = modal({ title: ex?'تعديل توثيق التنفيذ':'توثيق التنفيذ', body, wide:true, noDismiss:true,
@@ -377,11 +380,11 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
           if(!v('d_title')) miss.push('اسم البرنامج'); if(!v('d_domain')) miss.push('المجال'); if(!v('d_date')) miss.push('التاريخ');
           if(!v('d_loc')) miss.push('مكان التنفيذ'); if(!v('d_dur')) miss.push('مدة التنفيذ'); if(!v('d_bcount')) miss.push('عدد المستفيدين');
           if(!v('d_obj')) miss.push('الأهداف'); if(!v('d_steps')) miss.push('خطوات التنفيذ');
-          const execIds = pickGet(api.el,'d_exec'); if(!execIds.length) miss.push('المنفِّذون');
+          const execIds = OPEN ? [env.me.id] : pickGet(api.el,'d_exec'); if(!execIds.length) miss.push('المنفِّذون');
           if(photos.length+newFiles.length<1) miss.push('صورة الشاهد الأول');
           if(miss.length){ toast('أكمل الحقول: '+miss.join('، ')); return false; }
           const url = v('d_url'); if(url && !/^https?:\/\//i.test(url)){ toast('رابط الشواهد يجب أن يبدأ بـ http:// أو https://'); return false; }
-          const nameOf = id=>(staff.find(s=>s.id===id)||{}).name||'';
+          const nameOf = id=>id===env.me.id ? env.me.name : ((staff.find(s=>s.id===id)||{}).name||'');
           const stuName = seat=>(roster.students.find(s=>s.seat===seat)||{}).name||'';
           const execs = execIds.map(id=>({ uid:id, name:nameOf(id), type:'staff' }));
           const parts = pickGet(api.el,'d_stu').map(s=>({ uid:s, name:stuName(s), type:'student' }))
@@ -396,6 +399,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
             objectives:v('d_obj'), executionSteps:v('d_steps'), evidenceUrl:url, photos:photos.concat(up),
             executedBy:env.me.id, executedByName:env.me.name, description:v('d_steps')
           };
+          if(OPEN) data.partUids = parts.filter(p=>p.type==='staff').map(p=>p.uid);
           if(ex){ await patch(env,'activityEvents',ex.id, Object.assign(data,{ approvalStatus: (opts.autoApprove?ex.approvalStatus:'pending'), returnNote:'' })); }
           else {
             const s = opts.source||{};
@@ -409,6 +413,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
             }), base);
             if(opts.onCreated) await opts.onCreated(base);
           }
+          if(opts.afterSave) await opts.afterSave(base, data);
           toast(opts.autoApprove?'تم تسجيل الفعالية واعتمادها':'تم حفظ التوثيق وإرساله لرائد النشاط'); if(opts.onSaved) await opts.onSaved(); return true;
         } },
         { label:'إلغاء', cls:'sec' }
@@ -430,6 +435,10 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     return m;
   }
 
+  /* علامة «وثّق»: صاحب التوثيق، أو مشارك أكّد مشاركته. المدعو غير المؤكِّد لا يُحسب */
+  const markDone = m => (m.role||'owner')!=='participant' || m.confirm==='confirmed';
+  const markPartPending = m => (m.role||'owner')==='participant' && m.confirm==='invited';
+
   /* ---------- نموذج التوثيق المطبوع ---------- */
   function qrImg(url){
     try{ if(!url || typeof g.qrcode!=='function') return ''; const q=g.qrcode(0,'M'); q.addData(url); q.make(); return q.createDataURL(4,2); }catch(e){ return ''; }
@@ -438,7 +447,10 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     o = o||{};
     const names = a=>(a||[]).map(x=>x.name).filter(Boolean).join('، ');
     const stuN = (ev.participants||[]).filter(p=>p.type==='student').length;
-    const stfNames = names((ev.participants||[]).filter(p=>p.type==='staff'));
+    const conf = o.conf || null, viewer = o.viewerUid || '';
+    let stfList = (ev.participants||[]).filter(p=>p.type==='staff' && p.uid!==viewer);
+    if(viewer && ev.documentedBy && ev.documentedBy!==viewer) stfList = [{uid:ev.documentedBy,name:ev.documentedByName||''}].concat(stfList);
+    const stfNames = stfList.map(x=>(x.name||'')+((conf && x.uid!==ev.documentedBy && !conf.has(x.uid))?' (لم يؤكد بعد)':'')).filter(Boolean).join('، ');
     const parts = [stuN?('طلاب (عددهم '+arN(stuN)+')'):'', stfNames].filter(Boolean).join(' — ') || '—';
     const ph = (ev.photos||[]).slice(0,2);
     const qr = qrImg(ev.evidenceUrl);
@@ -468,7 +480,14 @@ ${ev.evidenceUrl?'<div class="dfq">'+(qr?'<img src="'+qr+'" alt="QR">':'')+'<div
     const w = openPreview('نموذج توثيق تنفيذ برنامج / مبادرة');
     const ctx = await g.FormHdr.resolve({ db:env.db, session:env.session, period:env.period });
     const coord = ev.approvedByName || (o&&o.coordinator) || '';
-    const html = g.FormHdr.doc({ title:'نموذج توثيق تنفيذ برنامج / مبادرة', formTitle:'نموذج توثيق تنفيذ برنامج / مبادرة', ctx, noPrintBtn:true, body:docFormBody(ev,{coordinator:coord, principal:ctx.principal}) });
+    let conf = null;
+    if(ev.openEventId && (ev.partUids||[]).length){
+      try{
+        const q = await env.db.collection('actOpenMarks').where('schoolId','==',env.sid).where('period','==',env.period).get();
+        conf = new Set(q.docs.map(d=>d.data()).filter(m=>m.openEventId===ev.openEventId && (m.role||'owner')==='participant' && m.confirm==='confirmed').map(m=>m.uid));
+      }catch(e){ conf = null; }
+    }
+    const html = g.FormHdr.doc({ title:'نموذج توثيق تنفيذ برنامج / مبادرة', formTitle:'نموذج توثيق تنفيذ برنامج / مبادرة', ctx, noPrintBtn:true, body:docFormBody(ev,{coordinator:coord, principal:ctx.principal, conf, viewerUid:(o&&o.viewerUid)||''}) });
     w.setHtml(html);
   }
   /* طباعة جدول عام بترويسة النموذج الموحدة */
@@ -484,5 +503,5 @@ ${ev.evidenceUrl?'<div class="dfq">'+(qr?'<img src="'+qr+'" alt="QR">':'')+'<div
   g.ACT = { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS, ROLE_NAMES,
     today, addDays, hijri, dayName, injectCss, openPreview, centerTab, loadState, saveState, modal, toast, confirmBox, pickHtml, pickInit, pickGet,
     keyOf, list, getDoc, create, patch, by, loadStaff, loadRoster, classLabel,
-    compress, compressFit, uploadPhoto, openDocForm, docFormBody, printDoc, printPage, qrImg };
+    compress, compressFit, uploadPhoto, openDocForm, docFormBody, printDoc, printPage, qrImg, markDone, markPartPending };
 })(window);

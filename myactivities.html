@@ -20,26 +20,28 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="mn-dialog.js?v=2026-10-06.1"></script>
 <script src="users-api.js"></script>
-<script src="form-header.js?v=2026-10-15.3"></script>
+<script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-16.3"></script>
+<script src="activity-core.js?v=2026-10-16.4"></script>
 <script>
 (function(){
 const { esc, arN:N, $ } = ACT;
-const S = { env:null, tab:'mine', assigns:[], opens:[], mine:[], staff:null, roster:null };
+const S = { env:null, tab:'mine', assigns:[], opens:[], mine:[], marks:[], staff:null, roster:null };
+const isExpired = o=>o.deadlineMs ? o.deadlineMs < Date.now() : (o.deadline ? o.deadline < ACT.today() : false);
 const chip = (t,c)=>'<span class="dh-chip '+(c||'')+'">'+esc(t)+'</span>';
 
 async function load(){
   const e = S.env, uid = e.me.id, base = c=>e.db.collection(c).where('schoolId','==',e.sid).where('period','==',e.period);
-  const [a,o,m] = await Promise.all([
+  const [a,o,m,mk] = await Promise.all([
     base('actAssignments').where('teacherId','==',uid).where('status','==','approved').get(),
     base('actOpenEvents').where('status','==','open').get(),
-    base('activityEvents').where('documentedBy','==',uid).get()
+    base('activityEvents').where('documentedBy','==',uid).get(),
+    base('actOpenMarks').get()
   ]);
+  S.marks = mk.docs.map(d=>Object.assign({id:d.id},d.data()));
   S.assigns = a.docs.map(d=>Object.assign({id:d.id},d.data()));
-  const t = ACT.today();
-  S.opens = o.docs.map(d=>Object.assign({id:d.id},d.data())).filter(x=>!x.deadline || x.deadline>=t);
+  S.opens = o.docs.map(d=>Object.assign({id:d.id},d.data())).sort((x,y)=>(y.ts||0)-(x.ts||0));
   S.mine = m.docs.map(d=>Object.assign({id:d.id},d.data())).sort((x,y)=>(y.date||'').localeCompare(x.date||''));
 }
 const evOf = (a,i)=>S.mine.find(x=>x.assignmentId===a.id && x.programIdx===i);
@@ -65,13 +67,21 @@ function vMine(){
       +(ev?'<button class="ac-btn sec" data-a="ev-print" data-id="'+ev.id+'">معاينة النموذج</button>':'')+'</div></div>';
   }).join('')).join('');
 }
+function markState(m){ return m.state==='approved'?'معتمد':(m.state==='returned'?'أُعيد للتعديل':'بانتظار الاعتماد'); }
 function vOpen(){
   if(!S.opens.length) return '<div class="dh-card dh-empty">لا توجد أنشطة متاحة حاليًا.</div>';
   return S.opens.map(o=>{
-    const ev = S.mine.find(x=>x.openEventId===o.id), canDoc = !ev || ev.approvalStatus==='returned';
-    return '<div class="dh-card"><div class="ac-row sb"><b>'+esc(o.title)+'</b>'+(o.domain?chip('المجال: '+o.domain):'')+'</div><div class="dh-sub">'+esc(o.description||'')+'</div>'
-      +'<div class="dh-sub">آخر موعد للتوثيق: '+(o.deadline?ACT.hijri(o.deadline):'غير محدد')+'</div>'+stateLine(ev)
-      +'<div class="ac-row" style="margin-top:6px">'+(canDoc?'<button class="ac-btn" data-a="doc-open" data-id="'+o.id+'">📝 '+(ev?'تعديل التوثيق':'توثيق التنفيذ')+'</button>':'')+(ev?'<button class="ac-btn sec" data-a="ev-print" data-id="'+ev.id+'">معاينة النموذج</button>':'')+'</div></div>';
+    const ev = S.mine.find(x=>x.openEventId===o.id), exp = isExpired(o), closed = exp;
+    const canDoc = !closed && (!ev || ev.approvalStatus==='returned');
+    const mk = S.marks.filter(m=>m.openEventId===o.id), done = new Set(mk.map(m=>m.uid));
+    const rest = (S.staff||[]).filter(s=>!done.has(s.id));
+    const lists = '<details class="ac-acc" style="margin-top:6px"><summary><span>من وثّق ومن لم يوثّق</span><span>'+chip('وثّق '+N(mk.length),'ok')+(S.staff?' '+chip('لم يوثّق '+N(rest.length), rest.length?'warn':''):'')+'</span></summary><div class="in">'
+      +(mk.length?mk.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','ar')).map(m=>'<div class="dh-item"><span>✅ '+esc(m.name||'')+'</span>'+chip(markState(m), m.state==='approved'?'ok':(m.state==='returned'?'bad':'warn'))+'</div>').join(''):'<div class="dh-empty">لم يوثّق أحد بعد.</div>')
+      +(S.staff&&rest.length?'<div style="margin-top:8px"><b>لم يوثّقوا بعد</b></div>'+rest.map(m=>'<div class="dh-item"><span>○ '+esc(m.name)+'</span></div>').join(''):'')+'</div></details>';
+    return '<div class="dh-card"><div class="ac-row sb"><b>'+esc(o.title)+'</b>'+(exp?chip('انتهى موعد التوثيق','bad'):(o.domain?chip('المجال: '+o.domain):''))+'</div><div class="dh-sub">'+esc(o.description||'')+'</div>'
+      +'<div class="dh-sub">'+(o.domain&&exp?'المجال: '+esc(o.domain)+' — ':'')+'آخر موعد للتوثيق: '+(o.deadline?ACT.hijri(o.deadline):'غير محدد')+'</div>'+stateLine(ev)
+      +(exp&&!ev?'<div class="dh-sub" style="color:#b42318">أُغلق التوثيق لانتهاء الموعد.</div>':'')
+      +'<div class="ac-row" style="margin-top:6px">'+(canDoc?'<button class="ac-btn" data-a="doc-open" data-id="'+o.id+'">📝 '+(ev?'تعديل التوثيق':'توثيق التنفيذ')+'</button>':'')+(ev?'<button class="ac-btn sec" data-a="ev-print" data-id="'+ev.id+'">معاينة النموذج</button>':'')+'</div>'+lists+'</div>';
   }).join('');
 }
 function vDone(){
@@ -80,7 +90,7 @@ function vDone(){
     +S.mine.map((x,i)=>'<tr><td>'+N(i+1)+'</td><td>'+esc(x.title)+'</td><td>'+ACT.hijri(x.date)+'</td><td>'+({approved:'✅ معتمد',pending:'⏳ بانتظار الاعتماد',returned:'↩ أُعيد للتعديل'})[x.approvalStatus]+'</td><td><button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.id+'">معاينة</button></td></tr>').join('')+'</table></div>';
 }
 function paint(){
-  const tabs = [['mine','تكاليفي',S.assigns.reduce((n,a)=>n+(a.programs||[]).filter((p,i)=>!evOf(a,i)).length,0)],['open','أنشطة متاحة',S.opens.filter(o=>!S.mine.find(x=>x.openEventId===o.id)).length],['done','أنشطتي المنفذة',0]];
+  const tabs = [['mine','تكاليفي',S.assigns.reduce((n,a)=>n+(a.programs||[]).filter((p,i)=>!evOf(a,i)).length,0)],['open','أنشطة متاحة',S.opens.filter(o=>o.status==='open' && !isExpired(o) && !S.mine.find(x=>x.openEventId===o.id)).length],['done','أنشطتي المنفذة',0]];
   const barH = tabs.map(t=>'<button class="ac-tab'+(S.tab===t[0]?' on':'')+'" data-a="tab" data-v="'+t[0]+'">'+t[1]+(t[2]?'<span class="n">'+N(t[2])+'</span>':'')+'</button>').join('');
   let bar = document.getElementById('acMainBar');
   if(!bar || !S.env.main.contains(bar)){ S.env.main.innerHTML = '<div class="ac-tabs" id="acMainBar">'+barH+'</div><div id="acBody"></div>'; bar = document.getElementById('acMainBar'); S._ctab = null; }
@@ -99,7 +109,14 @@ const H = {
   },
   'doc-open': async el=>{
     const o = S.opens.find(x=>x.id===el.dataset.id), ex = S.mine.find(x=>x.openEventId===o.id) || null;
-    await openDoc({ existing:ex, prefill:{ title:o.title, domain:o.domain||'' }, source:{ type:'open', openEventId:o.id } });
+    if(isExpired(o)||o.status!=='open'){ ACT.toast('انتهى موعد التوثيق لهذا النشاط'); return; }
+    await openDoc({ existing:ex, lockTitleDomain:true,
+      infoHtml:'<b>بيانات النشاط من رائد النشاط (للاطلاع فقط):</b><br>'+esc(o.description||'')+'<br>آخر موعد للتوثيق: '+(o.deadline?ACT.hijri(o.deadline):'—'),
+      prefill:{ title:o.title, domain:o.domain||'' }, source:{ type:'open', openEventId:o.id },
+      onSaved: async ()=>{
+        await S.env.db.collection('actOpenMarks').doc(o.id+'_'+S.env.me.id).set({ schoolId:S.env.sid, period:S.env.period, openEventId:o.id, uid:S.env.me.id, name:S.env.me.name, state:'pending', updatedAt:Date.now() },{ merge:true });
+        await load(); paint();
+      } });
   },
   'ev-print': async el=>{ const ev = S.mine.find(x=>x.id===el.dataset.id); if(ev) await ACT.printDoc(S.env, ev, {}); }
 };
@@ -110,6 +127,7 @@ Dash.boot({
     ACT.injectCss(); S.env = env;
     env.main.innerHTML = '<div class="dh-empty">جارٍ التحميل...</div>';
     await load();
+    people().then(()=>paint()).catch(()=>{});
     const u = ACT.loadState(env,'mine'); if(['mine','open','done'].includes(u.tab)) S.tab = u.tab;
     paint();
     env.main.addEventListener('click', async e=>{

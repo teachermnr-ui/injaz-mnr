@@ -34,8 +34,7 @@
     { id:'civil_defense',    title:'اليوم العالمي للدفاع المدني',     freq:'سنوي',  clubs:['scout'] },
     { id:'disability_day',   title:'اليوم العالمي لذوي الإعاقة',      freq:'سنوي',  clubs:['social'] },
     { id:'flag_day',         title:'يوم العلم',                       freq:'سنوي',  clubs:['social','cultural'] },
-    { id:'founding_day',     title:'يوم التأسيس',                     freq:'سنوي',  clubs:['social','cultural'] },
-    { id:'school_broadcast', title:'الإذاعة المدرسية',                freq:'يومي',  clubs:['cultural'] }
+    { id:'founding_day',     title:'يوم التأسيس',                     freq:'سنوي',  clubs:['social','cultural'] }
   ];
   const DAYS = [['sunday','الأحد'],['monday','الاثنين'],['tuesday','الثلاثاء'],['wednesday','الأربعاء'],['thursday','الخميس']];
   const PLAN_ST = { planned:'مخطط', executed:'مُنفَّذ', cancelled:'ملغى' };
@@ -349,10 +348,11 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
     const exSel = (pre.executors||[]).map(p=>p.uid);
     const stuItems = roster.students.map(s=>({ id:s.seat, name:s.name, sub:classLabel(roster,s.classCode) }));
     const stfItems = staff.map(s=>({ id:s.id, name:s.name, sub:ROLE_NAMES[s.role]||'' }));
-    const body = `
-      <div class="ac-f"><label>اسم البرنامج / المبادرة *</label><input class="ac-in" id="d_title" value="${esc(pre.title)}"></div>
+    const LK = opts.lockTitleDomain ? ' readonly style="background:#f1f5f7"' : '';
+    const body = `${opts.infoHtml?'<div class="ac-f" style="background:#eef6f8;border:1px solid #cfe2e8;border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.8">'+opts.infoHtml+'</div>':''}
+      <div class="ac-f"><label>اسم البرنامج / المبادرة *</label><input class="ac-in" id="d_title" value="${esc(pre.title)}"${LK}></div>
       <div class="ac-2c">
-        <div class="ac-f"><label>المجال *</label><select class="ac-sel" id="d_domain"><option value="">— اختر —</option>${DOMAINS.map(d=>'<option'+(pre.domain===d?' selected':'')+'>'+d+'</option>').join('')}</select></div>
+        <div class="ac-f"><label>المجال *</label><select class="ac-sel" id="d_domain"${opts.lockTitleDomain?' disabled':''}><option value="">— اختر —</option>${DOMAINS.map(d=>'<option'+(pre.domain===d?' selected':'')+'>'+d+'</option>').join('')}</select></div>
         <div class="ac-f"><label>تاريخ التنفيذ *</label><input type="date" class="ac-in" id="d_date" value="${esc(pre.date)}"></div>
         <div class="ac-f"><label>مكان التنفيذ *</label><input class="ac-in" id="d_loc" value="${esc(pre.location)}"></div>
         <div class="ac-f"><label>مدة التنفيذ *</label><input class="ac-in" id="d_dur" placeholder="مثال: يوم واحد" value="${esc(pre.duration)}"></div>
@@ -459,7 +459,7 @@ ${row('المستفيدون / عددهم', ((ev.beneficiaries||{}).type||'')+' �
 <tr><th colspan="2">الأهداف</th></tr><tr><td colspan="2" class="big">${esc(ev.objectives)}</td></tr>
 <tr><th colspan="2">خطوات التنفيذ / الوصف</th></tr><tr><td colspan="2" class="big">${esc(ev.executionSteps||ev.description)}</td></tr>
 <tr><th colspan="2">الشواهد</th></tr>
-<tr><td colspan="2"><div class="dfp">${[0,1].map(i=>'<div class="ph">'+(ph[i]?'<img src="'+esc(ph[i].url)+'" crossorigin="anonymous">':(i===0?'صورة الشاهد الأول':'صورة الشاهد الثاني (اختياري)'))+'</div>').join('')}</div>
+<tr><td colspan="2"><div class="dfp">${[0,1].map(i=>'<div class="ph">'+(ph[i]?'<img src="'+esc(ph[i].url)+'">':(i===0?'صورة الشاهد الأول':'صورة الشاهد الثاني (اختياري)'))+'</div>').join('')}</div>
 ${ev.evidenceUrl?'<div class="dfq">'+(qr?'<img src="'+qr+'" alt="QR">':'')+'<div>رابط الشواهد:<br>'+esc(ev.evidenceUrl)+'</div></div>':''}</td></tr>
 </table>
 <div class="fh-sig" style="margin-top:28px"><span>رائد النشاط: ${esc(o.coordinator||'')}<br><br>التوقيع: ____________</span><span>قائد المدرسة: ${esc(o.principal||'')}<br><br>التوقيع: ____________</span></div>`;
@@ -468,7 +468,7 @@ ${ev.evidenceUrl?'<div class="dfq">'+(qr?'<img src="'+qr+'" alt="QR">':'')+'<div
     const w = openPreview('نموذج توثيق تنفيذ برنامج / مبادرة');
     const ctx = await g.FormHdr.resolve({ db:env.db, session:env.session, period:env.period });
     const coord = ev.approvedByName || (o&&o.coordinator) || '';
-    const html = g.FormHdr.doc({ title:'نموذج توثيق تنفيذ برنامج / مبادرة', formTitle:'نموذج توثيق تنفيذ برنامج / مبادرة', ctx, body:docFormBody(ev,{coordinator:coord, principal:ctx.principal}) });
+    const html = g.FormHdr.doc({ title:'نموذج توثيق تنفيذ برنامج / مبادرة', formTitle:'نموذج توثيق تنفيذ برنامج / مبادرة', ctx, noPrintBtn:true, body:docFormBody(ev,{coordinator:coord, principal:ctx.principal}) });
     w.setHtml(html);
   }
   /* طباعة جدول عام بترويسة النموذج الموحدة */
@@ -476,7 +476,7 @@ ${ev.evidenceUrl?'<div class="dfq">'+(qr?'<img src="'+qr+'" alt="QR">':'')+'<div
     const w = openPreview(formTitle);
     const ctx = await g.FormHdr.resolve({ db:env.db, session:env.session, period:env.period });
     const css = '.pt{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0}.pt th,.pt td{border:1.5px solid #17475e;padding:6px 9px;text-align:right}.pt th{background:#eaf2f4}.pp{font-size:15px;line-height:2;margin:8px 4px}';
-    const html = g.FormHdr.doc(Object.assign({ title:formTitle, formTitle, ctx, body, extraCss:css }, opts||{}));
+    const html = g.FormHdr.doc(Object.assign({ title:formTitle, formTitle, ctx, body, extraCss:css, noPrintBtn:true }, opts||{}));
     w.setHtml(html);
     return ctx;
   }

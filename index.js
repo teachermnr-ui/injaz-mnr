@@ -1,4 +1,4 @@
-// إصدار: 2026-10-16.1
+// إصدار: 2026-10-16.4
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -875,7 +875,8 @@ async function schoolAdminIds(db, sid) {
   return sa.docs.filter((d) => { const u = d.data(); return u.role === "schoolAdmin" && u.active !== false; }).map((d) => d.id);
 }
 async function actCoordinatorOf(db, sid, period) {
-  try { const c = await db.collection("activityConfig").doc(sid + "_" + (period || "first")).get(); return c.exists ? (c.data().coordinatorId || null) : null; } catch (e) { return null; }
+  // رائد النشاط = مقرر مجلس النشاط
+  try { const c = await db.collection("activityCouncil").doc(sid + "_" + (period || "first")).get(); return c.exists ? (c.data().secretaryId || null) : null; } catch (e) { return null; }
 }
 async function hActAssignment(db, a, cal, kind) {
   if (kind === "pending") {
@@ -894,12 +895,14 @@ async function hActEvent(db, e, cal, kind) {
     await notify(db, e.schoolId, [e.documentedBy], { title: "أُعيد توثيق نشاطك للتعديل", body: (e.title || "") + (e.returnNote ? " — " + e.returnNote : ""), link: "myactivities.html", tag: "act" }, cal);
   }
 }
-async function hActPlan(db, c, cal, kind) {
+async function hActPlan(db, c, cal, kind, label) {
+  // label: اسم الخطة (نادٍ أو «فعاليات المسار العام»)
+  const what = label || "الخطة العامة للنشاط";
   if (kind === "submitted") {
-    await notify(db, c.schoolId, await schoolAdminIds(db, c.schoolId), { title: "الخطة العامة للنشاط بانتظار اعتمادك", body: "قدّمها رائد النشاط", link: "activity.html", tag: "act" }, cal);
-  } else if (kind === "approved") {
-    const to = uniq([c.coordinatorId]);
-    if (to.length) await notify(db, c.schoolId, to, { title: "اعتُمدت الخطة العامة للنشاط", body: "اعتمدها قائد المدرسة", link: "activity.html", tag: "act" }, cal);
+    await notify(db, c.schoolId, await schoolAdminIds(db, c.schoolId), { title: "خطة نشاط بانتظار اعتمادك", body: what + " — قدّمها رائد النشاط", link: "activity.html", tag: "act" }, cal);
+  } else if (kind === "approved" || kind === "returned") {
+    const to = uniq([await actCoordinatorOf(db, c.schoolId, c.period)]);
+    if (to.length) await notify(db, c.schoolId, to, { title: kind === "approved" ? "اعتُمدت خطة نشاط" : "أُعيدت خطة نشاط للتعديل", body: what + (kind === "returned" && c.__note ? " — " + c.__note : ""), link: "activity.html", tag: "act" }, cal);
   }
 }
 
@@ -1038,9 +1041,22 @@ exports.pushWatcher = onSchedule({ schedule: "every 1 minutes", timeZone: "Asia/
     const cfq = await db.collection("activityConfig").where("updatedAt", ">", since).get();
     for (const d of cfq.docs) {
       const c = d.data(); if (!c.schoolId) continue;
-      const kind = c.planStatus === "submitted" ? "submitted" : (c.planStatus === "approved" ? "approved" : null);
-      if (!kind || !mark("acf_" + kind + "_" + d.id + "_" + (c.planApprovedAt || c.planSubmittedAt || 0))) continue;
-      if (!baselineOnly) await hActPlan(db, c, await calOf(c.schoolId), kind);
+      let kind = null, ts = 0;
+      if (c.generalState === "submitted") { kind = "submitted"; ts = c.generalSubmittedAt || 0; }
+      else if (c.generalState === "approved") { kind = "approved"; ts = c.generalApprovedAt || 0; }
+      else if (c.generalState === "draft" && c.generalReturnNote) { kind = "returned"; ts = c.generalReturnedAt || 0; }
+      if (!kind || !ts || !mark("acf_" + kind + "_" + d.id + "_" + ts)) continue;
+      if (!baselineOnly) await hActPlan(db, Object.assign({}, c, { __note: c.generalReturnNote }), await calOf(c.schoolId), kind, "فعاليات المسار العام");
+    }
+    const clq = await db.collection("activityClubs").where("updatedAt", ">", since).get();
+    for (const d of clq.docs) {
+      const c = d.data(); if (!c.schoolId) continue;
+      let kind = null, ts = 0;
+      if (c.planState === "submitted") { kind = "submitted"; ts = c.planSubmittedAt || 0; }
+      else if (c.planState === "approved") { kind = "approved"; ts = c.planApprovedAt || 0; }
+      else if (c.planState === "draft" && c.planReturnNote) { kind = "returned"; ts = c.planReturnedAt || 0; }
+      if (!kind || !ts || !mark("acl_" + kind + "_" + d.id + "_" + ts)) continue;
+      if (!baselineOnly) await hActPlan(db, Object.assign({}, c, { __note: c.planReturnNote }), await calOf(c.schoolId), kind, "خطة " + (c.name || "النادي"));
     }
   } catch (e) { console.error("pushWatcher activity", e); }
 

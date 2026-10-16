@@ -1,4 +1,4 @@
-// إصدار: 2026-10-15.3
+// إصدار: 2026-10-16.4
 /* الترويسة الموحَّدة للنماذج المطبوعة (البند ٤).
    الشكل: لوحة داكنة بانحناء سفلي — يمين: (المملكة / الوزارة / إدارة التعليم / المدرسة) موسَّطة، وسط: شعار الوزارة،
    يسار: (العام الدراسي / الفصل الدراسي ومعهما بنود النموذج مثل المادة والصف) محاذاة يمين، وتحتها لوحة عنوان النموذج.
@@ -82,7 +82,7 @@ body.fh-light .fh .fh-c .fh-wc,.fh.fh-lt .fh-c .fh-wc{display:none}body.fh-light
     const c=o.ctx||{};
     return '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>'+esc(o.title||o.formTitle||'')+'</title><style>'
       +'@page{size:A4 '+(o.landscape?'landscape':'portrait')+';margin:'+(o.margin||'10mm')+'}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;padding:8px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-      +css()+(o.extraCss||'')+'</style></head><body>'+optionBar()+header(o)+(o.body||'')+(o.signatures?signatures(c,o.teacherLabel):'')+script()+'</body></html>';
+      +css()+(o.extraCss||'')+'</style></head><body>'+optionBar(o.noPrintBtn)+header(o)+(o.body||'')+(o.signatures?signatures(c,o.teacherLabel):'')+script()+'</body></html>';
   }
   function lightPref(){ try{ return localStorage.getItem(LS_KEY)==='1'; }catch(e){ return false; } }
   g.FormHdr = { lightPref, resolve, css, header, optionBar, script, signatures, doc, termName, yearTxt, schoolTxt };

@@ -1,4 +1,4 @@
-// إصدار: 2026-10-17.1
+// إصدار: 2026-10-17.2
 /* نواة منصة النشاط المدرسي — مشتركة بين activity.html (الرائد والمدير) وmyactivities.html (المعلم).
    تحوي: الثوابت (الأندية الوزارية، قالب المسار العام)، التاريخ الهجري (أم القرى)، تحميل البيانات وحفظها،
    النوافذ والاختيار المتعدد، ضغط الصور ورفعها إلى Firebase Storage، ونموذج توثيق التنفيذ المطبوع (QR + شواهد). */
@@ -90,6 +90,8 @@
 .ac-pick label{display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:7px;font-size:13px}
 .ac-pick label:hover{background:#f1f6f5}
 .ac-pick .cnt{font-size:12px;color:var(--muted)}
+.ac-pick label.ac-lk{opacity:.5;cursor:not-allowed}.ac-pick .ac-xt{margin-inline-start:auto;font:700 11px Tajawal,system-ui;color:#8a5a00;background:#fff3d6;border-radius:6px;padding:1px 6px}
+.ac-phb{display:inline-flex;align-items:center;gap:6px;cursor:pointer}.ac-phb.off{opacity:.5;pointer-events:none}
 .ac-pick .gh{position:sticky;top:0;background:#e3eef0;color:#17475e;font:800 12.5px Tajawal,system-ui;padding:4px 8px;border-radius:7px;margin-top:4px}
 .ac-steps{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap;margin:6px 0}
 .ac-steps b{padding:2px 9px;border-radius:12px;background:#eef2f1}.ac-steps b.on{background:var(--brand-l);color:var(--brand-2)}
@@ -403,7 +405,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
       <div class="ac-f"><label>خطوات التنفيذ / الوصف *</label><textarea class="ac-ta" id="d_steps">${esc(pre.executionSteps)}</textarea></div>
       <div class="ac-f"><label>صور الشواهد * (الأولى إلزامية، وحد أقصى صورتان — تُضغط تلقائيًا)</label>
         <div class="dh-sub" style="color:#b45309;font-weight:700;margin:0 0 4px">⚠ اختر الصور التي تثبت وجود الموثَّقين (المنفِّذين والمشاركين).</div>
-        <input type="file" accept="image/*" id="d_file" multiple><div class="ac-ph" id="d_ph"></div></div>
+        <div class="ac-row" style="align-items:center;gap:10px;position:relative"><label class="ac-btn sec sm ac-phb" id="d_fbtn" for="d_file">📷 إضافة صورة</label><span class="dh-sub" id="d_phc"></span><input type="file" accept="image/*" id="d_file" multiple style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);inset-inline-start:0;top:0"></div><div class="ac-ph" id="d_ph"></div></div>
       <div class="ac-f"><label>رابط الشواهد (اختياري — يُولَّد منه رمز QR في النسخة المطبوعة)</label><input class="ac-in" id="d_url" placeholder="https://" value="${esc(pre.evidenceUrl)}"></div>`;
     const m = modal({ title: ex?'تعديل توثيق التنفيذ':'توثيق التنفيذ', body, wide:true, noDismiss:true,
       buttons:[
@@ -424,7 +426,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
           const stuName = seat=>(roster.students.find(s=>s.seat===seat)||{}).name||'';
           const execs = execIds.map(id=>({ uid:id, name:nameOf(id), type:'staff' }));
           const parts = pickGet(api.el,'d_stu').map(s=>({ uid:s, name:stuName(s), type:'student' }))
-            .concat(pickGet(api.el,'d_stf').map(s=>({ uid:s, name:nameOf(s), type:'staff' })));
+            .concat(pickGet(api.el,'d_stf').filter(s=>!execIds.includes(s)).map(s=>({ uid:s, name:nameOf(s), type:'staff' })));
           const base = ex ? ex.id : (opts.eventId || env.db.collection('activityEvents').doc().id);
           if(opts.beforeSave){ const bad = await opts.beforeSave(); if(bad){ toast(bad); return false; } }
           const up = [];
@@ -459,7 +461,23 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
       ],
       onOpen: api=>{
         ['d_exec','d_stu','d_stf'].forEach(id=>pickInit(api.el,id));
+        /* المنفِّذ لا يكون مشاركًا والعكس: من اختير في قائمة يُعطَّل في الأخرى (المنفِّذ هو الأسبق) */
+        const xtag = (c,t)=>{ const l = c.closest('label'); if(!l) return; let x = l.querySelector('.ac-xt'); if(t){ if(!x){ x=document.createElement('span'); x.className='ac-xt'; l.appendChild(x); } x.textContent=t; } else if(x) x.remove(); l.classList.toggle('ac-lk', !!t); };
+        const recount = id=>{ const b = api.q('#'+id); if(b) b.querySelector('[data-pick-cnt]').textContent = 'المحدد: '+arN(pickGet(api.el,id).length); };
+        const syncXP = ()=>{
+          const bx = api.q('#d_exec'), bs = api.q('#d_stf'); if(!bx || !bs) return;
+          const exOn = new Set(pickGet(api.el,'d_exec'));
+          bs.querySelectorAll('input[type=checkbox]').forEach(c=>{ const lk = exOn.has(c.value); if(lk) c.checked=false; c.disabled=lk; xtag(c, lk?'منفِّذ':''); });
+          const stOn = new Set(pickGet(api.el,'d_stf'));
+          bx.querySelectorAll('input[type=checkbox]').forEach(c=>{ const lk = !c.checked && stOn.has(c.value); c.disabled=lk; xtag(c, lk?'مشارك':''); });
+          recount('d_exec'); recount('d_stf');
+        };
+        api.el.addEventListener('change', e=>{ if(e.target.closest('#d_exec') || e.target.closest('#d_stf')) syncXP(); });
+        syncXP();
         const draw = ()=>{
+          const n = photos.length+newFiles.length, full = n>=2;
+          api.q('#d_phc').textContent = arN(n)+'/'+arN(2)+(full?' — اكتمل العدد':'');
+          api.q('#d_fbtn').classList.toggle('off', full); api.q('#d_file').disabled = full;
           const host = api.q('#d_ph'); host.innerHTML='';
           photos.forEach((p,i)=>{ const d=document.createElement('div'); d.className='p'; d.innerHTML='<img src="'+esc(p.url)+'"><button type="button" title="حذف">×</button>'; d.querySelector('button').onclick=()=>{ photos.splice(i,1); draw(); }; host.appendChild(d); });
           newFiles.forEach((f,i)=>{ const d=document.createElement('div'); d.className='p'; const u=URL.createObjectURL(f); d.innerHTML='<img src="'+u+'"><button type="button" title="حذف">×</button>'; d.querySelector('button').onclick=()=>{ newFiles.splice(i,1); draw(); }; host.appendChild(d); });

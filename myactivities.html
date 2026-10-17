@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-17.1 -->
+<!-- إصدار: 2026-10-17.2 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة — «الأنشطة اللاصفية» للمعلم: تكاليفي، أنشطة متاحة، أنشطتي المنفذة -->
 <html lang="ar" dir="rtl">
 <head>
@@ -23,19 +23,20 @@
 <script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-17.1"></script>
+<script src="activity-core.js?v=2026-10-17.2"></script>
 <script>
 (function(){
 const { esc, arN:N, $ } = ACT;
 const S = { env:null, tab:'mine', assigns:[], opens:[], mine:[], marks:[], joined:[], clubs:[], staff:null, roster:null };
 const isExpired = o=>o.deadlineMs ? o.deadlineMs < Date.now() : (o.deadline ? o.deadline < ACT.today() : false);
+const isOver = o=>isExpired(o) || o.status!=='open';     // انتهى أو أغلقه الرائد
 const chip = (t,c)=>'<span class="dh-chip '+(c||'')+'">'+esc(t)+'</span>';
 
 async function load(){
   const e = S.env, uid = e.me.id, base = c=>e.db.collection(c).where('schoolId','==',e.sid).where('period','==',e.period);
   const [a,o,m,mk] = await Promise.all([
     base('actAssignments').where('teacherId','==',uid).where('status','==','approved').get(),
-    base('actOpenEvents').where('status','==','open').get(),
+    base('actOpenEvents').get(),
     base('activityEvents').where('documentedBy','==',uid).get(),
     base('actOpenMarks').get()
   ]);
@@ -54,9 +55,12 @@ async function load(){
 const myMark = o=>S.marks.find(m=>m.id===o.id+'_'+S.env.me.id);
 const partMark = o=>{ const m = myMark(o); return (m && m.role==='participant' && (m.confirm==='invited'||m.confirm==='confirmed')) ? m : null; };
 const evOf = (a,i)=>S.mine.find(x=>x.assignmentId===a.id && x.programIdx===i);
+/* تاريخ انتهاء برنامج التكليف (endDate)؛ التكليفات القديمة ذات الموعد النصي لا تنتهي */
+const progExpired = p=>!!(p && p.endDate && p.endDate < ACT.today());
+const progNeedsDoc = (a,i)=>{ const ev = evOf(a,i); return ev ? ev.approvalStatus==='returned' : !progExpired((a.programs||[])[i]); };
 const stepBar = (ev)=>{
   const s2 = !!ev, s3 = ev && ev.approvalStatus==='approved';
-  return '<div class="ac-steps"><b class="on">● القائد اعتمد</b>—<b class="'+(s2?'on':'')+'">'+(s2?'●':'○')+' المعلم وثّق</b>—<b class="'+(s3?'on':'')+'">'+(s3?'●':'○')+' الرائد اعتمد</b></div>';
+  return '<div class="ac-steps"><b class="on">● القائد اعتمد</b>—<b class="'+(s2?'on':'')+'">'+(s2?'●':'○')+' المعلم وثّق</b>—<b class="'+(s3?'on':'')+'">'+(s3?'●':'○')+' رائد النشاط اعتمد</b></div>';
 };
 function stateLine(ev){
   if(!ev) return '';
@@ -71,7 +75,7 @@ const clubNeedsDoc = ({c,it})=>{ const ev = evOfClub(c,it); return it.status==='
 function vClubItems(){
   return clubItems().filter(({c,it})=>{ const ev = evOfClub(c,it); return !(ev && ev.approvalStatus==='approved'); }).map(({c,it})=>{
     const ev = evOfClub(c,it), others = it.status==='executed' && !ev;
-    const steps = '<div class="ac-steps"><b class="on">● كلّفك رائد النشاط</b>—<b class="'+(ev?'on':'')+'">'+(ev?'●':'○')+' وثّقت</b>—<b class="">○ الرائد يعتمد</b></div>';
+    const steps = '<div class="ac-steps"><b class="on">● كلّفك رائد النشاط</b>—<b class="'+(ev?'on':'')+'">'+(ev?'●':'○')+' وثّقت</b>—<b class="">○ اعتماد رائد النشاط</b></div>';
     return '<div class="dh-card"><div class="ac-row sb"><b>'+esc(it.title)+'</b><span>'+chip('فعالية نادٍ')+' '+chip(c.name||'')+'</span></div>'
       +'<div class="dh-sub">'+(it.expectedDate?'التاريخ المتوقع: '+ACT.hijri(it.expectedDate):'')+'</div>'
       +(others ? '<div class="dh-sub" style="margin-top:6px">✔ نُفِّذ من رائد النشاط ولا يحتاج توثيقًا منك.</div>' : steps+stateLine(ev))
@@ -84,10 +88,10 @@ function vMine(){
   const cl = vClubItems();
   if(!S.assigns.length) return cl || '<div class="dh-card dh-empty">لا توجد تكليفات معتمدة لك حاليًا.</div>';
   return cl + S.assigns.map(a=>(a.programs||[]).map((p,i)=>{
-    const ev = evOf(a,i), canDoc = !ev || ev.approvalStatus==='returned';
+    const ev = evOf(a,i), expd = !ev && progExpired(p), canDoc = progNeedsDoc(a,i);
     return '<div class="dh-card"><div class="ac-row sb"><b>'+esc(p.name)+'</b>'+chip(a.clubName||'')+'</div>'
-      +'<div class="dh-sub">'+(p.target?'الفئة: '+esc(p.target)+' — ':'')+(p.kpi?'الهدف: '+esc(p.kpi)+' — ':'')+(p.timeline?esc(p.timeline):'')+'</div>'
-      +stepBar(ev)+stateLine(ev)
+      +'<div class="dh-sub">'+[p.target?'الفئة: '+esc(p.target):'', p.endDate?'تاريخ انتهاء التكليف: '+ACT.hijri(p.endDate):(p.timeline?'الموعد: '+esc(p.timeline):'')].filter(Boolean).join(' — ')+'</div>'
+      +(expd ? '<div style="color:#b42318;font-weight:700;margin-top:6px">⛔ منتهي — انتهى تاريخ التكليف قبل توثيقه</div>' : stepBar(ev)+stateLine(ev))
       +'<div class="ac-row" style="margin-top:6px">'
       +(canDoc?'<button class="ac-btn" data-a="doc-asg" data-id="'+a.id+'" data-i="'+i+'">📝 '+(ev?'تعديل التوثيق وإعادة الإرسال':'توثيق التنفيذ')+'</button>':'')
       +(ev?'<button class="ac-btn sec" data-a="ev-print" data-id="'+ev.id+'">معاينة النموذج</button>':'')+'</div></div>';
@@ -97,20 +101,25 @@ function markState(m){ return m.state==='approved'?'معتمد':(m.state==='retu
 function vOpen(){
   if(!S.opens.length) return '<div class="dh-card dh-empty">لا توجد أنشطة متاحة حاليًا.</div>';
   const U = ACT.ustaz;
-  const list = S.opens.filter(o=>{
+  const list = S.opens.slice().sort((x,y)=>(isOver(x)?1:0)-(isOver(y)?1:0)).filter(o=>{
     /* ما اعتمده الرائد انتقل إلى «أنشطتي المنفذة» ويختفي من هنا (عند الموثِّق وعند المشارك المؤكِّد) */
     const e = S.mine.find(x=>x.openEventId===o.id), pm0 = partMark(o), j0 = pm0 ? S.joined.find(x=>x.id===pm0.evId) : null;
     return !((e && e.approvalStatus==='approved') || (j0 && j0.approvalStatus==='approved'));
   });
   if(!list.length) return '<div class="dh-card dh-empty">لا توجد أنشطة متاحة حاليًا.</div>';
   return list.map(o=>{
-    const ev = S.mine.find(x=>x.openEventId===o.id), exp = isExpired(o), pm = partMark(o);
+    const ev = S.mine.find(x=>x.openEventId===o.id), exp = isOver(o), pm = partMark(o);
     const jev = pm ? S.joined.find(x=>x.id===pm.evId) : null;
+    /* النشاط الملغى من الرائد ولم أتفاعل معه لا يظهر */
+    if(o.status!=='open' && !isExpired(o) && !ev && !pm) return '';
     const canDoc = !exp && !pm && (!ev || ev.approvalStatus==='returned');
     const info = '<div>'+esc(o.description||'')+'</div><div class="dh-sub">'+(o.domain?'المجال: '+esc(o.domain)+' — ':'')+'آخر موعد للتوثيق: '+(o.deadline?ACT.hijri(o.deadline):'غير محدد')+'</div>';
     const stOf = e=>e.approvalStatus==='approved' ? ['ok','✅ تم التوثيق والاعتماد'] : e.approvalStatus==='returned' ? ['bad','↩ أعاده رائد النشاط للتعديل'+(e.returnNote?': '+esc(e.returnNote):'')] : ['warn','⏳ بانتظار اعتماد رائد النشاط'];
     let tone, status, body = info, actions = '';
-    if(pm && pm.confirm==='invited'){
+    if(pm && pm.confirm==='invited' && exp){
+      tone = 'bad'; status = '⛔ منتهي — انتهى الموعد قبل تأكيد مشاركتك مع '+esc(U(pm.ownerName||''));
+      actions = '<button class="ac-btn sec" data-a="part-view" data-id="'+(jev?jev.id:'')+'">عرض ملف التوثيق</button>';
+    } else if(pm && pm.confirm==='invited'){
       tone = 'warn'; status = '🔔 اختارك '+esc(U(pm.ownerName||''))+' مشاركًا في توثيقه — بانتظار ردّك';
       body += '<div class="dh-sub" style="background:#fff7e6;border:1px solid #f3d9a4;border-radius:10px;padding:9px 12px;line-height:1.9;margin-top:6px">اطّلع على الملف ثم أكّد مشاركتك أو اعتذر. لا تُحسب موثّقًا إلا بعد التأكيد.</div>';
       actions = '<button class="ac-btn sec" data-a="part-view" data-id="'+(jev?jev.id:'')+'">عرض ملف التوثيق</button><button class="ac-btn" data-a="part-confirm" data-id="'+o.id+'">✅ أؤكد مشاركتي</button><button class="ac-btn sec" data-a="part-decline" data-id="'+o.id+'">لا أؤكد</button>';
@@ -122,13 +131,13 @@ function vOpen(){
       const s2 = stOf(ev); tone = s2[0]; status = s2[1];
       actions = (canDoc?'<button class="ac-btn" data-a="doc-open" data-id="'+o.id+'">📝 تعديل التوثيق</button>':'')+'<button class="ac-btn sec" data-a="ev-print" data-id="'+ev.id+'">معاينة النموذج</button>';
     } else if(exp){
-      tone = 'bad'; status = 'انتهى موعد التوثيق'; body += '<div class="dh-sub" style="color:#b42318">أُغلق التوثيق لانتهاء الموعد.</div>';
+      tone = 'bad'; status = '⛔ منتهي — لم يُوثَّق'; body += '<div class="dh-sub" style="color:#b42318">انتهى آخر موعد للتوثيق، ولا يمكن التوثيق أو التعديل.</div>';
     } else {
       tone = 'info'; status = 'متاح — لم توثّقه بعد';
       actions = '<button class="ac-btn" data-a="doc-open" data-id="'+o.id+'">📝 توثيق التنفيذ</button>';
     }
-    return ACT.foldCard({ title:o.title, tone, status, body, actions });
-  }).join('');
+    return ACT.foldCard({ title:o.title+(o.deadline?' — آخر موعد: '+ACT.hijri(o.deadline):''), tone, status, body, actions });
+  }).join('') || '<div class="dh-card dh-empty">لا توجد أنشطة متاحة حاليًا.</div>';
 }
 function vDone(){
   const stTxt = {approved:'✅ معتمد',pending:'⏳ بانتظار الاعتماد',returned:'↩ أُعيد للتعديل'};
@@ -142,7 +151,7 @@ function vDone(){
     +rows.map((r,i)=>'<tr><td>'+N(i+1)+'</td><td>'+esc(r.t)+r.n+'</td><td>'+ACT.hijri(r.d)+'</td><td>'+r.st+'</td><td><button class="ac-btn sec sm" data-a="'+r.a+'" data-id="'+r.x.id+'">معاينة</button></td></tr>').join('')+'</table></div>';
 }
 function paint(){
-  const tabs = [['mine','تكاليفي',S.assigns.reduce((n,a)=>n+(a.programs||[]).filter((p,i)=>!evOf(a,i)).length,0)+clubItems().filter(clubNeedsDoc).length],['open','أنشطة متاحة',S.opens.filter(o=>{ const pm = partMark(o); return pm ? pm.confirm==='invited' : (o.status==='open' && !isExpired(o) && !S.mine.find(x=>x.openEventId===o.id)); }).length],['done','أنشطتي المنفذة',0]];
+  const tabs = [['mine','تكاليفي',S.assigns.reduce((n,a)=>n+(a.programs||[]).filter((p,i)=>!evOf(a,i) && !progExpired(p)).length,0)+clubItems().filter(clubNeedsDoc).length],['open','أنشطة متاحة',S.opens.filter(o=>{ const pm = partMark(o); return pm ? (pm.confirm==='invited' && !isOver(o)) : (o.status==='open' && !isExpired(o) && !S.mine.find(x=>x.openEventId===o.id)); }).length],['done','أنشطتي المنفذة',0]];
   const barH = tabs.map(t=>'<button class="ac-tab'+(S.tab===t[0]?' on':'')+'" data-a="tab" data-v="'+t[0]+'">'+t[1]+(t[2]?'<span class="n">'+N(t[2])+'</span>':'')+'</button>').join('');
   let bar = document.getElementById('acMainBar');
   if(!bar || !S.env.main.contains(bar)){ S.env.main.innerHTML = '<div class="ac-tabs" id="acMainBar">'+barH+'</div><div id="acBody"></div>'; bar = document.getElementById('acMainBar'); S._ctab = null; }
@@ -157,7 +166,12 @@ const H = {
   tab: el=>{ S.tab=el.dataset.v; paint(); },
   'doc-asg': async el=>{
     const a = S.assigns.find(x=>x.id===el.dataset.id), i = Number(el.dataset.i), p = a.programs[i], ex = evOf(a,i) || null;
-    await openDoc({ existing:ex, prefill:{ title:p.name, beneficiaries:{type:'طلاب',count:''} }, source:{ type:'assignment', assignmentId:a.id, programIdx:i, clubId:a.clubId } });
+    /* اسم البرنامج والمجال لا يُعدَّلان: الاسم من التكليف، والمجال مجال النادي المرتبط (إن كان صالحًا) */
+    const dom = ACT.DOMAINS.includes(a.domain) ? a.domain : '';
+    if(ex && ex.approvalStatus==='approved'){ ACT.toast('هذا التوثيق معتمد ولا يُعدَّل.'); return; }
+    if(!ex && progExpired(p)){ ACT.toast('انتهى تاريخ هذا التكليف قبل توثيقه.'); return; }
+    await openDoc({ existing:ex, prefill:Object.assign({ title:p.name, beneficiaries:{type:'طلاب',count:''} }, dom?{domain:dom}:{}), lockTitle:true, lockDomain:!!dom,
+      source:{ type:'assignment', assignmentId:a.id, programIdx:i, clubId:a.clubId } });
   },
   'doc-open': async el=>{
     const o = S.opens.find(x=>x.id===el.dataset.id), ex = S.mine.find(x=>x.openEventId===o.id) || null, me = S.env.me;
@@ -212,11 +226,13 @@ const H = {
   },
   'part-confirm': async el=>{
     const o = S.opens.find(x=>x.id===el.dataset.id); if(!o) return;
+    if(isOver(o)){ ACT.toast('انتهى موعد هذا النشاط.'); return; }
     await S.env.db.collection('actOpenMarks').doc(o.id+'_'+S.env.me.id).update({ confirm:'confirmed', confirmedAt:Date.now(), updatedAt:Date.now() });
     ACT.toast('تم تأكيد مشاركتك في التوثيق'); await load(); paint();
   },
   'part-decline': async el=>{
     const o = S.opens.find(x=>x.id===el.dataset.id); if(!o) return;
+    if(isOver(o)){ ACT.toast('انتهى موعد هذا النشاط.'); return; }
     if(!await ACT.confirmBox('بعد الاعتذار تُرفع عنك المشاركة وتقدر توثّق النشاط بنفسك. متابعة؟')) return;
     await S.env.db.collection('actOpenMarks').doc(o.id+'_'+S.env.me.id).update({ confirm:'declined', updatedAt:Date.now() });
     await load(); paint();

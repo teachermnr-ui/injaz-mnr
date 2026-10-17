@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-17.4 -->
+<!-- إصدار: 2026-10-17.5 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -24,7 +24,7 @@
 <script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-17.2"></script>
+<script src="activity-core.js?v=2026-10-17.5"></script>
 <script src="ai-fill.js?v=2026-10-16.7"></script>
 <script>
 (function(){
@@ -462,7 +462,8 @@ async function execForm(cid){
       const domOk = ACT.DOMAINS.includes(c.dom);
       setTimeout(()=>ACT.openDocForm({ env:S.env, staff:S.staff, roster:S.roster, autoApprove:true, council:S.council, clubMode:true,
         lockTitle:true, lockDomain:domOk, clubMemberSeats:stuMembers(c).map(x=>x.seat), eventId:'cl_'+cid+'_'+pid,
-        prefill:{ title:it.title, domain: domOk?c.dom:'', date: it.expectedDate?it.expectedDate:ACT.today() },
+        prefill:{ title:it.title, domain: domOk?c.dom:'', date: it.expectedDate?it.expectedDate:ACT.today() }, dateMin:ACT.planItemDate(it),
+        dateHint:'لا يسبق تاريخ إنشاء البند في الخطة، ولا يتجاوز اليوم.', minMsg:'لا يمكن أن يسبق تاريخ التنفيذ تاريخ إنشاء البند في الخطة',
         source:{ type:'club', clubId:cid, planItemId:pid },
         beforeSave: async ()=>{
           const cur = await ACT.getDoc(S.env,'activityClubs',cid), item = cur && (cur.plan||[]).find(x=>x.id===pid);
@@ -620,7 +621,7 @@ async function asgForm(id){
   await ensurePeople();
   const ex = id ? S.assigns.find(x=>x.id===id) : null;
   /* البرنامج الموثَّق المعتمد لا يُعدَّل؛ والموثَّق (بأي حالة) لا يُحذف؛ ولا يُحذف برنامج يسبق برنامجًا موثَّقًا (حفاظًا على ترتيب البرامج المرتبط بالتوثيقات) */
-  let progs = ex ? (ex.programs||[]).map((p,i)=>Object.assign({},p,{ _lk:progApproved(ex,i), _doc:!!progAll(ex,i) })) : [{name:'',target:'',endDate:''}];
+  let progs = ex ? (ex.programs||[]).map((p,i)=>Object.assign({},p,{ _lk:progApproved(ex,i), _doc:!!progAll(ex,i), _end0:p.endDate||'' })) : [{name:'',target:'',endDate:''}];
   const lastDoc = ()=>progs.reduce((m,p,i)=>p._doc?i:m,-1);
   const body = '<div class="ac-2c"><div class="ac-f"><label>المعلم المكلَّف *</label><select class="ac-sel" id="as_t"'+(ex&&progs.some(p=>p._doc)?' disabled':'')+'><option value="">— اختر —</option>'+S.staff.map(s=>'<option value="'+esc(s.id)+'"'+(ex&&ex.teacherId===s.id?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select></div>'
     +'<div class="ac-f"><label>النادي *</label><select class="ac-sel" id="as_c"'+(ex&&progs.some(p=>p._doc)?' disabled':'')+'>'+clubOpts(ex&&ex.clubId)+'</select></div></div><div class="ac-f"><label>البرامج *</label><div id="as_rows"></div><button type="button" class="ac-btn sec sm" id="as_add">+ إضافة برنامج</button></div>'
@@ -630,7 +631,7 @@ async function asgForm(id){
       const draw = ()=>{ const ld = lastDoc(); api.q('#as_rows').innerHTML = progs.map((p,i)=>{ const ro = p._lk ? ' readonly style="background:#f1f5f7"' : '';
         return '<div class="dh-card" style="padding:8px;margin-bottom:6px">'+(p._lk?'<div class="dh-sub" style="color:#0a7a3d;font-weight:700;margin-bottom:4px">✅ وُثِّق واعتُمد — لا يُعدَّل</div>':'')
           +'<div class="ac-2c"><input class="ac-in" data-pi="'+i+'" data-f="name" placeholder="اسم البرنامج" value="'+esc(p.name||'')+'"'+ro+'><input class="ac-in" data-pi="'+i+'" data-f="target" placeholder="الفئة المستهدفة" value="'+esc(p.target||'')+'"'+ro+'>'
-          +'<div class="ac-f" style="margin:0"><label class="dh-sub">تاريخ انتهاء التكليف *</label><input type="date" class="ac-in" data-pi="'+i+'" data-f="endDate" value="'+esc(p.endDate||'')+'"'+ro+'>'+(!p.endDate&&p.timeline?'<div class="dh-sub">الموعد السابق: '+esc(p.timeline)+'</div>':'')+'</div></div>'
+          +'<div class="ac-f" style="margin:0"><label class="dh-sub">تاريخ انتهاء التكليف *</label><input type="date" class="ac-in" data-pi="'+i+'" data-f="endDate" min="'+ACT.today()+'" value="'+esc(p.endDate||'')+'"'+ro+'>'+(!p.endDate&&p.timeline?'<div class="dh-sub">الموعد السابق: '+esc(p.timeline)+'</div>':'')+'</div></div>'
           +((progs.length>1 && !p._doc && i>ld)?'<button type="button" class="ac-btn bad sm" data-pdel="'+i+'" style="margin-top:6px">حذف البرنامج</button>':'')+'</div>'; }).join(''); };
       draw();
       api.q('#as_add').onclick = ()=>{ progs.push({name:'',target:'',endDate:''}); draw(); };
@@ -643,6 +644,8 @@ async function asgForm(id){
       if(!tid||!cid){ ACT.toast('اختر المعلم والنادي'); return false; }
       if(!progs.length || progs.some(p=>!(p.name||'').trim())){ ACT.toast('أدخل اسم كل برنامج، أو احذف البرنامج الفارغ'); return false; }
       if(progs.some(p=>!p._lk && !p.endDate)){ ACT.toast('حدّد «تاريخ انتهاء التكليف» لكل برنامج'); return false; }
+      /* لا تكليف ليوم مضى: يُرفض أي تاريخ ماضٍ جديد أو معدَّل (التاريخ الماضي الباقي كما هو دون تغيير يُقبل) */
+      if(progs.some(p=>!p._lk && p.endDate < ACT.today() && p.endDate !== p._end0)){ ACT.toast('لا يمكن إنشاء تكليف ليوم مضى؛ اختر تاريخ انتهاء من اليوم فصاعدًا'); return false; }
       const c = clubById(cid), dom = c && ACT.DOMAINS.includes(c.dom) ? c.dom : '';
       const data = { teacherId:tid, teacherName:staffName(tid), clubId:cid, clubName:c.name, domain:dom,
         programs:progs.map(p=>{ const o = { name:p.name.trim(), target:(p.target||'').trim(), endDate:p.endDate||'' }; if(p.timeline) o.timeline = p.timeline; return o; }),
@@ -671,11 +674,12 @@ async function openForm(id){
   const ex = S.opens.find(x=>x.id===id); if(!ex) return;
   const body = '<div class="ac-f"><label>اسم النشاط</label><div class="ac-in" style="background:#f1f5f7">'+esc(ex.title)+'</div></div><div class="ac-f"><label>المجال</label><div class="ac-in" style="background:#f1f5f7">'+esc(ex.domain||'—')+'</div></div>'
     +'<div class="ac-f"><label>الوصف *</label><textarea class="ac-ta" id="op_d">'+esc(ex.description||'')+'</textarea></div>'
-    +'<div class="ac-f"><label>آخر موعد للتوثيق *</label><input type="date" class="ac-in" id="op_dl" value="'+esc(ex.deadline||'')+'"></div>';
+    +'<div class="ac-f"><label>آخر موعد للتوثيق *</label><input type="date" class="ac-in" id="op_dl" min="'+ACT.today()+'" value="'+esc(ex.deadline||'')+'"></div>';
   ACT.modal({ title:'تعديل النشاط المتاح', body, noDismiss:true, onOpen: api=>{
     if(window.AIFill) AIFill.attach({ field:api.q('#op_d'), kind:'open_activity_description', schoolId:S.env.sid, title:'اقترح وصفًا بالذكاء الاصطناعي', getCtx:()=>({ title:ex.title, domain:ex.domain||'' }) });
   }, buttons:[{ label:'حفظ', onClick: async api=>{
     const d = api.q('#op_d').value.trim(), dl = api.q('#op_dl').value; if(!d||!dl){ ACT.toast('أكمل الوصف وآخر موعد'); return false; }
+    if(dl !== ex.deadline && dl < ACT.today()){ ACT.toast('آخر موعد لا يمكن أن يكون في الماضي'); return false; }
     await ACT.patch(S.env,'actOpenEvents',ex.id,{ description:d, deadline:dl, deadlineMs:endOfDayMs(dl) });
     await refresh(['opens']); return true; } },{ label:'إلغاء', cls:'sec' }] });
 }

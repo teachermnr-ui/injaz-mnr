@@ -1,4 +1,4 @@
-// إصدار: 2026-10-17.2
+// إصدار: 2026-10-17.5
 /* نواة منصة النشاط المدرسي — مشتركة بين activity.html (الرائد والمدير) وmyactivities.html (المعلم).
    تحوي: الثوابت (الأندية الوزارية، قالب المسار العام)، التاريخ الهجري (أم القرى)، تحميل البيانات وحفظها،
    النوافذ والاختيار المتعدد، ضغط الصور ورفعها إلى Firebase Storage، ونموذج توثيق التنفيذ المطبوع (QR + شواهد). */
@@ -43,6 +43,9 @@
   /* ---------- التاريخ ---------- */
   const pad = n=>String(n).padStart(2,'0');
   const today = ()=>{ const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
+  /* تاريخ (بتوقيت مكة) من ميلي ثانية؛ وتاريخ إنشاء بند الخطة: createdAt إن وُجد، وإلا من معرّفه (p + الوقت بالأساس ٣٦) */
+  const dateOfMs = ms=>(ms && ms>0) ? new Date(ms+3*3600000).toISOString().slice(0,10) : '';
+  const planItemDate = it=>{ if(!it) return ''; if(it.createdAt) return dateOfMs(it.createdAt); const n = parseInt(String(it.id||'').slice(1),36); return (n>1.5e12 && n<4e12) ? dateOfMs(n) : ''; };
   const addDays = (k,n)=>{ const d=new Date(k+'T12:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
   /* تقويم أم القرى: ٢٣/٠٣/١٤٤٧هـ */
   function hijri(k, long){
@@ -368,7 +371,11 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
   async function openDocForm(opts){
     const env = opts.env, ex = opts.existing || null;
     const staff = opts.staff || await loadStaff(env), roster = opts.roster || await loadRoster(env);
+    const TD = today();
     const pre = Object.assign({ title:'', domain:'', date:today(), location:'', duration:'', objectives:'', executionSteps:'', evidenceUrl:'', beneficiaries:{type:'طلاب',count:''}, participants:[], executors:[{uid:env.me.id,name:env.me.name,type:'staff'}], photos:[] }, opts.prefill||{}, ex||{});
+    /* لا يُوثَّق تنفيذ في يوم لم يأتِ بعد: سقف التاريخ اليوم (أو آخر موعد/انتهاء التكليف إن كان أبكر)، وحدّه الأدنى يوم النشر/الإنشاء */
+    const dMax = (opts.dateMax && opts.dateMax < TD) ? opts.dateMax : TD, dMin = opts.dateMin || '';
+    if(!ex){ if(pre.date > dMax) pre.date = dMax; if(dMin && pre.date < dMin) pre.date = dMin; }
     let photos = (pre.photos||[]).slice();       // [{path,url}] محفوظة سابقًا
     const newFiles = [];                          // ملفات جديدة بالانتظار
     const pStu = (pre.participants||[]).filter(p=>p.type==='student').map(p=>p.uid);
@@ -388,7 +395,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
       <div class="ac-f"><label>اسم البرنامج / المبادرة *</label><input class="ac-in" id="d_title" value="${esc(pre.title)}"${LK}></div>
       <div class="ac-2c">
         <div class="ac-f"><label>المجال *</label><select class="ac-sel" id="d_domain"${LKD?' disabled':''}><option value="">— اختر —</option>${DOMAINS.map(d=>'<option'+(pre.domain===d?' selected':'')+'>'+d+'</option>').join('')}</select></div>
-        <div class="ac-f"><label>تاريخ التنفيذ *</label><input type="date" class="ac-in" id="d_date" value="${esc(pre.date)}"${opts.dateMin?' min="'+esc(opts.dateMin)+'"':''}${opts.dateMax?' max="'+esc(opts.dateMax)+'"':''}>${(opts.dateMin||opts.dateMax)?'<div class="dh-sub">يجب أن يقع التنفيذ بين يوم نشر النشاط وآخر موعد للتوثيق.</div>':''}</div>
+        <div class="ac-f"><label>تاريخ التنفيذ *</label><input type="date" class="ac-in" id="d_date" value="${esc(pre.date)}"${dMin?' min="'+esc(dMin)+'"':''} max="${esc(dMax)}"><div class="dh-sub">${opts.dateHint||'لا يمكن توثيق تنفيذ في يوم لم يأتِ بعد.'}</div></div>
         <div class="ac-f"><label>مكان التنفيذ *</label><input class="ac-in" id="d_loc" value="${esc(pre.location)}"></div>
         <div class="ac-f"><label>مدة التنفيذ *</label><input class="ac-in" id="d_dur" placeholder="مثال: يوم واحد" value="${esc(pre.duration)}"></div>
       </div>
@@ -418,9 +425,10 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
           const execIds = OPEN ? [env.me.id] : pickGet(api.el,'d_exec'); if(!execIds.length) miss.push('المنفِّذون');
           if(photos.length+newFiles.length<1) miss.push('صورة الشاهد الأول');
           if(miss.length){ toast('أكمل الحقول: '+miss.join('، ')); return false; }
-          { const dv = v('d_date');
-            if(opts.dateMin && dv < opts.dateMin){ toast('لا يمكن أن يسبق تاريخ التنفيذ يوم نشر النشاط ('+hijri(opts.dateMin)+').'); return false; }
-            if(opts.dateMax && dv > opts.dateMax){ toast('لا يمكن أن يتجاوز تاريخ التنفيذ آخر موعد للتوثيق ('+hijri(opts.dateMax)+').'); return false; } }
+          { const dv = v('d_date'), td = today();
+            if(dv > td){ toast('لا يمكن توثيق تنفيذ في يوم لم يأتِ بعد.'); return false; }
+            if(dMin && dv < dMin){ toast((opts.minMsg||'لا يمكن أن يسبق تاريخ التنفيذ تاريخ الإنشاء')+' ('+hijri(dMin)+').'); return false; }
+            if(opts.dateMax && dv > opts.dateMax){ toast((opts.maxMsg||'لا يمكن أن يتجاوز تاريخ التنفيذ آخر موعد')+' ('+hijri(opts.dateMax)+').'); return false; } }
           const url = v('d_url'); if(url && !/^https?:\/\//i.test(url)){ toast('رابط الشواهد يجب أن يبدأ بـ http:// أو https://'); return false; }
           const nameOf = id=>id===env.me.id ? env.me.name : ((staff.find(s=>s.id===id)||{}).name||'');
           const stuName = seat=>(roster.students.find(s=>s.seat===seat)||{}).name||'';
@@ -669,7 +677,7 @@ ${sg.stamp?'<div style="text-align:center;margin-top:8px"><img src="'+sg.stamp+'
   }
 
   g.ACT = { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS, ROLE_NAMES,
-    today, addDays, hijri, dayName, injectCss, openPreview, centerTab, loadState, saveState, modal, toast, confirmBox, pickHtml, pickInit, pickGet,
+    today, dateOfMs, planItemDate, addDays, hijri, dayName, injectCss, openPreview, centerTab, loadState, saveState, modal, toast, confirmBox, pickHtml, pickInit, pickGet,
     keyOf, list, getDoc, create, patch, by, loadStaff, loadRoster, classLabel,
     compress, compressFit, uploadPhoto, openDocForm, docFormBody, printDoc, ustaz, foldCard, printPage, qrImg, markDone, markPartPending,
     SIG_NAMES, sigPointers, sigSave, sigClear, sigVerData, sigSnapshot, sigForApproval, sigDialog, approvalStamp, studentItems };

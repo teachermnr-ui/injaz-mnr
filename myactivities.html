@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-17.2 -->
+<!-- إصدار: 2026-10-17.5 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة — «الأنشطة اللاصفية» للمعلم: تكاليفي، أنشطة متاحة، أنشطتي المنفذة -->
 <html lang="ar" dir="rtl">
 <head>
@@ -23,7 +23,7 @@
 <script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-15.1"></script>
-<script src="activity-core.js?v=2026-10-17.2"></script>
+<script src="activity-core.js?v=2026-10-17.5"></script>
 <script>
 (function(){
 const { esc, arN:N, $ } = ACT;
@@ -171,6 +171,7 @@ const H = {
     if(ex && ex.approvalStatus==='approved'){ ACT.toast('هذا التوثيق معتمد ولا يُعدَّل.'); return; }
     if(!ex && progExpired(p)){ ACT.toast('انتهى تاريخ هذا التكليف قبل توثيقه.'); return; }
     await openDoc({ existing:ex, prefill:Object.assign({ title:p.name, beneficiaries:{type:'طلاب',count:''} }, dom?{domain:dom}:{}), lockTitle:true, lockDomain:!!dom,
+      dateMin:a.ts?ACT.dateOfMs(a.ts):'', dateMax:p.endDate||'', dateHint:'من يوم إنشاء التكليف إلى تاريخ انتهائه، ولا يتجاوز اليوم.', minMsg:'لا يمكن أن يسبق تاريخ التنفيذ تاريخ إنشاء التكليف', maxMsg:'لا يمكن أن يتجاوز تاريخ التنفيذ تاريخ انتهاء التكليف',
       source:{ type:'assignment', assignmentId:a.id, programIdx:i, clubId:a.clubId } });
   },
   'doc-open': async el=>{
@@ -189,7 +190,8 @@ const H = {
       execStatus:S.staff.filter(s=>s.id!==me.id).map(s=>({ name:s.name, on:done.has(s.id) })),
       infoHtml:'<b>بيانات النشاط من رائد النشاط (للاطلاع فقط):</b><br>'+esc(o.description||'')+'<br>آخر موعد للتوثيق: '+(o.deadline?ACT.hijri(o.deadline):'—'),
       prefill:{ title:o.title, domain:o.domain||'' }, source:{ type:'open', openEventId:o.id },
-      dateMin:(o.publishDate || (o.ts ? new Date(o.ts+3*3600000).toISOString().slice(0,10) : '')) || '', dateMax:o.deadline||'',
+      dateMin:(o.publishDate || (o.ts ? ACT.dateOfMs(o.ts) : '')) || '', dateMax:o.deadline||'',
+      dateHint:'يجب أن يقع التنفيذ بين يوم نشر النشاط وآخر موعد للتوثيق، ولا يتجاوز اليوم.', minMsg:'لا يمكن أن يسبق تاريخ التنفيذ يوم نشر النشاط', maxMsg:'لا يمكن أن يتجاوز تاريخ التنفيذ آخر موعد للتوثيق',
       afterSave: async (evId, data)=>{
         const db = S.env.db, now = Date.now(), col = db.collection('actOpenMarks'), nm = id=>((S.staff||[]).find(s=>s.id===id)||{}).name||'';
         await col.doc(o.id+'_'+me.id).set({ schoolId:S.env.sid, period:S.env.period, openEventId:o.id, uid:me.id, name:me.name, state:'pending', role:'owner', confirm:'none', evId, updatedAt:now },{ merge:true });
@@ -210,7 +212,8 @@ const H = {
     const domOk = ACT.DOMAINS.includes(c.dom);
     await ACT.openDocForm({ env:S.env, staff:S.staff, roster:S.roster, existing:ex, clubMode:true, lockTitle:true, lockDomain:domOk,
       clubMemberSeats:(c.members||[]).filter(m=>m.type!=='staff').map(m=>m.seat), eventId:'cl_'+c.id+'_'+it.id,
-      prefill:{ title:it.title, domain:domOk?c.dom:'', date:it.expectedDate||ACT.today() },
+      prefill:{ title:it.title, domain:domOk?c.dom:'', date:it.expectedDate||ACT.today() }, dateMin:ACT.planItemDate(it),
+      dateHint:'لا يسبق تاريخ إنشاء البند في الخطة، ولا يتجاوز اليوم.', minMsg:'لا يمكن أن يسبق تاريخ التنفيذ تاريخ إنشاء البند في الخطة',
       source:{ type:'club', clubId:c.id, planItemId:it.id, viaTeacher:true },
       beforeSave: async ()=>{
         const cs = await S.env.db.collection('activityClubs').where('schoolId','==',S.env.sid).where('period','==',S.env.period).where('respUids','array-contains',me.id).get();

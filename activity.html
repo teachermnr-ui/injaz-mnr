@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-17.2 -->
+<!-- إصدار: 2026-10-17.4 -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -338,7 +338,7 @@ function cPlan(c){
     +pl.map((x,i)=>{ const lk = teacherPending(c.id,x.id);
       return '<tr><td>'+N(i+1)+'</td><td>'+esc(x.title)+'</td><td>'+(x.expectedDate?ACT.hijri(x.expectedDate):'—')+'</td><td>'+esc(ACT.ustaz(x.responsible||'')||'—')+'</td><td>'+chip(PLAN_ST[x.status]||x.status,ST_CLS[x.status])
       +(lk?'<div class="dh-sub" style="color:#b45309;margin-top:3px">وثّقه '+esc(ACT.ustaz(lk.documentedByName||''))+' — بانتظار اعتماد رائد النشاط</div>':'')+'</td>'
-      +E('<td><button class="ac-btn sec sm" data-a="plan-edit" data-id="'+c.id+'" data-pid="'+x.id+'">تعديل</button>'+(x.status==='executed'?'':' <button class="ac-btn bad sm" data-a="plan-del" data-id="'+c.id+'" data-pid="'+x.id+'">حذف</button>')+'</td>')+'</tr>'; }).join('')+'</table></div>':'<div class="dh-empty">لا توجد بنود في الخطة بعد.</div>')+'</div>';
+      +E('<td>'+(x.status==='executed'?'':'<button class="ac-btn sec sm" data-a="plan-edit" data-id="'+c.id+'" data-pid="'+x.id+'">تعديل</button> <button class="ac-btn bad sm" data-a="plan-del" data-id="'+c.id+'" data-pid="'+x.id+'">حذف</button>')+'</td>')+'</tr>'; }).join('')+'</table></div>':'<div class="dh-empty">لا توجد بنود في الخطة بعد.</div>')+'</div>';
 }
 function cExec(c){
   const ev = S.events.filter(x=>x.clubId===c.id && x.approvalStatus!=='returned').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -697,11 +697,13 @@ function approveGate(x){
   return { ok: !waiting.length || expired, waiting, expired };
 }
 function docCard(x){
-  return '<div class="dh-card" style="margin-bottom:8px"><div class="ac-row sb"><div><b>'+esc(x.title)+'</b><div class="dh-sub">'+esc(ACT.ustaz(x.documentedByName||''))+' — '+fmtD(x.date)+' — '+(x.sourceType==='assignment'?'تكليف رسمي':(x.sourceType==='club'?'فعالية نادٍ — '+esc((clubById(x.clubId)||{}).name||''):'نشاط متاح'))+'</div>'+partLine(x)+'</div>'
+  /* النشاط المتاح: آخر موعد للتوثيق بعد اسمه ليعرف رائد النشاط متى يتفعّل الاعتماد */
+  const o = x.sourceType==='open' ? S.opens.find(v=>v.id===x.openEventId) : null, dl = o && o.deadline ? ACT.hijri(o.deadline) : '';
+  return '<div class="dh-card" style="margin-bottom:8px"><div class="ac-row sb"><div><b>'+esc(x.title)+'</b>'+(dl?' <span class="dh-sub" style="color:#b45309;font-weight:700">— آخر موعد للتوثيق: '+dl+'</span>':'')+'<div class="dh-sub">'+esc(ACT.ustaz(x.documentedByName||''))+' — '+fmtD(x.date)+' — '+(x.sourceType==='assignment'?'تكليف رسمي':(x.sourceType==='club'?'فعالية نادٍ — '+esc((clubById(x.clubId)||{}).name||''):'نشاط متاح'))+'</div>'+partLine(x)+'</div>'
     +({pending:chip('بانتظار اعتماد رائد النشاط','warn'),approved:chip('معتمد','ok'),returned:chip('أُعيد للتعديل','bad')})[x.approvalStatus]+'</div>'
     +'<div class="ac-row" style="margin-top:6px"><button class="ac-btn sec sm" data-a="ev-print" data-id="'+x.id+'">معاينة النموذج</button>'
     +(S.canEdit && x.approvalStatus==='pending' ? (approveGate(x).ok ? '<button class="ac-btn sm" data-a="ev-approve" data-id="'+x.id+'">اعتماد</button>' : '<button class="ac-btn sm" disabled style="opacity:.45;cursor:not-allowed">اعتماد</button>')+'<button class="ac-btn bad sm" data-a="ev-return" data-id="'+x.id+'">إعادة للتعديل</button>':'')+'</div>'
-    +(S.canEdit && x.approvalStatus==='pending' && !approveGate(x).ok ? '<div class="dh-sub" style="color:#b45309;margin-top:4px">يتفعّل الاعتماد عند رد جميع المشاركين أو في يوم آخر موعد للتوثيق. بانتظار: '+approveGate(x).waiting.map(p=>esc(p.name)).join('، ')+'</div>':'')+'</div>';
+    +(S.canEdit && x.approvalStatus==='pending' && !approveGate(x).ok ? '<div class="dh-sub" style="color:#b45309;margin-top:4px">يتفعّل الاعتماد عند رد جميع المشاركين أو في يوم آخر موعد للتوثيق'+(dl?' ('+dl+')':'')+'. بانتظار: '+approveGate(x).waiting.map(p=>esc(p.name)).join('، ')+'</div>':'')+'</div>';
 }
 function aDocs(){
   const all = S.events.filter(x=>x.sourceType==='assignment'||x.sourceType==='open'||(x.sourceType==='club'&&x.viaTeacher));
@@ -952,7 +954,7 @@ const H = {
   'club-tab': el=>{ S.clubTab=el.dataset.v; paint(); },
   'mem-add': el=>memAdd(el.dataset.id),
   'mem-del': async el=>{ const c=clubById(el.dataset.id); if(!await ACT.confirmBox('حذف الطالب من النادي؟')) return; await ACT.patch(S.env,'activityClubs',c.id,{ members:(c.members||[]).filter(m=>m.seat!==el.dataset.seat) }); await refresh(['clubs']); },
-  'plan-add': el=>planForm(el.dataset.id,null), 'plan-edit': el=>planForm(el.dataset.id,el.dataset.pid),
+  'plan-add': el=>planForm(el.dataset.id,null), 'plan-edit': el=>{ const c=clubById(el.dataset.id), it=c&&(c.plan||[]).find(x=>x.id===el.dataset.pid); if(it&&it.status==='executed'){ ACT.toast('البند المنفَّذ لا يُعدَّل.'); return; } planForm(el.dataset.id,el.dataset.pid); },
   'plan-del': async el=>{ const c=clubById(el.dataset.id); const it=(c.plan||[]).find(x=>x.id===el.dataset.pid); if(it&&it.status==='executed'){ ACT.toast('لا يُحذف بند مُنفَّذ؛ يبقى في السجل.'); return; } if(teacherPending(c.id,el.dataset.pid)){ ACT.toast('يوجد توثيق من المعلم المسؤول بانتظار اعتماد رائد النشاط؛ اعتمده أو أعده أولًا.'); return; } const ap = clubPS(c)==='approved'; if(!await ACT.confirmBox(ap?'خطة هذا النادي معتمدة؛ حذف بند منها يعيدها إلى «مسودة» وتحتاج اعتمادًا جديدًا. متابعة؟':'حذف هذا البند من الخطة؟')) return; const np=(c.plan||[]).filter(x=>x.id!==el.dataset.pid); await ACT.patch(S.env,'activityClubs',c.id,Object.assign({ plan:np }, respFields(np), ap?{planState:'draft',planReturnNote:''}:{})); await refresh(['clubs']); },
   'print-clubplan': el=>printKind('clubplan',el.dataset.id),
   'rp-attstu': ()=>printKind('attstu',$('#rp_att_club').value,ACT.pickGet(document,'rp_att_p')),

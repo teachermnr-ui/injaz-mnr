@@ -468,6 +468,7 @@ const PERM_TREE = [
     { key:'tools.excellence', label:'شاشة التميز', only:['access','edit'] },
     { key:'tools.activity', label:'منصة النشاط المدرسي', only:['access','edit'] },
     { key:'tools.health', label:'الإرشاد الصحي', only:['access','edit'] },
+    { key:'tools.agentSchool', label:'وكيل الشؤون المدرسية', only:['access','edit'] },
   ]},
 /* [ADMIN-TOOLS:END] */
   { key:'omr', label:'إدارة الصفوف', leaves:[
@@ -568,10 +569,12 @@ const ADMIN_TOOLS = [
   { key:'counselor', label:'الموجه الطلابي', icon:'🤝', href:'counselor.html', noAdmin:true, roles:['counselor'] },
   { key:'agents', label:'الوكلاء', icon:'🧭', href:'agents.html', noAdmin:true, roles:['agent'] },
   { key:'health', perm:'tools.health', label:'الإرشاد الصحي', icon:'🩺', href:'health.html', noAdmin:true },
+  // وكيل الشؤون المدرسية (2026-10-20): بتفويض «وكيل الشؤون المدرسية» فقط (لا يكفي دور الوكيل). المدير يفتحها للاطّلاع واعتماد ما يخصه (حق للمدير لا صلاحية)، ولا أدمن النظام
+  { key:'agentSchool', perm:'tools.agentSchool', label:'وكيل الشؤون المدرسية', icon:'🛠️', href:'school-affairs.html', noAdmin:true, roles:['schoolAdmin'] },
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
 /* [ADMIN-TOOLS:MOD] ORIG: const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting']; */
-const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting','tools.excellence','tools.activity','tools.health'];
+const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting','tools.excellence','tools.activity','tools.health','tools.agentSchool'];
 /* المدير داخل فصل مغلق: لا يرى إلا تبويب «الفصول الدراسية» (ولا أدوات ولا لوحتي) */
 function semClosedForMe(){
   return !!CURRENT && CURRENT.role==='schoolAdmin' && !!CURRENT.schoolId && !!SESSION && !SESSION.viewOnly && window.SemGuard
@@ -609,17 +612,19 @@ const MYBOARD_ITEMS = [
   // الأنشطة اللاصفية (منصة النشاط المدرسي): تظهر لمن لديه تكليف معتمد أو يوجد نشاط متاح، وعلامتها حمراء عند وجود ما لم يُوثَّق بعد
   { key:'activities', href:'myactivities.html', icon:'🎯', label:'الأنشطة اللاصفية', when:()=>MYBOARD.act.visible },
   // رائد النشاط (مقرر مجلس النشاط): يدخل منصة النشاط المدرسي كاملة دون حاجة لمنحه صلاحية من «الصلاحيات الخاصة»
+  // الإشعارات والمساءلات (2026-10-20): ما وصلني من وكيل الشؤون المدرسية للتوقيع أو الاطلاع، وللمدير ما ينتظر اعتماده، ولصاحب صلاحية الوكيل اعتمادات المدير
+  { key:'notices', href:'notices.html', icon:'🔔', label:'الإشعارات والمساءلات' },
   { key:'actcoord', href:'activity.html', icon:'🧩', label:'منصة النشاط المدرسي (رائد النشاط)', when:()=>MYBOARD.act.coord },
 ];
-const MYBOARD = { pendingCirculars:0, scheduleChanged:false, apptsToday:0, followupsDue:0, visits:[], visitsSig:'', visitsChanged:false, duty:[], dutySig:'', dutyChanged:false, wait:[], waitSig:'', waitChanged:false, act:{ visible:false, pending:0, coord:false } };
+const MYBOARD = { pendingCirculars:0, scheduleChanged:false, apptsToday:0, followupsDue:0, visits:[], visitsSig:'', visitsChanged:false, duty:[], dutySig:'', dutyChanged:false, wait:[], waitSig:'', waitChanged:false, act:{ visible:false, pending:0, coord:false }, notices:0 };
 const myBoardDotOn = key=> key==='circulars' ? MYBOARD.pendingCirculars>0 : key==='schedule' ? MYBOARD.scheduleChanged
-  : key==='appts' ? MYBOARD.apptsToday>0 : key==='followups' ? MYBOARD.followupsDue>0 : key==='visits' ? MYBOARD.visitsChanged : key==='duty' ? MYBOARD.dutyChanged : key==='wait' ? MYBOARD.waitChanged : key==='activities' ? MYBOARD.act.pending>0 : false;
+  : key==='appts' ? MYBOARD.apptsToday>0 : key==='followups' ? MYBOARD.followupsDue>0 : key==='visits' ? MYBOARD.visitsChanged : key==='duty' ? MYBOARD.dutyChanged : key==='wait' ? MYBOARD.waitChanged : key==='activities' ? MYBOARD.act.pending>0 : key==='notices' ? MYBOARD.notices>0 : false;
 async function refreshMyBoardAlerts(){
   MYBOARD.pendingCirculars = 0; MYBOARD.scheduleChanged = false; MYBOARD.apptsToday = 0; MYBOARD.followupsDue = 0;
   MYBOARD.visits = []; MYBOARD.visitsSig = ''; MYBOARD.visitsChanged = false;
   MYBOARD.duty = []; MYBOARD.dutySig = ''; MYBOARD.dutyChanged = false;
   MYBOARD.wait = []; MYBOARD.waitSig = ''; MYBOARD.waitChanged = false;
-  MYBOARD.act = { visible:false, pending:0, coord:false };
+  MYBOARD.act = { visible:false, pending:0, coord:false }; MYBOARD.notices = 0;
   updateMyBoardBadges();
   if(!myBoardVisible()) return;
   try{
@@ -650,6 +655,20 @@ async function refreshMyBoardAlerts(){
     asg.docs.forEach(d=>{ const a=d.data(); (a.programs||[]).forEach((p,i)=>{ total++; const e=evs.find(x=>x.assignmentId===d.id && x.programIdx===i); if(!e || e.approvalStatus==='returned') pend++; }); });
     opn.docs.forEach(d=>{ const o=d.data(); if(o.deadlineMs ? o.deadlineMs<Date.now() : (o.deadline && o.deadline<todayK)) return; total++; const e=evs.find(x=>x.openEventId===d.id); if(!e || e.approvalStatus==='returned') pend++; });
     MYBOARD.act = { visible: total>0 || evs.length>0, pending: pend, coord: !crd.empty };
+  }catch(e){ /* صمت */ }
+  try{
+    // الإشعارات والمساءلات: نماذج لم أوقّعها بعد (لكل موظف) + للمدير ما ينتظر اعتماده (قرارات حسم وخطابات صيانة). صمت عند أي فشل.
+    const sidN = CURRENT.schoolId;
+    const mine = await db.collection('staffDocs').doc(sidN).collection('items').where('empId','==',CURRENT.id).where('status','==','sent').get();
+    let nn = mine.size;
+    if(CURRENT.role==='schoolAdmin'){
+      const [dc, mt] = await Promise.all([
+        db.collection('schoolAffairs').doc(sidN).collection('decisions').where('st','==','wait').get(),
+        db.collection('schoolAffairs').doc(sidN).collection('maint').where('l','==','wait').get()
+      ]);
+      nn += dc.size + mt.size;
+    }
+    MYBOARD.notices = nn;
   }catch(e){ /* صمت */ }
   try{
     // الإشعار فقط لمن تغيّرت حصصه هو منذ آخر اطّلاع: توقيع حصصه في النسخة المنشورة مقابل ما شاهده آخر مرة.

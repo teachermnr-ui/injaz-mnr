@@ -1,4 +1,4 @@
-// إصدار: 2026-10-15.1
+// إصدار: 2026-10-20.1 (خيار bare: بلا الشريط العلوي لصفحات لها ترويستها الخاصة)
 /* أساس مشترك لصفحات اللوحات (الوكلاء، الموجه الطلابي، منصة النشاط المدرسي، الإرشاد الصحي).
    - يقرأ جلسة cls_session، ويتحقق من الحساب والصلاحية، ويعرض شريطًا علويًا موحّدًا.
    - يشغّل حارس الفصل الدراسي (SemGuard) فيُغطّى الفصل المغلق كاملًا.
@@ -55,10 +55,12 @@ button{font-family:inherit;cursor:pointer;border:none}
     if(b){ b.classList.remove('hidden'); b.innerHTML = '<div class="dh-card" style="max-width:460px;text-align:center"><h3>'+esc(msg)+'</h3><button class="dh-btn" style="background:var(--brand)" onclick="location.href=\'index.html\'">العودة للرئيسية</button></div>'; }
   }
   function boot(opts){
-    const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
+    /* bare: لصفحة لها أنماطها الكاملة (مثل وكيل الشؤون المدرسية) — لا نحقن أنماط اللوحات كي لا تُغيّر ألوانها ولا خطها */
+    const BARE_CSS = '.hidden{display:none !important}.dh-boot{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:#5b6d66;text-align:center;padding:20px;font-family:Tajawal,system-ui,sans-serif}.dh-spin{display:inline-block;width:22px;height:22px;border:3px solid #d8e3de;border-top-color:#3f6659;border-radius:50%;animation:dhsp 1s linear infinite}@keyframes dhsp{to{transform:rotate(360deg)}}.dh-card{background:#fff;border:1px solid #d8e3de;border-radius:14px;padding:14px;margin:14px}.dh-btn{background:#3f6659;color:#fff;padding:7px 14px;border-radius:10px;font-weight:700;border:none;cursor:pointer}';
+    const st = document.createElement('style'); st.textContent = opts.bare ? BARE_CSS : CSS; document.head.appendChild(st);
     document.body.innerHTML = '<div id="dhBoot" class="dh-boot"><div class="dh-spin"></div><div>جارٍ التحميل...</div></div>'
-      + '<div id="dhApp" class="hidden"><div class="dh-top"><button class="dh-btn" id="dhBack">← الموقع</button><h1>'+esc(opts.title)+'</h1>'
-      + '<span class="dh-badge" id="dhSchool"></span><span class="dh-badge" id="dhPeriod"></span></div><div class="dh-main" id="dhMain"></div></div>';
+      + '<div id="dhApp" class="hidden">'+(opts.bare?'':'<div class="dh-top"><button class="dh-btn" id="dhBack">← الموقع</button><h1>'+esc(opts.title)+'</h1>'
+      + '<span class="dh-badge" id="dhSchool"></span><span class="dh-badge" id="dhPeriod"></span></div>')+'<div class="dh-main" id="dhMain"'+(opts.bare?' style="max-width:none;padding:0"':'')+'></div></div>';
     let s=null; try{ s = JSON.parse(localStorage.getItem('cls_session')||'null'); }catch(e){}
     if(!s || !s.userId){ location.replace('index.html'); return; }
     if(s.role==='soloTeacher' || s.role==='admin' || !s.schoolId){ fatal('هذه الصفحة خاصة بموظفي المدرسة.'); return; }
@@ -80,9 +82,11 @@ button{font-family:inherit;cursor:pointer;border:none}
         const env = { db:_db, sid, session:s, me:{ id:us.id, name:u.username||'', role:isSA?'schoolAdmin':(ctx&&ctx.role)||'' }, user:u, ctx, period, isSA,
           main:document.getElementById('dhMain'), school:{ name:sid } };
         try{ const sd = await _db.collection('schoolData').doc(sid).get(); if(sd.exists) env.school = Object.assign({}, sd.data(), { name: sd.data().name||sid }); }catch(e){}
-        document.getElementById('dhBack').onclick = ()=>location.href='index.html';
-        document.getElementById('dhSchool').textContent = env.school.name;
-        document.getElementById('dhPeriod').textContent = periodLabel(period);
+        if(!opts.bare){
+          document.getElementById('dhBack').onclick = ()=>location.href='index.html';
+          document.getElementById('dhSchool').textContent = env.school.name;
+          document.getElementById('dhPeriod').textContent = periodLabel(period);
+        }
         document.getElementById('dhBoot').classList.add('hidden'); document.getElementById('dhApp').classList.remove('hidden');
         try{ if(g.SemGuard) g.SemGuard.start(); }catch(e){}
         await opts.render(env);

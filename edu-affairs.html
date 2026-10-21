@@ -125,6 +125,7 @@ nav.tabs.sub{margin:0 0 10px}
 .tg.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
 .tg.bad{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
 .tg.warn{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.tg.split{color:var(--fg);border-color:var(--line)}
 .tg.dis,.tg:disabled{opacity:.5;cursor:default;border-style:dashed;background:var(--bg);border-color:var(--line);color:var(--muted)}
 .sums{display:grid;grid-template-columns:repeat(var(--c),minmax(0,1fr));gap:6px;padding:11px;border:2px solid var(--brand);border-radius:12px;background:var(--brand-soft)}
 .sums::before{content:attr(data-t);grid-column:1/-1;color:var(--brand);font-weight:800;font-size:14px}
@@ -222,8 +223,8 @@ table{line-height:normal}
   <nav class="tabs" id="tabs" aria-label="أقسام المتابعة">
     <button type="button" data-t="l" class="active">الإشعارات والمساءلات</button>
     <button type="button" data-t="m">متابعة المعلمين</button>
-    <button type="button" data-t="w">المتابعات الأسبوعية</button>
-    <button type="button" data-t="r">تقرير متابعات الفصل</button>
+    <button type="button" data-t="w">تقرير المتابعات اليومية</button>
+    <button type="button" data-t="r">تقرير المتابعات الفصلية</button>
     <button type="button" data-t="u">لجنة التوجيه الطلابي</button>
   </nav>
 
@@ -265,7 +266,7 @@ table{line-height:normal}
 
   <div class="pane" id="p-w" hidden>
     <section class="card">
-      <div class="hd"><h2>المتابعات الأسبوعية</h2><span class="chip" id="wLabel"></span></div>
+      <div class="hd"><h2>تقرير المتابعات اليومية</h2><span class="chip" id="wLabel"></span><button type="button" class="btn" id="wPdf">طباعة PDF</button></div>
       <div class="rtitle" id="wTitle"></div>
       <div class="muted">يتجمّع تلقائيًا من المتابعات اليومية: أسابيع، ثم شهر، ثم شهر وأسابيع، دون أي تعديل يدوي.</div>
       <div class="tw"><table class="rep">
@@ -277,7 +278,7 @@ table{line-height:normal}
 
   <div class="pane" id="p-r" hidden>
     <section class="card">
-      <div class="hd"><h2>تقرير متابعات الفصل</h2><span class="chip">الفصل الدراسي الأول</span></div>
+      <div class="hd"><h2>تقرير المتابعات الفصلية</h2><span class="chip">الفصل الدراسي الأول</span><button type="button" class="btn" id="rPdf">طباعة PDF</button></div>
       <div class="muted">يتحدث تلقائيًا من متابعات الفصل الدراسي دون أي تعديل يدوي.</div>
       <div class="tw"><table class="rep">
         <thead>
@@ -320,6 +321,7 @@ table{line-height:normal}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-storage-compat.js"></script>
 <script src="users-api.js"></script>
+<script src="form-header.js?v=2026-10-16.4"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-20.1"></script>
 <script src="file-requests.js?v=2026-10-21.1"></script>
@@ -768,6 +770,24 @@ Dash.boot({
       $('msSend').disabled = false;
     });
 
+    /* ---------------- طباعة التقريرين (PDF من نافذة الطباعة): A4 أفقي بالترويسة الموحدة وتوقيع الوكيل والمدير ---------------- */
+    let PCTX = null;
+    async function printReport(title, sub, tableSel){
+      if(!window.FormHdr){ toast('تعذّر تحميل ترويسة الطباعة.'); return; }
+      try{
+        PCTX = PCTX || await FormHdr.resolve({ db, session:env.session, period });
+        const w = window.open('', '_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
+        const t = document.querySelector(tableSel).outerHTML;
+        w.document.open();
+        w.document.write(FormHdr.doc({ title, formTitle:title, ctx:PCTX, landscape:true, signatures:true, teacherLabel:'وكيل الشؤون التعليمية', margin:'10mm',
+          body:'<div class="sub">'+esc(sub)+'</div>'+t,
+          extraCss:'table{border-collapse:collapse;width:100%}th,td{border:1px solid #888;padding:5px 7px;font-size:12.5px;text-align:center}th:first-child,td:first-child{text-align:right}th{background:#eef2f1}tfoot td{font-weight:700;background:#f6f8f7}.sub{margin:6px 0;font-weight:700}.tag{border:1px solid #888;border-radius:9px;padding:1px 8px;font-size:12px}' }));
+        w.document.close();
+      }catch(e){ fail(e); }
+    }
+    $('wPdf').addEventListener('click', ()=>printReport('تقرير المتابعات اليومية', $('wLabel').textContent+' · '+$('wTitle').textContent, '#p-w table.rep'));
+    $('rPdf').addEventListener('click', ()=>printReport('تقرير المتابعات الفصلية', period==='second' ? 'الفصل الدراسي الثاني' : 'الفصل الدراسي الأول', '#p-r table.rep'));
+
     /* ---------------- ٢ المتابعات الأسبوعية (تراكمي تلقائي) ---------------- */
     const ORD = ['','الأول','الثاني','الثالث','الرابع'], WK = ['','وأسبوع','وأسبوعان','وثلاثة أسابيع'];
     const MON = ['','الأول','الثاني','الثالث','الرابع','الخامس','السادس'];
@@ -849,6 +869,8 @@ Dash.boot({
       if(c[0]===c[2] && c[1]===c[2]){ const a = S[i].anA; return (a[0].every(Boolean) && a[1].every(Boolean)) ? ['ok',txt] : ['warn',txt]; }
       return (c[0]+c[1]===0) ? ['bad',txt] : ['warn',txt];
     }
+    /* حالة نصف البطاقة لفترة p (٠ أولى، ١ ثانية): أخضر كلها معتمدة، برتقالي رُفع بعضها أو بانتظار الاعتماد، أحمر لم يُرفع شيء */
+    const anHalf = (i,p)=>{ const cv = S[i].an[p], ap = S[i].anA[p]; if(!cv.length) return 'bad'; if(ap.every(Boolean)) return 'ok'; return cv.some(Boolean) ? 'warn' : 'bad'; };
     const anAll = i=>{ const c = anCounts(i); return c[2]>0 && c[0]===c[2] && c[1]===c[2]; };
     const sDone = (i,k)=>{ const st = sStat(i,k)[0]; return k==='an' ? anAll(i) : (k==='act' ? st!=='bad' : st!=='bad' && !(k!=='cv' && S[i].req[k] && S[i].req[k].status==='ret')); };
     const sScore = i=>SK.filter(k=>sDone(i,k[0])).length;
@@ -930,7 +952,10 @@ Dash.boot({
     function sCard(i){
       const t = T[i];
       let h = '<div class="trow'+(unsN(i)?' uns':'')+'" id="sc'+i+'"><div class="nm">'+esc(t.n)+'<small>'+esc(t.s)+' — '+arN(sScore(i))+' من '+arN(SK.length)+' مكتمل</small>'+unsBadge(i)+'</div><div class="btns" style="--c:6">';
-      SK.forEach(k=>{ const st = sStat(i,k[0]); h += '<button type="button" class="tg '+st[0]+'" data-i="'+i+'" data-sb="'+k[0]+'">'+k[1]+'<span class="s">'+st[1]+'</span></button>'; });
+      SK.forEach(k=>{
+        const st = sStat(i,k[0]); let cls = st[0], sty = '';
+        if(k[0]==='an'){ const a = anHalf(i,0), b = anHalf(i,1); if(a!==b){ cls = 'split'; sty = ' style="background:linear-gradient(to left,var(--'+a+'-soft) 50%,var(--'+b+'-soft) 50%)"'; } else cls = a; }
+        h += '<button type="button" class="tg '+cls+'"'+sty+' data-i="'+i+'" data-sb="'+k[0]+'">'+k[1]+'<span class="s">'+st[1]+'</span></button>'; });
       h += '</div>';
       SK.forEach(k=>{ if(isSOpen(i,k[0])) h += sPanel(i,k[0]); });
       return h+'</div>';

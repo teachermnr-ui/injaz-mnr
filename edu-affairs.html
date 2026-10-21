@@ -95,6 +95,8 @@ textarea{min-height:64px;resize:vertical}
 
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
 .ov .box{background:var(--surface);color:var(--fg);border-radius:12px;max-width:440px;width:100%;padding:16px;display:flex;flex-direction:column;gap:10px;max-height:90vh;overflow:auto}
+.lgd{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.pvimg{max-width:100%;max-height:420px;border:1px solid var(--line);border-radius:8px;display:block;margin:6px 0}
 .doc{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--bg);display:flex;flex-direction:column;gap:8px}
 .doc i{display:block;height:8px;border-radius:4px;background:var(--line)}
 .doc .t{height:12px;width:55%;background:var(--muted);opacity:.5}
@@ -104,7 +106,8 @@ nav.tabs button:hover{background:var(--brand-soft)}
 nav.tabs button.active{background:var(--brand);color:var(--brand-fg)}
 button.stat{font:inherit;color:inherit;text-align:right;cursor:pointer}
 button.stat:hover{border-color:var(--brand)}
-.pane[hidden]{display:none}
+.pane[hidden],.spane[hidden]{display:none}
+nav.tabs.sub{margin:0 0 10px}
 .tag{border-radius:99px;padding:2px 12px;font-size:12px;font-weight:700;white-space:nowrap;background:var(--brand-soft);color:var(--brand)}
 .tag.bad{background:var(--bad-soft);color:var(--bad)} .tag.warn{background:var(--warn-soft);color:var(--warn)} .tag.ok{background:var(--ok-soft);color:var(--ok)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -217,15 +220,27 @@ table{line-height:normal}
   </section>
 
   <nav class="tabs" id="tabs" aria-label="أقسام المتابعة">
-    <button type="button" data-t="d" class="active">المتابعات اليومية</button>
+    <button type="button" data-t="l" class="active">الإشعارات والمساءلات</button>
+    <button type="button" data-t="m">متابعة المعلمين</button>
     <button type="button" data-t="w">المتابعات الأسبوعية</button>
-    <button type="button" data-t="s">متابعات الفصل الدراسي</button>
     <button type="button" data-t="r">تقرير متابعات الفصل</button>
-    <button type="button" data-t="l">سجل الإشعارات والمساءلات</button>
     <button type="button" data-t="u">لجنة التوجيه الطلابي</button>
   </nav>
 
-  <div class="pane" id="p-d">
+  <div class="pane" id="p-l">
+    <section class="card">
+      <div class="hd"><h2>الإشعارات والمساءلات</h2><span class="chip" id="lCount"></span></div>
+      <div class="muted">كل إشعار يحمل رقمه لكل بند، وكل مساءلة تبيّن حالتها وتوقيع المعلم.</div>
+      <div id="lRows"></div>
+    </section>
+  </div>
+
+  <div class="pane" id="p-m" hidden>
+    <nav class="tabs sub" id="subTabs" aria-label="متابعة المعلمين">
+      <button type="button" data-t="d" class="active">المتابعات اليومية</button>
+      <button type="button" data-t="s">متابعات الفصل الدراسي</button>
+    </nav>
+  <div class="spane" id="p-d">
     <section class="card">
       <div class="hd"><h2>المتابعات اليومية</h2><span class="chip" id="dDate"></span></div>
       <div class="muted">على مستوى اليوم والحصة. كل زر يبدأ بالحالة الافتراضية، والضغط يغيّرها. الملاحظة اختيارية.</div>
@@ -233,6 +248,19 @@ table{line-height:normal}
       <div class="nl" id="dList" hidden></div>
       <div id="dRows"></div>
     </section>
+  </div>
+
+  <div class="spane" id="p-s" hidden>
+    <section class="card">
+      <div class="hd"><h2>متابعات الفصل الدراسي</h2><span class="chip">الفصل الدراسي الأول</span></div>
+      <div class="muted">الأقل إكمالًا لملفه في الأعلى والمكتمل في الأسفل. الملاحظة اختيارية.</div>
+      <div class="lgd" id="sLegend"><span class="tag bad">الملف لم يُرفق</span><span class="tag warn">أُرفق لاعتمادكم</span><span class="tag ok">اعتُمد منكم المرفق</span></div>
+      <div class="sums" id="sSums" data-t="ملخص الفصل الدراسي" style="--c:6"></div>
+      <div class="nl" id="sList" hidden></div>
+      <div id="sRows"></div>
+    </section>
+  </div>
+
   </div>
 
   <div class="pane" id="p-w" hidden>
@@ -247,16 +275,6 @@ table{line-height:normal}
     </section>
   </div>
 
-  <div class="pane" id="p-s" hidden>
-    <section class="card">
-      <div class="hd"><h2>متابعات الفصل الدراسي</h2><span class="chip">الفصل الدراسي الأول</span></div>
-      <div class="muted">الأقل إكمالًا لملفه في الأعلى والمكتمل في الأسفل. الملاحظة اختيارية.</div>
-      <div class="sums" id="sSums" data-t="ملخص الفصل الدراسي" style="--c:6"></div>
-      <div class="nl" id="sList" hidden></div>
-      <div id="sRows"></div>
-    </section>
-  </div>
-
   <div class="pane" id="p-r" hidden>
     <section class="card">
       <div class="hd"><h2>تقرير متابعات الفصل</h2><span class="chip">الفصل الدراسي الأول</span></div>
@@ -268,14 +286,6 @@ table{line-height:normal}
         </thead>
         <tbody id="rBody"></tbody><tfoot id="rFoot"></tfoot>
       </table></div>
-    </section>
-  </div>
-
-  <div class="pane" id="p-l" hidden>
-    <section class="card">
-      <div class="hd"><h2>سجل الإشعارات والمساءلات</h2><span class="chip" id="lCount"></span></div>
-      <div class="muted">كل إشعار يحمل رقمه لكل بند، وكل مساءلة تبيّن حالتها وتوقيع المعلم.</div>
-      <div id="lRows"></div>
     </section>
   </div>
 
@@ -449,7 +459,7 @@ Dash.boot({
     function noticeDoc(i,key,scope,detail){
       const n = noticeCount(i,key)+1, date = dayStr();
       return { type:'notice', empId:T[i].id, empName:T[i].n, key, scope, n, dateKey:today, dateText:date, detail, text:letter(i,key,n,detail,date,scope),
-               period, createdAt:Date.now(), createdBy:me.id, visibleFrom:startOfTomorrow() };
+               period, createdAt:Date.now(), createdBy:me.id, visibleFrom: scope==='s' ? Date.now() : startOfTomorrow() };
     }
     async function sendNotices(list,key,scope,detailFn){
       const sendIdx = list.filter(i=>!noticeToday(i,key)), skip = list.length - sendIdx.length;
@@ -462,7 +472,7 @@ Dash.boot({
     }
     const sentMsg = r=>{
       if(r[0]===0) return 'لم يُرسل شيء: جميعهم استلموا إشعار هذا البند اليوم.';
-      let m = 'تم إرسال الإشعار إلى '+arN(r[0])+(r[0]===1?' معلم':' معلمين')+' وسُجّل في سجل الإشعارات والمساءلات، ويصل المعلمين غدًا.';
+      let m = 'تم إرسال الإشعار إلى '+arN(r[0])+(r[0]===1?' معلم':' معلمين')+' وسُجّل في «الإشعارات والمساءلات»، ويصل المعلمين غدًا.';
       if(r[1]) m += ' وتم تجاوز '+arN(r[1])+' لاستلامهم إشعار هذا البند اليوم.';
       return m;
     };
@@ -808,14 +818,16 @@ Dash.boot({
         const evs = ACTV.filter(e=>e.documentedBy===t.id);
         const asg = ASG.filter(a=>a.teacherId===t.id && a.status==='approved');
         const rep = EVR.filter(r=>r.empId===t.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        const apr = [new Set(), new Set()];
         const an = [0,1].map(p=>{
           const gp = p ? 'second' : 'first';
           const cov = new Set();
-          mine.filter(r=>r.kind==='grades' && r.gradesPeriod===gp && (r.status==='wait' || r.status==='ok')).forEach(r=>(r.files||[]).forEach(f=>cov.add(label(f.classLabel))));
+          mine.filter(r=>r.kind==='grades' && (r.gradesPeriod||'first')===gp).forEach(r=>(r.files||[]).forEach(f=>{ const st = FileReq.fst(r,f); if(st==='wait' || st==='ok') cov.add(label(f.classLabel)); if(st==='ok') apr[p].add(label(f.classLabel)); }));
           return t.cl.map(c=>cov.has(label(c)));
         });
+        const anA = [0,1].map(p=>t.cl.map(c=>apr[p].has(label(c))));
         return { req:{ vis:last('visits'), rec:last('worklog'), cur:last('completion') }, grades:mine.filter(r=>r.kind==='grades'),
-                 acts:evs, asg:asg.length, cvN:rep.length, cvLast:rep[0]||null, an };
+                 acts:evs, asg:asg.length, cvN:rep.length, cvLast:rep[0]||null, an, anA };
       });
     }
     const anCounts = i=>{ const a = S[i].an; return [a[0].filter(Boolean).length, a[1].filter(Boolean).length, a[0].length]; };
@@ -834,10 +846,11 @@ Dash.boot({
       const c = anCounts(i);
       const txt = 'أولى '+arN(c[0])+'/'+arN(c[2])+' · ثانية '+arN(c[1])+'/'+arN(c[2]);
       if(c[2]===0) return ['bad','لا فصول للمعلم'];
-      if(c[0]===c[2] && c[1]===c[2]) return ['ok',txt];
+      if(c[0]===c[2] && c[1]===c[2]){ const a = S[i].anA; return (a[0].every(Boolean) && a[1].every(Boolean)) ? ['ok',txt] : ['warn',txt]; }
       return (c[0]+c[1]===0) ? ['bad',txt] : ['warn',txt];
     }
-    const sDone = (i,k)=>{ const st = sStat(i,k)[0]; return k==='an' ? st==='ok' : (k==='act' ? st!=='bad' : st!=='bad' && !(k!=='cv' && S[i].req[k] && S[i].req[k].status==='ret')); };
+    const anAll = i=>{ const c = anCounts(i); return c[2]>0 && c[0]===c[2] && c[1]===c[2]; };
+    const sDone = (i,k)=>{ const st = sStat(i,k)[0]; return k==='an' ? anAll(i) : (k==='act' ? st!=='bad' : st!=='bad' && !(k!=='cv' && S[i].req[k] && S[i].req[k].status==='ret')); };
     const sScore = i=>SK.filter(k=>sDone(i,k[0])).length;
     const remaining = (i,p)=>T[i].cl.filter((c,j)=>!S[i].an[p][j]);
     function sDetail(i,k){
@@ -848,8 +861,27 @@ Dash.boot({
       return '';
     }
     const fdate = ms=>{ try{ return new Date(ms).toLocaleDateString('ar-SA',{day:'numeric',month:'long'}); }catch(e){ return ''; } };
-    function prevFiles(r){
-      return (r.files||[]).map(f=>'<div class="doc"><i class="t"></i><i></i><i></i><i style="width:80%"></i><i></i><i style="width:60%"></i></div><div class="muted">معاينة: '+esc(f.name||'ملف')+(f.classLabel?' ('+esc(f.classLabel)+')':'')+' — <a href="'+esc(f.url)+'" target="_blank" rel="noopener">فتح الملف</a></div>').join('');
+    /* معاينة الملف: الصورة تظهر مباشرة، وPDF بطاقة بزر فتح (متصفح الجوال لا يعرض PDF داخل الصفحة) */
+    function filePrev(f){
+      const isImg = /^image\//.test(f.type||'');
+      return (isImg ? '<img class="pvimg" loading="lazy" src="'+esc(f.url)+'" alt="'+esc(f.name||'ملف')+'">'
+                    : '<div class="doc"><i class="t"></i><i></i><i></i><i style="width:80%"></i><i></i><i style="width:60%"></i></div>')
+        +'<div class="muted">معاينة: '+esc(f.name||'ملف')+(f.classLabel?' ('+esc(f.classLabel)+')':'')+' — <a href="'+esc(f.url)+'" target="_blank" rel="noopener">فتح الملف</a></div>';
+    }
+    function prevFiles(r){ return (r.files||[]).map(filePrev).join(''); }
+    /* تحليل الدرجات: لكل ملف صف حالته واعتماده أو إعادته */
+    function gradeFiles(r){
+      return (r.files||[]).map((f,fi)=>{
+        const st = FileReq.fst(r,f), tg = st==='ok' ? '<span class="tag ok">معتمد</span>' : (st==='ret' ? '<span class="tag bad">معاد للتعديل</span>' : '<span class="tag warn">أُرفق لاعتمادكم</span>');
+        let h = filePrev(f)+'<div class="row">'+tg+'</div>';
+        if(st==='wait' && canEdit){
+          const key = esc(r.id)+'_'+fi;
+          h += '<div class="row"><button type="button" class="btn solid" data-ok="'+esc(r.id)+'" data-f="'+fi+'">اعتماد ملف هذا الصف</button></div>'+
+            '<label class="muted" for="rt'+key+'">أو أعده للتعديل مع ملاحظة</label><textarea id="rt'+key+'" placeholder="ملاحظة للمعلم"></textarea><div class="row"><button type="button" class="btn danger" data-ret="'+esc(r.id)+'" data-f="'+fi+'">إعادة للتعديل</button></div>';
+        }
+        if(st==='ret' && f.note) h += '<div class="muted">ملاحظتك عند الإعادة: '+esc(f.note)+'</div>';
+        return h;
+      }).join('');
     }
     function reqNote(r){
       if(!r) return '<div class="muted">لم يُطلب هذا الملف من المعلم بعد.</div>';
@@ -885,10 +917,10 @@ Dash.boot({
           '<div class="row">'+(canEdit?'<button type="button" class="btn solid" data-i="'+i+'" data-sv="cv">حفظ التقرير</button>':'')+(s.cvN?'<span class="tag ok">عدد الزيارات: '+arN(s.cvN)+'</span>':'')+'</div>';
       }else{
         h += '<div class="hd2"><div class="t">تحليل الدرجات</div><div class="seg"><button type="button" data-ap="0" class="'+(AP===0?'on':'')+'">الفترة الأولى</button><button type="button" data-ap="1" class="'+(AP===1?'on':'')+'">الفترة الثانية</button></div></div>'+
-          '<div class="pchips">'+(t.cl.length ? t.cl.map((c,j)=>'<span class="tag '+(s.an[AP][j]?'ok':'bad')+'">'+esc(c)+': '+(s.an[AP][j]?'مرفق':'لم يُرفق')+'</span>').join('') : '<span class="muted">لا فصول للمعلم في الجدول المنشور.</span>')+'</div>';
+          '<div class="pchips">'+(t.cl.length ? t.cl.map((c,j)=>{ const cv = s.an[AP][j], ap = s.anA[AP][j]; return '<span class="tag '+(ap?'ok':(cv?'warn':'bad'))+'">'+esc(c)+': '+(ap?'معتمد':(cv?'أُرفق لاعتمادكم':'لم يُرفق'))+'</span>'; }).join('') : '<span class="muted">لا فصول للمعلم في الجدول المنشور.</span>')+'</div>';
         const gp = AP ? 'second' : 'first';
-        const rs = s.grades.filter(r=>r.gradesPeriod===gp);
-        rs.forEach(r=>{ if(r.files && r.files.length) h += prevFiles(r)+reviewControls(r); h += reqNote(r); });
+        const rs = s.grades.filter(r=>(r.gradesPeriod||'first')===gp);
+        rs.forEach(r=>{ if(r.files && r.files.length) h += gradeFiles(r); h += reqNote(r); });
         if(!rs.length) h += '<div class="muted">لم يُطلب من المعلم تحليل هذه الفترة بعد.</div>';
       }
       return h+'</div>';
@@ -902,12 +934,14 @@ Dash.boot({
       return h+'</div>';
     }
     const NOTICE_KEYS = ['vis','rec','cur','an'];
+    /* معلمو الجدول المدرسي المنشور فقط (لهم مواد وفصول) */
+    const empTT = ()=>T.filter(t=>t.cl.length).map(t=>({ id:t.id, name:t.n, cl:t.cl }));
     function sListRender(){
       const box = $('sList');
       if(!sOpen || sOpen.t!=='list'){ box.hidden = true; return; }
       const key = sOpen.k, kk = SK.filter(x=>x[0]===key)[0], names = [];
       T.forEach((t,i)=>{ if(!sDone(i,key)) names.push(i); });
-      const can = NOTICE_KEYS.indexOf(key) > -1;
+      const can = NOTICE_KEYS.indexOf(key) > -1 && empTT().length > 0;
       box.hidden = false;
       box.innerHTML = '<div class="hd2"><strong>'+kk[2]+' ('+arN(names.length)+')</strong>'+(can && names.length && canEdit ? '<button type="button" class="btn solid" data-na="1">إرسال إشعار طلب الإرفاق للكل</button>' : '')+'</div>'+
         '<div id="sReq"></div>'+
@@ -933,20 +967,17 @@ Dash.boot({
       const a = e.target.closest('[data-na]');
       if(a){
         if(ro()) return;
-        const key = sOpen.k, names = [];
-        T.forEach((t,i)=>{ if(!sDone(i,key)) names.push(i); });
-        const emp = names.map(i=>({ id:T[i].id, name:T[i].n }));
-        FileReq.openCreate($('sReq'), { db, sid, me, period }, KIND_OF[key], emp, FR, async (n, skipped)=>{
-          sMsg = n ? 'تم إرسال طلب الملف إلى '+arN(n)+(n===1?' معلم':' معلمين')+' وسُجّل إشعار لطيف في سجل الإشعارات والمساءلات، ويصل المعلمين غدًا.'+(skipped?' وتم تجاوز '+arN(skipped)+' (استلموا إشعار هذا البند اليوم أو لديهم طلب قائم).':'') : '';
+        const key = sOpen.k;
+        FileReq.openCreate($('sReq'), { db, sid, me, period }, KIND_OF[key], empTT(), FR, async (n, skipped, first)=>{
+          sMsg = first
+            ? 'تم إنزال طلب الملف عند '+arN(n)+(n===1?' معلم':' معلمين')+' في «ملفات مطلوبة» دون إرسال إشعار.'
+            : 'تم إرسال الإشعار إلى '+arN(n)+(n===1?' معلم':' معلمين')+' ويصلهم فورًا، وسُجّل في «الإشعارات والمساءلات».'+(skipped?' وتم تجاوز '+arN(skipped)+' لاستلامهم إشعار هذا البند اليوم.':'');
           await loadSem(); sRender();
         }, {
-          emptyMsg:'لم يُرسل شيء: جميعهم استلموا إشعار هذا البند اليوم أو لديهم طلب قائم.',
+          emptyMsg:'لم يُرسل شيء: لا أحد بقي عليه شيء من معلمي الجدول، أو استلموا إشعار هذا البند اليوم.',
           before:(list,o)=>{
-            const keep = list.filter(e=>{
-              const i = idxOf(e.id);
-              const open = FR.some(r=>r.empId===e.id && r.kind===KIND_OF[key] && (r.status==='req' || r.status==='ret') && (key!=='an' || r.gradesPeriod===o.gp));
-              return !noticeToday(i,key) && !open;
-            });
+            if(o.first) return { list, skipped:0 };
+            const keep = list.filter(e=>!noticeToday(idxOf(e.id),key));
             return { list:keep, skipped:list.length-keep.length };
           },
           after:async (list,o)=>{
@@ -963,10 +994,11 @@ Dash.boot({
       const b = e.target.closest('[data-sb]');
       if(b){ const i = +b.getAttribute('data-i'), k = b.getAttribute('data-sb'); sOpen = isSOpen(i,k) ? null : { t:'card', i, k }; sRender(); return; }
       const ok = e.target.closest('[data-ok]');
-      if(ok){ if(ro()) return; const r = FR.find(x=>x.id===ok.getAttribute('data-ok')); try{ await FileReq.review(db, sid, me, r, true); await loadSem(); sRender(); }catch(err){ fail(err); } return; }
+      if(ok){ if(ro()) return; const r = FR.find(x=>x.id===ok.getAttribute('data-ok')); const f = ok.getAttribute('data-f'); const ti = idxOf(r.empId);
+        try{ await FileReq.review(db, sid, me, r, true, '', f==null ? null : +f, ti>=0 ? T[ti].cl : []); await loadSem(); sRender(); }catch(err){ fail(err); } return; }
       const rt = e.target.closest('[data-ret]');
-      if(rt){ if(ro()) return; const id = rt.getAttribute('data-ret'), r = FR.find(x=>x.id===id); const note = ($('rt'+id)||{}).value || '';
-        try{ await FileReq.review(db, sid, me, r, false, note); await loadSem(); sRender(); }catch(err){ fail(err); } return; }
+      if(rt){ if(ro()) return; const id = rt.getAttribute('data-ret'), r = FR.find(x=>x.id===id), f = rt.getAttribute('data-f'), ti = idxOf(r.empId); const note = ($('rt'+id+(f==null?'':'_'+f))||{}).value || '';
+        try{ await FileReq.review(db, sid, me, r, false, note, f==null ? null : +f, ti>=0 ? T[ti].cl : []); await loadSem(); sRender(); }catch(err){ fail(err); } return; }
       const rm = e.target.closest('[data-rm]');
       if(rm){ if(ro()) return; try{ await FileReq.remind(db, sid, FR.find(x=>x.id===rm.getAttribute('data-rm'))); toast('أُرسل التذكير، ويراه المعلم في الإشعارات والمرفقات.'); await loadSem(); sRender(); }catch(err){ fail(err); } return; }
       const v = e.target.closest('[data-sv]');
@@ -1000,8 +1032,16 @@ Dash.boot({
       $('rFoot').innerHTML = '<tr><td>الإجمالي</td><td class="num">'+arN(tot.vis)+' من '+arN(T.length)+'</td><td class="num">'+arN(tot.act)+'</td><td class="num">'+arN(tot.cv)+'</td><td class="num">'+arN(tot.rec)+' من '+arN(T.length)+'</td><td class="num">'+arN(tot.cur)+' من '+arN(T.length)+'</td><td class="num">'+arN(tot.a0)+' من '+arN(T.length)+'</td><td class="num">'+arN(tot.a1)+' من '+arN(T.length)+'</td></tr>';
     }
 
-    /* ---------------- ٥ سجل الإشعارات والمساءلات ---------------- */
+    /* ---------------- ٥ الإشعارات والمساءلات ---------------- */
     let lOpenT = null, lOpen = null;
+    /* شارة الإشعار تتبع حالة الملف الذي طُلب (إشعارات الملفات فقط) */
+    function fileTag(i,x,nowMs){
+      if(x.scope==='s' && S.length && S[i]){
+        if(sDone(i,x.key)) return sStat(i,x.key)[0]==='ok' ? '<span class="tag ok">اعتُمد الملف</span>' : '<span class="tag warn">رفعه المعلم</span>';
+        if(x.key==='an'){ const c = anCounts(i); if(c[0]+c[1]>0) return '<span class="tag warn">رفع بعض الصفوف</span>'; }
+      }
+      return nowMs < (x.visibleFrom||0) ? '<span class="tag">يصل المعلم غدًا</span>' : '<span class="tag ok">وصل المعلم</span>';
+    }
     const accStatus = x=>x.status==='wait' ? 'بانتظار اعتماد المدير' : 'أُرسلت للمعلم';
     function lRender(){
       const ids = {};
@@ -1020,7 +1060,7 @@ Dash.boot({
         if(open){
           h += '<div class="lb">';
           ns.forEach(x=>{
-            h += '<div class="lrow"><div class="l1"><span class="tag warn">إشعار</span><span class="grow">'+esc(KL(x.key))+'</span></div><div class="l2"><span class="tag">رقم '+arN(x.n)+'</span>'+(nowMs < (x.visibleFrom||0) ? '<span class="tag">يصل المعلم غدًا</span>' : '<span class="tag ok">وصل المعلم</span>')+'<span class="muted">'+esc(x.dateText)+'</span><button type="button" class="btn" data-lp="'+x.id+'">معاينة</button></div></div>';
+            h += '<div class="lrow"><div class="l1"><span class="tag warn">إشعار</span><span class="grow">'+esc(KL(x.key))+'</span></div><div class="l2"><span class="tag">رقم '+arN(x.n)+'</span>'+fileTag(i,x,nowMs)+'<span class="muted">'+esc(x.dateText)+'</span><button type="button" class="btn" data-lp="'+x.id+'">معاينة</button></div></div>';
             if(lOpen===x.id) h += '<pre class="letter">'+esc(x.text)+'</pre>';
           });
           as.forEach(x=>{
@@ -1083,8 +1123,17 @@ Dash.boot({
       if(k==='l') lRender();
       if(k==='r') rRender();
       if(k==='w') wRender();
-      if(k==='s') loadSem().then(sRender);
+      if(k==='m') showSub(subNow);
     });
+    /* متابعة المعلمين: تبويبان داخليان (اليومية / الفصل الدراسي) */
+    let subNow = 'd';
+    function showSub(k){
+      subNow = k;
+      document.querySelectorAll('#subTabs button').forEach(x=>x.classList.toggle('active', x.getAttribute('data-t')===k));
+      document.querySelectorAll('.spane').forEach(p=>{ p.hidden = (p.id!=='p-'+k); });
+      if(k==='s') loadSem().then(sRender);
+    }
+    $('subTabs').addEventListener('click', e=>{ const b = e.target.closest('button'); if(b) showSub(b.getAttribute('data-t')); });
 
     /* ---------------- التشغيل ---------------- */
     let logTimer = 0;
@@ -1102,7 +1151,7 @@ Dash.boot({
     }, e=>console.warn('log', e));
     await loadSem();
     topStats(); visitsStat();
-    dRender(); sRender();
+    dRender(); sRender(); lRender();
   }
 });
 </script>

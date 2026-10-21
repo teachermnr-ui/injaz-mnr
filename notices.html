@@ -52,8 +52,12 @@ Dash.boot({
         isSA || isEdu ? safe(logCol.where('type','==','acc').get()) : Promise.resolve([])
       ]);
       const waitDec = decs.filter(d=>d.st==='wait'), waitMt = mts.filter(m=>m.l==='wait'), waitAcc = accs.filter(a=>a.status==='wait');
-      const fm = await FileReq.mountMine($('#nFiles'), {db, sid, me, period}, ()=>load());
-      const notes = mine.filter(x=>x.type==='notice' && (x.visibleFrom||0) <= Date.now()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      const fctx = {db, sid, me, period};
+      const fm = await FileReq.mountMine($('#nFiles'), fctx, ()=>load());
+      /* إشعار طلب الملف لا يظهر للمعلم إن أنجز ما طُلب منه (رفع كل ما عليه) */
+      const FK = { vis:'visits', rec:'worklog', cur:'completion', an:'grades' };
+      const stale = x=>{ if(x.scope!=='s' || !FK[x.key]) return false; const rs = fm.rows.filter(r=>r.kind===FK[x.key]); return rs.length>0 && !rs.some(r=>FileReq.isOpen(r, fctx.classes)); };
+      const notes = mine.filter(x=>x.type==='notice' && (x.visibleFrom||0) <= Date.now() && !stale(x)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
       $('#nSumm').innerHTML = '<div class="dh-stats">'
         + stat('ملفات مطلوبة مني', arN(fm.pending), '#nFiles', fm.pending?'bad':'')
         + stat('إشعارات تعليمية وصلتني', arN(notes.length), '#nEdu', '')

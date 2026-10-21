@@ -179,15 +179,21 @@
       + (rows.length ? '<div class="dh-list">' + rows.map(r=>{
           const can = isOpen(r, ctx.classes);
           const rem = r.kind==='grades' && ctx.classes && ctx.classes.length ? remainingOf(r, ctx.classes) : [];
-          return '<div class="dh-item" data-r="'+esc(r.id)+'"><div>'+esc(r.title)
+          return '<div class="dh-item" data-r="'+esc(r.id)+'" style="flex-wrap:wrap"><div>'+esc(r.title)
             + '<div class="m">'+(r.deadline?'آخر موعد: '+esc(dateOf(r.deadline)):'دون موعد محدد')+(r.note?' · '+esc(r.note):'')+'</div>'
             + ((r.files||[]).some(f=>fst(r,f)==='ret') ? '<div class="m" style="color:#b91c1c">ملاحظة الوكيل: '+esc(r.agentNote||(r.files.filter(f=>f.st==='ret')[0]||{}).note||'يلزم التعديل')+'</div>' : (r.status==='ret' && r.agentNote ? '<div class="m" style="color:#b91c1c">ملاحظة الوكيل: '+esc(r.agentNote)+'</div>' : ''))
             + (rem.length && (r.files||[]).length ? '<div class="m">الصفوف المتبقية: '+esc(rem.join('، '))+'</div>' : '')
             + ((r.files||[]).length ? '<div class="m">'+fileLinks(r)+'</div>' : '')
-            + '</div><div>'+chip(r, ctx.classes)+(can?' <button class="dh-link" data-up="'+esc(r.id)+'">'+(r.status==='ret'?'رفع من جديد':'رفع الملف')+'</button>':'')+'</div></div>';
+            + '</div><div>'+chip(r, ctx.classes)+(can?' <button class="dh-link" data-up="'+esc(r.id)+'">'+(r.status==='ret'?'رفع من جديد':'رفع الملف')+'</button>':'')+'</div><div class="frSlot" style="flex:0 0 100%"></div></div>';
         }).join('') + '</div>' : '<div class="dh-empty">لا ملفات مطلوبة منك حاليًا.</div>')
-      + '<div id="frUp"></div></div>';
-    host.querySelectorAll('[data-up]').forEach(b=>b.onclick = ()=>uploadForm(host.querySelector('#frUp'), ctx, rows.find(x=>x.id===b.dataset.up), ()=>{ mountMine(host, ctx, onChange); onChange&&onChange(); }));
+      + '</div>';
+    /* نموذج الرفع يظهر داخل بطاقة الطلب نفسها، ونموذج واحد فقط مفتوح */
+    host.querySelectorAll('[data-up]').forEach(b=>b.onclick = ()=>{
+      host.querySelectorAll('.frSlot').forEach(x=>{ x.innerHTML=''; });
+      const slot = b.closest('.dh-item').querySelector('.frSlot');
+      uploadForm(slot, ctx, rows.find(x=>x.id===b.dataset.up), ()=>{ mountMine(host, ctx, onChange); onChange&&onChange(); });
+      try{ slot.scrollIntoView({ behavior:'smooth', block:'nearest' }); }catch(e){}
+    });
     return { total:rows.length, pending:open.length, rows };
   }
   function uploadForm(box, ctx, r, done){

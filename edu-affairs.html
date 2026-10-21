@@ -886,8 +886,10 @@ Dash.boot({
     function reqNote(r){
       if(!r) return '<div class="muted">لم يُطلب هذا الملف من المعلم بعد.</div>';
       let h = '<div class="muted">طُلب '+esc(fdate(r.createdAt))+(r.deadline?' · آخر موعد '+esc(fdate(r.deadline)):'')+(r.remindedAt?' · آخر تذكير '+esc(fdate(r.remindedAt)):'')+'</div>';
-      if(FileReq.overdue(r)) h += '<div><span class="tag bad">متأخر عن الموعد</span>'+(canEdit?' <button type="button" class="btn" data-rm="'+esc(r.id)+'">تذكير</button>':'')+'</div>';
-      else if(r.status==='req' && canEdit) h += '<div><button type="button" class="btn" data-rm="'+esc(r.id)+'">تذكير</button></div>';
+      /* تذكير المعلم بما لم يرفع: إشعار نصي فوري؛ يتعطل إن أكمل رفع كل ما عليه لهذه البطاقة */
+      const ti = idxOf(r.empId), done = FileReq.complete(r, { cl: ti>=0 ? T[ti].cl : [] });
+      const rb = canEdit ? ' <button type="button" class="btn" data-rm="'+esc(r.id)+'"'+(done?' disabled title="أكمل المعلم رفع كل ما عليه"':'')+'>تذكير</button>' : '';
+      h += '<div>'+(FileReq.overdue(r) ? '<span class="tag bad">متأخر عن الموعد</span>' : '')+rb+(done && canEdit ? ' <span class="muted">أكمل رفع ما عليه</span>' : '')+'</div>';
       return h;
     }
     function reviewControls(r){
@@ -1000,7 +1002,12 @@ Dash.boot({
       if(rt){ if(ro()) return; const id = rt.getAttribute('data-ret'), r = FR.find(x=>x.id===id), f = rt.getAttribute('data-f'), ti = idxOf(r.empId); const note = ($('rt'+id+(f==null?'':'_'+f))||{}).value || '';
         try{ await FileReq.review(db, sid, me, r, false, note, f==null ? null : +f, ti>=0 ? T[ti].cl : []); await loadSem(); sRender(); }catch(err){ fail(err); } return; }
       const rm = e.target.closest('[data-rm]');
-      if(rm){ if(ro()) return; try{ await FileReq.remind(db, sid, FR.find(x=>x.id===rm.getAttribute('data-rm'))); toast('أُرسل التذكير، ويراه المعلم في الإشعارات والمرفقات.'); await loadSem(); sRender(); }catch(err){ fail(err); } return; }
+      if(rm){ if(ro()) return;
+        const r = FR.find(x=>x.id===rm.getAttribute('data-rm')), ti = idxOf(r.empId), key = ({visits:'vis',worklog:'rec',completion:'cur',grades:'an'})[r.kind];
+        if(ti<0 || !key) return;
+        if(FileReq.complete(r, { cl:T[ti].cl })){ toast('أكمل المعلم رفع كل ما عليه.'); return; }
+        if(noticeToday(ti,key)){ toast('استلم المعلم إشعارًا بهذا البند اليوم.'); return; }
+        try{ await logCol.add(noticeDoc(ti,key,'s',sDetail(ti,key))); await FileReq.remind(db, sid, r); toast('أُرسل التذكير للمعلم ويصله فورًا، وسُجّل في «الإشعارات والمساءلات».'); await loadSem(); sRender(); }catch(err){ fail(err); } return; }
       const v = e.target.closest('[data-sv]');
       if(v){
         if(ro()) return;

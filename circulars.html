@@ -5,7 +5,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>التوقيع على التعاميم</title>
+<title>التعاميم والمساءلات</title>
 <meta name="theme-color" content="#3f6659">
 <link rel="stylesheet" href="theme.css?v=2026-10-05.1">
 <script src="mn-dialog.js?v=2026-10-06.1"></script>
@@ -115,7 +115,7 @@ main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
 
 <div id="app" class="hidden">
   <div class="topbar">
-    <h1>✍️ التوقيع على التعاميم</h1>
+    <h1>✍️ التعاميم والمساءلات</h1>
     <span class="tb-badge" id="tbSchool">—</span>
     <span class="tb-spacer"></span>
     <button class="tb-btn" id="tbBack">→ الرئيسية</button>
@@ -132,6 +132,7 @@ main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="users-api.js"></script>
 <script src="form-header.js?v=2026-10-15.3"></script>
+<script src="staff-docs.js?v=2026-10-20.1"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 'use strict';
@@ -446,9 +447,65 @@ async function createCircular({title, mandatory, recipients, pages}){
 /* =========================================================================
    تعاميمي (للمستخدم العادي بلا صلاحية إدارة)
    ========================================================================= */
+const EDU_KEYLAB = { queue:'الطابور', wait:'الانتظار', cls:'حضور الحصص', sup:'الإشراف', duty:'المناوبة', early:'الانصراف مبكرًا دون استئذان', prep:'تحضير الدرس' };
+/* التنبيه الخطي / التعهد الخطي (١) و(٢) / لفت النظر (وكيل الشؤون المدرسية) + المساءلات التعليمية بعد اعتماد المدير */
+async function renderMyStaffDocs(){
+  const host = $('#myStaffDocs'); if(!host) return;
+  const col = db.collection('staffDocs').doc(CR.sid).collection('items');
+  const logCol = db.collection('eduLog').doc(CR.sid).collection('items');
+  let docs = [];
+  try{ const sn = await col.where('empId','==',CR.me.id).get(); sn.forEach(d=>docs.push(Object.assign({id:d.id, src:'staff'}, d.data()))); }
+  catch(e){ console.warn(e); }
+  /* المساءلات التعليمية التي اعتمدها المدير (تصل المعلم من تاريخ وصولها) */
+  try{
+    const sn = await logCol.where('empId','==',CR.me.id).get();
+    sn.forEach(d=>{ const x = d.data(); if(x.type!=='acc' || x.status!=='sent' || (x.visibleFrom||0) > Date.now()) return;
+      docs.push(Object.assign({}, x, { id:d.id, src:'edu', title:'مساءلة: '+(EDU_KEYLAB[x.key]||x.key), needSign:true, status:x.sign==='signed'?'signed':'sent', createdAt:x.approvedAt||x.createdAt })); });
+  }catch(e){ console.warn(e); }
+  if(!docs.length){ host.innerHTML=''; return; }
+  docs.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  host.innerHTML = '<div class="card"><h3 style="margin:0 0 6px">المساءلات الواردة إليّ</h3><div class="sub" style="margin-bottom:8px">التنبيه الخطي والتعهد الخطي ولفت النظر.</div>'
+    + docs.map(d=>{
+        const signed = d.status==='signed';
+        const need = d.needSign ? 'بانتظار توقيعك' : 'بانتظار تأكيد اطلاعك';
+        return '<div class="circ-card" data-sd="'+esc(d.id)+'"><div class="info"><div class="ttl">'+esc(d.title||'')+'</div><div class="meta">'+esc(d.dateText||'')+(d.minutes!=null?' · '+esc(String(d.minutes))+' دقيقة':'')+'</div></div>'
+        + '<span class="chip '+(signed?'ok':'warn')+'">'+(signed?(d.needSign?'تم التوقيع':'تم تأكيد الاطلاع'):need)+'</span></div>';
+      }).join('')
+    + '<div id="sdView"></div></div>';
+  host.querySelectorAll('[data-sd]').forEach(el=> el.onclick = ()=>openMyStaffDoc(docs.find(x=>x.id===el.dataset.sd), col, logCol));
+}
+async function openMyStaffDoc(d, col, logCol){
+  if(!d) return;
+  let c = {}; try{ c = await FormHdr.resolve({db, session:CR.session, period:CR.session&&CR.session.period}); }catch(e){}
+  const v = $('#sdView');
+  v.innerHTML = '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px"><div id="sdDoc"></div><div id="sdPad"></div><div id="sdAct" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div></div>';
+  const edu = d.src==='edu';
+  const eduText = edu ? 'المكرم الأستاذ / '+d.empName+' حفظه الله\nالسلام عليكم ورحمة الله وبركاته\n\nمساءلة بشأن «'+(EDU_KEYLAB[d.key]||d.key)+'» في يوم '+d.dateText+':\n'+d.detail+'.\n'+(d.extra?'\n'+d.extra+'\n':'')+'\nنأمل إفادتنا بما لديكم خلال المدة المحددة، وتقبلوا خالص التحية.\nوكيل الشؤون التعليمية' : '';
+  const eduBody = edu ? '<pre style="white-space:pre-wrap;font:inherit;line-height:2;margin:0">'+esc(eduText)+'</pre>'+(d.signature?'<div style="margin-top:12px">توقيع المعلم:<br><img src="'+d.signature+'" alt="" style="max-height:80px"></div>':'') : '';
+  $('#sdDoc').innerHTML = edu ? eduBody : StaffDocs.html(d, c);
+  const act = $('#sdAct');
+  const tail = '<button class="btn sec sm" id="sdPrint">طباعة</button><button class="btn sec sm" id="sdClose">إغلاق</button>';
+  act.innerHTML = d.status==='sent'
+    ? (d.needSign ? '<button class="btn sm" id="sdSign">أوقّع بإصبعي</button>' : '<button class="btn sm" id="sdAck">أؤكد اطلاعي</button>') + tail
+    : tail;
+  const done = async patch=>{
+    try{
+      if(edu) await logCol.doc(d.id).update(Object.assign({sign:'signed', signedAt:Date.now()}, patch));
+      else await col.doc(d.id).update(Object.assign({status:'signed', signedAt:Date.now()}, patch));
+      await renderMyStaffDocs();
+    }
+    catch(e){ console.error(e); alert('تعذّر الحفظ: '+(e.message||e)); }
+  };
+  if($('#sdSign')) $('#sdSign').onclick = ()=>{ act.innerHTML=''; StaffDocs.signPad($('#sdPad'), img=>done({signature:img}), ()=>openMyStaffDoc(d, col, logCol)); };
+  if($('#sdAck')) $('#sdAck').onclick = ()=>done({});
+  $('#sdPrint').onclick = ()=>{ if(!edu) return StaffDocs.print(d, c); const w = window.open('', '_blank'); if(!w) return; w.document.open(); w.document.write(FormHdr.doc({ title:d.title, formTitle:d.title, ctx:c||{}, body:eduBody, margin:'10mm' })); w.document.close(); };
+  $('#sdClose').onclick = ()=>{ v.innerHTML=''; };
+}
+
 async function showMyList(){
   if(MGR_UNSUB){ MGR_UNSUB(); MGR_UNSUB=null; }
-  $('#main').innerHTML = `<div class="card"><h3 style="margin:0">تعاميمي</h3><div class="sub">التعاميم التي وصلتك وتحتاج توقيعك أو اطّلاعك.</div></div><div id="myList"></div>`;
+  $('#main').innerHTML = `<div id="myStaffDocs"></div><div class="card"><h3 style="margin:0">تعاميمي</h3><div class="sub">التعاميم التي وصلتك وتحتاج توقيعك أو اطّلاعك.</div></div><div id="myList"></div>`;
+  renderMyStaffDocs();;
   try{
     const snap = await db.collection('circulars').doc(CR.sid).collection('items').where('recipients','array-contains', CR.me.id).get();
     const items = []; snap.forEach(d=>items.push(Object.assign({id:d.id}, d.data())));

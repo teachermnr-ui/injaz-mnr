@@ -351,6 +351,7 @@ Dash.boot({
     const lateCol = base.collection('late'), mtCol = base.collection('maint'), decCol = base.collection('decisions');
     const sdCol = db.collection('staffDocs').doc(sid).collection('items');
     const lateRef = uid=>lateCol.doc(period+'__'+uid);
+    const feedCol = base.collection('eduFeed');
 
     /* ---- الموظفون ---- */
     const ROLE = { agent:'وكيل', counselor:'موجه طلابي', assistant:'مساعد إداري', teacher:'معلم' };
@@ -361,7 +362,7 @@ Dash.boot({
         const u = d.data(), c = (u.schools||{})[sid];
         const isAdm = u.role==='schoolAdmin' && (u.adminSchools||[]).includes(sid);
         if(isAdm || !c || c.active===false) return;
-        STAFF.push({ id:d.id, name:u.username||'', role:ROLE[c.role]||c.role||'' });
+        STAFF.push({ id:d.id, name:u.username||'', role:ROLE[c.role]||c.role||'', raw:c.role||'' });
       });
     }catch(e){ console.warn('staff', e); }
     STAFF.sort((a,b)=>a.name.localeCompare(b.name,'ar'));
@@ -374,7 +375,9 @@ Dash.boot({
 
     /* ---- الحالة الحية ---- */
     let LATE = {}, MT = [], DEC = [], DOCS = {};
-    const ready = { late:false, mt:false, dec:false, docs:false };
+    const ready = { late:false, mt:false, dec:false, docs:false, feed:false };
+    /* دقائق أرسلها وكيل الشؤون التعليمية (الانصراف المبكر والحصص) ولم يُتخذ بشأنها إجراء بعد: تُضاف لخلايا الجدول */
+    let FEED = {}, EDAY = null;
     let rOrd = null, mF = 'all', mrF = 'all', mOpenNote = null, rDirty = false;
 
     const LV = [
@@ -390,7 +393,9 @@ Dash.boot({
     function viewOf(s){
       const r = LATE[s.id] || {};
       const e = { id:s.id, n:s.name, r:s.role, archive:r.archive||[] };
-      CELLS.forEach(k=>e[k]=r[k]||0);
+      const fd = FEED[s.id] || {};
+      CELLS.forEach(k=>{ e[k] = (r[k]||0) + (fd[k]||0); });
+      e.feedDocs = fd.docs || [];
       e.hist = (r.hist||[]).map(h=>Object.assign({}, h, {st:stOf(h)}));
       e.last = r.last && r.last.k ? { min:r.last.min, k:r.last.k, st:stOf(r.last) } : { min:0, k:'', st:'' };
       return e;
@@ -416,7 +421,9 @@ Dash.boot({
     /* ---- المؤشرات ---- */
     function stats(){
       const L = E(), open = MT.filter(m=>m.st!=='done');
-      $('#s1').textContent = '—'; $('#s1d').textContent = 'يُربط مع الشؤون التعليمية';
+      const teachers = STAFF.filter(x=>x.raw==='teacher');
+      if(EDAY===null){ $('#s1').textContent = '—'; $('#s1d').textContent = 'لا بيانات من الشؤون التعليمية'; }
+      else{ const absn = teachers.filter(x=>EDAY.has(x.id)).length; $('#s1').textContent = A(teachers.length-absn); $('#s1d').textContent = 'من '+A(teachers.length)+' معلمًا'; }
       $('#s4').textContent = A(L.reduce((a,e)=>a+due(e),0));
       $('#s5').textContent = A(open.length); $('#s5d').textContent = A(open.filter(m=>m.pri==='عاجلة').length)+' عاجلة';
       $('#s6').textContent = A(DEC.filter(d=>d.st==='wait').length);
@@ -477,6 +484,7 @@ Dash.boot({
           batch.set(lr, Object.assign({}, head, zero, { last:ent, hist:e.hist.map(strip).concat([ent]) }), {merge:true});
           toast(MSG[n]);
         }
+        (e.feedDocs||[]).forEach(id=>batch.update(feedCol.doc(id), { consumed:true, consumedAt:now }));
         await batch.commit();
       }catch(err){ fail(err); }
       acting = false;
@@ -484,7 +492,7 @@ Dash.boot({
     $('#rBody').addEventListener('change', async ev=>{
       const i = ev.target.closest('[data-ce]'); if(!i || !canEdit) return;
       const s = STAFF.find(x=>x.id===i.dataset.id); if(!s) return;
-      try{ await lateRef(s.id).set({ uid:s.id, name:s.name, period, [i.dataset.ce]:num(i.value), updatedAt:Date.now() }, {merge:true}); }catch(e){ fail(e); }
+      try{ const fdv = (FEED[s.id]||{})[i.dataset.ce]||0; await lateRef(s.id).set({ uid:s.id, name:s.name, period, [i.dataset.ce]:Math.max(0, num(i.value)-fdv), updatedAt:Date.now() }, {merge:true}); }catch(e){ fail(e); }
     });
     $('#rBody').addEventListener('click', ev=>{
       const ab = ev.target.closest('[data-act]'); if(ab){ act(ab.dataset.act); return; }
@@ -656,16 +664,25 @@ Dash.boot({
 
     /* ---- العرض ---- */
     let raf = 0, typing = false;
-    $('#rBody').addEventListener('input', ev=>{ if(ev.target.closest('[data-ce]')) typing = true; });
-    $('#rBody').addEventListener('change', ()=>{ typing = false; });
+    document.addEventListener('input', ev=>{ if(ev.target.closest('[data-ce],[data-dd]')) typing = true; });
+    document.addEventListener('change', ev=>{ if(ev.target.closest('[data-ce],[data-dd]')) typing = false; });
     function renderAll(){
-      if(!(ready.late && ready.mt && ready.dec && ready.docs)) return;
+      if(!(ready.late && ready.mt && ready.dec && ready.docs && ready.feed)) return;
       if(typing){ rDirty = true; return; }
       cancelAnimationFrame(raf); raf = requestAnimationFrame(()=>{ stats(); mRender(); rRender(); cRender(); if(!$('#mRep').hidden) mrRender(); });
     }
     document.addEventListener('focusout', ev=>{ if(rDirty && !typing){ rDirty = false; setTimeout(renderAll, 50); } });
     const onErr = k=>e=>{ console.error(k, e); ready[k] = true; toast('تعذّر تحميل بعض البيانات'); renderAll(); };
     lateCol.where('period','==',period).onSnapshot(s=>{ LATE = {}; s.forEach(d=>{ LATE[d.data().uid] = d.data(); }); ready.late = true; renderAll(); }, onErr('late'));
+    feedCol.where('period','==',period).onSnapshot(s=>{
+      FEED = {};
+      s.forEach(d=>{ const f = d.data(); if(f.consumed) return; const o = FEED[f.uid] = FEED[f.uid] || { docs:[] }; o[f.key] = (o[f.key]||0) + (+f.min||0); o.docs.push(d.id); });
+      ready.feed = true; renderAll();
+    }, e=>{ console.warn('feed', e); ready.feed = true; renderAll(); });
+    try{
+      const d0 = new Date(), tk = d0.getFullYear()+'-'+String(d0.getMonth()+1).padStart(2,'0')+'-'+String(d0.getDate()).padStart(2,'0');
+      db.collection('eduDaily').doc(sid).collection('items').where('date','==',tk).onSnapshot(s=>{ EDAY = new Set(); s.forEach(d=>{ const x = d.data(); if(x.abs) EDAY.add(x.uid); }); renderAll(); }, e=>console.warn('eduDaily', e));
+    }catch(e){ console.warn(e); }
     mtCol.onSnapshot(s=>{ MT = s.docs.map(d=>Object.assign({id:d.id}, d.data())).filter(m=>!m.period || m.period===period).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); ready.mt = true; renderAll(); }, onErr('mt'));
     decCol.onSnapshot(s=>{ DEC = s.docs.map(d=>Object.assign({id:d.id}, d.data())).filter(m=>!m.period || m.period===period).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); ready.dec = true; renderAll(); }, onErr('dec'));
     sdCol.where('period','==',period).onSnapshot(s=>{ DOCS = {}; s.forEach(d=>{ DOCS[d.id] = Object.assign({id:d.id}, d.data()); }); ready.docs = true; renderAll(); }, onErr('docs'));

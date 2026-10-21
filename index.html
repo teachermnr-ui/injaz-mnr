@@ -470,6 +470,7 @@ const PERM_TREE = [
     { key:'tools.health', label:'الإرشاد الصحي', only:['access','edit'] },
     { key:'tools.agentSchool', label:'وكيل الشؤون المدرسية', only:['access','edit'] },
     { key:'tools.agentEdu', label:'وكيل الشؤون التعليمية', only:['access','edit'] },
+    { key:'tools.agentStudents', label:'وكيل الشؤون الطلابية', only:['access','edit'] },
   ]},
 /* [ADMIN-TOOLS:END] */
   { key:'omr', label:'إدارة الصفوف', leaves:[
@@ -573,10 +574,11 @@ const ADMIN_TOOLS = [
   // وكيل الشؤون المدرسية (2026-10-20): بتفويض «وكيل الشؤون المدرسية» فقط (لا يكفي دور الوكيل). المدير يفتحها للاطّلاع واعتماد ما يخصه (حق للمدير لا صلاحية)، ولا أدمن النظام
   { key:'agentSchool', perm:'tools.agentSchool', label:'وكيل الشؤون المدرسية', icon:'🛠️', href:'school-affairs.html', noAdmin:true, roles:['schoolAdmin'] },
   { key:'agentEdu', perm:'tools.agentEdu', label:'وكيل الشؤون التعليمية', icon:'📚', href:'edu-affairs.html', noAdmin:true, roles:['schoolAdmin'] },
+  { key:'agentStudents', perm:'tools.agentStudents', label:'وكيل الشؤون الطلابية', icon:'🎒', href:'student-affairs.html', noAdmin:true, roles:['schoolAdmin'] },
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
 /* [ADMIN-TOOLS:MOD] ORIG: const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting']; */
-const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting','tools.excellence','tools.activity','tools.health','tools.agentSchool','tools.agentEdu'];
+const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting','tools.excellence','tools.activity','tools.health','tools.agentSchool','tools.agentEdu','tools.agentStudents'];
 /* المدير داخل فصل مغلق: لا يرى إلا تبويب «الفصول الدراسية» (ولا أدوات ولا لوحتي) */
 function semClosedForMe(){
   return !!CURRENT && CURRENT.role==='schoolAdmin' && !!CURRENT.schoolId && !!SESSION && !SESSION.viewOnly && window.SemGuard
@@ -2843,13 +2845,15 @@ function absNoticeText(s){
 }
 function paintAbsAcc(){
   const host = document.getElementById('absAccCard'); if(!host) return;
+  /* 2026-10-22: أُلغيت بطاقة «تنبيه تراكم الغياب» (مستوى واحد) — حلّ محلها سلّم المادة ٣٤ في «وكيل الشؤون الطلابية» (٣/٥/١٠ أيام بدون عذر) */
+  host.innerHTML=''; return;
   if(!(ABS_CACHE && ABS_CACHE.canEdit && CURRENT.schoolId && ABS_ACC.loaded && ABS_ACC.sid===CURRENT.schoolId)){ host.innerHTML=''; return; }
   const all = absAccAll(), bySeat = {}; all.forEach(s=>bySeat[s.seat]=s);
   const thr = ABS_ACC.threshold;
   const pending = all.filter(s=>s.days>=thr && !ABS_ACC.notices[s.seat])
     .sort((a,b)=>b.days-a.days || _normN(a.className).localeCompare(_normN(b.className),undefined,{numeric:true}) || String(a.name).localeCompare(String(b.name)));
   const done = Object.values(ABS_ACC.notices).sort((a,b)=>(b.at||0)-(a.at||0));
-  const refOk = !guideFull();
+  const refOk = false;   // 2026-10-22: أُلغي زر «تحويل للموجه» القديم حتى بناء صفحة الإرشاد الطلابي الجديدة
   const rows = pending.map(s=>
     '<div style="border:1px solid var(--bd-f6d6d2,#f6d6d2);background:var(--bg-fff8f7,#fff8f7);border-radius:12px;padding:10px 12px;margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'+
       '<div style="flex:0 0 58px;text-align:center"><div style="font-size:22px;font-weight:900;color:var(--fg-b42318,#b42318);line-height:1">'+s.days+'</div><div style="font-size:11px;color:var(--muted)">يوم غياب</div></div>'+
@@ -3360,7 +3364,7 @@ function printAbsDay(dt){
 function absRow(a,dayCount,canEdit){
   const bg = a.status==='excused'?'#FFF7E6':a.status==='late'?'#FFF1E0':'#FDECEC';
   const stLbl = a.status==='excused'?('🟡 مستأذن'+(a.excuseTime?(' · '+esc(a.excuseTime)):'')):a.status==='late'?('🟠 متأخر'+(a.entryTime?(' · دخول '+esc(a.entryTime)):'')):'🔴 غائب';
-  const refBtn = (canEdit && CURRENT.schoolId && !guideFull())
+  const refBtn = (false && canEdit && CURRENT.schoolId && !guideFull())   // 2026-10-22: أُلغي مؤقتًا حتى بناء صفحة الإرشاد الجديدة
     ? '<button class="btn ghost sm" style="color:var(--fg-0f766e,#0f766e);border:1px solid var(--bd-0f766e,#0f766e)" onclick="openGuideReferral(\''+esc(a.seat)+'\')">↗ تحويل للموجه</button>' : '';
   const ctrl = canEdit ? '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)">'+
       '<div class="umeta" style="margin-bottom:6px;font-weight:700">تعديل حالة الغياب إلى</div>'+

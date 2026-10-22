@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-14.1 -->
+<!-- إصدار: 2026-10-22.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -549,8 +549,7 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span id="selCount" style="font-weight:800;color:var(--teal-d);font-size:13px"></span>
             <span id="bulkNoteBtns" style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="ghost" style="padding:6px 10px;font-size:12.5px" onclick="bulkNote('وكيل')">ملاحظة للوكيل</button>
-              <button class="ghost" style="padding:6px 10px;font-size:12.5px" onclick="bulkNote('مرشد')">ملاحظة للموجه</button>
+              <button class="ghost" style="padding:6px 10px;font-size:12.5px" onclick="bulkNote()">تحويل إلى وكيل الشؤون الطلابية</button>
             </span>
           </div>
         </div>
@@ -2873,86 +2872,96 @@ async function omrStudentNoteCount(seat){
       db.collection('notes').where('schoolId','==',CLS_SESSION.schoolId).where('studentSeats','array-contains',String(seat)).get()
     ]);
     const ids=new Set();
-    a.docs.concat(b.docs).forEach(d=>{ if(d.data().period===CLS_SESSION.period) ids.add(d.id); });
+    a.docs.concat(b.docs).forEach(d=>{ if(d.data().period===CLS_SESSION.period && d.data().trType==='st') ids.add(d.id); });
     return ids.size;
   }catch(e){ return 0; }
 }
-async function bulkNote(kind){
+/* ===== تحويل الطالب إلى وكيل الشؤون الطلابية (2026-10-22) =====
+   التحويل الجديد من المعلم إلى الوكيل الطلابي فقط (كل من له تعديل «وكيل الشؤون الطلابية»). أسباب خمسة. المادة ورقم الحصة اختياريان.
+   اليوم والتاريخ (هجري وميلادي) يُسجَّلان تلقائيًا وقت الإرسال. لكل طالب مستند تحويل مستقل في notes (trType='st'). */
+const ST_REASONS=['عدم أداء الواجب','مشاغبة','تأخر عن الحصة','ضعف دراسي','أخرى'];
+async function omrStudentAgents(){
+  const snap=await UsersAPI.listSnap(CLS_SESSION.schoolId);
+  return snap.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId])
+    .map(u=>{ const ctx=u.schools[CLS_SESSION.schoolId]; const pm=(ctx.permissions||{})['tools.agentStudents']||{}; return {userId:u.id,name:u.username||'',role:ctx.role||u.role||'',active:ctx.active,edit:pm.edit===true}; })
+    .filter(u=>u.active!==false && u.edit && u.userId!==CLS_SESSION.userId)
+    .map(u=>({userId:u.userId,name:u.name,role:u.role}));
+}
+function omrTrWhen(){
+  const d=new Date(), pd=n=>String(n).padStart(2,'0');
+  const dateG=d.getFullYear()+'-'+pd(d.getMonth()+1)+'-'+pd(d.getDate());
+  let dayName=''; try{ dayName=d.toLocaleDateString('ar-SA',{weekday:'long'}); }catch(e){}
+  let dateH=''; try{ const o={}; new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d).forEach(x=>o[x.type]=x.value); dateH=o.year+'/'+o.month+'/'+o.day; }catch(e){}
+  return {dateG,dayName,dateH};
+}
+function omrTrFields(codes,pre){ pre=pre||'';
+  const cs=(codes||[]).map(String), all=(state.mySubjectAssignments||[]);
+  let subs=[...new Set(all.filter(a=>!cs.length||cs.includes(String(a.classCode))).map(a=>a.subject).filter(Boolean))];
+  if(!subs.length) subs=[...new Set(all.map(a=>a.subject).filter(Boolean))];
+  const LN=['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة','الثامنة'];
+  return '<label class="field" style="margin-top:8px">سبب التحويل<select id="'+pre+'trR"><option value="">— اختر —</option>'+ST_REASONS.map(r=>'<option value="'+escapeHtml(r)+'">'+escapeHtml(r)+'</option>').join('')+'</select></label>'+
+    '<label class="field" style="margin-top:8px">المادة <span class="sub">(اختياري)</span><select id="'+pre+'trS"><option value="">— بدون —</option>'+subs.map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('')+'</select></label>'+
+    '<label class="field" style="margin-top:8px">الحصة <span class="sub">(اختياري)</span><select id="'+pre+'trL"><option value="">— بدون —</option>'+LN.map((x,k)=>'<option value="'+(k+1)+'">الحصة '+x+'</option>').join('')+'</select></label>';
+}
+function omrTrRead(pre){ pre=pre||'';
+  const g=id=>((document.getElementById(pre+id)||{}).value||'').trim();
+  return { reason:g('trR'), subject:g('trS'), lessonNo:g('trL')?Number(g('trL')):null };
+}
+async function omrCreateTransfers(studs, f, text){
+  const agents=await omrStudentAgents();
+  if(!agents.length) throw new Error('لا يوجد وكيل شؤون طلابية معيّن.');
+  const w=omrTrWhen(), now=Date.now();
+  for(const s of studs){
+    await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
+      fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
+      recipients:agents.map(a=>a.userId), recipientsInfo:agents, scope:'student',
+      trType:'st', trSt:'new', trReason:f.reason, referralReason:f.reason, subject:f.subject||'', lessonNo:f.lessonNo||null,
+      dateG:w.dateG, dayName:w.dayName, dateH:w.dateH,
+      studentSeat:String(s.seat), studentName:s.name||'', classCode:String(s.classCode||''),
+      className:classNameByCode(s.classCode)||String(s.classCode||''),
+      text, createdAt:now, replies:[], readAt:{}, closed:false });
+  }
+}
+async function bulkNote(){
   const sel=selectedSeats(); if(!sel.length) return;
   const studs=sel.map(seat=>state.students.find(s=>s.seat===seat)).filter(Boolean);
   if(!studs.length) return;
-  if(!CLS_SESSION || !CLS_SESSION.schoolId){ alert('لا يمكن إرسال الملاحظات: حسابك غير مرتبط بمدرسة.'); return; }
-  const roles = kind==='مرشد'?['counselor'] : kind==='وكيل'?['agent'] : ['counselor','agent'];
+  if(!CLS_SESSION || !CLS_SESSION.schoolId){ alert('لا يمكن إرسال التحويل: حسابك غير مرتبط بمدرسة.'); return; }
   omrModal('<div style="text-align:center;color:var(--fg-888888,#888);padding:26px">جارٍ التحميل…</div>');
-  let cands=[];
-  try{
-    const snap=await UsersAPI.listSnap(CLS_SESSION.schoolId);
-    cands=snap.docs.map(d=>({id:d.id,...d.data()}))
-      .filter(u=>!u.migratedTo && u.schools && u.schools[CLS_SESSION.schoolId])
-      .map(u=>{ const ctx=u.schools[CLS_SESSION.schoolId]; return {id:u.id, username:u.username, role:ctx.role, assignedClasses:ctx.assignedClasses||[], active:ctx.active}; })
-      .filter(u=>u.active!==false && roles.includes(u.role));
-  }catch(e){}
-  const normN=x=>String(x||'').replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]).trim();
-  const codes=[...new Set(studs.map(s=>normN(s.classCode)))];
-  const hasClass=u=>{ const ac=(u.assignedClasses||[]); if(ac.includes('__all__')) return true; return ac.map(normN).some(c=>codes.includes(c)); };
-  const preferred=cands.filter(hasClass);
-  const recips = preferred.length?preferred:cands;
+  let agents=[]; try{ agents=await omrStudentAgents(); }catch(e){}
   const counts={};
   await Promise.all(studs.map(async s=>{ counts[s.seat]=await omrStudentNoteCount(s.seat); }));
-  const roleLabel = kind==='مرشد'?'المرشد الطلابي':kind==='وكيل'?'الوكيل':'المرشد / الوكيل';
   const studList = studs.map(s=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--bd-eeeeee,#eee);font-size:13px"><span>'+escapeHtml(s.name)+'</span><span style="color:var(--fg-999999,#999);white-space:nowrap">📨 سبق '+toArabic(counts[s.seat]||0)+'</span></div>').join('');
-  const recOptions = recips.map(u=>'<option value="'+escapeHtml(u.id)+'">'+escapeHtml(u.username)+' ('+(u.role==='counselor'?'موجه طلابي':'وكيل')+')</option>').join('');
-  const noRec = !recips.length;
+  const codes=[...new Set(studs.map(s=>String(s.classCode||'')))];
   omrModal(
     '<div style="width:42px;height:4px;border-radius:9px;background:var(--bg-dddddd,#ddd);margin:0 auto 14px"></div>'+
-    '<h3 style="margin:0 0 4px">إرسال ملاحظة إلى '+roleLabel+'</h3>'+
-    '<div style="color:var(--fg-888888,#888);font-size:13px;margin-bottom:10px">عن '+toArabic(studs.length)+' طالب — العدد بجانب كل طالب هو ما سبق إرساله عنه</div>'+
+    '<h3 style="margin:0 0 4px">تحويل إلى وكيل الشؤون الطلابية</h3>'+
+    '<div style="color:var(--fg-888888,#888);font-size:13px;margin-bottom:10px">عن '+toArabic(studs.length)+' طالب — يُنشأ لكل طالب تحويل مستقل، والعدد بجانب كل طالب هو ما سبق تحويله</div>'+
     '<div style="background:var(--bg-f6f8f8,#f6f8f8);border:1px solid var(--bd-e5eaea,#e5eaea);border-radius:10px;padding:6px 10px;margin-bottom:12px">'+studList+'</div>'+
-    (noRec
-      ? '<div style="background:var(--bg-fdecec,#fdecec);color:var(--fg-c0392b,#c0392b);border-radius:10px;padding:12px;font-size:13.5px">لا يوجد '+roleLabel+' مُسنَد لهذا الفصل. يرجى إبلاغ الإدارة لإسناد مستخدم.</div>'
-      : '<label style="font-weight:700;font-size:14px;display:block;margin-bottom:6px">المستلِم</label>'+
-        '<select id="omrNoteRecip" style="width:100%;padding:11px;border:1px solid var(--line,var(--bd-d7dede,#d7dede));border-radius:10px;font:inherit;text-align:right;margin-bottom:12px;background:var(--bg-ffffff,#fff)">'+recOptions+'</select>'+
-        '<label style="font-weight:700;font-size:14px;display:block;margin-bottom:6px">نص الملاحظة</label>'+
-        '<textarea id="omrNoteText" rows="4" style="width:100%;padding:11px;border:1px solid var(--line,var(--bd-d7dede,#d7dede));border-radius:10px;font:inherit;text-align:right" placeholder="اكتب الملاحظة…"></textarea>')+
+    (!agents.length
+      ? '<div style="background:var(--bg-fdecec,#fdecec);color:var(--fg-c0392b,#c0392b);border-radius:10px;padding:12px;font-size:13.5px">لا يوجد وكيل شؤون طلابية معيّن. يرجى إبلاغ الإدارة.</div>'
+      : omrTrFields(codes,'b')+
+        '<label class="field" style="margin-top:8px">نص التحويل<textarea id="omrNoteText" rows="4" style="width:100%;padding:11px;border:1px solid var(--line,var(--bd-d7dede,#d7dede));border-radius:10px;font:inherit;text-align:right" placeholder="اكتب ما لاحظته على الطالب…"></textarea></label>')+
     '<div style="display:flex;gap:8px;margin-top:14px">'+
       '<button class="ghost" style="flex:1;padding:11px" onclick="closeOmrModal()">إلغاء</button>'+
-      (noRec?'':'<button style="flex:2;padding:11px;background:var(--teal,var(--bg-0f766e,#0f766e));color:var(--fg-ffffff,#fff);border:none;border-radius:10px;font:inherit;font-weight:700" onclick="sendOmrNotes()">📨 إرسال</button>')+
+      (!agents.length?'':'<button id="omrNoteGo" style="flex:2;padding:11px;background:var(--teal,var(--bg-0f766e,#0f766e));color:var(--fg-ffffff,#fff);border:none;border-radius:10px;font:inherit;font-weight:700" onclick="sendOmrNotes()">📨 تحويل</button>')+
     '</div>'
   );
   _omrNoteCtx={ studs };
 }
 async function sendOmrNotes(){
   if(!_omrNoteCtx) return;
-  const rid=(document.getElementById('omrNoteRecip')||{}).value;
-  const txt=((document.getElementById('omrNoteText')||{}).value||'').trim();
-  if(!rid){ alert('اختر المستلِم.'); return; }
-  if(!txt){ alert('اكتب نص الملاحظة.'); return; }
-  let info;
+  const f=omrTrRead('b'), txt=((document.getElementById('omrNoteText')||{}).value||'').trim();
+  if(!f.reason){ alert('اختر سبب التحويل.'); return; }
+  if(!txt){ alert('اكتب نص التحويل.'); return; }
+  const go=document.getElementById('omrNoteGo'); if(go) go.disabled=true;
   try{
-    const us=await db.collection('users').doc(rid).get(); const u=us.data();
-    const ctx=(u.schools&&u.schools[CLS_SESSION.schoolId])||{};
-    info=[{userId:rid,name:u.username||'',role:ctx.role||u.role||''}];
-  }
-  catch(e){ alert('تعذّر تحديد المستلِم.'); return; }
-  try{
-    // رسالة واحدة تضم كل الطلاب المحددين — وتُحتسب تحويلًا لكل طالب منهم (studentSeats)
-    const studs=_omrNoteCtx.studs;
-    const classCodes=[...new Set(studs.map(s=>String(s.classCode||'')))];
-    const classNames=[...new Set(studs.map(s=>classNameByCode(s.classCode)||String(s.classCode||'')))];
-    await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
-      fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
-      recipients:[rid], recipientsInfo:info, scope:'student',
-      studentSeat: studs.length===1 ? String(studs[0].seat) : '',
-      studentSeats: studs.map(s=>String(s.seat)),
-      students: studs.map(s=>({ seat:String(s.seat), name:s.name||'', classCode:String(s.classCode||'') })),
-      studentName: studs.map(s=>s.name).join('، '),
-      classCode: classCodes.length===1 ? classCodes[0] : '',
-      className: classNames.join('، '),
-      text:txt, createdAt:Date.now(), replies:[], readAt:{}, closed:false });
+    await omrCreateTransfers(_omrNoteCtx.studs, f, txt);
     closeOmrModal();
     state.selectedStudents={}; renderStudents();
-    alert('تم إرسال الملاحظة بنجاح.');
-  }catch(e){ alert('تعذّر الإرسال: '+(e.message||e)); }
+    alert('تم تحويل الطالب إلى وكيل الشؤون الطلابية.');
+  }catch(e){ if(go) go.disabled=false; alert('تعذّر التحويل: '+(e.message||e)); }
 }
 // خرائط حالات الحضور (عامة ليستخدمها العرض والنافذة معاً)
 const ATT_BG = { runaway:'#e9e9e9', excused:'#e7f7ee', late:'#fff4e0', absent:'#fdecec' };   // هارب رمادي غامق · مستأذن أخضر · متأخر أصفر · غائب أحمر (حاضر = أبيض)
@@ -5510,23 +5519,16 @@ let OMR_NOTES_CACHE = { rec:[], snt:[] }, OMR_NOTES_VIEW = 'rec';
 function setOmrNotesView(v){ OMR_NOTES_VIEW=v; paintOmrInbox(); }
 function paintOmrInbox(){
   const host=document.getElementById('omrInbox'); if(!host) return;
-  const me=CLS_SESSION.userId;
-  const rec=OMR_NOTES_CACHE.rec.filter(n=>!n.closed), snt=OMR_NOTES_CACHE.snt.filter(n=>!n.closed);
-  const seen=new Set(); const closed=OMR_NOTES_CACHE.rec.concat(OMR_NOTES_CACHE.snt).filter(n=>n.closed && !seen.has(n.id) && seen.add(n.id));
-  const tabBtn=(v,label)=>'<button onclick="setOmrNotesView(\''+v+'\')" style="padding:7px 12px;border-radius:20px;border:1px solid var(--line);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;background:'+(OMR_NOTES_VIEW===v?'var(--teal-d,#0b5a54)':'#fff')+';color:'+(OMR_NOTES_VIEW===v?'#fff':'var(--ink)')+'">'+label+'</button>';
-  let body='';
-  if(OMR_NOTES_VIEW==='rec') body = rec.length ? rec.map(n=>omrNoteCard(n,false)).join('') : '<div class="empty">لا ملاحظات واردة مفتوحة.</div>';
-  else if(OMR_NOTES_VIEW==='snt') body = snt.length ? snt.map(n=>omrNoteCard(n,true)).join('') : '<div class="empty">لا ملاحظات مرسلة مفتوحة.</div>';
-  else {
-    const g={}; closed.forEach(n=>{ const k=n.className||'بلا فصل'; (g[k]=g[k]||[]).push(n); });
-    const keys=Object.keys(g).sort((a,b)=>String(a).localeCompare(String(b),'ar',{numeric:true}));
-    body = keys.length ? keys.map(k=>'<div style="margin:12px 0 6px;padding:6px 10px;background:var(--bg-eef4f3,#eef4f3);border-radius:8px;font-weight:800;font-size:13px;color:var(--teal-d,var(--fg-0b5a54,#0b5a54))">'+escapeHtml(k)+' ('+toArabic(g[k].length)+')</div>'+
-      g[k].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(n=>omrNoteCard(n,n.fromUserId===me)).join('')).join('')
-      : '<div class="empty">لا تحويلات مغلقة.</div>';
-  }
-  host.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
-    tabBtn('rec','📥 الواردة ('+toArabic(rec.length)+')')+tabBtn('snt','📤 المرسلة ('+toArabic(snt.length)+')')+tabBtn('closed','🔒 تحويلات مغلقة ('+toArabic(closed.length)+')')+
-    '</div>'+body;
+  const ST={new:['بانتظار الوكيل','#b45309','#fff4e0'],obs:['تحت الملاحظة','#0b5a54','#e7f4f1'],ref:['محال للتوجيه','#6d28d9','#f1ebfe'],done:['منتهٍ','#555','#eee']};
+  const arr=OMR_NOTES_CACHE.snt.filter(n=>n.trType==='st').sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  host.innerHTML='<div class="subtitle" style="margin-bottom:8px">تحويلاتي <span class="sub">('+toArabic(arr.length)+')</span></div>'+(arr.length ? arr.map(n=>{
+    const st=ST[n.trSt||'new']||ST.new;
+    const meta=[n.subject, n.lessonNo?('الحصة '+toArabic(n.lessonNo)):'', n.dayName, n.dateH?toArabic(n.dateH):''].filter(Boolean).map(escapeHtml).join(' · ');
+    return '<div class="subcard"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div style="font-weight:700">'+escapeHtml(n.studentName||'')+(n.className?(' · '+escapeHtml(n.className)):'')+'</div>'+
+      '<span style="padding:2px 10px;border-radius:12px;font-size:12px;font-weight:800;color:'+st[1]+';background:'+st[2]+'">'+st[0]+'</span></div>'+
+      '<div class="sub">السبب: <b>'+escapeHtml(n.trReason||n.referralReason||'')+'</b></div>'+(meta?'<div class="sub">'+meta+'</div>':'')+
+      '<div style="margin:8px 0;padding:9px 11px;background:var(--bg-ffffff,#fff);border-right:3px solid var(--teal,#0f766e);border-radius:8px;font-weight:600;white-space:pre-wrap">'+escapeHtml(n.text)+'</div></div>';
+  }).join('') : '<div class="empty">لا تحويلات مرسلة.</div>');
 }
 function omrNoteCard(n,mineSent){
   const who=mineSent?('إلى: '+(n.recipientsInfo||[]).map(r=>escapeHtml(r.name)).join('، ')):('من: '+escapeHtml(n.fromName)+' ('+(OROLES[n.fromRole]||n.fromRole)+')');
@@ -5568,29 +5570,17 @@ async function omrToggleNoteClosed(id, closed){
   catch(e){ alert('تعذّر '+(closed?'الإغلاق':'إعادة الفتح')+': '+(e.message||e)); return; }
   renderOmrNotes();
 }
-function omrComposeSend(){
+async function omrComposeSend(){
   const code=document.getElementById('onClass').value, seat=document.getElementById('onStudent').value, text=(document.getElementById('onText').value||'').trim();
-  const rid=(document.getElementById('onRecip')||{}).value;
-  const reason=(document.getElementById('onReason')||{}).value||'';
+  const f=omrTrRead('c');
   if(!code||!seat){ alert('اختر الفصل والطالب.'); return; }
-  if(!rid){ alert('اختر المستلِم من القائمة.'); return; }
-  if(!text){ alert('اكتب نص الملاحظة.'); return; }
-  const cl=state.classes.find(c=>String(c.code)===String(code))||{};
-  const st=state.students.find(s=>String(s.seat)===String(seat)&&String(s.classCode)===String(code))||{};
-  omrSendNoteTo(rid,seat,code,cl.name||'',st.name||'',text,reason);
-}
-async function omrSendNoteTo(rid,seat,classCode,className,studentName,text,referralReason){
+  if(!f.reason){ alert('اختر سبب التحويل.'); return; }
+  if(!text){ alert('اكتب نص التحويل.'); return; }
+  const st=state.students.find(s=>String(s.seat)===String(seat)&&String(s.classCode)===String(code))||{seat,classCode:code};
   try{
-    const us=await db.collection('users').doc(rid).get(); const u=us.data();
-    const ctx=(u.schools&&u.schools[CLS_SESSION.schoolId])||{};
-    const info=[{userId:rid,name:u.username||'',role:ctx.role||u.role||''}];
-    await db.collection('notes').add({ schoolId:CLS_SESSION.schoolId, period:CLS_SESSION.period,
-      fromUserId:CLS_SESSION.userId, fromName:CLS_SESSION.username, fromRole:CLS_SESSION.role,
-      recipients:[rid], recipientsInfo:info, scope:'student',
-      studentSeat:String(seat), studentName:studentName, classCode:String(classCode), className:className,
-      text:text, referralReason:referralReason||'', createdAt:Date.now(), replies:[], readAt:{}, closed:false });
-    alert('تم إرسال الملاحظة.'); renderOmrNotes();
-  }catch(e){ alert('فشل الإرسال: '+(e.message||e)); }
+    await omrCreateTransfers([st], f, text);
+    alert('تم تحويل الطالب إلى وكيل الشؤون الطلابية.'); renderOmrNotes();
+  }catch(e){ alert('تعذّر التحويل: '+(e.message||e)); }
 }
 function moveStudentOmr(seat){
   if(!canManageStudents()){ alert('نقل الطلاب صلاحية مقصورة على مدير المدرسة أو من يفوّضه.'); return; }
@@ -5623,7 +5613,7 @@ function doMoveStudentOmr(seat){
    ويتوقف بعد ١٥ دقيقة خمول ويُستأنف عند العودة. */
 const OLIVE = { subs:{}, lastActive: Date.now(), paused:false, sig:null };
 function oliveOff(){ Object.keys(OLIVE.subs).forEach(k=>{ try{ OLIVE.subs[k](); }catch(e){} delete OLIVE.subs[k]; }); }
-function oliveSig(arr){ return arr.map(n=>n.id+':'+(n.createdAt||0)+':'+((n.replies||[]).length)+':'+(n.closed?1:0)).sort().join('|'); }
+function oliveSig(arr){ return arr.map(n=>n.id+':'+(n.createdAt||0)+':'+((n.replies||[]).length)+':'+(n.closed?1:0)+':'+(n.trSt||'')).sort().join('|'); }
 function oliveNotice(show){
   const el=document.getElementById('omrLiveNotice'); if(!el) return;
   el.innerHTML = show ? '<button style="width:100%;margin-bottom:10px;padding:10px;border:none;border-radius:10px;background:var(--teal,var(--bg-0f766e,#0f766e));color:var(--fg-ffffff,#fff);font:inherit;font-weight:700;cursor:pointer" onclick="oliveNotice(false);renderOmrNotes()">🔄 تحديثات جديدة — اضغط للعرض</button>' : '';
@@ -5658,33 +5648,25 @@ async function renderOmrNotes(){
   const host=document.getElementById('omrNotesHost'); if(!host) return;
   const classOpts=state.classes.map(c=>'<option value="'+c.code+'">'+escapeHtml(c.name)+'</option>').join('');
   host.innerHTML=
-    '<div class="subcard"><div class="subtitle">📨 إرسال ملاحظة عن طالب <span class="sub">إلى الوكيل/الموجه/المساعد الإداري المسنَد للفصل</span></div>'+
+    '<div class="subcard"><div class="subtitle">📨 تحويل طالب <span class="sub">إلى وكيل الشؤون الطلابية</span></div>'+
     '<label class="field" style="margin-top:6px">الفصل<select id="onClass"><option value="">— اختر —</option>'+classOpts+'</select></label>'+
     '<label class="field" style="margin-top:8px">الطالب<select id="onStudent"><option value="">— اختر الفصل أولاً —</option></select></label>'+
     '<div id="onCount" class="sub" style="margin-top:6px"></div>'+
-    '<label class="field" style="margin-top:8px">سبب الإحالة<select id="onReason"><option value="">— اختر —</option>'+
-      Object.entries(REFERRAL_REASONS).map(([grp,items])=>'<optgroup label="'+escapeHtml(grp)+'">'+items.map(it=>'<option value="'+escapeHtml(it)+'">'+escapeHtml(it)+'</option>').join('')+'</optgroup>').join('')+
-      '<option value="أخرى">أخرى</option></select></label>'+
-    '<label class="field" style="margin-top:8px">المستلِم<select id="onRecip"><option value="">— اختر الطالب أولاً —</option></select></label>'+
-    '<label class="field" style="margin-top:8px">نص الملاحظة<textarea id="onText" rows="3" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--bg-fcfdfd,#fcfdfd)"></textarea></label>'+
-    '<button class="primary" style="margin-top:8px" onclick="omrComposeSend()">📨 إرسال</button></div>'+
-    '<div id="omrLiveNotice" style="margin-top:12px"></div><div id="omrInbox" style="margin-top:12px"><div class="empty">جارٍ تحميل الملاحظات…</div></div>';
+    omrTrFields([],'c')+
+    '<label class="field" style="margin-top:8px">نص التحويل<textarea id="onText" rows="3" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--bg-fcfdfd,#fcfdfd)"></textarea></label>'+
+    '<button class="primary" style="margin-top:8px" onclick="omrComposeSend()">📨 تحويل</button></div>'+
+    '<div id="omrLiveNotice" style="margin-top:12px"></div><div id="omrInbox" style="margin-top:12px"><div class="empty">جارٍ تحميل التحويلات…</div></div>';
   const cs=document.getElementById('onClass');
   if(cs) cs.onchange=function(){ const code=this.value; const studs=state.students.filter(s=>String(s.classCode)===String(code));
     document.getElementById('onStudent').innerHTML='<option value="">— اختر —</option>'+studs.map(s=>'<option value="'+s.seat+'">'+escapeHtml(s.name)+'</option>').join('');
-    document.getElementById('onRecip').innerHTML='<option value="">— اختر الطالب أولاً —</option>';
     document.getElementById('onCount').textContent=''; };
   const ss=document.getElementById('onStudent');
   if(ss) ss.onchange=async function(){
-    const code=document.getElementById('onClass').value, seat=this.value;
-    const cc=document.getElementById('onCount'), rc=document.getElementById('onRecip');
-    if(!seat){ if(cc)cc.textContent=''; if(rc)rc.innerHTML='<option value="">— اختر الطالب أولاً —</option>'; return; }
-    if(cc) cc.textContent='⏳ …'; if(rc) rc.innerHTML='<option value="">⏳ …</option>';
-    const [n, admins] = await Promise.all([omrStudentNoteCount(seat), omrResolveClassAdmins(code)]);
-    if(cc) cc.innerHTML='📊 عدد الملاحظات المرسلة عن هذا الطالب: <b>'+toArabic(n)+'</b>';
-    if(rc) rc.innerHTML = admins.length
-      ? admins.map(a=>'<option value="'+escapeHtml(a.userId)+'">'+escapeHtml(a.name)+' ('+(a.role==='counselor'?'موجه طلابي':a.role==='agent'?'وكيل':'مساعد إداري')+')</option>').join('')
-      : '<option value="">لا يوجد مستلِم مُسنَد لهذا الفصل</option>';
+    const seat=this.value, cc=document.getElementById('onCount');
+    if(!seat){ if(cc)cc.textContent=''; return; }
+    if(cc) cc.textContent='⏳ …';
+    const n = await omrStudentNoteCount(seat);
+    if(cc) cc.innerHTML='📊 عدد التحويلات السابقة لهذا الطالب: <b>'+toArabic(n)+'</b>';
   };
   try{
     const [recv,sent]=await Promise.all([

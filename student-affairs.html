@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-22.1 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) (طبق الأصل من النموذج المعتمد) -->
+<!-- إصدار: 2026-10-22.2 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) (طبق الأصل من النموذج المعتمد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -296,8 +296,10 @@ table{line-height:normal}
     </div>
   </section></div>
   <div class="pane" id="p-r" hidden><section class="card">
-    <div class="hd"><h2>التحويلات</h2></div>
-    <div class="muted">هذا القسم قيد الإعداد، ويُفعَّل في مرحلة لاحقة.</div>
+    <div class="hd"><h2>التحويلات</h2><span class="chip" id="rCnt"></span></div>
+    <div class="seg subs" id="rSeg"><button type="button" class="on" data-f="new">جديد</button><button type="button" data-f="obs">تحت الملاحظة</button><button type="button" data-f="ref">إحالات للتوجيه</button><button type="button" data-f="done">منتهٍ</button></div>
+    <div class="muted">تصل التحويلات من المعلمين بعد انتهاء الحصة. ملف الطالب بطاقة واحدة لا تكون إلا في تبويب واحد: يكتب الوكيل تقريره فينتقل الملف إلى «تحت الملاحظة». وإذا تكرر التحويل للطالب ظهر معه خيار «إحالة للموجه» فينتقل الملف كاملًا إلى «إحالات للتوجيه». وكل حالة اتُّخذ فيها إجراء تنتقل مغلقة. والإنهاء يكون من الموجه الطلابي عند بناء صفحته.</div>
+    <div id="rRows" style="display:flex;flex-direction:column;gap:10px"></div>
   </section></div>
   <div class="pane" id="p-v" hidden><section class="card">
     <div class="hd"><h2>المخالفات السلوكية</h2></div>
@@ -574,12 +576,71 @@ Dash.boot({
       const rec={period, seat:s.seat, name:s.name, className:s.cls, date:dk, at:Date.now(), by:env.me.id, byName:env.me.name};
       try{ await ntCol.doc(period+'__'+s.seat+'__'+dk).set(rec); NT.set(s.seat,rec); toast('سُجّل إشعار ولي الأمر'); }catch(er){ fail(er); }
       tRender(); });
+
+    /* =====================================================================
+       المرحلة ٣ — التحويلات (من المعلم إلى وكيل الشؤون الطلابية فقط)
+       البيانات: مجموعة notes الحالية بمستند لكل تحويل (trType='st') يُنشئه المعلم، ويضيف الوكيل عليه:
+         trSt: new → obs (بعد التقرير) → ref (إحالة للموجه) → done (من صفحة الموجه لاحقًا)
+         agentReport, reportAt, reportBy, reportByName, referredAt, referredBy
+       ملف الطالب بطاقة واحدة في تبويب واحد: جديد إن وُجد تحويل جديد، وإلا إحالات للتوجيه، وإلا تحت الملاحظة، وإلا منتهٍ. */
+    const nCol = db.collection('notes');
+    const RSM = {new:['جديد','bad'],obs:['تحت الملاحظة','warn'],ref:['محال للتوجيه','warn'],done:['منتهٍ','ok']};
+    let TR = [], rF = 'new';
+    const trFile = seat=>{ const rs=TR.filter(r=>r.seat===seat); return rs.some(r=>r.st==='new')?'new':rs.some(r=>r.st==='ref')?'ref':rs.some(r=>r.st==='obs')?'obs':'done'; };
+    async function loadTr(){
+      const q = await nCol.where('schoolId','==',sid).where('trType','==','st').get();
+      TR = q.docs.map(d=>{ const x=d.data(); return {id:d.id, period:x.period, seat:String(x.studentSeat||''), name:x.studentName||'', cls:x.className||'',
+        subj:x.subject||'', lesson:x.lessonNo||0, why:x.trReason||x.referralReason||'', t:x.fromName||'', day:x.dayName||'', dateH:x.dateH||'', text:x.text||'',
+        st:x.trSt||'new', note:x.agentReport||'', at:x.createdAt||0}; }).filter(r=>r.period===period && r.seat);
+    }
+    function rRender(){
+      const seats = [...new Set(TR.map(r=>r.seat))].filter(id=>trFile(id)===rF);
+      $('#rCnt').textContent = A(seats.length)+' ملفات';
+      $('#s5').textContent = A(TR.filter(r=>r.st==='new').length);
+      $('#rRows').innerHTML = seats.map(id=>{
+        const rs = TR.filter(r=>r.seat===id).sort((a,b)=>(a.st==='new')-(b.st==='new') || a.at-b.at), n = rs.length, f = rs[0];
+        const head = '<div class="nm">'+esc(f.name)+'<small>'+esc(f.cls)+'</small></div><div class="row"><span class="tag">'+A(n)+' '+(n>2?'تحويلات':(n===2?'تحويلان':'تحويل'))+'</span></div>';
+        return '<div class="trow">'+head+rs.map(r=>{ const open = r.st==='new' && canEdit;
+          const meta = [esc(r.subj), r.lesson?('الحصة '+A(r.lesson)):'', 'المعلم '+esc(r.t), esc(r.day)+' '+A(esc(r.dateH))].filter(x=>x && String(x).trim()).join(' · ');
+          return '<div class="srow"><div class="row"><span class="tag bad">'+esc(r.why)+'</span><span class="tag '+RSM[r.st][1]+'">'+RSM[r.st][0]+'</span></div>'+
+            '<div class="muted">'+meta+'</div>'+(r.text?'<div>'+esc(r.text)+'</div>':'')+
+            '<label class="muted" for="rn'+r.id+'">تقرير الوكيل</label>'+
+            '<textarea id="rn'+r.id+'" '+(open?'':'disabled')+' placeholder="اكتب ما تم مع الطالب">'+esc(r.note)+'</textarea>'+
+            (open?'<div class="row r1"><button type="button" class="btn solid" data-rs="'+r.id+'">حفظ التقرير</button>'+(n>1?'<button type="button" class="btn" data-rf="'+r.id+'">إحالة للموجه</button>':'')+'</div>':'')+'</div>'; }).join('')+'</div>';
+      }).join('') || '<div class="muted">لا ملفات في هذا التبويب.</div>';
+    }
+    $('#rSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; rF=b.dataset.f; document.querySelectorAll('#rSeg button').forEach(x=>x.classList.toggle('on',x===b)); rRender(); });
+    $('#rRows').addEventListener('click', async e=>{
+      const g = a=>{ const b=e.target.closest('['+a+']'); return b && TR.find(x=>x.id===b.getAttribute(a)); };
+      let r;
+      try{
+        if((r=g('data-rs'))){
+          const t=$('#rn'+r.id).value.trim(); if(!t){ toast('اكتب التقرير أولًا'); return; }
+          const now=Date.now();
+          await nCol.doc(r.id).update({agentReport:t, trSt:'obs', reportAt:now, reportBy:env.me.id, reportByName:env.me.name});
+          r.note=t; r.st='obs'; toast('حُفظ التقرير، وانتقل الملف إلى «تحت الملاحظة»');
+        } else if((r=g('data-rf'))){
+          const t=$('#rn'+r.id).value.trim(), now=Date.now();
+          const b = db.batch();
+          TR.filter(x=>x.seat===r.seat && x.st!=='done').forEach(x=>{
+            const u = {trSt:'ref', referredAt:now, referredBy:env.me.id};
+            if(x.id===r.id && t){ u.agentReport=t; u.reportAt=now; u.reportBy=env.me.id; u.reportByName=env.me.name; }
+            b.update(nCol.doc(x.id), u); });
+          await b.commit();
+          TR.filter(x=>x.seat===r.seat && x.st!=='done').forEach(x=>{ x.st='ref'; if(x.id===r.id && t) x.note=t; });
+          toast('أُحيل ملف الطالب كاملًا إلى الموجه');
+        } else return;
+      }catch(er){ fail(er); return; }
+      rRender(); });
+
     /* ---- التبويبات الفرعية ---- */
     document.addEventListener('click', e=>{ const b=e.target.closest('.subs button'); if(!b) return; const bar=b.parentElement, g=bar.dataset.grp;
       bar.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
       document.querySelectorAll('.sp[data-grp="'+g+'"]').forEach(p=>p.hidden=p.dataset.s!==b.dataset.s); });
     try{ await loadAbs(); gRender(); cRender(); tRender(); }
     catch(e){ console.error(e); toast('تعذّر تحميل أيام الغياب'); }
+    try{ await loadTr(); rRender(); }
+    catch(e){ console.error(e); toast('تعذّر تحميل التحويلات'); }
   }
 });
 </script>

@@ -354,7 +354,7 @@ Dash.boot({
     const feedCol = base.collection('eduFeed');
 
     /* ---- الموظفون ---- */
-    const ROLE = { agent:'وكيل', counselor:'موجه طلابي', assistant:'مساعد إداري', teacher:'معلم' };
+    const ROLE = { agent:'وكيل', counselor:'موجه طلابي', assistant:'كادر إداري', teacherAssistant:'مساعد معلم', teacher:'معلم' };
     const STAFF = [];
     try{
       const snap = await window.UsersAPI.listSnap(sid);

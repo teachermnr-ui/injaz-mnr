@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-05.1 -->
+<!-- إصدار: 2026-10-22.1 — عرض تعميم «محضر لجنة التوجيه» (نوع committeeMinutes) -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -270,7 +270,7 @@ async function loadStaff(){
   CR.staff = list;
 }
 function staffById(id){ return CR.staff.find(s=>s.id===id); }
-const ROLE_NAMES = { schoolAdmin:'مدير', agent:'وكيل', counselor:'موجه طلابي', assistant:'مساعد إداري', teacher:'معلم' };
+const ROLE_NAMES = { schoolAdmin:'مدير', agent:'وكيل', counselor:'موجه طلابي', assistant:'كادر إداري', teacherAssistant:'مساعد معلم', teacher:'معلم' };
 
 /* =========================================================================
    لوحة الإدارة: قائمة التعاميم + إنشاء جديد
@@ -533,6 +533,18 @@ async function showMyList(){
    عرض تعميم واحد — الصفحات، التوقيع، جدول المتابعة (للمدير)، المشاركة، الطباعة
    ========================================================================= */
 let VIEW_UNSUB = null;
+/* محضر اجتماع لجنة التوجيه (يصدره وكيل الشؤون الطلابية): يُعرض نصًا للاطّلاع والتوقيع، ولا يُطبع إلا من صفحة الوكيل بعد اعتماد المدير */
+function minutesHtml(m, c){
+  const A = n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+  const ol = L=>'<ol style="margin:4px 0 12px;padding-right:24px">'+(L||[]).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>';
+  const mem = (m.members||[]).filter(x=>x.present).map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.role)+'</td></tr>').join('');
+  return '<div class="sub" style="margin-top:10px">'+esc(m.school||'')+' — '+esc(m.eduDept||'')+'</div>'+
+    '<h4 style="margin:10px 0">محضر اجتماع لجنة التوجيه والإرشاد بالمدرسة</h4>'+
+    '<div class="sub">'+esc(m.dayName||'')+' '+A(esc(m.dateH||''))+' هـ — الحالة: '+esc(m.caseText||'')+'</div>'+
+    '<b>نقاط النقاش خلال الاجتماع:</b>'+ol(m.points)+'<b>التوصيات:</b>'+ol(m.recs)+
+    '<b>الأعضاء الحاضرون:</b><table style="width:100%;border-collapse:collapse;margin-top:6px" border="1" cellpadding="6"><tr><th>م</th><th>الاسم</th><th>عمله في اللجنة</th></tr>'+mem+'</table>'+
+    (c && c.approvedAt?'<div class="alert ok" style="margin-top:10px">اعتمد المدير هذا المحضر.</div>':'');
+}
 async function openCircularView(cid, skipHistory){
   if(VIEW_UNSUB){ VIEW_UNSUB(); VIEW_UNSUB=null; }
   CR.cid = cid;
@@ -546,14 +558,14 @@ async function openCircularView(cid, skipHistory){
   // جدول التعميم الأحدث يُقرأ من النسخة المعتمدة (يحدّثه المدير أو الوكيل عند أي تعديل)
   if(c.table && c.planId){ try{ const ps = await db.collection('dutyPlans').doc(c.planId).get(); const t = ps.exists && ps.data().pub && (ps.data().pub.tables||{})[c.kind]; if(t) c.table = t; }catch(e){} }
   let pages = [];
-  if(!c.table){ const pagesSnap = await itemRef.collection('pages').orderBy('index').get(); pages = pagesSnap.docs.map(d=>d.data().dataUrl); }
+  if(!c.table && !c.minutes){ const pagesSnap = await itemRef.collection('pages').orderBy('index').get(); pages = pagesSnap.docs.map(d=>d.data().dataUrl); }
 
   let html = `
     <div class="card">
       <button class="btn sec sm" id="backBtn">→ رجوع للقائمة</button>
       <h3 style="margin:10px 0 2px">تعميم رقم ${esc(c.number)}${c.title?' — '+esc(c.title):''}</h3>
       <div class="sub">${esc(c.createdByName||'')} · ${esc(fmtDate(c.createdAt))} · ${c.mandatory?'<b>التوقيع إلزامي</b>':'التوقيع اختياري'}</div>
-      ${c.table?'<div id="liveTbl" style="margin-top:12px"></div>':`<div class="pagewrap" style="margin-top:10px">${pages.map(p=>`<img src="${p}">`).join('')}</div>`}
+      ${c.table?'<div id="liveTbl" style="margin-top:12px"></div>':(c.minutes?minutesHtml(c.minutes, c):`<div class="pagewrap" style="margin-top:10px">${pages.map(p=>`<img src="${p}">`).join('')}</div>`)}
     </div>`;
 
   if(isRecipient){

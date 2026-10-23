@@ -5487,7 +5487,7 @@ function toArabic(n){return String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]
 /* ============================================================
    نظام الملاحظات — جانب المعلم
    ============================================================ */
-const OROLES={admin:'أدمن',manager:'مدير',agent:'وكيل',counselor:'موجه طلابي',assistant:'مساعد إداري',teacher:'معلم'};
+const OROLES={admin:'أدمن',manager:'مدير',agent:'وكيل',counselor:'موجه طلابي',assistant:'كادر إداري',teacherAssistant:'مساعد معلم',teacher:'معلم'};
 const REFERRAL_REASONS = {
   'أكاديمي': ['موهبة تحتاج إلى رعاية','تدني التحصيل','عدم أداء الواجبات','صعوبات تعلم','عدم إحضار الكتب أو الأدوات'],
   'سلوكي': ['مخالفة سلوكية','تكرار المخالفات','مشكلة مع طالب','مشكلة مع معلم','عدم انضباط','مشكلة داخل الفصل','عدم الالتزام بتعليمات المعلم','تخريب الممتلكات'],
@@ -6075,7 +6075,7 @@ let CLS_SESSION = null, CLS_NS = '', CLS_CAN_ADD_MANAGE = false, CLS_ALL_PERMS =
     /* الترويسة الموحّدة (نفس ترويسة الرئيسية) — تبقى أول div في body لأن الشارات الإضافية تُلحق بها */
     var IT = window.InjazTheme;
     var ic = function(n, sz, sw){ return IT ? IT.icon(n, sz, sw) : ''; };
-    var IJH_ROLE = { admin:'أدمن النظام', schoolAdmin:'مدير المدرسة', agent:'وكيل', counselor:'موجه طلابي', assistant:'مساعد إداري', teacher:'معلم', soloTeacher:'معلم (حساب مستقل)' };
+    var IJH_ROLE = { admin:'أدمن النظام', schoolAdmin:'مدير المدرسة', agent:'وكيل', counselor:'موجه طلابي', assistant:'كادر إداري',teacherAssistant:'مساعد معلم', teacher:'معلم', soloTeacher:'معلم (حساب مستقل)' };
     var uname = CLS_SESSION.username || '';
     var bar = document.createElement('div');
     bar.className = 'ijh';

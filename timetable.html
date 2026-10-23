@@ -1045,7 +1045,7 @@ async function ensureUserIndex(force){
   TT.userIndex = idx;
   return idx;
 }
-const ROLE_NAMES = { schoolAdmin:'مدير', agent:'وكيل', counselor:'موجه طلابي', assistant:'مساعد إداري', teacher:'معلم' };
+const ROLE_NAMES = { schoolAdmin:'مدير', agent:'وكيل', counselor:'موجه طلابي', assistant:'كادر إداري', teacherAssistant:'مساعد معلم', teacher:'معلم' };
 function openTeacher(id){
   const t = id ? clone(teacherById(id)) : { id:uid('t'), name:'', nid:'', stages: enabledStages().map(s=>s.key).slice(0,1), quota:24, unavail:{} };
   t.unavail = t.unavail || {};

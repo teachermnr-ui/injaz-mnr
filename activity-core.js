@@ -304,7 +304,7 @@ body.act-skin{--brand:#1a6b4a;--brand-2:#145838;--brand-l:#e8f5ee;--bg:#f8f7f4;-
   const by = (arr, f)=>arr.reduce((m,x)=>{ const k=f(x); (m[k]=m[k]||[]).push(x); return m; },{});
 
   /* موظفو المدرسة: [{id,name,role,perms}] */
-  const ROLE_NAMES = { schoolAdmin:'مدير', agent:'وكيل', counselor:'موجه طلابي', assistant:'مساعد إداري', teacher:'معلم' };
+  const ROLE_NAMES = { schoolAdmin:'مدير', agent:'وكيل', counselor:'موجه طلابي', assistant:'كادر إداري', teacherAssistant:'مساعد معلم', teacher:'معلم' };
   async function loadStaff(env){
     const out = [];
     try{

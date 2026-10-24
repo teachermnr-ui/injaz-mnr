@@ -1,4 +1,4 @@
-// إصدار: 2026-10-24.2
+// إصدار: 2026-10-24.3
 /* نماذج الشؤون الطلابية المطبوعة (من الدليل الإجرائي) وتسجيل التوقيع الورقي.
    النماذج: رصد المشكلات السلوكية (٥)، تعهد سلوكي (٨)، إشعار ولي الأمر (٩ — سري)، محضر ضبط واقعة (١١ — سري)،
    إبلاغ عن حالة عالية الخطورة (١٤ — سري للغاية)، إجراءات الغياب بعذر (١٥) وبدون عذر (١٦)، تعهد الالتزام بالحضور (١٧).
@@ -15,7 +15,7 @@
   const MAXF = 512000, OKF = /^(application\/pdf|image\/(jpeg|png|webp))$/;
   const PLAB = {student:'الطالب', parent:'ولي الأمر', witnesses:'الشهود'};
   const HCK = ['تبليغ إدارة التعليم','تبليغ الجهات الأمنية','تبليغ الحماية من العنف الأسري وحماية الطفل','تبليغ وزارة الصحة','التواصل مع الأسرة لإخطارها بوضع الحالة','عقد اجتماع طارئ للجنة التوجيه الطلابي لدراسة الحالة ووضع خطة لمعالجتها بالتكامل مع الجهات ذات العلاقة','رفع بلاغ عن الحالة في الأنظمة التقنية الخاصة بالبلاغات'];
-  const CSS = '.f{font-size:15px;line-height:2.2;margin:6px 4px}.f .ln{margin:3px 0}.dots{display:inline-block;min-width:110px;border-bottom:1px dotted #444;padding:0 6px;text-align:center}'
+  const CSS = '.f{font-size:15px;line-height:2.2;margin:6px 0;padding:0 9mm}.sgs.e{justify-content:flex-end}.sgs.m{justify-content:center}.sgs.e .sgb,.sgs.m .sgb{flex:0 0 auto;min-width:230px}.sgs .stp{flex:0 0 auto;min-width:170px}.sgs.lt .sgb:not(.stp){flex:0 0 auto;min-width:260px}.f .ln{margin:3px 0}.dots{display:inline-block;min-width:110px;border-bottom:1px dotted #444;padding:0 6px;text-align:center}'
     +'.f table{width:100%;border-collapse:collapse;margin:10px 0}.f th,.f td{border:1.5px solid #17475e;padding:6px 8px;text-align:center;font-size:13px;vertical-align:top}.f th{background:#eaf2f4}.f td{height:46px}'
     +'.f td.l{text-align:right}.sgs{display:flex;justify-content:space-between;gap:14px;margin-top:30px}.sgb{flex:1;font-size:14px;line-height:2.3}.sgb .t{font-weight:700;margin-bottom:2px}'
     +'.sgb img.sg{max-height:62px;max-width:150px;vertical-align:middle}.stbox{display:inline-block;min-width:110px;min-height:62px;vertical-align:middle;border:1px dashed #999}.stbox img{max-height:90px;max-width:150px;display:block}'
@@ -49,7 +49,15 @@
     /* ---- مكونات الطباعة ---- */
     const dots = (v,w)=>'<span class="dots"'+(w?' style="min-width:'+w+'px"':'')+'>'+(v?esc(v):'&nbsp;')+'</span>';
     const today = ()=>A(C.hijL(C.dk))+' هـ';
-    const mgrBlock = (M,ctx)=>'<div class="sgb"><div class="t">مدير/مديرة المدرسة</div><div>الاسم: '+dots(ctx.principal,150)+'</div><div>التوقيع: '+(M.sig?'<img class="sg" src="'+M.sig+'" alt="">':dots('',130))+'</div><div>الختم: <span class="stbox">'+(M.stamp?'<img src="'+M.stamp+'" alt="">':'')+'</span></div><div>التاريخ: '+dots(today(),130)+'</div></div>';
+    /* كتلة المدير: o.nodate بدون تاريخ، o.stamp = 'box' (خانة الختم دائمًا) أو 'opt' (الختم عند وجوده فقط) أو 'none' */
+    const mgrBlock = (M,ctx,o)=>{ o = o||{}; const sm = o.stamp||'box';
+      return '<div class="sgb"><div class="t">مدير/مديرة المدرسة</div><div>الاسم: '+dots(ctx.principal,150)+'</div><div>التوقيع: '+(M.sig?'<img class="sg" src="'+M.sig+'" alt="">':dots('',130))+'</div>'
+        +(sm==='box'?'<div>الختم: <span class="stbox">'+(M.stamp?'<img src="'+M.stamp+'" alt="">':'')+'</span></div>':(sm==='opt'&&M.stamp?'<div>الختم: <span class="stbox"><img src="'+M.stamp+'" alt=""></span></div>':''))
+        +(o.nodate?'':'<div>التاريخ: '+dots(today(),130)+'</div>')+'</div>'; };
+    /* صف المدير وحده: يمين الصفحة ممنوع، حسب النموذج الأصلي: e = يسار، m = وسط. الختم بجانب الكتلة إن وُجد */
+    const mgrRow = (M,ctx,al,o)=>'<div class="sgs '+(al||'e')+'">'+(M.stamp?'<div class="sgb stp"><div class="t">&nbsp;</div><span class="stbox"><img src="'+M.stamp+'" alt=""></span></div>':'')+mgrBlock(M,ctx,Object.assign({stamp:'none'},o||{}))+'</div>';
+    /* خطاب بختم في اليمين واسم المدير وتوقيعه في اليسار (الإشعار والدعوة) */
+    const mgrLetter = (M,ctx,o)=>'<div class="sgs lt"><div class="sgb stp"><div class="t">الختم</div><span class="stbox">'+(M.stamp?'<img src="'+M.stamp+'" alt="">':'')+'</span></div>'+mgrBlock(M,ctx,Object.assign({stamp:'none'},o||{}))+'</div>';
     const partyBlock = (t,name)=>'<div class="sgb"><div class="t">'+t+'</div><div>الاسم: '+dots(name||'',150)+'</div><div>التوقيع: '+dots('',130)+'</div><div>التاريخ: '+dots('',130)+'</div></div>';
     const secret = t=>'<div class="sec">'+t+'</div>';
     const ck = on=>'<span class="box">'+(on?'✓':'')+'</span>';
@@ -73,7 +81,7 @@
           return '<tr><td class="l">'+esc(v.w)+'</td><td>الدرجة '+C.DEGN[v.d]+'</td><td>'+A(esc(v.dateH||''))+'</td><td>'+A(I.pts)+'</td><td class="l">'+esc(I.act)+'</td><td>'+A(esc(v.dateH||''))+'</td><td></td><td></td></tr>'; }).join('');
         return '<div class="ln">اسم الطالب/الطالبة: '+dots(f.name,330)+'</div><div class="ln">الصف: '+dots(f.className,150)+' الفصل: '+dots(C.PN[per],170)+'</div>'
           +'<table><thead><tr><th>المشكلة السلوكية</th><th>نوعها ودرجتها</th><th>تاريخها</th><th>درجات السلوك المحسومة</th><th>الإجراءات المتخذة</th><th>تاريخ الإجراء</th><th>توقيع الطالب</th><th>توقيع ولي الأمر</th></tr></thead><tbody>'+rows+'</tbody></table>'
-          +'<div class="sgs">'+mgrBlock(M,ctx)+'</div>'; });
+          +mgrRow(M,ctx,'m'); });
     }
     /* ---- ٨: تعهد سلوكي (لكل مخالفة) ---- */
     function printPledge(v){
@@ -82,7 +90,7 @@
         +'<div class="ln">أنني قمت في يوم '+dots(v.dayName,110)+' الموافق '+dots(A(v.dateH||''),130)+' هـ</div>'
         +'<div class="ln">بمشكلة سلوكية من الدرجة '+dots(C.DEGN[v.d],90)+'</div><div class="ln">وهي: '+dots(v.w,420)+'</div>'
         +'<div class="ln">وأتعهد بعدم تكرار أي مشكلة سلوكية مستقبلاً وعلى ذلك جرى التوقيع.</div>'
-        +'<div class="sgs">'+partyBlock('الطالب/الطالبة',v.name)+partyBlock('ولي الأمر','')+mgrBlock(M,ctx)+'</div>');
+        +'<div class="sgs">'+partyBlock('الطالب/الطالبة',v.name)+partyBlock('ولي الأمر','')+mgrBlock(M,ctx,{stamp:'opt'})+'</div>');
     }
     /* ---- ٩: إشعار ولي الأمر بمشكلة سلوكية (سري) ---- */
     function printNotice(v){
@@ -93,7 +101,22 @@
         +'<div class="ln">نشعركم بأن الطالب/الطالبة قام/قامت بمشكلة سلوكية من الدرجة '+dots(C.DEGN[v.d],90)+'</div><div class="ln">وهي: '+dots(v.w,420)+'</div>'
         +'<div class="ln">وقد قُررت الإجراءات التالية حياله/حيالها وفق ما ورد في قواعد السلوك والمواظبة:</div><ol>'+items.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>'
         +'<div class="ln">لذا يرجى منكم المتابعة والتعاون مع المدرسة بما يسهم في انضباط سلوك ابنكم/ابنتكم.</div>'
-        +'<div class="sgs">'+mgrBlock(M,ctx)+'</div>');
+        +mgrLetter(M,ctx,{nodate:true}));
+    }
+    /* ---- خطاب دعوة ولي الأمر (بديل الإشعار، يختاره الوكيل) ---- */
+    function printInvite(v, inv){
+      inv = inv||{};
+      return printDoc('خطاب دعوة ولي الأمر', v.period, [], (ctx,M)=>
+        '<div class="ln">المكرم ولي أمر الطالب/الطالبة: '+dots(v.name,330)+'</div><div class="ln">بالصف: '+dots(v.className,200)+'</div>'
+        +'<div class="ln" style="text-align:center">السلام عليكم ورحمة الله وبركاته</div>'
+        +'<div class="ln">نأمل منكم الحضور إلى المدرسة في يوم '+dots(inv.day||'',110)+' الموافق '+dots(inv.dateH?A(inv.dateH)+' هـ':'',150)+'</div>'
+        +'<div class="ln">لمقابلة مدير/مديرة المدرسة، وذلك بهدف '+dots(inv.purpose||'',380)+'</div>'
+        +'<div class="ln" style="text-align:center;margin-top:18px">شاكرين لكم تعاونكم معنا لتحقيق مصلحة الطالب.</div>'
+        +mgrLetter(M,ctx)
+        +'<div class="ln" style="margin-top:26px"><b>رد ولي الأمر:</b></div>'
+        +'<div class="ln">'+ck(false)+' أقر بالعلم، وسأحضر في الموعد المحدد.</div>'
+        +'<div class="ln">'+ck(false)+' أقر بالعلم، وأرغب بتغيير الموعد (خلال نفس الأسبوع)، وذلك في يوم '+dots('',100)+' الموافق '+dots('',130)+' هـ</div>'
+        +'<div class="sgs m">'+partyBlock('ولي الأمر','')+'</div>');
     }
     /* ---- ١١: محضر ضبط واقعة (سري) ---- */
     function printIncident(v){
@@ -105,7 +128,7 @@
         +'<div class="ln ev">نوع المشاهدة المضبوطة: <span>'+ck(ev.photos)+' صور</span><span>'+ck(ev.videos)+' مقاطع فيديو</span><span>'+ck(ev.chats)+' محادثات</span><span>'+ck(!!ev.other)+' أخرى '+dots(ev.other||'',170)+'</span></div>'
         +'<div class="ln">مكان ضبط الواقعة: '+dots(x.place||'',360)+'</div><div class="ln">شهود الواقعة:</div>'
         +'<table><thead><tr><th style="width:36px">م</th><th>الاسم</th><th>الوظيفة</th><th>العمل المسند إليه</th><th>التوقيع</th></tr></thead><tbody>'+ws.map((w,i)=>'<tr style="height:30px"><td style="height:30px">'+A(i+1)+'</td><td style="height:30px">'+esc(w.name||'')+'</td><td style="height:30px">'+esc(w.job||'')+'</td><td style="height:30px">'+esc(w.work||'')+'</td><td style="height:30px"></td></tr>').join('')+'</tbody></table>'
-        +'<div class="sgs">'+partyBlock('الطالب/الطالبة',v.name)+partyBlock('ولي الأمر','')+mgrBlock(M,ctx)+'</div>');
+        +'<div class="sgs">'+partyBlock('الطالب/الطالبة',v.name)+partyBlock('ولي الأمر','')+mgrBlock(M,ctx,{stamp:'opt'})+'</div>');
     }
     /* ---- ١٤: إبلاغ عن حالة عالية الخطورة (سري للغاية) — بعد اعتماد المدير ---- */
     const fmtT = t=>{ if(!t) return ''; const p=String(t).split(':'), h=+p[0]; return A((h%12||12)+'،'+p[1])+(h<12?' ص':' م'); };
@@ -119,7 +142,7 @@
         +'<div class="ln">وصف الحالة:</div><div style="border-bottom:1px dotted #444;min-height:64px;padding:2px 6px;line-height:2">'+nl(h.desc||'')+'</div>'
         +'<div class="ln">اسم راصد الحالة: '+dots(h.observer||h.createdByName||'',300)+'</div><div class="ln">تاريخ الرصد: '+dots(A(C.hijL(od))+' هـ',150)+' وقت الرصد: '+dots(fmtT(ot),100)+'</div>'
         +'<div class="ln">الإجراءات المتخذة مع الحالة:</div>'+HCK.map((t,i)=>'<div class="ln">'+ck((h.checks||[]).includes(i))+' '+esc(t)+'.</div>').join('')
-        +'<div class="sgs">'+mgrBlock(M,ctx)+'</div>';
+        +mgrRow(M,ctx,'e');
     }
     function printHigh(h){
       if(h.st!=='approved'){ C.toast('الطباعة بعد اعتماد المدير للتقرير'); return; }
@@ -146,7 +169,7 @@
         return '<table><tr><th>اليوم</th><td>'+esc(c.dayName||'')+'</td><th>التاريخ</th><td>'+A(esc(c.dateH||''))+' هـ</td><th>الوقت</th><td>'+fmtT(c.time)+'</td></tr></table>'
           +'<div class="ln"><b>نقاط النقاش خلال الاجتماع:</b></div>'+ol(c.points)+'<div class="ln"><b>ومما سبق تم إقرار والموافقة على التوصيات التالية وهي:</b></div>'+ol(c.recs)
           +'<div class="ln"><b>وبذلك تم التوقيع على المحضر والتوصيات:</b></div><table><thead><tr><th>م</th><th>الاسم</th><th>عمله في اللجنة</th><th>التوقيع</th></tr></thead><tbody>'+rows+'</tbody></table>'
-          +'<div class="sgs">'+mgrBlock(M,Object.assign({},ctx,{principal:m.approvedByName||ctx.principal}))+'</div>'; }, async()=>{ sg = (typeof getSig==='function' ? await getSig() : getSig) || {}; });
+          +mgrRow(M,Object.assign({},ctx,{principal:m.approvedByName||ctx.principal}),'e'); }, async()=>{ sg = (typeof getSig==='function' ? await getSig() : getSig) || {}; });
     }
     /* ---- قرار تشكيل لجنة التوجيه الطلابي (بعد اعتماد المدير) ---- */
     function printFormation(fm, getSig){
@@ -170,7 +193,7 @@
     function printAbs(s, withExcuse){
       const acts = (s.doc && s.doc.actions) || [], un = C.un(s), exn = C.exn(s), st = C.stageOf(s.seat);
       return printDoc(withExcuse ? 'نموذج إجراءات الغياب بعذر' : 'نموذج إجراءات الغياب بدون عذر', C.period, [], (ctx,M)=>{
-        const head = '<div class="ln">اسم الطالب/الطالبة: '+dots(s.name,330)+'</div><div class="ln">المرحلة: '+dots(st,140)+' الصف: '+dots(s.cls,170)+'</div><div class="ln">'+(withExcuse?'عدد أيام الغياب بعذر: '+dots(A(exn),60):'عدد أيام الغياب بدون عذر: '+dots(A(un),60))+'</div>';
+        const head = '<div class="ln">اسم الطالب/الطالبة: '+dots(s.name,330)+'</div><div class="ln">المرحلة: '+dots(st,140)+' الصف: '+dots(s.cls,170)+'</div>';
         let table;
         if(withExcuse){
           table = '<table><thead><tr><th>عدد أيام الغياب</th><th>الإجراء المتخذ</th><th>تاريخ الإجراء</th><th>توقيع الطالب</th><th>توقيع ولي الأمر</th></tr></thead><tbody>'
@@ -180,7 +203,7 @@
             +LVL16.map(r=>{ const h = r.k>=0 ? acts.find(a=>a.k===r.k) : null, L = h ? C.LV[h.k] : null;
               return '<tr><td>'+r.label+'</td><td class="l">'+(L?esc(L.k+': '+L.v):'')+'</td><td>'+(h&&h.date?A(C.hijL(h.date)):'')+'</td><td></td><td></td><td>'+(h?A(h.n):'')+'</td></tr>'; }).join('')+'</tbody></table>';
         }
-        return head+table+'<div class="sgs">'+mgrBlock(M,ctx)+'</div>'; });
+        return head+table+mgrRow(M,ctx,'e'); });
     }
     /* ---- ١٧: تعهد الالتزام بالحضور ---- */
     function printAtt(s){
@@ -189,17 +212,23 @@
         '<div class="ln">أنا الطالب/الطالبة: '+dots(s.name,360)+'</div><div class="ln">بالصف: '+dots(s.cls,200)+'</div>'
         +'<div class="ln">أنني تغيبت عن الحضور للمدرسة بدون عذر لمدة '+dots(A(un),60)+' أيام، بتاريخ '+dots(last?A(C.hijL(last))+' هـ':'',150)+'</div>'
         +'<div class="ln">وأتعهد بالالتزام بالخطة التربوية والعلاجية المقدمة لتحسين الحضور، وعلى ذلك جرى التوقيع.</div>'
-        +'<div class="sgs">'+partyBlock('الطالب/الطالبة',s.name)+partyBlock('ولي الأمر','')+mgrBlock(M,ctx)+'</div>');
+        +'<div class="sgs">'+partyBlock('الطالب/الطالبة',s.name)+partyBlock('ولي الأمر','')+mgrBlock(M,ctx,{stamp:'opt'})+'</div>');
     }
 
     /* ---- تسجيل التوقيع الورقي ---- */
     const soOf = id=>SO.get(id)||{rows:{},files:[]};
     function soTags(id, parties, keys){
-      const d = soOf(id), rows = d.rows||{}, n = keys.length;
-      return parties.map(p=>{ const c = keys.filter(k=>rows[k] && rows[k][p]).length;
-        return '<span class="tag '+(n && c===n?'ok':(c?'warn':''))+'">'+PLAB[p]+': '+(n===1?(c?'وقّع':'لم يوقّع'):A(c)+' من '+A(n))+'</span>'; }).join('')
-        +((d.files||[]).length?'<span class="tag">📎 '+A(d.files.length)+'</span>':'');
+      const d = soOf(id), rows = d.rows||{}; let tot = 0, ok = 0;
+      keys.forEach(k=>parties.forEach(p=>{ tot++; if(rows[k] && rows[k][p]) ok++; }));
+      const full = tot>0 && ok===tot;
+      return '<span class="tag '+(full?'ok':(ok?'warn':''))+'">التواقيع: '+(full?'مكتملة':'ناقصة')+'</span>'+((d.files||[]).length?'<span class="tag">📎 '+A(d.files.length)+'</span>':'');
     }
+    /* تنسيق صفوف النماذج داخل البطاقات: صف مستقل لكل نموذج (العنوان والحالة ثم الأزرار) */
+    (function css(){ if(document.getElementById('safCss')) return; const st = document.createElement('style'); st.id = 'safCss';
+      st.textContent = '.frow{border:1px solid var(--line,#d5ddd9);border-radius:10px;padding:8px 10px;margin:6px 0;background:#fff;display:flex;flex-direction:column;gap:6px}.frow .fh{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between}.frow .fb{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.frow select{font:inherit;padding:6px 8px;border:1px solid var(--line,#ccd6d1);border-radius:8px;background:#fff;max-width:100%}';
+      document.head.appendChild(st); })();
+    const frow = (title, tags, btns)=>'<div class="frow"><div class="fh"><b>'+title+'</b><span>'+tags+'</span></div><div class="fb">'+btns+'</div></div>';
+    const LT = new Map();
     function ensureOv(){
       if(document.getElementById('soOv')) return;
       document.body.insertAdjacentHTML('beforeend',
@@ -207,6 +236,10 @@
         +'<div class="muted">يوقّع الأطراف ورقيًا بعد الطباعة، وهنا يُسجَّل من وقّع. رفع صورة الورقة الموقَّعة اختياري.</div><div id="soRows" style="display:flex;flex-direction:column;gap:8px"></div>'
         +'<label class="muted" for="soFile">رفع الورقة الموقَّعة (اختياري)</label><input type="file" id="soFile" accept="image/*,.pdf"><div class="muted">صورة أو PDF بحجم أقل من ٥٠٠ كيلوبايت.</div><div id="soFiles"></div>'
         +'<div class="row"><button type="button" class="btn solid" id="soSave">حفظ</button><button type="button" class="btn" id="soX">إغلاق</button></div></div></div>'
+        +'<div class="ov" id="ivOv" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="ivT" style="max-width:520px"><strong id="ivT">دعوة ولي الأمر</strong><div class="muted" id="ivSub"></div>'
+        +'<label class="muted" for="ivD">تاريخ الحضور المطلوب</label><input type="date" id="ivD" class="ci" style="width:100%"><div class="muted" id="ivH"></div>'
+        +'<label class="muted" for="ivP">هدف المقابلة</label><input type="text" id="ivP" class="ci" style="width:100%" maxlength="160">'
+        +'<div class="row"><button type="button" class="btn solid" id="ivGo">طباعة الدعوة</button><button type="button" class="btn" id="ivX">إغلاق</button></div></div></div>'
         +'<div class="ov" id="inOv" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="inT" style="max-width:600px;max-height:90vh;overflow:auto"><strong id="inT">محضر ضبط واقعة</strong><div class="muted" id="inSub"></div>'
         +'<label class="muted" for="inPl">مكان ضبط الواقعة</label><input type="text" id="inPl" class="ci" style="width:100%">'
         +'<label class="muted">نوع المشاهدة المضبوطة</label><div style="display:flex;flex-wrap:wrap;gap:12px"><label><input type="checkbox" id="inE1"> صور</label><label><input type="checkbox" id="inE2"> مقاطع فيديو</label><label><input type="checkbox" id="inE3"> محادثات</label></div>'
@@ -215,16 +248,23 @@
         +'<div class="row"><button type="button" class="btn solid" id="inSave">حفظ المحضر</button><button type="button" class="btn" id="inX">إغلاق</button></div></div></div>');
       document.getElementById('soX').onclick = ()=>document.getElementById('soOv').hidden = true;
       document.getElementById('inX').onclick = ()=>document.getElementById('inOv').hidden = true;
+      document.getElementById('ivX').onclick = ()=>document.getElementById('ivOv').hidden = true;
+      document.getElementById('ivD').addEventListener('input', ()=>{ const d = document.getElementById('ivD').value; document.getElementById('ivH').textContent = d ? C.dayOf(d)+' '+A(C.hijL(d))+' هـ' : ''; });
+      document.getElementById('ivGo').onclick = ()=>{ const v = IV, d = document.getElementById('ivD').value, pu = document.getElementById('ivP').value.trim();
+        if(!v) return; if(!d){ C.toast('اختر تاريخ الحضور'); return; } if(!pu){ C.toast('اكتب هدف المقابلة'); return; }
+        document.getElementById('ivOv').hidden = true; printInvite(v, {day:C.dayOf(d), dateH:C.hijL(d), purpose:pu}); };
       document.getElementById('soSave').onclick = soSave;
       document.getElementById('inAddW').onclick = ()=>wRow({});
       document.getElementById('inSave').onclick = inSave;
       document.getElementById('inWs').addEventListener('click', e=>{ const b=e.target.closest('[data-rmw]'); if(b) b.parentElement.remove(); });
     }
+    let IV = null;
+    function openInvite(v){ ensureOv(); IV = v; document.getElementById('ivSub').textContent = v.name+' · '+v.className; document.getElementById('ivD').value = ''; document.getElementById('ivH').textContent = ''; document.getElementById('ivP').value = ''; document.getElementById('ivOv').hidden = false; }
     let SP = null;   // مواصفة نافذة التوقيع الحالية
     function specOf(form, ref){
       const v = ()=>C.vl().find(x=>x.id===ref);
       if(form==='pledge'||form==='notice'||form==='incident'){ const x=v(); if(!x) return null;
-        const t = {pledge:'التعهد السلوكي',notice:'إشعار ولي الأمر',incident:'محضر ضبط الواقعة'}[form];
+        const t = {pledge:'التعهد السلوكي',notice:'خطاب ولي الأمر',incident:'محضر ضبط الواقعة'}[form];
         return {id:form+'__'+ref, form, period:x.period, seat:x.seat, name:x.name, cls:x.className, title:t+' — '+x.name, sub:x.w,
           parties: form==='notice'?['parent']:(form==='incident'?['student','parent','witnesses']:['student','parent']), rows:[{key:'main',label:t}]}; }
       if(form==='v5'){ const [per,seat]=ref.split('|'); const vs=C.vl().filter(x=>x.seat===seat && x.period===per).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); if(!vs.length) return null;
@@ -295,31 +335,33 @@
     /* ---- واجهات تُحقن في بطاقات الصفحة ---- */
     const bt = (act, lab, cls)=>'<button type="button" class="btn'+(cls?' '+cls:'')+'" data-saf="'+esc(act)+'">'+lab+'</button>';
     function rowForms(v){
-      const edit = C.canEdit(), has = INC.has(v.id);
+      const edit = C.canEdit(), has = INC.has(v.id), lt = LT.get(v.id)||'n';
       return '<details class="fm"><summary class="muted">نماذج المخالفة</summary>'
-        +'<div class="row"><b>التعهد السلوكي</b>'+soTags('pledge__'+v.id,['student','parent'],['main'])+bt('pl|'+v.id,'طباعة')+bt('so|pledge|'+v.id,'التواقيع')+'</div>'
-        +'<div class="row"><b>إشعار ولي الأمر (سري)</b>'+soTags('notice__'+v.id,['parent'],['main'])+bt('pn|'+v.id,'طباعة')+bt('so|notice|'+v.id,'التواقيع')+'</div>'
-        +'<div class="row"><b>محضر ضبط الواقعة (سري)</b>'+(has?'<span class="tag ok">محفوظ</span>'+soTags('incident__'+v.id,['student','parent','witnesses'],['main']):'<span class="tag">لم يُعدّ</span>')
-        +((edit||has)?bt('ine|'+v.id,has?(edit?'تعديل':'عرض'):'إعداد'):'')+(has?bt('inp|'+v.id,'طباعة')+bt('so|incident|'+v.id,'التواقيع'):'')+'</div></details>';
+        +frow('التعهد السلوكي', soTags('pledge__'+v.id,['student','parent'],['main']), bt('pl|'+v.id,'طباعة')+bt('so|pledge|'+v.id,'التواقيع'))
+        +frow('خطاب ولي الأمر (سري)', soTags('notice__'+v.id,['parent'],['main']), '<select data-lt="'+esc(v.id)+'" aria-label="نوع الخطاب"><option value="n"'+(lt==='n'?' selected':'')+'>إشعار بمشكلة سلوكية</option><option value="i"'+(lt==='i'?' selected':'')+'>دعوة ولي الأمر</option></select>'+bt('pn|'+v.id,'طباعة')+bt('so|notice|'+v.id,'التواقيع'))
+        +frow('محضر ضبط الواقعة (سري)', has?'<span class="tag ok">محفوظ</span>'+soTags('incident__'+v.id,['student','parent','witnesses'],['main']):'<span class="tag">لم يُعدّ</span>',
+          ((edit||has)?bt('ine|'+v.id,has?(edit?'تعديل':'عرض'):'إعداد'):'')+(has?bt('inp|'+v.id,'طباعة')+bt('so|incident|'+v.id,'التواقيع'):''))
+        +'</details>';
     }
     function v5Html(seat, per){
       const keys = C.vl().filter(v=>v.seat===seat && v.period===per).map(v=>v.id); if(!keys.length) return '';
-      return '<div class="row"><b>نموذج رصد المشكلات السلوكية</b>'+soTags('v5__'+per+'__'+seat,['student','parent'],keys)+bt('v5|'+per+'|'+seat,'طباعة')+bt('so|v5|'+per+'|'+seat,'التواقيع')+'</div>';
+      return frow('نموذج رصد المشكلات السلوكية', soTags('v5__'+per+'__'+seat,['student','parent'],keys), bt('v5|'+per+'|'+seat,'طباعة')+bt('so|v5|'+per+'|'+seat,'التواقيع'));
     }
     function hrBtn(h){ return h.st==='approved' ? '<div class="row">'+bt('hv|'+h.id,'معاينة النموذج')+bt('hr|'+h.id,'طباعة التقرير')+'</div>' : ''; }
     function absHtml(s){
       return '<div class="dp"><div class="t">نماذج الغياب</div>'
-        +'<div class="row"><b>إجراءات الغياب بدون عذر</b>'+soTags('abs16__'+C.period+'__'+s.seat,['student','parent'],LVL16.map(r=>r.key))+bt('a16|'+s.seat,'طباعة')+bt('so|abs16|'+s.seat,'التواقيع')+'</div>'
-        +'<div class="row"><b>إجراءات الغياب بعذر</b>'+soTags('abs15__'+C.period+'__'+s.seat,['student','parent'],LVL15.map(r=>r.key))+bt('a15|'+s.seat,'طباعة')+bt('so|abs15|'+s.seat,'التواقيع')+'</div>'
-        +'<div class="row"><b>تعهد الالتزام بالحضور</b>'+soTags('att17__'+C.period+'__'+s.seat,['student','parent'],['main'])+bt('a17|'+s.seat,'طباعة')+bt('so|att17|'+s.seat,'التواقيع')+'</div></div>';
+        +frow('إجراءات الغياب بدون عذر', soTags('abs16__'+C.period+'__'+s.seat,['student','parent'],LVL16.map(r=>r.key)), bt('a16|'+s.seat,'طباعة')+bt('so|abs16|'+s.seat,'التواقيع'))
+        +frow('إجراءات الغياب بعذر', soTags('abs15__'+C.period+'__'+s.seat,['student','parent'],LVL15.map(r=>r.key)), bt('a15|'+s.seat,'طباعة')+bt('so|abs15|'+s.seat,'التواقيع'))
+        +frow('تعهد الالتزام بالحضور', soTags('att17__'+C.period+'__'+s.seat,['student','parent'],['main']), bt('a17|'+s.seat,'طباعة')+bt('so|att17|'+s.seat,'التواقيع'))+'</div>';
     }
 
     /* ---- مستمع واحد للأزرار ---- */
+    document.addEventListener('change', e=>{ const t = e.target.closest && e.target.closest('[data-lt]'); if(t) LT.set(t.dataset.lt, t.value); });
     document.addEventListener('click', e=>{
       const b = e.target.closest('[data-saf]'); if(!b) return; const p = b.dataset.saf.split('|'), vOf = id=>C.vl().find(x=>x.id===id);
       switch(p[0]){
         case 'pl': { const v=vOf(p[1]); if(v) printPledge(v); break; }
-        case 'pn': { const v=vOf(p[1]); if(v) printNotice(v); break; }
+        case 'pn': { const v=vOf(p[1]); if(!v) break; const sel = b.closest('.frow') && b.closest('.frow').querySelector('[data-lt]'); if(sel && sel.value==='i') openInvite(v); else printNotice(v); break; }
         case 'inp': { const v=vOf(p[1]); if(v) printIncident(v); break; }
         case 'ine': openIncident(p[1]); break;
         case 'v5': printV5(p[2], p[1]); break;
@@ -331,7 +373,7 @@
         case 'so': openSign(p[1], p[1]==='v5' ? p[2]+'|'+p[3] : p[2]); break;
       }
     });
-    return { load, mgr, hasMgr:async()=>{ const m=await mgr(); return !!(m.sig||m.stamp); }, printMn, printFormation, previewHigh, rowForms, v5Html, hrBtn, absHtml, printV5, printPledge, printNotice, printIncident, printHigh, printAbs, printAtt, _so:()=>SO, _inc:()=>INC };
+    return { load, mgr, hasMgr:async()=>{ const m=await mgr(); return !!(m.sig||m.stamp); }, printMn, printFormation, previewHigh, rowForms, v5Html, hrBtn, absHtml, printV5, printPledge, printNotice, printInvite, printIncident, printHigh, printAbs, printAtt, _so:()=>SO, _inc:()=>INC };
   }
   g.SAForms = { make, HCK };
 })(window);

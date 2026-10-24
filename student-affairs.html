@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-24.2 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
+<!-- إصدار: 2026-10-24.3 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -136,6 +136,7 @@ button.stat:hover{border-color:var(--brand)}
 .nmb{border:0;background:var(--brand-soft);color:var(--brand);border-radius:99px;padding:4px 14px;font-weight:700;cursor:pointer}
 .dp{border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:12px;display:flex;flex-direction:column;gap:8px}
 .dp .t{font-weight:800;font-size:14px}
+#vForm.fromTr{background:#fff1df;border-color:#e08a2e;box-shadow:0 0 0 2px #f3b778 inset}#vForm.fromTr #vTr{color:#8a4b08;font-weight:700}#vForm.fromTr #vQ,#vForm.fromTr #vSg{display:none}
 .kinds{display:flex;flex-wrap:wrap;gap:6px}
 .kd{border:1.5px solid var(--line);background:var(--surface);border-radius:99px;padding:3px 14px;font-weight:700;font-size:13px;cursor:pointer}
 .kd.on{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
@@ -455,7 +456,7 @@ details.cmx>summary .t::before{content:"◂";margin-inline-end:4px}details.cmx[o
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-20.1"></script>
 <script src="form-header.js?v=2026-10-16.4"></script>
-<script src="sa-forms.js?v=2026-10-24.2"></script>
+<script src="sa-forms.js?v=2026-10-24.3"></script>
 <script>
 const ST_MARKUP = document.getElementById('stTpl').innerHTML;
 /* وكيل الشؤون الطلابية — المرحلة ١ (البطاقات) والمرحلة ٢ (غياب الطلاب):
@@ -694,7 +695,7 @@ Dash.boot({
     const nCol = db.collection('notes');
     const RSM = {new:['جديد','bad'],obs:['تحت الملاحظة','warn'],ref:['محال للتوجيه','warn'],done:['منتهٍ','ok']};
     let TR = [], rF = 'new';
-    const trFile = seat=>{ const rs=TR.filter(r=>r.seat===seat); return rs.some(r=>r.st==='new')?'new':rs.some(r=>r.st==='ref')?'ref':rs.some(r=>r.st==='obs')?'obs':'done'; };
+    const trFile = seat=>{ const rs=TR.filter(r=>r.seat===seat && !trConv(r)); return rs.some(r=>r.st==='new')?'new':rs.some(r=>r.st==='ref')?'ref':rs.some(r=>r.st==='obs')?'obs':'done'; };
     async function loadTr(){
       const q = await nCol.where('schoolId','==',sid).where('trType','==','st').get();
       TR = q.docs.map(d=>{ const x=d.data(); return {id:d.id, period:x.period, seat:String(x.studentSeat||''), name:x.studentName||'', cls:x.className||'',
@@ -705,12 +706,14 @@ Dash.boot({
     const vioBtn = r=>{ if(r.why!=='مشاغبة' && r.why!=='أخرى') return '';
       if(VL.some(v=>v.srcNote===r.id)) return '<div class="row"><span class="tag ok">حُوّل إلى مخالفة</span></div>';
       return canEdit ? '<div class="row"><button type="button" class="btn" data-rv="'+r.id+'">تحويل لمخالفة</button></div>' : ''; };
+    const trConv = r=>VL.some(v=>v.srcNote===r.id);
     function rRender(){
-      const seats = [...new Set(TR.map(r=>r.seat))].filter(id=>trFile(id)===rF);
+      const TR0 = TR; const TRV = TR0.filter(r=>!trConv(r));
+      const seats = [...new Set(TRV.map(r=>r.seat))].filter(id=>trFile(id)===rF);
       $('#rCnt').textContent = A(seats.length)+' ملفات';
-      $('#s5').textContent = A(TR.filter(r=>r.st==='new').length);
+      $('#s5').textContent = A(TRV.filter(r=>r.st==='new').length);
       $('#rRows').innerHTML = seats.map(id=>{
-        const rs = TR.filter(r=>r.seat===id).sort((a,b)=>(a.st==='new')-(b.st==='new') || a.at-b.at), n = rs.length, f = rs[0];
+        const rs = TRV.filter(r=>r.seat===id).sort((a,b)=>(a.st==='new')-(b.st==='new') || a.at-b.at), n = rs.length, f = rs[0];
         const head = '<div class="nm">'+esc(f.name)+'<small>'+esc(f.cls)+'</small></div><div class="row"><span class="tag">'+A(n)+' '+(n>2?'تحويلات':(n===2?'تحويلان':'تحويل'))+'</span></div>';
         return tfold('r|'+f.name+'|'+f.cls, esc(f.name)+'<small>'+esc(f.cls)+'</small>', '<span class="tag">'+A(n)+' '+(n>2?'تحويلات':(n===2?'تحويلان':'تحويل'))+'</span>', rs.map(r=>{ const open = r.st==='new' && canEdit;
           const meta = [esc(r.subj), r.lesson?('الحصة '+A(r.lesson)):'', 'المعلم '+esc(r.t), esc(r.day)+' '+A(esc(r.dateH))].filter(x=>x && String(x).trim()).join(' · ');
@@ -843,7 +846,7 @@ Dash.boot({
     function vBoxDraw(){
       const s = vSelS; let h = '';
       if(s){ const pv = prevP ? VL.filter(v=>v.seat===s.seat && v.period===prevP) : [];
-        h = '<span class="chip">'+esc(s.name)+' · '+esc(s.cls)+(s.stage?' · '+s.stage:'')+' <button type="button" class="btn" data-pclr="1" style="padding:0 8px">×</button></span>'
+        h = '<span class="chip">'+esc(s.name)+' · '+esc(s.cls)+(s.stage?' · '+s.stage:'')+(vFromTr?'':' <button type="button" class="btn" data-pclr="1" style="padding:0 8px">×</button>')+'</span>'
           + (pv.length ? '<div class="muted">لهذا الطالب '+cnt(pv.length,'مخالفة واحدة','مخالفتان','مخالفات')+' في '+PN[prevP]+'</div>' : ''); }
       $('#vBox').innerHTML = h;
     }
@@ -852,17 +855,18 @@ Dash.boot({
       $('#vRes').innerHTML = t ? (RO.filter(s=>(!s.stage || s.stage===vStage) && s.name.includes(t)).slice(0,6).map(s=>'<button type="button" class="btn" data-pk2="'+esc(s.seat)+'">'+esc(s.name)+' · '+esc(s.cls)+'</button>').join('') || '<span class="muted">لا نتائج.</span>') : '';
     }
     $('#vQ').addEventListener('input', vResDraw);
-    $('#vRes').addEventListener('click', e=>{ const b=e.target.closest('[data-pk2]'); if(!b) return; vSelS = RO.find(s=>s.seat===b.dataset.pk2)||null; $('#vQ').value=''; vResDraw();
+    $('#vRes').addEventListener('click', e=>{ const b=e.target.closest('[data-pk2]'); if(!b || vFromTr) return; vSelS = RO.find(s=>s.seat===b.dataset.pk2)||null; $('#vQ').value=''; vResDraw();
       if(vSelS && vSelS.stage){ vStage=vSelS.stage; document.querySelectorAll('#vSg button').forEach(x=>x.classList.toggle('on',x.dataset.g===vStage)); } vBoxDraw(); vOpts(); });
-    $('#vBox').addEventListener('click', e=>{ if(e.target.closest('[data-pclr]')){ vSelS=null; vBoxDraw(); vOpts(); } });
-    $('#vSg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; vStage=b.dataset.g; document.querySelectorAll('#vSg button').forEach(x=>x.classList.toggle('on',x===b));
+    $('#vBox').addEventListener('click', e=>{ if(!vFromTr && e.target.closest('[data-pclr]')){ vSelS=null; vBoxDraw(); vOpts(); } });
+    $('#vSg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b || vFromTr) return; vStage=b.dataset.g; document.querySelectorAll('#vSg button').forEach(x=>x.classList.toggle('on',x===b));
       if(vSelS && vSelS.stage && vSelS.stage!==vStage){ vSelS=null; vBoxDraw(); } vResDraw(); vOpts(); });
     $('#vWb').onclick = ()=>$('#vwOv').hidden=false; $('#vwX').onclick = ()=>$('#vwOv').hidden=true;
     $('#vwList').addEventListener('click', e=>{ const b=e.target.closest('[data-vw]'); if(!b) return; $('#vW').value=b.dataset.vw; $('#vWb').textContent=b.textContent; $('#vwOv').hidden=true; vDeg(); });
     $('#vDo').addEventListener('change', vDeg);
     function trBanner(){ const t=$('#vTr'); t.hidden=!vFromTr;
+      $('#vForm').classList.toggle('fromTr', !!vFromTr); document.querySelectorAll('#vSg button').forEach(x=>x.disabled=!!vFromTr);
       t.innerHTML = vFromTr ? 'مخالفة محوَّلة من تحويل المعلم بتاريخ '+dtxt(vFromTr)+'، ومصدرها «المعلم». <button type="button" class="btn" id="vTrX" style="padding:0 8px">إلغاء الربط</button>' : ''; }
-    $('#vTr').addEventListener('click', e=>{ if(e.target.closest('#vTrX')){ vFromTr=null; trBanner(); } });
+    $('#vTr').addEventListener('click', e=>{ if(e.target.closest('#vTrX')){ vFromTr=null; trBanner(); vBoxDraw(); vResDraw(); } });
     /* من بطاقة التحويل: يفتح نموذج المخالفة بالطالب وتاريخ التحويل */
     function startVio(t){
       if(semV!==period){ semV=period; semDraw(); }
@@ -1348,7 +1352,7 @@ Dash.boot({
     /* ---- النماذج المطبوعة وتسجيل التوقيع الورقي (sa-forms.js) ---- */
     const SAF = SAForms.make({ env, db, sid, base, period, dk, A, hijL, DEGN, PN, LV, toast, fail, DD_dummy:0,
       vl:()=>VL, hr:()=>HR, vInfo, ddOf, un, exn, exMap, stageOf:seat=>{ const r=RO.find(x=>x.seat===seat); return r?r.stage:''; },
-      absOf:seat=>AB.get(seat), canEdit:()=>canEdit, fallback:()=>'',
+      absOf:seat=>AB.get(seat), dayOf, canEdit:()=>canEdit, fallback:()=>'',
       onChange:()=>{ try{ vRender(); }catch(e){} try{ rpRender(); }catch(e){} try{ hRender(); }catch(e){} if(bySeat && !$('#stOv').hidden) try{ openBayan(bySeat); }catch(e){} } });
 
     /* ---- التبويبات الفرعية ---- */

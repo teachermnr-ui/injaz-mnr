@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-22.4 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
+<!-- إصدار: 2026-10-24.2 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -247,6 +247,13 @@ details summary{cursor:pointer}
 .rpc summary .nm{font-weight:800}.rpc summary .nm small{display:block;font-weight:500}
 /* النموذج المعتمد معروض بوضع التوافق (بلا DOCTYPE) حيث لا ترث الجداول ارتفاع السطر؛ نُعيد السلوك نفسه هنا ليتطابق الشكل تمامًا */
 table{line-height:normal}
+details.ex{margin:4px 0}details.ex>summary{color:var(--brand);font-size:13px;font-weight:700}details.ex>.muted{margin-top:4px}
+details.vc>summary{list-style:none;display:flex;flex-direction:column;gap:6px}details.vc>summary::-webkit-details-marker{display:none}
+details.vc>summary .nm::before{content:"◂";color:var(--brand);margin-inline-end:4px}details.vc[open]>summary .nm::before{content:"▾"}
+details.vc[open]>summary{border-bottom:3px solid var(--line);padding-bottom:8px;margin-bottom:8px}
+details.vc>.vcb{display:flex;flex-direction:column;gap:8px}
+details.cmx>summary{list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:8px}details.cmx>summary::-webkit-details-marker{display:none}
+details.cmx>summary .t::before{content:"◂";margin-inline-end:4px}details.cmx[open]>summary .t::before{content:"▾"}
 </style>
 <template id="stTpl">
 <div class="wrap">
@@ -283,7 +290,7 @@ table{line-height:normal}
     <div class="hd"><h2>غياب الطلاب</h2><span class="chip" id="gDate"></span></div>
     <div class="seg subs" data-grp="g"><button type="button" class="on" data-s="a">غياب الطلاب</button><button type="button" data-s="n">إشعار ولي الأمر</button><button type="button" data-s="d">قرارات الغياب</button></div>
     <div class="sp" data-grp="g" data-s="a">
-      <div class="muted">تُسحب أيام الغياب من حضور الطلاب في الموقع، وكل يوم يُعدّ «بدون عذر» افتراضيًا. وفي «الأعذار» يحدد الوكيل يومًا أو أكثر ويسجل لها عذرًا واحدًا بملاحظة أو مرفق. لا يتفعل إجراء ما لم يبلغ نصابه: ٣ أيام، ثم ٥، ثم ١٠ (م٣٤). ويُحسم من درجة المواظبة درجة واحدة عن كل يوم بدون عذر، وتظهر في تبويب «السلوك والمواظبة».</div>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">تُسحب أيام الغياب من حضور الطلاب في الموقع، وكل يوم يُعدّ «بدون عذر» افتراضيًا. وفي «الأعذار» يحدد الوكيل يومًا أو أكثر ويسجل لها عذرًا واحدًا بملاحظة أو مرفق. لا يتفعل إجراء ما لم يبلغ نصابه: ٣ أيام، ثم ٥، ثم ١٠ (م٣٤). ويُحسم من درجة المواظبة درجة واحدة عن كل يوم بدون عذر، وتظهر في تبويب «السلوك والمواظبة».</div></details>
       <div class="tw"><table class="rep" style="min-width:760px"><thead><tr><th>الطالب</th><th>الصف</th><th class="num">أيام الغياب</th><th class="num">بعذر</th><th class="num">بدون عذر</th><th>آخر إجراء</th><th>الإجراء</th><th>الأعذار</th><th>البيان</th></tr></thead><tbody id="gBody"></tbody></table></div>
     </div>
     <div class="sp" data-grp="g" data-s="n" hidden>
@@ -292,14 +299,14 @@ table{line-height:normal}
     </div>
     <div class="sp" data-grp="g" data-s="d" hidden>
       <div class="hd" style="margin-top:8px"><span class="chip" id="cCount"></span></div>
-      <div class="muted">يصل هنا الطالب الذي بلغ ١٠ أيام غيابًا بدون عذر لمخاطبة جهات الاختصاص (حماية الطفل) وإشعار إدارة التعليم. الاعتماد للمدير.</div>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">يصل هنا الطالب الذي بلغ ١٠ أيام غيابًا بدون عذر لمخاطبة جهات الاختصاص (حماية الطفل) وإشعار إدارة التعليم. الاعتماد للمدير.</div></details>
       <div id="cRows"></div>
     </div>
   </section></div>
   <div class="pane" id="p-r" hidden><section class="card">
     <div class="hd"><h2>التحويلات</h2><span class="chip" id="rCnt"></span></div>
     <div class="seg subs" id="rSeg"><button type="button" class="on" data-f="new">جديد</button><button type="button" data-f="obs">تحت الملاحظة</button><button type="button" data-f="ref">إحالات للتوجيه</button><button type="button" data-f="done">منتهٍ</button></div>
-    <div class="muted">تصل التحويلات من المعلمين بعد انتهاء الحصة. ملف الطالب بطاقة واحدة لا تكون إلا في تبويب واحد: يكتب الوكيل تقريره فينتقل الملف إلى «تحت الملاحظة». وإذا تكرر التحويل للطالب ظهر معه خيار «إحالة للموجه» فينتقل الملف كاملًا إلى «إحالات للتوجيه». وكل حالة اتُّخذ فيها إجراء تنتقل مغلقة. والإنهاء يكون من الموجه الطلابي عند بناء صفحته.</div>
+    <details class="ex"><summary>شرح القسم</summary><div class="muted">تصل التحويلات من المعلمين بعد انتهاء الحصة. ملف الطالب بطاقة واحدة لا تكون إلا في تبويب واحد: يكتب الوكيل تقريره فينتقل الملف إلى «تحت الملاحظة». وإذا تكرر التحويل للطالب ظهر معه خيار «إحالة للموجه» فينتقل الملف كاملًا إلى «إحالات للتوجيه». وكل حالة اتُّخذ فيها إجراء تنتقل مغلقة. والإنهاء يكون من الموجه الطلابي عند بناء صفحته.</div></details>
     <div id="rRows" style="display:flex;flex-direction:column;gap:10px"></div>
   </section></div>
   <div class="pane" id="p-v" hidden><section class="card">
@@ -307,7 +314,7 @@ table{line-height:normal}
     <div class="seg subs" data-grp="v"><button type="button" class="on" data-s="v">سجل المخالفات</button><button type="button" data-s="b">حسم السلوك</button><button type="button" data-s="t">تقارير</button></div>
     <div class="sp" data-grp="v" data-s="v">
       <div class="hd" style="margin-top:8px"><span class="chip" id="vCnt"></span></div>
-      <div class="muted">يحدد الوكيل المرحلة ثم الطالب ثم المخالفة من قائمة اللائحة، فتتحدد الدرجة والحسم تلقائيًا، ويُحدد الإجراء بحسب تكرار المخالفة في الفصل الدراسي نفسه. تتولى المعلمة أو المعلم أول ثلاثة إجراءات من الدرجة الأولى، وتنتقل مخالفات الدرجة الثانية فما فوق إلى الإدارة. ويبدأ العدّ من جديد في الفصل الدراسي الثاني مع بيان ما سُجّل على الطالب في الفصل الأول. وتُحفظ الأدلة لدى الوكيل.</div>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">يحدد الوكيل المرحلة ثم الطالب ثم المخالفة من قائمة اللائحة، فتتحدد الدرجة والحسم تلقائيًا، ويُحدد الإجراء بحسب تكرار المخالفة في الفصل الدراسي نفسه. تتولى المعلمة أو المعلم أول ثلاثة إجراءات من الدرجة الأولى، وتنتقل مخالفات الدرجة الثانية فما فوق إلى الإدارة. ويبدأ العدّ من جديد في الفصل الدراسي الثاني مع بيان ما سُجّل على الطالب في الفصل الأول. وتُحفظ الأدلة لدى الوكيل.</div></details>
       <div class="dp" id="vForm"><div class="t">تسجيل مخالفة</div>
         <div class="muted" id="vTr" hidden></div>
         <label>المرحلة</label><div class="seg" id="vSg"><button type="button" class="on" data-g="ابتدائي">ابتدائي</button><button type="button" data-g="متوسط">متوسط</button><button type="button" data-g="ثانوي">ثانوي</button></div>
@@ -320,11 +327,11 @@ table{line-height:normal}
     </div>
     <div class="sp" data-grp="v" data-s="b" hidden>
       <div class="hd" style="margin-top:8px"><span class="chip" id="bCnt"></span></div>
-      <div class="muted">تصل هنا المخالفات التي تستوجب حسمًا من «سجل المخالفات» بدرجاتها الثابتة حسب اللائحة (١ و٢ و٣ و١٠ و١٥). عند «إرسال الحسم» تصل بطاقة الحسم إلى مسجل معلومات نظام نور في «التقارير الواردة» ضمن «تقارير الحسم»، فيرصده في نظام نور ويضغط «تم رصد الحسم في نور». وبعد ذلك يسجل الوكيل فرص التعويض (نموذج ٦) بحد أقصى المحسوم، ولا يُسقط التعويض الإجراءات المتخذة. أما الغياب فلا يُحسم هنا لأنه يُحسب تلقائيًا من درجة المواظبة.</div>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">تصل هنا المخالفات التي تستوجب حسمًا من «سجل المخالفات» بدرجاتها الثابتة حسب اللائحة (١ و٢ و٣ و١٠ و١٥). عند «إرسال الحسم» تصل بطاقة الحسم إلى مسجل معلومات نظام نور في «التقارير الواردة» ضمن «تقارير الحسم»، فيرصده في نظام نور ويضغط «تم رصد الحسم في نور». وبعد ذلك يسجل الوكيل فرص التعويض (نموذج ٦) بحد أقصى المحسوم، ولا يُسقط التعويض الإجراءات المتخذة. أما الغياب فلا يُحسم هنا لأنه يُحسب تلقائيًا من درجة المواظبة.</div></details>
       <div id="bRows" style="display:flex;flex-direction:column;gap:10px"></div>
     </div>
     <div class="sp" data-grp="v" data-s="t" hidden>
-      <div class="muted">تقرير الطلاب المخالفين: مخالفاتهم وما حُسم منهم وما عُوّض، ويُختار الفصل الدراسي من أعلى القسم، وتُصفّى النتائج بالصف.</div>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">تقرير الطلاب المخالفين: مخالفاتهم وما حُسم منهم وما عُوّض، ويُختار الفصل الدراسي من أعلى القسم، وتُصفّى النتائج بالصف.</div></details>
       <div class="row"><label for="rpCls" class="muted">الصف</label><select id="rpCls" class="ci sel"></select></div>
       <div class="stats" id="rpSt" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))"></div>
       <div class="seg" id="rpSeg"><button type="button" class="on" data-f="all">الكل</button><button type="button" data-f="ded">عليه حسم</button><button type="button" data-f="comp">عليه تعويض</button></div>
@@ -333,11 +340,11 @@ table{line-height:normal}
   </section></div>
   <div class="pane" id="p-k" hidden><section class="card">
     <div class="hd"><h2>السلوك والمواظبة</h2><span class="chip">من ١٠٠ لكل منهما</span><div class="seg semSeg" aria-label="الفصل الدراسي"></div></div>
-    <div class="muted">درجة السلوك: ٨٠ إيجابية تلقائية + حتى ٢٠ للسلوك المتميز، يُحسم منها وتُعوَّض بحد أقصى ١٠٠، وتبدأ من ٨٠ من جديد في كل فصل دراسي. ودرجة المواظبة: ١٠٠ يُحسم منها درجة واحدة عن كل يوم بدون عذر في الفصل. ويُحرم الطالب من الانتقال إذا تجاوز غيابه بدون عذر في الفصلين معًا ١٠٪ من أيام العام. وتدوَّن الدرجتان في بطاقة الدرجات عبر مسجل المعلومات.</div>
-    <div class="muted">السلوك المتميز: ٦ درجات تلقائية لمن لم يغب بدون عذر خلال الفصل، ويضيف الوكيل ما استحقه من المشاركات (٦ أو ٤ أو ٢ لكل مشاركة) أو ما قررته اللجنة (حتى ٦).</div>
+    <details class="ex"><summary>شرح القسم</summary><div class="muted">درجة السلوك: ٨٠ إيجابية تلقائية + حتى ٢٠ للسلوك المتميز، يُحسم منها وتُعوَّض بحد أقصى ١٠٠، وتبدأ من ٨٠ من جديد في كل فصل دراسي. ودرجة المواظبة: ١٠٠ يُحسم منها درجة واحدة عن كل يوم بدون عذر في الفصل. ويُحرم الطالب من الانتقال إذا تجاوز غيابه بدون عذر في الفصلين معًا ١٠٪ من أيام العام. وتدوَّن الدرجتان في بطاقة الدرجات عبر مسجل المعلومات.</div></details>
+    <details class="ex"><summary>شرح القسم</summary><div class="muted">السلوك المتميز: ٦ درجات تلقائية لمن لم يغب بدون عذر خلال الفصل، ويضيف الوكيل ما استحقه من المشاركات (٦ أو ٤ أو ٢ لكل مشاركة) أو ما قررته اللجنة (حتى ٦).</div></details>
     <div class="dp" id="ydBox"><div class="t">أيام العام الدراسي: <span id="ydVal"></span></div>
-      <div class="muted">لماذا هذا الإعداد؟ تُحسب نسبة غياب الطالب بدون عذر (أيام غيابه بدون عذر في الفصلين ÷ أيام العام) لمعرفة من يتجاوز ١٠٪ فيُحرم من الانتقال. والأصل ١٨٠ يومًا، وقد يختلف عدد أيام الدراسة الفعلية في مدرستك.</div>
-      <div class="muted">ماذا يترتب على تغييره؟ تتغير نسبة الغياب وعلامة «حرمان من الانتقال» فقط؛ فكلما زاد عدد الأيام انخفضت النسبة وقلّ من يتجاوز ١٠٪، وكلما نقص ارتفعت. ولا يتغير به شيء من درجة المواظبة ولا الحسم ولا درجة السلوك. ويُحسب الحرمان لحظيًا ولا يُخزَّن، فيسري التغيير على كل الطلاب فورًا.</div>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">لماذا هذا الإعداد؟ تُحسب نسبة غياب الطالب بدون عذر (أيام غيابه بدون عذر في الفصلين ÷ أيام العام) لمعرفة من يتجاوز ١٠٪ فيُحرم من الانتقال. والأصل ١٨٠ يومًا، وقد يختلف عدد أيام الدراسة الفعلية في مدرستك.</div></details>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">ماذا يترتب على تغييره؟ تتغير نسبة الغياب وعلامة «حرمان من الانتقال» فقط؛ فكلما زاد عدد الأيام انخفضت النسبة وقلّ من يتجاوز ١٠٪، وكلما نقص ارتفعت. ولا يتغير به شيء من درجة المواظبة ولا الحسم ولا درجة السلوك. ويُحسب الحرمان لحظيًا ولا يُخزَّن، فيسري التغيير على كل الطلاب فورًا.</div></details>
       <div class="row" id="ydEd" hidden><input type="number" class="ci" id="ydIn" min="50" max="300"><button type="button" class="btn solid" id="ydSave">حفظ أيام العام</button></div>
       <div class="muted" id="ydNote" hidden>يعدّل هذا الإعداد مدير المدرسة فقط.</div></div>
     <div class="row"><label for="kCls" class="muted">الصف</label><select id="kCls" class="ci sel"></select></div>
@@ -347,26 +354,26 @@ table{line-height:normal}
     <div class="hd"><h2>التوجيه الطلابي</h2></div>
     <div class="seg subs" data-grp="l"><button type="button" class="on" data-s="c">لجنة التوجيه الطلابي</button><button type="button" data-s="h">حالات عالية الخطورة</button></div>
     <div class="sp" data-grp="l" data-s="c">
-      <div class="muted">لجنة التوجيه الطلابي يشكلها الوكيل الطلابي بصفته رئيسها، وتصل إليها الحالات المحالة من إجراء الغياب (٥ أيام) أو من المخالفات المستوجبة. يسجل الوكيل لكل حالة محضر الاجتماع، فيصل الأعضاء الحاضرين في «التعاميم» للتوقيع، ثم يعتمده المدير بختمه وتوقيعه، ولا يُطبع إلا من حساب المدير بعد الاعتماد.</div>
-      <div class="dp" id="cmBox"><div class="t">تشكيل اللجنة</div>
-        <div class="muted">الرئيس: وكيل الشؤون الطلابية (أنت). ويُختار الأعضاء من مستخدمي المدرسة.</div>
-        <div class="fgrid"><div><label for="cmEdu">وكيل الشؤون التعليمية</label><select id="cmEdu" class="ci sel"></select></div><div><label for="cmCn">الموجه الطلابي (مقرر)</label><select id="cmCn" class="ci sel"></select></div></div>
-        <div class="fgrid"><div><label for="cmT1">معلم متميز ١</label><select id="cmT1" class="ci sel"></select></div><div><label for="cmT2">معلم متميز ٢</label><select id="cmT2" class="ci sel"></select></div><div><label for="cmT3">معلم متميز ٣</label><select id="cmT3" class="ci sel"></select></div></div>
-        <div class="row"><button type="button" class="btn solid" id="cmSave">حفظ تشكيل اللجنة</button><span class="tag" id="cmSt"></span></div></div>
-      <div class="dp" id="stBox" hidden><div class="t">ختم المدير وتوقيعه</div>
-        <div class="muted">يرفع المدير صورة ختمه وتوقيعه مرة واحدة (صورة PNG أو JPG أقل من ٣٠٠ كيلوبايت)، ولا يقرؤها غيره، وتُستخدم في اعتماد محاضر اللجنة وطباعتها.</div>
-        <div class="row"><input type="file" id="stFile" accept="image/png,image/jpeg"><button type="button" class="btn solid" id="stSave">حفظ الختم والتوقيع</button><span class="tag" id="stSt"></span></div><div id="stPrev"></div></div>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">لجنة التوجيه الطلابي يشكلها الوكيل الطلابي بصفته رئيسها، وتصل إليها الحالات المحالة من إجراء الغياب (٥ أيام) أو من المخالفات المستوجبة. يسجل الوكيل لكل حالة محضر الاجتماع، فيصل الأعضاء الحاضرين في «التعاميم» للتوقيع، ثم يعتمده المدير بختمه وتوقيعه، ولا يُطبع إلا من حساب المدير بعد الاعتماد.</div></details>
+      <details class="dp cmx" id="cmBox"><summary><span class="t">تشكيل اللجنة</span><span class="tag" id="cmSt"></span><span class="tag" id="fmSt"></span></summary>
+        <div class="muted">يختار الوكيل رئيس اللجنة من الوكلاء، ويختار بقية الأعضاء من مستخدمي المدرسة بحسب دورهم.</div>
+        <div class="fgrid"><div><label for="cmPr">رئيس اللجنة (وكيل)</label><select id="cmPr" class="ci sel"></select></div><div><label for="cmEdu">وكيل الشؤون التعليمية (وكيل)</label><select id="cmEdu" class="ci sel"></select></div><div><label for="cmCn">الموجه الطلابي</label><select id="cmCn" class="ci sel"></select></div></div>
+        <div class="fgrid"><div><label for="cmT1">معلم متميز ١ (معلم)</label><select id="cmT1" class="ci sel"></select></div><div><label for="cmT2">معلم متميز ٢ (معلم)</label><select id="cmT2" class="ci sel"></select></div><div><label for="cmT3">معلم متميز ٣ (معلم)</label><select id="cmT3" class="ci sel"></select></div></div>
+        <div class="row"><button type="button" class="btn solid" id="cmSave">حفظ تشكيل اللجنة</button></div>
+        <div id="fmBox" class="dp" hidden><div class="t">خطاب قرار تشكيل اللجنة</div><div id="fmBody" style="display:flex;flex-direction:column;gap:8px"></div></div></details>
       <div class="hd"><span class="chip" id="lCnt"></span></div>
       <div id="lRows" style="display:flex;flex-direction:column;gap:10px"></div>
     </div>
     <div class="sp" data-grp="l" data-s="h" hidden>
       <div class="hd" style="margin-top:8px"><span class="chip" id="hCnt"></span></div>
-      <div class="muted">يجهز الوكيل التقرير ويحدد الإجراءات المتخذة، ويعتمده المدير. وتشمل حالات إيذاء النفس أو الخطر الجسيم (٩١١، ٩٣٧).</div>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">يجهز الوكيل التقرير ويحدد الإجراءات المتخذة، ويعتمده المدير. وتشمل حالات إيذاء النفس أو الخطر الجسيم (٩١١، ٩٣٧).</div></details>
       <div class="dp" id="hForm"><div class="t">تقرير جديد</div>
         <label for="hQ">الطالب</label><input type="text" id="hQ" placeholder="اكتب جزءًا من اسم الطالب"><div id="hRes" class="row"></div><div id="hBox"></div>
+        <label for="hTy">نوع الحالة (من الدليل الإجرائي)</label><select id="hTy" class="ci sel"></select>
         <label for="hD">وصف الحالة</label><textarea id="hD" placeholder="وصف الحالة"></textarea>
+        <div class="fgrid"><div><label for="hOb">اسم راصد الحالة</label><input type="text" id="hOb" class="ci" style="width:100%;text-align:right"></div><div><label for="hOd">تاريخ الرصد</label><input type="date" id="hOd"></div><div><label for="hOt">وقت الرصد</label><input type="time" id="hOt"></div></div>
         <div id="hCk" style="display:flex;flex-direction:column;gap:4px"></div>
-        <div class="row"><button type="button" class="btn solid" id="hAdd">رفع التقرير للمدير</button></div></div>
+        <div class="row"><button type="button" class="btn solid" id="hAdd">رفع التقرير للمدير</button><button type="button" class="btn" id="hCancel" hidden>إلغاء التعديل</button></div></div>
       <div id="hRows" style="display:flex;flex-direction:column;gap:10px"></div>
     </div>
   </section></div>
@@ -432,6 +439,7 @@ table{line-height:normal}
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="stT" style="max-width:800px">
     <strong id="stT"></strong><div class="muted" id="stSub"></div>
     <div class="tw"><table class="rep" style="min-width:640px"><thead><tr><th>الإجراء</th><th class="num">الأيام</th><th>التاريخ</th><th>ما اتخذه الوكيل</th><th>ما اتخذه ولي الأمر</th></tr></thead><tbody id="stBody"></tbody></table></div>
+    <div id="stFm"></div>
     <div class="row"><button type="button" class="btn solid" id="stClose">إغلاق</button></div>
   </div>
 </div>
@@ -446,6 +454,8 @@ table{line-height:normal}
 <script src="users-api.js"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-20.1"></script>
+<script src="form-header.js?v=2026-10-16.4"></script>
+<script src="sa-forms.js?v=2026-10-24.2"></script>
 <script>
 const ST_MARKUP = document.getElementById('stTpl').innerHTML;
 /* وكيل الشؤون الطلابية — المرحلة ١ (البطاقات) والمرحلة ٢ (غياب الطلاب):
@@ -551,7 +561,11 @@ Dash.boot({
       const rec = Object.assign({ period, seat:s.seat, name:s.name, className:s.cls, excuses:s.doc.excuses||[], actions:s.doc.actions||[], moved:!!s.doc.moved, updatedAt:Date.now() }, extra||{});
       await abCol.doc(abId(s.seat)).set(rec,{merge:true});
     }
-    const card = (s,tags,inner)=>'<div class="trow"><div class="nm">'+esc(s.name)+'<small>'+esc(s.cls)+'</small></div>'+(tags?'<div class="row">'+tags+'</div>':'')+inner+'</div>';
+    /* بطاقة الطالب: قابلة للانكماش وافتراضها منكمش (قاعدة دائمة)، وتحفظ حالة الفتح عند إعادة الرسم */
+    const OPENV = new Set();
+    document.addEventListener('toggle', e=>{ const d=e.target; if(d && d.classList && d.classList.contains('vc')){ if(d.open) OPENV.add(d.dataset.vk); else OPENV.delete(d.dataset.vk); } }, true);
+    const tfold = (key,nm,tags,inner,cls)=>'<details class="trow vc'+(cls?' '+cls:'')+'" data-vk="'+esc(key)+'"'+((OPENV.has(key)||window.__saOpenAll)?' open':'')+'><summary><div class="nm">'+nm+'</div>'+(tags?'<div class="row">'+tags+'</div>':'')+'</summary><div class="vcb">'+inner+'</div></details>';
+    const card = (s,tags,inner)=>tfold('t|'+s.name+'|'+s.cls, esc(s.name)+'<small>'+esc(s.cls)+'</small>', tags, inner);
     function stats(){
       $('#s4').textContent = A([...AB.values()].filter(due).length);
       $('#s6').textContent = A([...AB.values()].filter(s=>s.doc.moved && s.doc.decision && s.doc.decision.st==='wait').length);
@@ -626,26 +640,27 @@ Dash.boot({
       btn.disabled=false; };
     $('#dyClose').onclick = ()=>$('#dyOv').hidden=true;
     /* ---- البيان ---- */
+    let bySeat = null;
     function openBayan(seat){
       const s=sOf(seat), acts=s.doc.actions||[];
       $('#stT').textContent='بيان: '+s.name; $('#stSub').textContent=s.cls+' · بدون عذر '+A(un(s))+' يومًا';
       $('#stBody').innerHTML = acts.length ? acts.map((h,i)=>{ const L=LV[h.k];
         const g = canEdit ? '<button type="button" class="btn'+(h.g?' solid':'')+'" data-g="'+esc(seat)+':'+i+'">'+(h.g?L.g[0]:L.g[1])+'</button>' : '<span class="tag'+(h.g?' ok':'')+'">'+(h.g?L.g[0]:L.g[1])+'</span>';
         return '<tr><td>'+L.k+'</td><td class="num">'+A(h.n)+'</td><td>'+hij(h.date)+'</td><td>'+L.v+'</td><td>'+g+'</td></tr>'; }).join('') : '<tr><td colspan="5" class="muted">لم يُتخذ إجراء بعد.</td></tr>';
-      $('#stOv').hidden=false;
+      bySeat=seat; $('#stFm').innerHTML = (typeof SAF!=='undefined') ? SAF.absHtml(s) : ''; $('#stOv').hidden=false;
     }
     $('#stBody').addEventListener('click', async e=>{
       const b=e.target.closest('[data-g]'); if(!b || !canEdit) return; const [seat,i]=b.dataset.g.split(':'), s=sOf(seat);
       const acts=(s.doc.actions||[]).map((h,j)=>j===+i?Object.assign({},h,{g:!h.g}):h), prev=s.doc; s.doc=Object.assign({},prev,{actions:acts});
       try{ await saveDoc(s); }catch(er){ s.doc=prev; fail(er); }
       openBayan(seat); });
-    $('#stClose').onclick = ()=>$('#stOv').hidden=true;
+    $('#stClose').onclick = ()=>{ $('#stOv').hidden=true; bySeat=null; };
     /* ---- قرارات الغياب (اعتماد المدير) ---- */
     function cRender(){
       const L=[...AB.values()].filter(s=>s.doc.moved).sort((a,b)=>((a.doc.decision&&a.doc.decision.st==='wait')?0:1)-((b.doc.decision&&b.doc.decision.st==='wait')?0:1) || a.name.localeCompare(b.name,'ar'));
       $('#cCount').textContent = A(L.length)+' قرارات';
       $('#cRows').innerHTML = L.map(s=>{ const d=s.doc.decision||{st:'wait'}, w=d.st==='wait';
-        return '<div class="trow"><div class="nm">'+esc(s.name)+'<small>'+esc(s.cls)+' · '+A(un(s))+' يومًا بدون عذر · أُحيل بتاريخ '+(d.date?hij(d.date):'—')+'</small></div><div class="row"><span class="tag '+(w?'warn':'ok')+'">'+(w?'بانتظار اعتماد المدير':'اعتمد المدير'+(d.approvedByName?' ('+esc(d.approvedByName)+')':''))+'</span><button type="button" class="btn" data-cb="'+esc(s.seat)+'">بيان</button>'+(w&&canApprove?'<button type="button" class="btn solid" data-ok="'+esc(s.seat)+'">اعتماد المدير</button>':'')+'</div></div>'; }).join('') || '<div class="muted">لا قرارات.</div>';
+        return tfold('c|'+s.name+'|'+s.cls, esc(s.name)+'<small>'+esc(s.cls)+' · '+A(un(s))+' يومًا بدون عذر · أُحيل بتاريخ '+(d.date?hij(d.date):'—')+'</small>', '<span class="tag '+(w?'warn':'ok')+'">'+(w?'بانتظار اعتماد المدير':'اعتمد المدير'+(d.approvedByName?' ('+esc(d.approvedByName)+')':''))+'</span>', '<div class="row"><button type="button" class="btn" data-cb="'+esc(s.seat)+'">بيان</button>'+(w&&canApprove?'<button type="button" class="btn solid" data-ok="'+esc(s.seat)+'">اعتماد المدير</button>':'')+'</div>'); }).join('') || '<div class="muted">لا قرارات.</div>';
       stats();
     }
     $('#cRows').addEventListener('click', async e=>{
@@ -697,14 +712,14 @@ Dash.boot({
       $('#rRows').innerHTML = seats.map(id=>{
         const rs = TR.filter(r=>r.seat===id).sort((a,b)=>(a.st==='new')-(b.st==='new') || a.at-b.at), n = rs.length, f = rs[0];
         const head = '<div class="nm">'+esc(f.name)+'<small>'+esc(f.cls)+'</small></div><div class="row"><span class="tag">'+A(n)+' '+(n>2?'تحويلات':(n===2?'تحويلان':'تحويل'))+'</span></div>';
-        return '<div class="trow">'+head+rs.map(r=>{ const open = r.st==='new' && canEdit;
+        return tfold('r|'+f.name+'|'+f.cls, esc(f.name)+'<small>'+esc(f.cls)+'</small>', '<span class="tag">'+A(n)+' '+(n>2?'تحويلات':(n===2?'تحويلان':'تحويل'))+'</span>', rs.map(r=>{ const open = r.st==='new' && canEdit;
           const meta = [esc(r.subj), r.lesson?('الحصة '+A(r.lesson)):'', 'المعلم '+esc(r.t), esc(r.day)+' '+A(esc(r.dateH))].filter(x=>x && String(x).trim()).join(' · ');
           return '<div class="srow"><div class="row"><span class="tag bad">'+esc(r.why)+'</span><span class="tag '+RSM[r.st][1]+'">'+RSM[r.st][0]+'</span></div>'+
             '<div class="muted">'+meta+'</div>'+(r.text?'<div>'+esc(r.text)+'</div>':'')+
             '<label class="muted" for="rn'+r.id+'">تقرير الوكيل</label>'+
             '<textarea id="rn'+r.id+'" '+(open?'':'disabled')+' placeholder="اكتب ما تم مع الطالب">'+esc(r.note)+'</textarea>'+
             (open?'<div class="row r1"><button type="button" class="btn solid" data-rs="'+r.id+'">حفظ التقرير</button>'+(n>1?'<button type="button" class="btn" data-rf="'+r.id+'">إحالة للموجه</button>':'')+'</div>':'')+
-            vioBtn(r)+'</div>'; }).join('')+'</div>';
+            vioBtn(r)+'</div>'; }).join(''));
       }).join('') || '<div class="muted">لا ملفات في هذا التبويب.</div>';
     }
     $('#rSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; rF=b.dataset.f; document.querySelectorAll('#rSeg button').forEach(x=>x.classList.toggle('on',x===b)); rRender(); });
@@ -746,7 +761,7 @@ Dash.boot({
     let RO = [], VL = [], DD = [], BHV = new Map(), UNP = {first:new Map(), second:new Map()}, YD = 180, semV = period;
     const canAct = ()=> canEdit && semV===period;
     const cnt = (n,one,two,many)=> n===1?one:(n===2?two:A(n)+' '+(n>2&&n<11?many:one.replace(' واحدة','')));
-    const vcard = (name,cls,tags,inner)=>'<div class="trow"><div class="nm">'+esc(name)+'<small>'+esc(cls)+'</small></div>'+(tags?'<div class="row">'+tags+'</div>':'')+inner+'</div>';
+    const vcard = (name,cls,tags,inner)=>tfold('v|'+name+'|'+cls, esc(name)+'<small>'+esc(cls)+'</small>', tags, inner);
     const vrow = h=>'<div class="srow">'+h+'</div>';
     const dtxt = v=>A(((v.dayName||'')+' '+(v.dateH||'')).trim());
     const hijL = k=>{ try{ const o={}; new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(k+'T12:00:00')).forEach(x=>o[x.type]=x.value); return o.year+'/'+o.month+'/'+o.day; }catch(e){ return ''; } };
@@ -887,7 +902,7 @@ Dash.boot({
             if(canAct() && I.pts>0 && !v.toDed) btn.push('<button type="button" class="btn solid" data-vs="'+v.id+'">إرسال لحسم السلوك ('+A(I.pts)+')</button>');
             if(canAct() && I.com && !v.cm) btn.push('<button type="button" class="btn" data-vc="'+v.id+'">إحالة للجنة التوجيه</button>');
             return vrow('<div class="row"><b>'+esc(v.w)+'</b></div><div class="row"><span class="tag '+(v.d>=3?'bad':'warn')+'">الدرجة '+DEGN[v.d]+'</span>'+(v.prov?'<span class="tag">تصنيف مبدئي</span>':'')+'<span class="tag">التكرار '+A(I.n)+'</span><span class="tag '+(I.pts?'bad':'ok')+'">'+(I.pts?'حسم '+A(I.pts):'بلا حسم')+'</span>'+(v.toDed?'<span class="tag ok">أُرسل لحسم السلوك</span>':'')+(v.cm?'<span class="tag ok">أُحيل للجنة</span>':'')+(mnDone('v_'+v.id)?'<span class="tag ok">عُرضت على اللجنة</span>':'')+'</div>'+
-              '<div class="muted">'+dtxt(v)+' · رصد: '+esc(v.src||'الوكيل')+'</div><details><summary class="muted">الإجراء المقرر (الإجراء '+A(I.i)+')</summary><div class="muted">'+esc(I.act)+'</div></details>'+(btn.length?'<div class="row">'+btn.join('')+'</div>':'')); }).join('')+oth);
+              '<div class="muted">'+dtxt(v)+' · رصد: '+esc(v.src||'الوكيل')+'</div><details><summary class="muted">الإجراء المقرر (الإجراء '+A(I.i)+')</summary><div class="muted">'+esc(I.act)+'</div></details>'+(btn.length?'<div class="row">'+btn.join('')+'</div>':'')+(typeof SAF!=='undefined'?SAF.rowForms(v):'')); }).join('')+oth);
       }).join('') || '<div class="muted">لا مخالفات في '+PN[semV]+'.</div>';
     }
     $('#vAdd').onclick = async ()=>{
@@ -914,7 +929,7 @@ Dash.boot({
     });
 
     /* ---- حسم السلوك: الوكيل يرسل، ومسجل معلومات نظام نور يرصد، ثم يسجل الوكيل التعويض ---- */
-    const BS = {draft:['لم يُرسل بعد','bad'], sent:['أُرسل لمسجل معلومات نظام نور - بانتظار رصد الحسم','warn'], exec:['نُفِّذ الحسم - رُصد في نظام نور','bad']};
+    const BS = {draft:['لم يُرسل بعد','bad'], sent:['بانتظار رصد نور','warn'], exec:['نُفِّذ الحسم - رُصد في نظام نور','bad']};
     const ptw = n=> n>2&&n<11 ? 'درجات' : 'درجة';
     let bnId = null;
     function bRender(){
@@ -964,7 +979,7 @@ Dash.boot({
       $('#rpRows').innerHTML = L.map(seat=>{
         const vs = vsAll.filter(v=>v.seat===seat).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)), t=info(seat), f=vs[0], g=gradeOf(seat, semV);
         return '<details class="rpc"><summary><span class="nm">'+esc(f.name)+'<small>'+esc(f.className)+(f.stage?' · '+f.stage:'')+'</small></span><span class="rpn">'+(t.pendN?'بانتظار التنفيذ '+A(t.pendN):'لا شيء بانتظار التنفيذ')+'</span></summary>'+
-          '<dl class="kv"><dt>المخالفات</dt><dd>'+A(vs.length)+'</dd><dt>المحسوم</dt><dd>'+A(t.ded)+'</dd><dt>بانتظار التنفيذ</dt><dd>'+A(t.pend)+'</dd><dt>المعوَّض</dt><dd>'+A(t.comp)+'</dd><dt>درجة السلوك</dt><dd>'+A(g.beh)+'</dd></dl>'+
+          '<dl class="kv"><dt>المخالفات</dt><dd>'+A(vs.length)+'</dd><dt>المحسوم</dt><dd>'+A(t.ded)+'</dd><dt>بانتظار التنفيذ</dt><dd>'+A(t.pend)+'</dd><dt>المعوَّض</dt><dd>'+A(t.comp)+'</dd><dt>درجة السلوك</dt><dd>'+A(g.beh)+'</dd></dl>'+(typeof SAF!=='undefined'?SAF.v5Html(seat, semV):'')+
           vs.map(v=>{ const I=vInfo(v), d=ddOf(v), st=!d?(v.toDed?'لم يُرسل الحسم':(I.pts?'لم يُرسل للحسم':'بلا حسم')):(d.st==='exec'?'محسوم '+A(d.pts)+(d.comp?' · معوَّض '+A(d.comp):''):'بانتظار مسجل نور');
             return '<div class="srow"><div class="st">'+esc(v.w)+'</div><div class="muted">الدرجة '+DEGN[v.d]+(v.prov?' (تصنيف مبدئي)':'')+' · '+st+' · '+dtxt(v)+'</div></div>'; }).join('')+'</details>';
       }).join('') || '<div class="muted">لا طلاب.</div>';
@@ -1021,16 +1036,16 @@ Dash.boot({
          private/stamp        ختم المدير وتوقيعه (يقرؤه ويكتبه المدير وحده)
        المحضر يُرسل للأعضاء الحاضرين تعميمًا (circulars/{sid}/items بنوع committeeMinutes) للتوقيع؛ يعتمده المدير بعد اكتمال التواقيع ويطبعه وحده. */
     const cmCol = base.collection('committee'), mnCol = base.collection('minutes'), hrCol = base.collection('highRisk'), aidCol = base.collection('aid'),
-          aidCfg = base.collection('aidCfg').doc('main'), apCol = base.collection('approvals'), pvRef = base.collection('private').doc('stamp');
+          aidCfg = base.collection('aidCfg').doc('main'), apCol = base.collection('approvals'), fmRef = base.collection('formation').doc(period);
     const circRoot = db.collection('circulars').doc(sid), circItems = circRoot.collection('items');
     const ROLEN = {agent:'وكيل', counselor:'موجه طلابي', assistant:'كادر إداري', teacherAssistant:'مساعد معلم', teacher:'معلم'};
-    let STAFF = [], CMT = null, MN = [], MSIG = new Map(), HR = [], AIDS = [], AIDON = false, APR = new Map(), STAMP = null;
+    let STAFF = [], CMT = null, FM = null, FMSIG = {}, MN = [], MSIG = new Map(), HR = [], AIDS = [], AIDON = false, APR = new Map();
     const ordA = (a,b)=>String(a).localeCompare(String(b),'ar');
     async function loadStaff(){
       STAFF = [];
       try{ const snap = await window.UsersAPI.listSnap(sid);
         snap.forEach(d=>{ const u=d.data(), c=(u.schools||{})[sid]; const adm = u.role==='schoolAdmin' && (u.adminSchools||[]).includes(sid);
-          if(adm || !c || c.active===false) return; STAFF.push({id:d.id, name:u.username||'', role:ROLEN[c.role]||c.role||''}); });
+          if(adm || !c || c.active===false) return; STAFF.push({id:d.id, name:u.username||'', role:ROLEN[c.role]||c.role||'', r:c.role||''}); });
       }catch(e){ console.warn('staff', e); }
       STAFF.sort((a,b)=>ordA(a.name,b.name));
     }
@@ -1042,55 +1057,100 @@ Dash.boot({
     }
     async function loadS5(){
       const E = {docs:[]};
-      const [cm, mn, hr, ac, cf, ap, pv] = await Promise.all([ cmCol.doc(period).get().catch(()=>null), mnCol.get().catch(()=>E), hrCol.get().catch(()=>E), aidCol.get().catch(()=>E),
-        aidCfg.get().catch(()=>null), apCol.get().catch(()=>E), env.isSA ? pvRef.get().catch(()=>null) : Promise.resolve(null) ]);
+      const [cm, mn, hr, ac, cf, ap] = await Promise.all([ cmCol.doc(period).get().catch(()=>null), mnCol.get().catch(()=>E), hrCol.get().catch(()=>E), aidCol.get().catch(()=>E),
+        aidCfg.get().catch(()=>null), apCol.get().catch(()=>E) ]);
       CMT = cm && cm.exists ? cm.data() : null;
       MN = mn.docs.map(d=>Object.assign({id:d.id}, d.data()));
       HR = hr.docs.map(d=>Object.assign({id:d.id}, d.data()));
       AIDS = ac.docs.map(d=>Object.assign({id:d.id}, d.data()));
       AIDON = !!(cf && cf.exists && cf.data().on);
       APR = new Map(ap.docs.map(d=>[d.id, d.data()]));
-      STAMP = pv && pv.exists ? pv.data() : null;
-      await Promise.all([loadStaff(), loadSigs()]);
+      await Promise.all([loadStaff(), loadSigs(), loadFm()]);
     }
     const mnOf = key=>MN.find(m=>m.caseKey===key && m.period===period);
     const mnDone = key=>MN.some(m=>m.caseKey===key && m.st==='approved');
     const timeTxt = t=>{ if(!t) return ''; const p=t.split(':'), h=+p[0]; return A((h%12||12)+'،'+p[1])+(h<12?' ص':' م'); };
 
     /* ---- تشكيل اللجنة ---- */
-    function cmOptions(sel, cur){ sel.innerHTML = '<option value="">اختر</option>'+STAFF.map(u=>'<option value="'+esc(u.id)+'"'+(u.id===cur?' selected':'')+'>'+esc(u.name)+' ('+esc(u.role)+')</option>').join(''); }
+    function cmOptions(sel, cur, roles){ sel.innerHTML = '<option value="">اختر</option>'+STAFF.filter(u=>!roles || roles.includes(u.r)).map(u=>'<option value="'+esc(u.id)+'"'+(u.id===cur?' selected':'')+'>'+esc(u.name)+' ('+esc(u.role)+')</option>').join(''); }
     function cmDraw(){
-      const c = CMT||{}; cmOptions($('#cmEdu'), c.edu&&c.edu.id); cmOptions($('#cmCn'), c.cn&&c.cn.id); [0,1,2].forEach(i=>cmOptions($('#cmT'+(i+1)), c.t&&c.t[i]&&c.t[i].id));
+      const c = CMT||{}; cmOptions($('#cmPr'), c.pres ? c.pres.id : env.me.id, ['agent']); cmOptions($('#cmEdu'), c.edu&&c.edu.id, ['agent']); cmOptions($('#cmCn'), c.cn&&c.cn.id, ['counselor']); [0,1,2].forEach(i=>cmOptions($('#cmT'+(i+1)), c.t&&c.t[i]&&c.t[i].id, ['teacher']));
       $('#cmSt').textContent = CMT ? 'اللجنة مشكلة' : 'لم تُشكَّل بعد'; $('#cmSt').className = 'tag '+(CMT?'ok':'bad');
-      ['#cmEdu','#cmCn','#cmT1','#cmT2','#cmT3'].forEach(s=>$(s).disabled = !canEdit); $('#cmSave').hidden = !canEdit;
+      ['#cmPr','#cmEdu','#cmCn','#cmT1','#cmT2','#cmT3'].forEach(s=>$(s).disabled = !canEdit); $('#cmSave').hidden = !canEdit;
     }
     const pickU = id=>{ const u=STAFF.find(x=>x.id===id); return u?{id:u.id, name:u.name}:null; };
     $('#cmSave').onclick = async ()=>{
-      const edu=pickU($('#cmEdu').value), cn=pickU($('#cmCn').value), t=[1,2,3].map(i=>pickU($('#cmT'+i).value));
-      if(!edu || !cn || t.some(x=>!x)){ toast('أكمل أعضاء اللجنة'); return; }
-      const ids=[env.me.id, edu.id, cn.id].concat(t.map(x=>x.id));
+      const pres=pickU($('#cmPr').value), edu=pickU($('#cmEdu').value), cn=pickU($('#cmCn').value), t=[1,2,3].map(i=>pickU($('#cmT'+i).value));
+      if(!pres || !edu || !cn || t.some(x=>!x)){ toast('أكمل أعضاء اللجنة'); return; }
+      const ids=[pres.id, edu.id, cn.id].concat(t.map(x=>x.id));
       if(new Set(ids).size<6){ toast('اختر أعضاء مختلفين، فلا يتكرر المستخدم في اللجنة'); return; }
-      const rec = {period, pres:{id:env.me.id, name:env.me.name}, edu, cn, t, memberIds:ids, updatedAt:Date.now(), updatedBy:env.me.id};
+      const rec = {period, pres, edu, cn, t, memberIds:ids, updatedAt:Date.now(), updatedBy:env.me.id};
       try{ await cmCol.doc(period).set(rec); }catch(er){ fail(er); return; }
-      CMT = rec; lRender(); toast('حُفظ تشكيل اللجنة');
+      CMT = rec; lRender(); toast('حُفظ تشكيل اللجنة. ارفع الآن خطاب قرار التشكيل للمدير');
     };
-    const cmMembers = ()=>CMT ? [{id:CMT.pres.id, name:CMT.pres.name, role:'رئيسًا'}, {id:CMT.edu.id, name:CMT.edu.name, role:'عضوًا'}, {id:CMT.cn.id, name:CMT.cn.name, role:'المقرر'}].concat(CMT.t.map(x=>({id:x.id, name:x.name, role:'عضوًا'}))) : [];
+    const cmMembers = ()=>CMT ? [{id:CMT.pres.id, name:CMT.pres.name, role:'رئيسًا'}, {id:CMT.edu.id, name:CMT.edu.name, role:'عضوًا'}, {id:CMT.cn.id, name:CMT.cn.name, role:'عضوًا'}].concat(CMT.t.map(x=>({id:x.id, name:x.name, role:'عضوًا'}))) : [];
 
-    /* ---- ختم المدير وتوقيعه ---- */
-    function stDraw(){
-      $('#stBox').hidden = !env.isSA;
-      $('#stSt').textContent = STAMP ? 'محفوظ' : 'لم يُرفع بعد'; $('#stSt').className = 'tag '+(STAMP?'ok':'bad');
-      $('#stPrev').innerHTML = STAMP ? '<img alt="الختم والتوقيع" src="'+STAMP.dataUrl+'" style="max-height:90px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:4px">' : '';
+    /* ---- خطاب قرار تشكيل اللجنة: يرفعه الوكيل، يعتمده المدير (رقم القرار وتاريخ التعميم)، ثم يصل الرئيس والأعضاء تعميمًا للتوقيع ---- */
+    async function loadFm(){
+      try{ const d = await fmRef.get(); FM = d && d.exists ? d.data() : null; }catch(e){ FM = null; }
+      await loadFmSigs();
     }
-    $('#stSave').onclick = async ()=>{
-      const f = $('#stFile').files[0];
-      if(!f){ toast('اختر صورة الختم والتوقيع'); return; }
-      if(!/^image\/(png|jpeg)$/.test(f.type) || f.size>300000){ toast('الصورة PNG أو JPG بحجم أقل من ٣٠٠ كيلوبايت'); return; }
-      const url = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
-      const rec = {dataUrl:url, updatedAt:Date.now(), updatedBy:env.me.id};
-      try{ await pvRef.set(rec); }catch(er){ fail(er); return; }
-      STAMP = rec; stDraw(); toast('حُفظ الختم والتوقيع');
-    };
+    async function loadFmSigs(){
+      FMSIG = {};
+      if(FM && FM.circId){ try{ const sn = await circItems.doc(FM.circId).collection('signatures').get(); sn.docs.forEach(d=>FMSIG[d.id]=d.data()); }catch(e){ console.warn(e); } }
+    }
+    const fmSame = ()=>FM && CMT && (FM.memberIds||[]).slice().sort().join()===(CMT.memberIds||[]).slice().sort().join();
+    function fmDraw(){
+      const box = $('#fmBox'); box.hidden = !CMT; if(!CMT){ $('#fmSt').textContent=''; $('#fmSt').className='tag'; return; }
+      let tag='', cls='warn', body='';
+      if(!FM || !fmSame()){
+        tag = FM ? 'تغيّر التشكيل — يلزم خطاب جديد' : 'لم يُرفع خطاب التشكيل'; cls='bad';
+        body = canEdit ? '<div class="muted">يُرفع خطاب «قرار تشكيل لجنة التوجيه الطلابي» للمدير، فيدخل رقم القرار وتاريخ التعميم ويعتمده، ثم يصل الرئيس والأعضاء في «التعاميم» للتوقيع.</div><div class="row"><button type="button" class="btn solid" id="fmSend">رفع الخطاب للمدير</button></div>' : '<div class="muted">لم يرفع الوكيل خطاب التشكيل بعد.</div>';
+      }else if(FM.st==='sent'){
+        tag = 'بانتظار اعتماد المدير';
+        body = env.isSA ? '<div class="fgrid"><div><label for="fmNo">رقم القرار</label><input type="text" id="fmNo" class="ci" style="width:100%"></div><div><label for="fmDt">تاريخ التعميم</label><input type="date" id="fmDt" value="'+dk+'"></div></div><div class="row"><button type="button" class="btn solid" id="fmOk">اعتماد وإرسال كتعميم للتوقيع</button></div>'
+          : '<div class="muted">أُرسل الخطاب إلى المدير لاعتماده.</div>';
+      }else{
+        const ids = FM.memberIds||[], done = ids.filter(i=>FMSIG[i]).length, names = ids.filter(i=>!FMSIG[i]).map(i=>(cmMembers().find(m=>m.id===i)||{}).name||'');
+        tag = done===ids.length ? 'اعتمد المدير ووقّع الجميع' : 'اعتمد المدير'; cls='ok';
+        body = '<dl class="kv"><dt>رقم القرار</dt><dd>'+A(esc(FM.decNo||''))+'</dd><dt>تاريخ التعميم</dt><dd>'+(FM.decDate?A(hijL(FM.decDate))+' هـ':'')+'</dd><dt>التواقيع</dt><dd>'+A(done)+' من '+A(ids.length)+(done===ids.length?'':' — لم يوقّع: '+esc(names.join('، ')))+'</dd></dl>'
+          +'<div class="row"><button type="button" class="btn" id="fmRef">تحديث التواقيع</button>'+((env.isSA||canEdit)?'<button type="button" class="btn solid" id="fmPr">طباعة الخطاب</button>':'')+'</div>';
+      }
+      $('#fmSt').textContent = tag; $('#fmSt').className = 'tag '+cls; $('#fmBody').innerHTML = body;
+    }
+    $('#fmBody').addEventListener('click', async e=>{
+      const b = e.target.closest('button'); if(!b) return;
+      if(b.id==='fmSend'){
+        if(!canEdit || !CMT) return;
+        const rec = {period, st:'sent', pres:CMT.pres, edu:CMT.edu, cn:CMT.cn, t:CMT.t, memberIds:CMT.memberIds, sentAt:Date.now(), sentBy:env.me.id, sentByName:env.me.name};
+        try{ await fmRef.set(rec); }catch(er){ fail(er); return; }
+        FM = rec; FMSIG = {}; fmDraw(); toast('رُفع الخطاب للمدير لاعتماده'); return;
+      }
+      if(b.id==='fmOk'){
+        if(!env.isSA || !FM || FM.st!=='sent') return;
+        const no = $('#fmNo').value.trim(), dt = $('#fmDt').value;
+        if(!no){ toast('اكتب رقم القرار'); return; } if(!dt){ toast('حدد تاريخ التعميم'); return; }
+        if(!(await SAF.hasMgr())){ toast('ارفع ختمك وتوقيعك في منصة النشاط المدرسي أولًا ثم اعتمد الخطاب'); return; }
+        const now = Date.now(), itemRef = circItems.doc(); b.disabled = true;
+        try{
+          const hd = await window.FormHdr.resolve({db, session:env.session, period});
+          const job = {edu:'وكيل الشؤون التعليمية', cn:'الموجه الطلابي', t:'معلم'};
+          const members = [{id:FM.edu.id, name:FM.edu.name, job:job.edu}, {id:FM.cn.id, name:FM.cn.name, job:job.cn}].concat(FM.t.map(x=>({id:x.id, name:x.name, job:job.t})));
+          await db.runTransaction(async tx=>{
+            const sn = await tx.get(circRoot), next = sn.exists ? (sn.data().nextNumber||1) : 1;
+            tx.set(circRoot, {nextNumber:next+1}, {merge:true});
+            tx.set(itemRef, {number:next, title:'قرار تشكيل لجنة التوجيه الطلابي', mandatory:true, recipients:FM.memberIds, pageCount:0, type:'committeeFormation', period,
+              formation:{school:hd.school||env.school.name||'', eduDept:hd.edu||env.school.eduDept||'', year:hd.year||'', decNo:no, decDate:dt, dateH:hijL(dt), president:FM.pres, members},
+              createdBy:env.me.id, createdByName:env.me.name, createdAt:now, approvedAt:now, approvedByName:env.me.name});
+          });
+          await fmRef.update({st:'approved', decNo:no, decDate:dt, approvedAt:now, approvedBy:env.me.id, approvedByName:env.me.name, circId:itemRef.id});
+        }catch(er){ fail(er); b.disabled = false; return; }
+        FM = Object.assign({}, FM, {st:'approved', decNo:no, decDate:dt, approvedAt:now, approvedBy:env.me.id, approvedByName:env.me.name, circId:itemRef.id}); FMSIG = {};
+        fmDraw(); toast('اعتُمد الخطاب وأُرسل للرئيس والأعضاء في «التعاميم» للتوقيع'); return;
+      }
+      if(b.id==='fmRef'){ await loadFmSigs(); fmDraw(); toast('حُدّثت التواقيع'); return; }
+      if(b.id==='fmPr'){ SAF.printFormation(Object.assign({period}, FM), async()=>{ await loadFmSigs(); return FMSIG; }); }
+    });
 
     /* ---- حالات اللجنة ---- */
     function cases(){
@@ -1100,7 +1160,7 @@ Dash.boot({
       return out;
     }
     function lRender(){
-      cmDraw(); stDraw();
+      cmDraw(); fmDraw();
       const cs = cases(); $('#lCnt').textContent = A(cs.length)+' حالات';
       const seats = [...new Set(cs.map(c=>c.seat))];
       $('#lRows').innerHTML = seats.map(seat=>{
@@ -1112,7 +1172,7 @@ Dash.boot({
             const sg = MSIG.get(m.id)||{}, pr = (m.content.members||[]).filter(x=>x.present), done = pr.filter(x=>sg[x.id]).length, all = done===pr.length;
             body = '<dl class="kv"><dt>الاجتماع</dt><dd>'+A((m.content.dayName||'')+' '+(m.content.dateH||''))+' '+timeTxt(m.content.time)+'</dd><dt>التواقيع</dt><dd>'+A(done)+' من '+A(pr.length)+(all?'':' — لم يوقّع: '+esc(pr.filter(x=>!sg[x.id]).map(x=>x.name).join('، ')))+'</dd></dl>'+
               '<details><summary class="muted">قرارات اللجنة (التوصيات)</summary><ol style="margin:6px 0">'+(m.content.recs||[]).map(r=>'<li>'+esc(r)+'</li>').join('')+'</ol></details>';
-            if(m.st==='approved'){ st='<span class="tag ok">عُرضت على اللجنة</span><span class="tag ok">اعتمد المدير</span>'; if(env.isSA) act='<button type="button" class="btn solid" data-pr="'+m.id+'">طباعة المحضر</button>'; }
+            if(m.st==='approved'){ st='<span class="tag ok">عُرضت على اللجنة</span><span class="tag ok">اعتمد المدير</span>'; if(env.isSA||canEdit) act='<button type="button" class="btn solid" data-pr="'+m.id+'">طباعة المحضر</button>'; }
             else { st='<span class="tag warn">المحضر بانتظار التوقيع والاعتماد</span>'; if(env.isSA) act='<button type="button" class="btn solid" data-ap="'+m.id+'"'+(all?'':' disabled')+'>اعتماد المحضر</button>'+(all?'':'<span class="muted">يُفعَّل بعد اكتمال توقيع الأعضاء الحاضرين</span>'); }
           }
           return vrow('<div class="row"><b>'+esc(c.why)+'</b>'+st+'</div>'+body+(act?'<div class="row">'+act+'</div>':'')); }).join(''));
@@ -1163,7 +1223,7 @@ Dash.boot({
       if(mn){ openMn(mn.dataset.mn); return; }
       if(ap){
         const m = MN.find(x=>x.id===ap.dataset.ap); if(!m) return;
-        if(!STAMP){ toast('ارفع ختمك وتوقيعك أولًا'); return; }
+        if(!(await SAF.hasMgr())){ toast('ارفع ختمك وتوقيعك في منصة النشاط المدرسي أولًا ثم اعتمد المحضر'); return; }
         await loadSigs(); const sg=MSIG.get(m.id)||{};
         if((m.content.members||[]).filter(x=>x.present).some(x=>!sg[x.id])){ toast('لم يكتمل توقيع الأعضاء الحاضرين'); lRender(); return; }
         const now=Date.now();
@@ -1171,23 +1231,8 @@ Dash.boot({
           try{ await circItems.doc(m.circId).update({approvedAt:now, approvedByName:env.me.name}); }catch(e2){ console.warn(e2); } }catch(er){ fail(er); return; }
         m.st='approved'; m.approvedAt=now; m.approvedByName=env.me.name; lRender(); vRender(); toast('اعتُمد المحضر، وصارت الحالة «عُرضت على اللجنة»'); return;
       }
-      if(pr){ const m = MN.find(x=>x.id===pr.dataset.pr); if(m) printMn(m); }
+      if(pr){ const m = MN.find(x=>x.id===pr.dataset.pr); if(m) SAF.printMn(m, MSIG.get(m.id)||{}); }
     });
-    /* طباعة المحضر: من حساب المدير فقط وبعد الاعتماد، بالختم والتوقيع وتواقيع الأعضاء */
-    function printMn(m){
-      if(!env.isSA || m.st!=='approved'){ toast('الطباعة للمدير بعد اعتماد المحضر'); return; }
-      const c = m.content, sg = MSIG.get(m.id)||{}, w = window.open('', '_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
-      const ol = L=>'<ol>'+L.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>';
-      const rows = (c.members||[]).filter(x=>x.present).map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.role)+'</td><td>'+(sg[x.id]&&sg[x.id].image?'<img src="'+sg[x.id].image+'" style="height:34px">':'')+'</td></tr>').join('');
-      w.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>محضر اجتماع لجنة التوجيه والإرشاد</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:24px;color:#111;line-height:1.9}h1{text-align:center;font-size:20px;margin:6px 0 14px}.hd{text-align:center;font-size:14px;color:#333}table{border-collapse:collapse;width:100%;margin:10px 0}th,td{border:1px solid #444;padding:6px 10px;text-align:center}th{background:#eee}ol{margin:4px 0 12px;padding-right:24px}.sg{display:flex;justify-content:space-between;align-items:flex-end;margin-top:26px}</style></head><body>'+
-        '<div class="hd">'+esc(c.eduDept||'')+'<br><b>'+esc(c.school||'')+'</b></div><h1>محضر اجتماع لجنة التوجيه والإرشاد بالمدرسة</h1>'+
-        '<table><tr><th>اليوم</th><td>'+esc(c.dayName||'')+'</td><th>التاريخ</th><td>'+A(esc(c.dateH||''))+' هـ</td><th>الوقت</th><td>'+timeTxt(c.time)+'</td></tr></table>'+
-        '<b>نقاط النقاش خلال الاجتماع:</b>'+ol(c.points||[])+'<b>ومما سبق تم إقرار والموافقة على التوصيات التالية وهي:</b>'+ol(c.recs||[])+
-        '<b>وبذلك تم التوقيع على المحضر والتوصيات:</b><table><tr><th>م</th><th>الاسم</th><th>عمله في اللجنة</th><th>التوقيع</th></tr>'+rows+'</table>'+
-        '<div class="sg"><div><b>المدير:</b> '+esc(m.approvedByName||env.me.name)+'</div><div>'+(STAMP?'<img src="'+STAMP.dataUrl+'" style="max-height:110px">':'')+'</div></div></body></html>');
-      w.document.close(); setTimeout(()=>{ try{ w.print(); }catch(e){} }, 400);
-    }
-
     /* ---- الحالات عالية الخطورة ---- */
     const HCK = ['تبليغ إدارة التعليم','تبليغ الجهات الأمنية','تبليغ الحماية من العنف الأسري وحماية الطفل','تبليغ وزارة الصحة','التواصل مع الأسرة لإخطارها بوضع الحالة','عقد اجتماع طارئ للجنة التوجيه','رفع بلاغ في الأنظمة التقنية الخاصة بالبلاغات'];
     $('#hCk').innerHTML = HCK.map((x,i)=>'<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-hk="'+i+'" style="width:18px;height:18px;accent-color:var(--brand)">'+x+'</label>').join('');
@@ -1197,25 +1242,60 @@ Dash.boot({
     $('#hQ').addEventListener('input', hResDraw);
     $('#hRes').addEventListener('click', e=>{ const b=e.target.closest('[data-pk2]'); if(!b) return; hSel = RO.find(s=>s.seat===b.dataset.pk2)||null; $('#hQ').value=''; hResDraw(); hBoxDraw(); });
     $('#hBox').addEventListener('click', e=>{ if(e.target.closest('[data-pclr]')){ hSel=null; hBoxDraw(); } });
+    /* أنواع الحالات من تعريفات الدليل الإجرائي: الإيذاء بأشكاله، والإهمال، والحالات عالية الخطورة (مثل محاولات إيذاء الذات) */
+    const HTYPES = ['إيذاء جسدي','إيذاء نفسي','إيذاء جنسي أو استغلال','تهديد بالإيذاء','إهمال','محاولة إيذاء الذات','تهديد مباشر لسلامة الطلبة','أخرى (تُوصف في وصف الحالة)'];
+    $('#hTy').innerHTML = '<option value="">اختر نوع الحالة</option>'+HTYPES.map(x=>'<option>'+x+'</option>').join('');
+    const nowT = ()=>{ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+    let hEdit = null;
+    function hReset(){ hEdit=null; hSel=null; hBoxDraw(); $('#hD').value=''; $('#hTy').value=''; $('#hOb').value=env.me.name||''; $('#hOd').value=dk; $('#hOt').value=nowT();
+      document.querySelectorAll('[data-hk]').forEach(c=>c.checked=false); $('#hAdd').textContent='رفع التقرير للمدير'; $('#hCancel').hidden=true; $('#hForm .t').textContent='تقرير جديد'; }
+    hReset();
+    const HST = {pending:['بانتظار اعتماد المدير','warn'], approved:['اعتمد المدير','ok'], returned:['أُعيد للتعديل','bad']};
     function hRender(){
       const L = HR.filter(x=>x.period===period); $('#hCnt').textContent = A(L.length)+' تقارير'; $('#hForm').hidden = !canEdit;
       const seats = [...new Set(L.map(x=>x.seat))];
       $('#hRows').innerHTML = seats.map(seat=>{ const hs = L.filter(x=>x.seat===seat).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)), f = hs[0];
-        return vcard(f.name, f.className, '<span class="tag">'+cnt(hs.length,'تقرير واحد','تقريران','تقارير')+'</span>', hs.map(x=>vrow('<div>'+esc(x.desc)+'</div><div class="row"><span class="tag '+(x.st==='approved'?'ok':'warn')+'">'+(x.st==='approved'?'اعتمد المدير':'بانتظار اعتماد المدير')+'</span><span class="tag">'+cnt((x.checks||[]).length,'إجراء واحد','إجراءان','إجراءات')+'</span>'+(x.st==='approved'&&x.approvedByName?'<span class="muted">'+esc(x.approvedByName)+'</span>':'')+(x.st==='pending'&&env.isSA?'<button type="button" class="btn solid" data-ho="'+x.id+'">اعتماد</button>':'')+'</div>'+
-          ((x.checks||[]).length?'<details><summary class="muted">الإجراءات المتخذة</summary><ul style="margin:6px 0">'+x.checks.map(i=>'<li>'+esc(HCK[i]||'')+'</li>').join('')+'</ul></details>':''))).join('')); }).join('') || '<div class="muted">لا تقارير.</div>';
+        return vcard(f.name, f.className, '<span class="tag">'+cnt(hs.length,'تقرير واحد','تقريران','تقارير')+'</span>', hs.map(x=>{ const st = HST[x.st]||HST.pending, mine = env.isSA;
+          return vrow((x.type?'<b>'+esc(x.type)+'</b>':'')+'<div>'+esc(x.desc)+'</div><div class="muted">الراصد: '+esc(x.observer||x.createdByName||'')+(x.obsDate?' · '+A(hijL(x.obsDate))+' هـ':'')+(x.obsTime?' · '+timeTxt(x.obsTime):'')+'</div>'
+            +'<div class="row"><span class="tag '+st[1]+'">'+st[0]+'</span><span class="tag">'+cnt((x.checks||[]).length,'إجراء واحد','إجراءان','إجراءات')+'</span>'+(x.st==='approved'&&x.approvedByName?'<span class="muted">'+esc(x.approvedByName)+'</span>':'')+'</div>'
+            +(x.st==='returned'&&x.returnNote?'<div class="muted">سبب الإعادة: '+esc(x.returnNote)+'</div>':'')
+            +'<div class="row">'+(x.st==='pending'&&mine?'<button type="button" class="btn solid" data-ho="'+x.id+'">اعتماد</button>':'')
+              +((x.st==='pending'||x.st==='approved')&&mine?'<input type="text" class="ci" data-hrn="'+x.id+'" placeholder="سبب الإعادة للتعديل (اختياري)" style="width:210px;text-align:right"><button type="button" class="btn" data-hrt="'+x.id+'">إعادة للتعديل</button>':'')
+              +(x.st==='returned'&&canEdit?'<button type="button" class="btn solid" data-hed="'+x.id+'">تعديل التقرير</button>':'')+'</div>'
+            +(typeof SAF!=='undefined'?SAF.hrBtn(x):'')+
+            ((x.checks||[]).length?'<details><summary class="muted">الإجراءات المتخذة</summary><ul style="margin:6px 0">'+x.checks.map(i=>'<li>'+esc(HCK[i]||'')+'</li>').join('')+'</ul></details>':'')); }).join('')); }).join('') || '<div class="muted">لا تقارير.</div>';
     }
     $('#hAdd').onclick = async ()=>{
-      const d = $('#hD').value.trim(); if(!canEdit) return;
-      if(!hSel){ toast('اختر الطالب'); return; } if(!d){ toast('اكتب وصف الحالة'); return; }
-      const ck = [...document.querySelectorAll('[data-hk]')].filter(c=>c.checked).map(c=>+c.dataset.hk), ref = hrCol.doc();
-      const rec = {period, seat:hSel.seat, name:hSel.name, className:hSel.cls, desc:d, checks:ck, st:'pending', createdAt:Date.now(), createdBy:env.me.id, createdByName:env.me.name};
-      try{ await ref.set(rec); }catch(er){ fail(er); return; }
-      HR.push(Object.assign({id:ref.id}, rec)); hSel=null; hBoxDraw(); $('#hD').value=''; document.querySelectorAll('[data-hk]').forEach(c=>c.checked=false); hRender(); toast('رُفع التقرير للمدير');
+      const d = $('#hD').value.trim(), ty = $('#hTy').value, ob = $('#hOb').value.trim(), od = $('#hOd').value, ot = $('#hOt').value; if(!canEdit) return;
+      if(!hSel){ toast('اختر الطالب'); return; } if(!ty){ toast('اختر نوع الحالة'); return; } if(!d){ toast('اكتب وصف الحالة'); return; }
+      if(!ob){ toast('اكتب اسم راصد الحالة'); return; } if(!od || !ot){ toast('حدد تاريخ الرصد ووقته'); return; }
+      const ck = [...document.querySelectorAll('[data-hk]')].filter(c=>c.checked).map(c=>+c.dataset.hk), now = Date.now();
+      const body = {seat:hSel.seat, name:hSel.name, className:hSel.cls, type:ty, desc:d, observer:ob, obsDate:od, obsTime:ot, checks:ck};
+      try{
+        if(hEdit){
+          const x = HR.find(y=>y.id===hEdit); const upd = Object.assign({}, body, {st:'pending', returnNote:'', resubmittedAt:now, updatedAt:now, updatedBy:env.me.id});
+          await hrCol.doc(hEdit).update(upd); Object.assign(x, upd); toast('أُعيد رفع التقرير للمدير');
+        }else{
+          const ref = hrCol.doc(), rec = Object.assign({period, st:'pending', createdAt:now, createdBy:env.me.id, createdByName:env.me.name}, body);
+          await ref.set(rec); HR.push(Object.assign({id:ref.id}, rec)); toast('رُفع التقرير للمدير');
+        }
+      }catch(er){ fail(er); return; }
+      hReset(); hRender();
     };
+    $('#hCancel').onclick = ()=>hReset();
     $('#hRows').addEventListener('click', async e=>{
-      const b = e.target.closest('[data-ho]'); if(!b || !env.isSA) return; const x = HR.find(y=>y.id===b.dataset.ho), now = Date.now();
-      try{ await hrCol.doc(x.id).update({st:'approved', approvedAt:now, approvedBy:env.me.id, approvedByName:env.me.name}); }catch(er){ fail(er); return; }
-      x.st='approved'; x.approvedByName=env.me.name; hRender(); toast('اعتُمد التقرير');
+      const ok = e.target.closest('[data-ho]'), rt = e.target.closest('[data-hrt]'), ed = e.target.closest('[data-hed]'), now = Date.now();
+      if(ed && canEdit){ const x = HR.find(y=>y.id===ed.dataset.hed); if(!x) return;
+        hEdit = x.id; hSel = RO.find(s=>s.seat===x.seat) || {seat:x.seat, name:x.name, cls:x.className}; hBoxDraw(); $('#hTy').value = x.type||''; $('#hD').value = x.desc||''; $('#hOb').value = x.observer||x.createdByName||''; $('#hOd').value = x.obsDate||dk; $('#hOt').value = x.obsTime||nowT();
+        document.querySelectorAll('[data-hk]').forEach(c=>c.checked = (x.checks||[]).includes(+c.dataset.hk)); $('#hAdd').textContent='إعادة رفع التقرير للمدير'; $('#hCancel').hidden=false; $('#hForm .t').textContent='تعديل التقرير المُعاد'; $('#hForm').scrollIntoView({block:'center'}); return; }
+      if(!env.isSA) return;
+      if(ok){ const x = HR.find(y=>y.id===ok.dataset.ho); if(!x) return;
+        try{ await hrCol.doc(x.id).update({st:'approved', approvedAt:now, approvedBy:env.me.id, approvedByName:env.me.name}); }catch(er){ fail(er); return; }
+        x.st='approved'; x.approvedByName=env.me.name; hRender(); toast('اعتُمد التقرير'); return; }
+      if(rt){ const x = HR.find(y=>y.id===rt.dataset.hrt); if(!x) return; const note = (document.querySelector('[data-hrn="'+x.id+'"]')||{}).value||'';
+        const upd = {st:'returned', returnedAt:now, returnedBy:env.me.id, returnedByName:env.me.name, returnNote:note.trim(), approvedAt:null, approvedBy:null, approvedByName:null};
+        try{ await hrCol.doc(x.id).update(upd); }catch(er){ fail(er); return; }
+        Object.assign(x, upd); hRender(); toast('أُعيد التقرير للوكيل للتعديل'); }
     });
 
     /* ---- الإعانة والمكافأة (مغلقة افتراضيًا) ---- */
@@ -1265,6 +1345,12 @@ Dash.boot({
     });
     function refreshL(){ lRender(); hRender(); eRender(); pRender(); }
 
+    /* ---- النماذج المطبوعة وتسجيل التوقيع الورقي (sa-forms.js) ---- */
+    const SAF = SAForms.make({ env, db, sid, base, period, dk, A, hijL, DEGN, PN, LV, toast, fail, DD_dummy:0,
+      vl:()=>VL, hr:()=>HR, vInfo, ddOf, un, exn, exMap, stageOf:seat=>{ const r=RO.find(x=>x.seat===seat); return r?r.stage:''; },
+      absOf:seat=>AB.get(seat), canEdit:()=>canEdit, fallback:()=>'',
+      onChange:()=>{ try{ vRender(); }catch(e){} try{ rpRender(); }catch(e){} try{ hRender(); }catch(e){} if(bySeat && !$('#stOv').hidden) try{ openBayan(bySeat); }catch(e){} } });
+
     /* ---- التبويبات الفرعية ---- */
     document.addEventListener('click', e=>{ const b=e.target.closest('.subs button'); if(!b) return; const bar=b.parentElement, g=bar.dataset.grp;
       bar.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
@@ -1275,7 +1361,9 @@ Dash.boot({
     catch(e){ console.error(e); toast('تعذّر تحميل التحويلات'); }
     try{ await Promise.all([loadRoster(), loadVio(), loadUnx()]); refreshV(); rRender(); }
     catch(e){ console.error(e); toast('تعذّر تحميل المخالفات'); }
-    try{ await loadS5(); refreshL(); vRender(); }
+    try{ await SAF.load(); }
+    catch(e){ console.error(e); toast('تعذّر تحميل تواقيع النماذج'); }
+    try{ await loadS5(); refreshL(); vRender(); rpRender(); $('#cmBox').open = !CMT || !!window.__saOpenAll; }
     catch(e){ console.error(e); toast('تعذّر تحميل التوجيه الطلابي'); }
   }
 });

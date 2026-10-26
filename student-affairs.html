@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-24.3 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
+<!-- إصدار: 2026-10-24.4 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -245,6 +245,7 @@ details summary{cursor:pointer}
 .rpc summary{display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;list-style:none}.rpc summary::-webkit-details-marker{display:none}
 .rpc .rpn{font-size:13px;color:var(--muted);white-space:nowrap}.rpc[open] summary{border-bottom:3px solid var(--line);padding-bottom:8px;margin-bottom:8px}
 .rpc .kv{margin-bottom:6px}
+details>summary.blu{color:#1a5fb4;font-weight:700}
 .rpc summary .nm{font-weight:800}.rpc summary .nm small{display:block;font-weight:500}
 /* النموذج المعتمد معروض بوضع التوافق (بلا DOCTYPE) حيث لا ترث الجداول ارتفاع السطر؛ نُعيد السلوك نفسه هنا ليتطابق الشكل تمامًا */
 table{line-height:normal}
@@ -456,7 +457,7 @@ details.cmx>summary .t::before{content:"◂";margin-inline-end:4px}details.cmx[o
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-20.1"></script>
 <script src="form-header.js?v=2026-10-16.4"></script>
-<script src="sa-forms.js?v=2026-10-24.3"></script>
+<script src="sa-forms.js?v=2026-10-24.4"></script>
 <script>
 const ST_MARKUP = document.getElementById('stTpl').innerHTML;
 /* وكيل الشؤون الطلابية — المرحلة ١ (البطاقات) والمرحلة ٢ (غياب الطلاب):
@@ -906,7 +907,7 @@ Dash.boot({
             if(canAct() && I.pts>0 && !v.toDed) btn.push('<button type="button" class="btn solid" data-vs="'+v.id+'">إرسال لحسم السلوك ('+A(I.pts)+')</button>');
             if(canAct() && I.com && !v.cm) btn.push('<button type="button" class="btn" data-vc="'+v.id+'">إحالة للجنة التوجيه</button>');
             return vrow('<div class="row"><b>'+esc(v.w)+'</b></div><div class="row"><span class="tag '+(v.d>=3?'bad':'warn')+'">الدرجة '+DEGN[v.d]+'</span>'+(v.prov?'<span class="tag">تصنيف مبدئي</span>':'')+'<span class="tag">التكرار '+A(I.n)+'</span><span class="tag '+(I.pts?'bad':'ok')+'">'+(I.pts?'حسم '+A(I.pts):'بلا حسم')+'</span>'+(v.toDed?'<span class="tag ok">أُرسل لحسم السلوك</span>':'')+(v.cm?'<span class="tag ok">أُحيل للجنة</span>':'')+(mnDone('v_'+v.id)?'<span class="tag ok">عُرضت على اللجنة</span>':'')+'</div>'+
-              '<div class="muted">'+dtxt(v)+' · رصد: '+esc(v.src||'الوكيل')+'</div><details><summary class="muted">الإجراء المقرر (الإجراء '+A(I.i)+')</summary><div class="muted">'+esc(I.act)+'</div></details>'+(btn.length?'<div class="row">'+btn.join('')+'</div>':'')+(typeof SAF!=='undefined'?SAF.rowForms(v):'')); }).join('')+oth);
+              '<div class="muted">'+dtxt(v)+' · رصد: '+esc(v.src||'الوكيل')+'</div><details><summary class="muted blu">الإجراء المقرر (الإجراء '+A(I.i)+')</summary><div class="muted">'+esc(I.act)+'</div></details>'+(btn.length?'<div class="row">'+btn.join('')+'</div>':'')+(typeof SAF!=='undefined'?SAF.rowForms(v):'')); }).join('')+oth);
       }).join('') || '<div class="muted">لا مخالفات في '+PN[semV]+'.</div>';
     }
     $('#vAdd').onclick = async ()=>{
@@ -982,7 +983,7 @@ Dash.boot({
       const L = seats.filter(seat=>{ const t=info(seat); return rpF==='all' || (rpF==='ded' && (t.ded||t.pend)) || (rpF==='comp' && t.comp); });
       $('#rpRows').innerHTML = L.map(seat=>{
         const vs = vsAll.filter(v=>v.seat===seat).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)), t=info(seat), f=vs[0], g=gradeOf(seat, semV);
-        return '<details class="rpc"><summary><span class="nm">'+esc(f.name)+'<small>'+esc(f.className)+(f.stage?' · '+f.stage:'')+'</small></span><span class="rpn">'+(t.pendN?'بانتظار التنفيذ '+A(t.pendN):'لا شيء بانتظار التنفيذ')+'</span></summary>'+
+        return '<details class="rpc"><summary><span class="nm">'+esc(f.name)+'<small>'+esc(f.className)+(f.stage?' · '+f.stage:'')+'</small></span><span class="rpn">'+cnt(vs.length,'مخالفة واحدة','مخالفتان','مخالفات')+' · '+(t.pendN?'بانتظار التنفيذ '+A(t.pendN):'لا شيء بانتظار التنفيذ')+'</span></summary>'+
           '<dl class="kv"><dt>المخالفات</dt><dd>'+A(vs.length)+'</dd><dt>المحسوم</dt><dd>'+A(t.ded)+'</dd><dt>بانتظار التنفيذ</dt><dd>'+A(t.pend)+'</dd><dt>المعوَّض</dt><dd>'+A(t.comp)+'</dd><dt>درجة السلوك</dt><dd>'+A(g.beh)+'</dd></dl>'+(typeof SAF!=='undefined'?SAF.v5Html(seat, semV):'')+
           vs.map(v=>{ const I=vInfo(v), d=ddOf(v), st=!d?(v.toDed?'لم يُرسل الحسم':(I.pts?'لم يُرسل للحسم':'بلا حسم')):(d.st==='exec'?'محسوم '+A(d.pts)+(d.comp?' · معوَّض '+A(d.comp):''):'بانتظار مسجل نور');
             return '<div class="srow"><div class="st">'+esc(v.w)+'</div><div class="muted">الدرجة '+DEGN[v.d]+(v.prov?' (تصنيف مبدئي)':'')+' · '+st+' · '+dtxt(v)+'</div></div>'; }).join('')+'</details>';

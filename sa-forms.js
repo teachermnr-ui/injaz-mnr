@@ -1,4 +1,4 @@
-// إصدار: 2026-10-24.3
+// إصدار: 2026-10-24.4
 /* نماذج الشؤون الطلابية المطبوعة (من الدليل الإجرائي) وتسجيل التوقيع الورقي.
    النماذج: رصد المشكلات السلوكية (٥)، تعهد سلوكي (٨)، إشعار ولي الأمر (٩ — سري)، محضر ضبط واقعة (١١ — سري)،
    إبلاغ عن حالة عالية الخطورة (١٤ — سري للغاية)، إجراءات الغياب بعذر (١٥) وبدون عذر (١٦)، تعهد الالتزام بالحضور (١٧).
@@ -121,7 +121,7 @@
     /* ---- ١١: محضر ضبط واقعة (سري) ---- */
     function printIncident(v){
       const x = INC.get(v.id); if(!x) return; const ev = x.ev||{}, ws = (x.witnesses||[]).slice(0,7);
-      while(ws.length<7) ws.push({});
+      if(!ws.length) ws.push({});
       return printDoc('محضر ضبط واقعة', v.period, [], (ctx,M)=>
         secret('سري')+'<div class="ln">اسم الطالب/الطالبة: '+dots(v.name,330)+'</div><div class="ln">المرحلة: '+dots(v.stage||'',150)+' الصف: '+dots(v.className,170)+'</div>'
         +'<div class="ln">المشكلة السلوكية: '+dots(v.w,330)+' درجتها: '+dots(C.DEGN[v.d],80)+'</div>'
@@ -207,10 +207,10 @@
     }
     /* ---- ١٧: تعهد الالتزام بالحضور ---- */
     function printAtt(s){
-      const un = C.un(s), last = (s.dates||[]).filter(d=>!C.exMap(s)[d]).slice(-1)[0] || '';
+      const exm = C.exMap(s), uds = (s.dates||[]).filter(d=>!exm[d]).slice().sort(), un = uds.length;
       return printDoc('تعهد الالتزام بالحضور', C.period, [], (ctx,M)=>
         '<div class="ln">أنا الطالب/الطالبة: '+dots(s.name,360)+'</div><div class="ln">بالصف: '+dots(s.cls,200)+'</div>'
-        +'<div class="ln">أنني تغيبت عن الحضور للمدرسة بدون عذر لمدة '+dots(A(un),60)+' أيام، بتاريخ '+dots(last?A(C.hijL(last))+' هـ':'',150)+'</div>'
+        +'<div class="ln">أنني تغيبت عن الحضور للمدرسة بدون عذر لمدة '+dots(A(un),60)+' أيام، بتاريخ '+dots(uds.map(d=>A(C.hijL(d))).join('، ')+(uds.length?' هـ':''),300)+'</div>'
         +'<div class="ln">وأتعهد بالالتزام بالخطة التربوية والعلاجية المقدمة لتحسين الحضور، وعلى ذلك جرى التوقيع.</div>'
         +'<div class="sgs">'+partyBlock('الطالب/الطالبة',s.name)+partyBlock('ولي الأمر','')+mgrBlock(M,ctx,{stamp:'opt'})+'</div>');
     }
@@ -225,7 +225,7 @@
     }
     /* تنسيق صفوف النماذج داخل البطاقات: صف مستقل لكل نموذج (العنوان والحالة ثم الأزرار) */
     (function css(){ if(document.getElementById('safCss')) return; const st = document.createElement('style'); st.id = 'safCss';
-      st.textContent = '.frow{border:1px solid var(--line,#d5ddd9);border-radius:10px;padding:8px 10px;margin:6px 0;background:#fff;display:flex;flex-direction:column;gap:6px}.frow .fh{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between}.frow .fb{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.frow select{font:inherit;padding:6px 8px;border:1px solid var(--line,#ccd6d1);border-radius:8px;background:#fff;max-width:100%}';
+      st.textContent = '.frow{border:1px solid var(--line,#d5ddd9);border-radius:10px;padding:8px 10px;margin:6px 0;background:#fff;display:flex;flex-direction:column;gap:6px}.frow .fh{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between}.frow .fb{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.frow select{font:inherit;padding:6px 8px;border:1px solid var(--line,#ccd6d1);border-radius:8px;background:#fff;max-width:100%}details>summary.blu{color:#1a5fb4;font-weight:700}';
       document.head.appendChild(st); })();
     const frow = (title, tags, btns)=>'<div class="frow"><div class="fh"><b>'+title+'</b><span>'+tags+'</span></div><div class="fb">'+btns+'</div></div>';
     const LT = new Map();
@@ -336,7 +336,7 @@
     const bt = (act, lab, cls)=>'<button type="button" class="btn'+(cls?' '+cls:'')+'" data-saf="'+esc(act)+'">'+lab+'</button>';
     function rowForms(v){
       const edit = C.canEdit(), has = INC.has(v.id), lt = LT.get(v.id)||'n';
-      return '<details class="fm"><summary class="muted">نماذج المخالفة</summary>'
+      return '<details class="fm"><summary class="muted blu">نماذج المخالفة</summary>'
         +frow('التعهد السلوكي', soTags('pledge__'+v.id,['student','parent'],['main']), bt('pl|'+v.id,'طباعة')+bt('so|pledge|'+v.id,'التواقيع'))
         +frow('خطاب ولي الأمر (سري)', soTags('notice__'+v.id,['parent'],['main']), '<select data-lt="'+esc(v.id)+'" aria-label="نوع الخطاب"><option value="n"'+(lt==='n'?' selected':'')+'>إشعار بمشكلة سلوكية</option><option value="i"'+(lt==='i'?' selected':'')+'>دعوة ولي الأمر</option></select>'+bt('pn|'+v.id,'طباعة')+bt('so|notice|'+v.id,'التواقيع'))
         +frow('محضر ضبط الواقعة (سري)', has?'<span class="tag ok">محفوظ</span>'+soTags('incident__'+v.id,['student','parent','witnesses'],['main']):'<span class="tag">لم يُعدّ</span>',

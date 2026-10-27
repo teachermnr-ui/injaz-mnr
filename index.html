@@ -472,6 +472,7 @@ const PERM_TREE = [
     { key:'tools.agentSchool', label:'وكيل الشؤون المدرسية', only:['access','edit'] },
     { key:'tools.agentEdu', label:'وكيل الشؤون التعليمية', only:['access','edit'] },
     { key:'tools.agentStudents', label:'وكيل الشؤون الطلابية', only:['access','edit'] },
+    { key:'tools.counselor', label:'التوجيه والإرشاد الطلابي', only:['access','edit'] },
     { key:'tools.noorRecorder', label:'مسجل معلومات نظام نور (تقارير الحسم الواردة)', only:['access','edit'] },
   ]},
 /* [ADMIN-TOOLS:END] */
@@ -570,7 +571,7 @@ const ADMIN_TOOLS = [
   // الترتيب: منصة النشاط المدرسي، الموجه الطلابي، الوكلاء، الإرشاد الصحي. «الوكلاء» لدور الوكيل فقط، و«الموجه الطلابي» لدور الموجه فقط،
   // أما «منصة النشاط المدرسي» و«الإرشاد الصحي» فتُمنحان لموظف بعينه من «الصلاحيات الخاصة» (ومدير المدرسة بالدور) — ولا أدمن النظام
   { key:'activity', perm:'tools.activity', label:'منصة النشاط المدرسي', icon:'🎯', href:'activity.html', noAdmin:true },
-  { key:'counselor', label:'الموجه الطلابي', icon:'🤝', href:'counselor.html', noAdmin:true, roles:['counselor'] },
+  { key:'counselor', perm:'tools.counselor', label:'التوجيه والإرشاد الطلابي', icon:'🤝', href:'counselor.html', noAdmin:true, roles:['counselor','schoolAdmin'] },
   { key:'agents', label:'الوكلاء', icon:'🧭', href:'agents.html', noAdmin:true, roles:['agent'] },
   { key:'health', perm:'tools.health', label:'الإرشاد الصحي', icon:'🩺', href:'health.html', noAdmin:true },
   // وكيل الشؤون المدرسية (2026-10-20): بتفويض «وكيل الشؤون المدرسية» فقط (لا يكفي دور الوكيل). المدير يفتحها للاطّلاع واعتماد ما يخصه (حق للمدير لا صلاحية)، ولا أدمن النظام
@@ -580,7 +581,7 @@ const ADMIN_TOOLS = [
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
 /* [ADMIN-TOOLS:MOD] ORIG: const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting']; */
-const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting','tools.excellence','tools.activity','tools.health','tools.agentSchool','tools.agentEdu','tools.agentStudents','tools.noorRecorder'];
+const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting','tools.excellence','tools.activity','tools.health','tools.agentSchool','tools.agentEdu','tools.agentStudents','tools.counselor','tools.noorRecorder'];
 /* المدير داخل فصل مغلق: لا يرى إلا تبويب «الفصول الدراسية» (ولا أدوات ولا لوحتي) */
 function semClosedForMe(){
   return !!CURRENT && CURRENT.role==='schoolAdmin' && !!CURRENT.schoolId && !!SESSION && !SESSION.viewOnly && window.SemGuard
@@ -861,7 +862,7 @@ function toggleMyBoardMenu(btn){
     if(it.dataset.action==='visits'){ openMyVisits(); return; }
     if(it.dataset.action==='duty'){ openMyDuty(); return; }
     if(it.dataset.action==='wait'){ openMyWait(); return; }
-    if(it.dataset.action==='followups'){ activeTab='guidance'; GUIDE.sub='cases'; GUIDE.caseFilter='open'; renderTabs(); renderPanel(); return; }
+    if(it.dataset.action==='followups'){ window.location.href='counselor.html'; return; }
     window.location.href=it.dataset.href;
   });
   btn.classList.add('open');
@@ -1778,7 +1779,7 @@ function visibleTabsRaw(){
   if(semClosedForMe()) return [INDEX_TABS.find(t=>t.key==='semesters')];
   const base = visibleTabsCore().filter(t=>t.key!=='guidance' && t.key!=='dashboard' && t.key!=='semesters');
   const extra = [];
-  if(CURRENT.schoolId && guideView()) extra.push(INDEX_TABS.find(t=>t.key==='guidance'));
+  /* 2026-10-27: أُخفي تبويب «الإرشاد الطلابي» القديم بعد بناء صفحة الموجه الطلابي (counselor.html) */
   if(dashVisible()) extra.push(INDEX_TABS.find(t=>t.key==='dashboard'));
   if(dashVisible()) extra.push(INDEX_TABS.find(t=>t.key==='semesters'));   // «الفصول الدراسية»: لمدير المدرسة
   { const ti = transitionInfo(); if(ti){ const tt = INDEX_TABS.find(t=>t.key==='transition'); extra.push(ti.licensed ? tt : Object.assign({}, tt, { label: tt.label+' ⚠' })); } }
@@ -2814,7 +2815,6 @@ async function delAppt(id){
 }
 // «لوحتي ← مواعيدي»: للوكيل نافذة مستقلة، وللموجه قسم المواعيد في تبويبه
 function openMyAppointments(){
-  if(guideFull()){ activeTab='guidance'; GUIDE.sub='appts'; if(typeof renderTabs==='function') renderTabs(); renderPanel(); return; }
   modal('<h2>مواعيدي مع أولياء الأمور</h2><div id="myApptHost"></div><div class="modal-row"><button class="btn secondary" onclick="closeModal()">إغلاق</button></div>');
   renderApptsInto($('#myApptHost'));
 }

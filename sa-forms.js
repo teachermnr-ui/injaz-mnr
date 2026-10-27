@@ -1,4 +1,4 @@
-// إصدار: 2026-10-24.4
+// إصدار: 2026-10-27.1
 /* نماذج الشؤون الطلابية المطبوعة (من الدليل الإجرائي) وتسجيل التوقيع الورقي.
    النماذج: رصد المشكلات السلوكية (٥)، تعهد سلوكي (٨)، إشعار ولي الأمر (٩ — سري)، محضر ضبط واقعة (١١ — سري)،
    إبلاغ عن حالة عالية الخطورة (١٤ — سري للغاية)، إجراءات الغياب بعذر (١٥) وبدون عذر (١٦)، تعهد الالتزام بالحضور (١٧).
@@ -14,7 +14,7 @@
   const nl = s=>esc(s).replace(/\n/g,'<br>');
   const MAXF = 512000, OKF = /^(application\/pdf|image\/(jpeg|png|webp))$/;
   const PLAB = {student:'الطالب', parent:'ولي الأمر', witnesses:'الشهود'};
-  const HCK = ['تبليغ إدارة التعليم','تبليغ الجهات الأمنية','تبليغ الحماية من العنف الأسري وحماية الطفل','تبليغ وزارة الصحة','التواصل مع الأسرة لإخطارها بوضع الحالة','عقد اجتماع طارئ للجنة التوجيه الطلابي لدراسة الحالة ووضع خطة لمعالجتها بالتكامل مع الجهات ذات العلاقة','رفع بلاغ عن الحالة في الأنظمة التقنية الخاصة بالبلاغات'];
+  const HCK = ['تبليغ إدارة التعليم','تبليغ الجهات الأمنية','تبليغ الحماية من العنف الأسري وحماية الطفل','تبليغ وزارة الصحة','التواصل مع الأسرة لإخطارها بوضع الحالة','عقد اجتماع طارئ للجنة التوجيه والإرشاد لدراسة الحالة ووضع خطة لمعالجتها بالتكامل مع الجهات ذات العلاقة','رفع بلاغ عن الحالة في الأنظمة التقنية الخاصة بالبلاغات'];
   const CSS = '.f{font-size:15px;line-height:2.2;margin:6px 0;padding:0 9mm}.sgs.e{justify-content:flex-end}.sgs.m{justify-content:center}.sgs.e .sgb,.sgs.m .sgb{flex:0 0 auto;min-width:230px}.sgs .stp{flex:0 0 auto;min-width:170px}.sgs.lt .sgb:not(.stp){flex:0 0 auto;min-width:260px}.f .ln{margin:3px 0}.dots{display:inline-block;min-width:110px;border-bottom:1px dotted #444;padding:0 6px;text-align:center}'
     +'.f table{width:100%;border-collapse:collapse;margin:10px 0}.f th,.f td{border:1.5px solid #17475e;padding:6px 8px;text-align:center;font-size:13px;vertical-align:top}.f th{background:#eaf2f4}.f td{height:46px}'
     +'.f td.l{text-align:right}.sgs{display:flex;justify-content:space-between;gap:14px;margin-top:30px}.sgb{flex:1;font-size:14px;line-height:2.3}.sgb .t{font-weight:700;margin-bottom:2px}'
@@ -171,16 +171,16 @@
           +'<div class="ln"><b>وبذلك تم التوقيع على المحضر والتوصيات:</b></div><table><thead><tr><th>م</th><th>الاسم</th><th>عمله في اللجنة</th><th>التوقيع</th></tr></thead><tbody>'+rows+'</tbody></table>'
           +mgrRow(M,Object.assign({},ctx,{principal:m.approvedByName||ctx.principal}),'e'); }, async()=>{ sg = (typeof getSig==='function' ? await getSig() : getSig) || {}; });
     }
-    /* ---- قرار تشكيل لجنة التوجيه الطلابي (بعد اعتماد المدير) ---- */
+    /* ---- قرار تشكيل لجنة التوجيه والإرشاد (بعد اعتماد المدير) ---- */
     function printFormation(fm, getSig){
       if(!fm || fm.st!=='approved'){ C.toast('الطباعة بعد اعتماد المدير للخطاب'); return; }
       let sg = {}; const img = id=>sg[id]&&sg[id].image ? '<img class="sg" src="'+sg[id].image+'" alt="">' : '';
       const mem = [{id:fm.edu.id, name:fm.edu.name, job:'وكيل الشؤون التعليمية'},{id:fm.cn.id, name:fm.cn.name, job:'الموجه الطلابي'}]
         .concat((fm.t||[]).map(x=>({id:x.id, name:x.name, job:'معلم'})));
-      return printDoc('قرار تشكيل لجنة التوجيه الطلابي', fm.period||C.period, [['رقم القرار',A(fm.decNo||'')],['التاريخ',fm.decDate?A(C.hijL(fm.decDate))+' هـ':'']], (ctx,M)=>{
-        const rows = mem.map((x,i)=>'<tr><td>'+A(i+1)+'</td><td class="l">'+esc(x.name)+'</td><td>'+esc(x.job)+'</td><td>عضوًا</td><td>'+img(x.id)+'</td></tr>').join('');
-        return '<div class="ln">الموضوع: <b>تشكيل لجنة التوجيه الطلابي بالمدرسة</b></div>'
-          +'<div class="ln">بناءً على ما ورد في الدليل الإجرائي لقواعد السلوك والمواظبة، ولتحقيق بيئة مدرسية آمنة، تقرر تشكيل لجنة التوجيه الطلابي للعام الدراسي '+esc(g.FormHdr.yearTxt(ctx.year)||'')+' على النحو الآتي:</div>'
+      return printDoc('قرار تشكيل لجنة التوجيه والإرشاد', fm.period||C.period, [['رقم القرار',A(fm.decNo||'')],['التاريخ',fm.decDate?A(C.hijL(fm.decDate))+' هـ':'']], (ctx,M)=>{
+        const rows = mem.map((x,i)=>'<tr><td>'+A(i+1)+'</td><td class="l">'+esc(x.name)+'</td><td>'+esc(x.job)+'</td><td>'+(x.job==='الموجه الطلابي'?'مقررًا':'عضوًا')+'</td><td>'+img(x.id)+'</td></tr>').join('');
+        return '<div class="ln">الموضوع: <b>تشكيل لجنة التوجيه والإرشاد بالمدرسة</b></div>'
+          +'<div class="ln">بناءً على ما ورد في الدليل الإجرائي لقواعد السلوك والمواظبة، ولتحقيق بيئة مدرسية آمنة، تقرر تشكيل لجنة التوجيه والإرشاد للعام الدراسي '+esc(g.FormHdr.yearTxt(ctx.year)||'')+' على النحو الآتي:</div>'
           +'<div class="ln"><b>رئيس اللجنة:</b> '+dots(fm.pres.name,260)+' '+img(fm.pres.id)+'</div>'
           +'<table><thead><tr><th>م</th><th>الاسم</th><th>الصفة</th><th>العمل في اللجنة</th><th>التوقيع</th></tr></thead><tbody>'+rows+'</tbody></table>'
           +'<div class="ln">وعلى اللجنة مباشرة مهامها وفق ما ورد في الدليل الإجرائي، وعلى الله الاعتماد.</div>'

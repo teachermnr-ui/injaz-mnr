@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-26.1 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
+<!-- إصدار: 2026-10-27.1 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -361,9 +361,9 @@ details.vc[open]>summary,.rpc[open]>summary{border-bottom:0;padding-bottom:8px;m
   </section></div>
   <div class="pane" id="p-l" hidden><section class="card">
     <div class="hd"><h2>التوجيه الطلابي</h2></div>
-    <div class="seg subs" data-grp="l"><button type="button" class="on" data-s="c">لجنة التوجيه الطلابي</button><button type="button" data-s="h">حالات عالية الخطورة</button></div>
+    <div class="seg subs" data-grp="l"><button type="button" class="on" data-s="c">لجنة التوجيه والإرشاد</button><button type="button" data-s="h">حالات عالية الخطورة</button></div>
     <div class="sp" data-grp="l" data-s="c">
-      <details class="ex"><summary>شرح القسم</summary><div class="muted">لجنة التوجيه الطلابي يشكلها الوكيل الطلابي بصفته رئيسها، وتصل إليها الحالات المحالة من إجراء الغياب (٥ أيام) أو من المخالفات المستوجبة. يسجل الوكيل لكل حالة محضر الاجتماع، فيصل الأعضاء الحاضرين في «التعاميم» للتوقيع، ثم يعتمده المدير بختمه وتوقيعه، ولا يُطبع إلا من حساب المدير بعد الاعتماد.</div></details>
+      <details class="ex"><summary>شرح القسم</summary><div class="muted">لجنة التوجيه والإرشاد يشكلها الوكيل الطلابي بصفته رئيسها، وتصل إليها الحالات المحالة من إجراء الغياب (٥ أيام) أو من المخالفات المستوجبة. يسجل الوكيل لكل حالة محضر الاجتماع، فيصل الأعضاء الحاضرين في «التعاميم» للتوقيع، ثم يعتمده المدير بختمه وتوقيعه، ولا يُطبع إلا من حساب المدير بعد الاعتماد.</div></details>
       <details class="dp cmx" id="cmBox"><summary><span class="t">تشكيل اللجنة</span><span class="tag" id="cmSt"></span><span class="tag" id="fmSt"></span></summary>
         <div class="muted">يختار الوكيل رئيس اللجنة من الوكلاء، ويختار بقية الأعضاء من مستخدمي المدرسة بحسب دورهم.</div>
         <div class="fgrid"><div><label for="cmPr">رئيس اللجنة (وكيل)</label><select id="cmPr" class="ci sel"></select></div><div><label for="cmEdu">وكيل الشؤون التعليمية (وكيل)</label><select id="cmEdu" class="ci sel"></select></div><div><label for="cmCn">الموجه الطلابي</label><select id="cmCn" class="ci sel"></select></div></div>
@@ -388,7 +388,8 @@ details.vc[open]>summary,.rpc[open]>summary{border-bottom:0;padding-bottom:8px;m
   </section></div>
   <div class="pane" id="p-e" hidden><section class="card">
     <div class="hd"><h2>الإعانة والمكافأة</h2>
-      <label class="sw"><input type="checkbox" id="eOn"><span class="knob"></span><b id="eLab">مغلقة</b></label></div>
+      <div class="row"><label for="eOwn" class="muted">صاحب التسجيل</label><select id="eOwn" class="ci sel"><option value="agent">الوكيل</option><option value="counselor">الموجه الطلابي</option></select><label class="sw"><input type="checkbox" id="eOn"><span class="knob"></span><b id="eLab">مغلقة</b></label></div></div>
+    <div id="eNote" class="nl" hidden></div>
     <div id="eOff" class="hud"><strong>الإعانة والمكافأة مغلقة</strong><div class="muted">يفعّلها الوكيل من المفتاح أعلاه لتبدأ باستخدام السجل، وهي مغلقة افتراضيًا. ويطّلع المدير على السجل.</div></div>
     <div id="eOnBox" hidden>
       <div class="dp" id="eForm"><div class="t">إضافة مستحق</div>
@@ -464,7 +465,7 @@ details.vc[open]>summary,.rpc[open]>summary{border-bottom:0;padding-bottom:8px;m
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="dash-base.js?v=2026-10-20.1"></script>
 <script src="form-header.js?v=2026-10-16.4"></script>
-<script src="sa-forms.js?v=2026-10-24.4"></script>
+<script src="sa-forms.js?v=2026-10-27.1"></script>
 <script>
 const ST_MARKUP = document.getElementById('stTpl').innerHTML;
 /* وكيل الشؤون الطلابية — المرحلة ١ (البطاقات) والمرحلة ٢ (غياب الطلاب):
@@ -1051,7 +1052,7 @@ Dash.boot({
           aidCfg = base.collection('aidCfg').doc('main'), apCol = base.collection('approvals'), fmRef = base.collection('formation').doc(period);
     const circRoot = db.collection('circulars').doc(sid), circItems = circRoot.collection('items');
     const ROLEN = {agent:'وكيل', counselor:'موجه طلابي', assistant:'كادر إداري', teacherAssistant:'مساعد معلم', teacher:'معلم'};
-    let STAFF = [], CMT = null, FM = null, FMSIG = {}, MN = [], MSIG = new Map(), HR = [], AIDS = [], AIDON = false, APR = new Map();
+    let STAFF = [], CMT = null, FM = null, FMSIG = {}, MN = [], MSIG = new Map(), HR = [], AIDS = [], AIDON = false, AIDOWN = 'agent', APR = new Map();
     const ordA = (a,b)=>String(a).localeCompare(String(b),'ar');
     async function loadStaff(){
       STAFF = [];
@@ -1075,7 +1076,7 @@ Dash.boot({
       MN = mn.docs.map(d=>Object.assign({id:d.id}, d.data()));
       HR = hr.docs.map(d=>Object.assign({id:d.id}, d.data()));
       AIDS = ac.docs.map(d=>Object.assign({id:d.id}, d.data()));
-      AIDON = !!(cf && cf.exists && cf.data().on);
+      AIDON = !!(cf && cf.exists && cf.data().on); AIDOWN = (cf && cf.exists && cf.data().owner) || 'agent';
       APR = new Map(ap.docs.map(d=>[d.id, d.data()]));
       await Promise.all([loadStaff(), loadSigs(), loadFm()]);
     }
@@ -1100,7 +1101,7 @@ Dash.boot({
       try{ await cmCol.doc(period).set(rec); }catch(er){ fail(er); return; }
       CMT = rec; lRender(); toast('حُفظ تشكيل اللجنة. ارفع الآن خطاب قرار التشكيل للمدير');
     };
-    const cmMembers = ()=>CMT ? [{id:CMT.pres.id, name:CMT.pres.name, role:'رئيسًا'}, {id:CMT.edu.id, name:CMT.edu.name, role:'عضوًا'}, {id:CMT.cn.id, name:CMT.cn.name, role:'عضوًا'}].concat(CMT.t.map(x=>({id:x.id, name:x.name, role:'عضوًا'}))) : [];
+    const cmMembers = ()=>CMT ? [{id:CMT.pres.id, name:CMT.pres.name, role:'رئيسًا'}, {id:CMT.edu.id, name:CMT.edu.name, role:'عضوًا'}, {id:CMT.cn.id, name:CMT.cn.name, role:'مقررًا'}].concat(CMT.t.map(x=>({id:x.id, name:x.name, role:'عضوًا'}))) : [];
 
     /* ---- خطاب قرار تشكيل اللجنة: يرفعه الوكيل، يعتمده المدير (رقم القرار وتاريخ التعميم)، ثم يصل الرئيس والأعضاء تعميمًا للتوقيع ---- */
     async function loadFm(){
@@ -1117,7 +1118,7 @@ Dash.boot({
       let tag='', cls='warn', body='';
       if(!FM || !fmSame()){
         tag = FM ? 'تغيّر التشكيل — يلزم خطاب جديد' : 'لم يُرفع خطاب التشكيل'; cls='bad';
-        body = canEdit ? '<div class="muted">يُرفع خطاب «قرار تشكيل لجنة التوجيه الطلابي» للمدير، فيدخل رقم القرار وتاريخ التعميم ويعتمده، ثم يصل الرئيس والأعضاء في «التعاميم» للتوقيع.</div><div class="row"><button type="button" class="btn solid" id="fmSend">رفع الخطاب للمدير</button></div>' : '<div class="muted">لم يرفع الوكيل خطاب التشكيل بعد.</div>';
+        body = canEdit ? '<div class="muted">يُرفع خطاب «قرار تشكيل لجنة التوجيه والإرشاد» للمدير، فيدخل رقم القرار وتاريخ التعميم ويعتمده، ثم يصل الرئيس والأعضاء في «التعاميم» للتوقيع.</div><div class="row"><button type="button" class="btn solid" id="fmSend">رفع الخطاب للمدير</button></div>' : '<div class="muted">لم يرفع الوكيل خطاب التشكيل بعد.</div>';
       }else if(FM.st==='sent'){
         tag = 'بانتظار اعتماد المدير';
         body = env.isSA ? '<div class="fgrid"><div><label for="fmNo">رقم القرار</label><input type="text" id="fmNo" class="ci" style="width:100%"></div><div><label for="fmDt">تاريخ التعميم</label><input type="date" id="fmDt" value="'+dk+'"></div></div><div class="row"><button type="button" class="btn solid" id="fmOk">اعتماد وإرسال كتعميم للتوقيع</button></div>'
@@ -1151,7 +1152,7 @@ Dash.boot({
           await db.runTransaction(async tx=>{
             const sn = await tx.get(circRoot), next = sn.exists ? (sn.data().nextNumber||1) : 1;
             tx.set(circRoot, {nextNumber:next+1}, {merge:true});
-            tx.set(itemRef, {number:next, title:'قرار تشكيل لجنة التوجيه الطلابي', mandatory:true, recipients:FM.memberIds, pageCount:0, type:'committeeFormation', period,
+            tx.set(itemRef, {number:next, title:'قرار تشكيل لجنة التوجيه والإرشاد', mandatory:true, recipients:FM.memberIds, pageCount:0, type:'committeeFormation', period,
               formation:{school:hd.school||env.school.name||'', eduDept:hd.edu||env.school.eduDept||'', year:hd.year||'', decNo:no, decDate:dt, dateH:hijL(dt), president:FM.pres, members},
               createdBy:env.me.id, createdByName:env.me.name, createdAt:now, approvedAt:now, approvedByName:env.me.name});
           });
@@ -1312,21 +1313,30 @@ Dash.boot({
 
     /* ---- الإعانة والمكافأة (مغلقة افتراضيًا) ---- */
     function eRender(){
-      $('#eOn').checked = AIDON; $('#eOn').disabled = !canEdit; $('#eLab').textContent = AIDON?'مفتوحة':'مغلقة'; $('#eOff').hidden = AIDON; $('#eOnBox').hidden = !AIDON; $('#eForm').hidden = !canEdit;
+      const eMine = canEdit && AIDOWN==='agent';
+      $('#eOn').checked = AIDON; $('#eOn').disabled = !canEdit; $('#eLab').textContent = AIDON?'مفتوحة':'مغلقة'; $('#eOff').hidden = AIDON; $('#eOnBox').hidden = !AIDON; $('#eForm').hidden = !eMine;
+      $('#eOwn').value = AIDOWN; $('#eOwn').disabled = !(canEdit || canApprove);
+      $('#eNote').hidden = !(AIDON && AIDOWN==='counselor'); $('#eNote').textContent = 'التسجيل حاليًا من اختصاص الموجه الطلابي، وتطّلع على السجل دون تعديل.';
       const cl = [...new Set(RO.map(s=>s.cls))].sort(ordA), cur = $('#eC').value || cl[0] || '';
       $('#eC').innerHTML = cl.map(c=>'<option'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');
       $('#eN').innerHTML = RO.filter(s=>s.cls===$('#eC').value).map(s=>'<option value="'+esc(s.seat)+'">'+esc(s.name)+'</option>').join('');
-      $('#eBody').innerHTML = AIDS.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.className)+'</td><td><span class="tag '+(x.type==='إعانة'?'warn':'ok')+'">'+esc(x.type)+'</span></td><td>'+A(esc(x.dateH||''))+'</td><td>'+(canEdit?'<button type="button" class="btn danger" data-rm="'+x.id+'">حذف</button>':'')+'</td></tr>').join('') || '<tr><td colspan="5" class="muted">لا مستحقين.</td></tr>';
+      $('#eBody').innerHTML = AIDS.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.className)+'</td><td><span class="tag '+(x.type==='إعانة'?'warn':'ok')+'">'+esc(x.type)+'</span>'+(x.byName?'<div class="muted">سجّله: '+esc(x.byName)+' ('+esc(x.byRole||'الوكيل')+')</div>':'')+'</td><td>'+A(esc(x.dateH||''))+'</td><td>'+(eMine?'<button type="button" class="btn danger" data-rm="'+x.id+'">حذف</button>':'')+'</td></tr>').join('') || '<tr><td colspan="5" class="muted">لا مستحقين.</td></tr>';
     }
     $('#eOn').addEventListener('change', async ()=>{
       const on = $('#eOn').checked;
       try{ await aidCfg.set({on, updatedAt:Date.now(), updatedBy:env.me.id}, {merge:true}); }catch(er){ fail(er); $('#eOn').checked=!on; return; }
       AIDON = on; eRender();
     });
+    $('#eOwn').addEventListener('change', async ()=>{
+      const v = $('#eOwn').value;
+      try{ await aidCfg.set({owner:v, updatedAt:Date.now(), updatedBy:env.me.id}, {merge:true}); }catch(er){ fail(er); $('#eOwn').value = AIDOWN; return; }
+      AIDOWN = v; eRender(); toast(v==='counselor' ? 'صار التسجيل للموجه الطلابي' : 'صار التسجيل للوكيل');
+    });
     $('#eC').addEventListener('change', eRender);
     $('#eAdd').onclick = async ()=>{
       const seat = $('#eN').value, s = RO.find(x=>x.seat===seat); if(!s){ toast('اختر الطالب'); return; }
-      const dg = $('#eD').value || dk, ref = aidCol.doc(), rec = {seat, name:s.name, className:s.cls, type:$('#eT').value, dateG:dg, dateH:hijL(dg), createdAt:Date.now(), createdBy:env.me.id};
+      const dg = $('#eD').value || dk, ref = aidCol.doc(), rec = {seat, name:s.name, className:s.cls, type:$('#eT').value, dateG:dg, dateH:hijL(dg), createdAt:Date.now(), createdBy:env.me.id, byName:env.me.name, byRole:'الوكيل'};
+      if(AIDOWN!=='agent'){ toast('التسجيل حاليًا للموجه الطلابي'); return; }
       try{ await ref.set(rec); }catch(er){ fail(er); return; }
       AIDS.push(Object.assign({id:ref.id}, rec)); eRender(); toast('أُضيف المستحق');
     };

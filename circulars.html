@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-24.2 — عرض تعميم «محضر لجنة التوجيه» (committeeMinutes) و«قرار تشكيل لجنة التوجيه الطلابي» (committeeFormation) -->
+<!-- إصدار: 2026-10-27.1 — عرض تعميم «محضر لجنة التوجيه» (committeeMinutes) و«قرار تشكيل لجنة التوجيه والإرشاد» (committeeFormation) -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -545,14 +545,14 @@ function minutesHtml(m, c){
     '<b>الأعضاء الحاضرون:</b><table style="width:100%;border-collapse:collapse;margin-top:6px" border="1" cellpadding="6"><tr><th>م</th><th>الاسم</th><th>عمله في اللجنة</th></tr>'+mem+'</table>'+
     (c && c.approvedAt?'<div class="alert ok" style="margin-top:10px">اعتمد المدير هذا المحضر.</div>':'');
 }
-/* قرار تشكيل لجنة التوجيه الطلابي (يصدره المدير بعد اعتماده من وكيل الشؤون الطلابية): يُعرض نصًا للاطّلاع والتوقيع الإلزامي */
+/* قرار تشكيل لجنة التوجيه والإرشاد (يصدره المدير بعد اعتماده من وكيل الشؤون الطلابية): يُعرض نصًا للاطّلاع والتوقيع الإلزامي */
 function formationHtml(m, c){
   const A = n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
-  const mem = (m.members||[]).map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.job||'')+'</td><td>عضوًا</td></tr>').join('');
+  const mem = (m.members||[]).map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.job||'')+'</td><td>'+(x.job==='الموجه الطلابي'?'مقررًا':'عضوًا')+'</td></tr>').join('');
   return '<div class="sub" style="margin-top:10px">'+esc(m.school||'')+(m.eduDept?' — '+esc(m.eduDept):'')+'</div>'+
-    '<h4 style="margin:10px 0">قرار تشكيل لجنة التوجيه الطلابي</h4>'+
+    '<h4 style="margin:10px 0">قرار تشكيل لجنة التوجيه والإرشاد</h4>'+
     '<div class="sub">رقم القرار: '+A(esc(m.decNo||''))+' — التاريخ: '+A(esc(m.dateH||''))+' هـ</div>'+
-    '<p style="line-height:2">بناءً على ما ورد في الدليل الإجرائي لقواعد السلوك والمواظبة، ولتحقيق بيئة مدرسية آمنة، تقرر تشكيل لجنة التوجيه الطلابي بالمدرسة على النحو الآتي:</p>'+
+    '<p style="line-height:2">بناءً على ما ورد في الدليل الإجرائي لقواعد السلوك والمواظبة، ولتحقيق بيئة مدرسية آمنة، تقرر تشكيل لجنة التوجيه والإرشاد بالمدرسة على النحو الآتي:</p>'+
     '<div><b>رئيس اللجنة:</b> '+esc((m.president||{}).name||'')+'</div>'+
     '<table style="width:100%;border-collapse:collapse;margin-top:6px" border="1" cellpadding="6"><tr><th>م</th><th>الاسم</th><th>الصفة</th><th>العمل في اللجنة</th></tr>'+mem+'</table>'+
     '<div class="alert ok" style="margin-top:10px">اعتمد المدير هذا القرار، والتوقيع على التعميم إلزامي للرئيس والأعضاء.</div>';

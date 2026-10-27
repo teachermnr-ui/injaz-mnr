@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-27.1 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
+<!-- إصدار: 2026-10-27.2 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -263,6 +263,8 @@ details.vc>summary,.rpc>summary{background:var(--sum-bg);border-radius:8px;paddi
 .rpc .rpn{white-space:normal;font-size:13px}
 .cnr,.tag.cnr{color:var(--bad);font-weight:800}
 details.vc[open]>summary,.rpc[open]>summary{border-bottom:0;padding-bottom:8px;margin-bottom:8px}
+tr.gone td{color:var(--muted)}
+tr.gone del{text-decoration:line-through}
 </style>
 <template id="stTpl">
 <div class="wrap">
@@ -1320,7 +1322,7 @@ Dash.boot({
       const cl = [...new Set(RO.map(s=>s.cls))].sort(ordA), cur = $('#eC').value || cl[0] || '';
       $('#eC').innerHTML = cl.map(c=>'<option'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');
       $('#eN').innerHTML = RO.filter(s=>s.cls===$('#eC').value).map(s=>'<option value="'+esc(s.seat)+'">'+esc(s.name)+'</option>').join('');
-      $('#eBody').innerHTML = AIDS.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.className)+'</td><td><span class="tag '+(x.type==='إعانة'?'warn':'ok')+'">'+esc(x.type)+'</span>'+(x.byName?'<div class="muted">سجّله: '+esc(x.byName)+' ('+esc(x.byRole||'الوكيل')+')</div>':'')+'</td><td>'+A(esc(x.dateH||''))+'</td><td>'+(eMine?'<button type="button" class="btn danger" data-rm="'+x.id+'">حذف</button>':'')+'</td></tr>').join('') || '<tr><td colspan="5" class="muted">لا مستحقين.</td></tr>';
+      $('#eBody').innerHTML = AIDS.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(x=>x.deleted?'<tr class="gone"><td><del>'+esc(x.name)+'</del></td><td><del>'+esc(x.className)+'</del></td><td><del>'+esc(x.type)+'</del></td><td><del>'+A(esc(x.dateH||''))+'</del></td><td><div class="muted">حُذف بواسطة: '+esc(x.deletedByName||'')+'</div></td></tr>':'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.className)+'</td><td><span class="tag '+(x.type==='إعانة'?'warn':'ok')+'">'+esc(x.type)+'</span>'+(x.byName?'<div class="muted">سجّله: '+esc(x.byName)+' ('+esc(x.byRole||'الوكيل')+')</div>':'')+'</td><td>'+A(esc(x.dateH||''))+'</td><td>'+(eMine?'<button type="button" class="btn danger" data-rm="'+x.id+'">حذف</button>':'')+'</td></tr>').join('') || '<tr><td colspan="5" class="muted">لا مستحقين.</td></tr>';
     }
     $('#eOn').addEventListener('change', async ()=>{
       const on = $('#eOn').checked;
@@ -1342,8 +1344,10 @@ Dash.boot({
     };
     $('#eBody').addEventListener('click', async e=>{
       const b = e.target.closest('[data-rm]'); if(!b) return;
-      try{ await aidCol.doc(b.dataset.rm).delete(); }catch(er){ fail(er); return; }
-      AIDS = AIDS.filter(x=>x.id!==b.dataset.rm); eRender();
+      if(!confirm('حذف المستحق؟ سيبقى ظاهرًا مشطوبًا مع بيان من حذفه.')) return;
+      const dd = {deleted:true, deletedAt:Date.now(), deletedBy:env.me.id, deletedByName:env.me.name};
+      try{ await aidCol.doc(b.dataset.rm).set(dd, {merge:true}); }catch(er){ fail(er); return; }
+      const ax = AIDS.find(x=>x.id===b.dataset.rm); if(ax) Object.assign(ax, dd); eRender();
     });
 
     /* ---- موافقات أولياء الأمور (ورقية، يسجل الوكيل حالتها) ---- */

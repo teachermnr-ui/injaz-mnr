@@ -314,6 +314,7 @@ table{line-height:normal}
 
 <div id="toast" role="status" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--brand);color:var(--brand-fg);padding:8px 18px;border-radius:99px;font-weight:700;font-size:14px;z-index:30" hidden></div>
 </template>
+<script src="quick-access.js?v=2026-10-28.1"></script>
 <script src="nav-back.js?v=2026-10-28.1" defer></script>
 </head>
 <body>
@@ -1185,6 +1186,21 @@ Dash.boot({
     await loadSem();
     topStats(); visitsStat();
     dRender(); sRender(); lRender();
+
+    /* ---- الوصول السريع (أول تبويب) ---- */
+    try{
+      let q = null; const G = (t,sub)=>()=>q && q.go(t,sub);
+      q = QA.install({ style:'rows', stats:'.stats', cards:()=>{
+        const waitAcc = LOG.acc.filter(a=>a.status==='wait').length;
+        const flagged = T.filter((t,i)=>DK.some(k=>dApplies(i,k[0]) && dBad(i,k[0]))).length;
+        return [
+          {t:'الإشعارات والمساءلات', n:LOG.notices.length+LOG.acc.length, p:waitAcc, l:'بانتظار الاعتماد', go:G('l')},
+          {t:'متابعة المعلمين', n:T.length, p:flagged, l:'لديهم ملاحظات اليوم', go:G('m'), tabs:[['المتابعات اليومية',G('m','#subTabs [data-t="d"]')],['متابعات الفصل الدراسي',G('m','#subTabs [data-t="s"]')]]},
+          {t:'تقرير المتابعات اليومية', n:T.length, l:'معلمًا', go:G('w')},
+          {t:'تقرير المتابعات الفصلية', n:T.length, l:'معلمًا', go:G('r')},
+          {t:'لجنة التوجيه الطلابي', n:6, l:'أعضاء', go:G('u')}
+        ]; } });
+    }catch(e){ console.warn('QA', e); }
   }
 });
 </script>

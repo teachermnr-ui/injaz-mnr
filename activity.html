@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="quick-access.js?v=2026-10-28.1"></script>
 <script src="nav-back.js?v=2026-10-28.1" defer></script>
 </head>
 <body>
@@ -31,7 +32,7 @@
 (function(){
 const { esc, arN, $, $$, CLUBS_DEFAULT, DOMAINS, GENERAL_TEMPLATE, DAYS, PLAN_ST, ST_CLS } = ACT;
 const N = arN;
-const S = { env:null, canEdit:false, isSA:false, isCoord:false, tab:'summary', clubId:null, clubTab:'members', genTab:'events', marks:[], signs:{}, sigImg:{},
+const S = { env:null, canEdit:false, isSA:false, isCoord:false, tab:'quick', qaSub:'i', clubId:null, clubTab:'members', genTab:'events', marks:[], signs:{}, sigImg:{},
   cfg:null, council:null, meetings:[], clubs:[], events:[], general:[], broadcast:null, assigns:[], opens:[], staff:null, roster:null };
 
 /* ====================== التحميل ====================== */
@@ -72,7 +73,7 @@ function tabsDef(){
   const bClubs = S.isSA ? pendingAssigns().length : 0;          // اعتماد التكليفات صار داخل بطاقة «التكليفات الرسمية»
   const bDocs = S.canEdit ? pendingDocs().length : 0;
   const pb = S.isSA ? submittedCount() : 0;
-  return [['summary','الملخص'],['council','مجلس النشاط'],['clubs','التكليفات والأندية',bClubs],['general','الأنشطة والمسار العام'],['plan','الخطة العامة',pb],['docs','التوثيقات',bDocs],['broadcast','الإذاعة'],['reports','التقارير']];
+  return [['quick','الوصول السريع'],['summary','الملخص'],['council','مجلس النشاط'],['clubs','التكليفات والأندية',bClubs],['general','الأنشطة والمسار العام'],['plan','الخطة العامة',pb],['docs','التوثيقات',bDocs],['broadcast','الإذاعة'],['reports','التقارير']];
 }
 function barHtml(){
   return tabsDef().map(x=>'<button class="ac-tab'+(S.tab===x[0]?' on':'')+'" data-a="tab" data-v="'+x[0]+'">'+x[1]+(x[2]?'<span class="n">'+N(x[2])+'</span>':'')+'</button>').join('');
@@ -91,7 +92,7 @@ function paint(){
   if(S._ctab !== S.tab){ ACT.centerTab(bar, S._ctab !== null); S._ctab = S.tab; }
   const body = $('#acBody');
   if(!S.cfg || !S.cfg.active){ body.innerHTML = activationView(); return; }
-  const fn = { summary:vSummary, council:vCouncil, clubs:vClubs, plan:vPlan, general:vGeneral, docs:aDocs, broadcast:vBroadcast, reports:vReports }[S.tab];
+  const fn = { quick:vQuick, summary:vSummary, council:vCouncil, clubs:vClubs, plan:vPlan, general:vGeneral, docs:aDocs, broadcast:vBroadcast, reports:vReports }[S.tab];
   body.innerHTML = fn();
   $$('#acBody .ac-tabs').forEach(b=>ACT.centerTab(b,false));
   if(S.tab==='clubs' && S.clubId) afterClubPaint();
@@ -158,6 +159,31 @@ function vSummary(){
     +'<div class="dh-card"><h3>نسبة تنفيذ الخطة: '+N(Math.round(ps.pct*100))+'٪</h3><div class="ac-bar"><i style="width:'+Math.round(ps.pct*100)+'%"></i></div><div class="dh-sub" style="margin-top:4px">'+N(ps.done)+' من '+N(ps.total)+' بنود منفَّذة</div></div>'
     +'<div class="dh-grid"><div class="dh-card"><h3>التنبيهات</h3><div class="dh-list">'+(alerts.length?alerts.map(a=>'<div class="dh-item">'+esc(a)+'</div>').join(''):'<div class="dh-empty">لا توجد تنبيهات.</div>')+'</div></div>'
     +'<div class="dh-card"><h3>الأنشطة الموثّقة</h3><div class="dh-list">'+(docs.length?docs.map(d=>'<div class="dh-item"><span>'+esc(d[0])+'</span>'+chip('وثّقه '+N(d[1])+' معلم')+'</div>').join(''):'<div class="dh-empty">لا توجد توثيقات بعد.</div>')+'</div><div class="dh-sub" style="margin-top:6px">تفاصيل المعلمين في تبويب التقارير.</div></div></div>';
+}
+
+
+/* ====================== الوصول السريع ====================== */
+function qaCards(){
+  const ac = activeClubs(), ps = planStats();
+  const goT = (t,fn)=>()=>{ S.tab=t; S.clubId = t==='clubs'?S.clubId:null; if(fn) fn(); paint(); };
+  const pendEv = S.events.filter(x=>x.approvalStatus==='pending').length;
+  return [
+    {t:'الملخص', n:ac.length, l:'نادٍ مفعّل', go:goT('summary')},
+    {t:'مجلس النشاط', n:S.council ? 2+(S.council.members||[]).length : 0, l:'الإجمالي', go:goT('council')},
+    {t:'التكليفات والأندية', n:ac.length, p:S.isSA?pendingAssigns().length:null, l:'بانتظار الاعتماد', go:goT('clubs')},
+    {t:'الأنشطة والمسار العام', n:S.events.length, p:pendEv, l:'بانتظار', go:goT('general'), tabs:[['الأنشطة',goT('general',()=>{S.genTab='events';})],['المتاح للمعلمين',goT('general',()=>{S.genTab='open';})]]},
+    {t:'الخطة العامة', n:ps.total, p:S.isSA?submittedCount():null, l:'بانتظار الاعتماد', go:goT('plan')},
+    {t:'التوثيقات', n:S.events.length, p:S.canEdit?pendingDocs().length:null, l:'بانتظار الاعتماد', go:goT('docs')},
+    {t:'الإذاعة', n:((S.broadcast&&S.broadcast.weeks)||[]).length, l:'الإجمالي', go:goT('broadcast')},
+    {t:'التقارير', n:'—', l:'', go:goT('reports')}
+  ];
+}
+let QA_CUR = [];
+function vQuick(){
+  QA.css();
+  QA_CUR = qaCards();
+  return '<div class="ac-tabs sub"><button class="ac-tab'+(S.qaSub==='i'?' on':'')+'" data-a="qa-sub" data-v="i">المؤشرات</button><button class="ac-tab'+(S.qaSub==='q'?' on':'')+'" data-a="qa-sub" data-v="q">الوصول السريع</button></div>'
+    + (S.qaSub==='q' ? QA.html('bar', QA_CUR) : vSummary());
 }
 
 /* ====================== مجلس النشاط ====================== */
@@ -944,6 +970,9 @@ async function reviewDoc(id, st, note){
   await refresh(['events','marks','general','clubs']);
 }
 const H = {
+  'qa-sub': el=>{ S.qaSub=el.dataset.v; paint(); },
+  'qa-c': el=>{ const c=QA_CUR[+el.dataset.v]; if(c&&c.go) c.go(); },
+  'qa-t': el=>{ const p=el.dataset.v.split('|'); const c=QA_CUR[+p[0]]; if(c&&c.tabs) c.tabs[+p[1]][1](); },
   'tab': el=>{ S.tab=el.dataset.v; S.clubId = S.tab==='clubs'?S.clubId:null; paint(); },
   'activate': activate,
   'council-form': councilForm,

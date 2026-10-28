@@ -73,7 +73,7 @@ function tabsDef(){
   const bClubs = S.isSA ? pendingAssigns().length : 0;          // اعتماد التكليفات صار داخل بطاقة «التكليفات الرسمية»
   const bDocs = S.canEdit ? pendingDocs().length : 0;
   const pb = S.isSA ? submittedCount() : 0;
-  return [['quick','الوصول السريع'],['summary','الملخص'],['council','مجلس النشاط'],['clubs','التكليفات والأندية',bClubs],['general','الأنشطة والمسار العام'],['plan','الخطة العامة',pb],['docs','التوثيقات',bDocs],['broadcast','الإذاعة'],['reports','التقارير']];
+  return [['quick','الوصول السريع'],['council','مجلس النشاط'],['clubs','التكليفات والأندية',bClubs],['general','الأنشطة والمسار العام'],['plan','الخطة العامة',pb],['docs','التوثيقات',bDocs],['broadcast','الإذاعة'],['reports','التقارير']];
 }
 function barHtml(){
   return tabsDef().map(x=>'<button class="ac-tab'+(S.tab===x[0]?' on':'')+'" data-a="tab" data-v="'+x[0]+'">'+x[1]+(x[2]?'<span class="n">'+N(x[2])+'</span>':'')+'</button>').join('');
@@ -168,7 +168,6 @@ function qaCards(){
   const goT = (t,fn)=>()=>{ S.tab=t; S.clubId = t==='clubs'?S.clubId:null; if(fn) fn(); paint(); };
   const pendEv = S.events.filter(x=>x.approvalStatus==='pending').length;
   return [
-    {t:'الملخص', n:ac.length, l:'نادٍ مفعّل', go:goT('summary')},
     {t:'مجلس النشاط', n:S.council ? 2+(S.council.members||[]).length : 0, l:'الإجمالي', go:goT('council')},
     {t:'التكليفات والأندية', n:ac.length, p:S.isSA?pendingAssigns().length:null, l:'بانتظار الاعتماد', go:goT('clubs')},
     {t:'الأنشطة والمسار العام', n:S.events.length, p:pendEv, l:'بانتظار', go:goT('general'), tabs:[['الأنشطة',goT('general',()=>{S.genTab='events';})],['المتاح للمعلمين',goT('general',()=>{S.genTab='open';})]]},

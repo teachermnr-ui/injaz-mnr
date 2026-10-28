@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-28.7 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
+<!-- إصدار: 2026-10-28.8 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -1229,7 +1229,7 @@ Dash.boot({
       const pool = all.filter(inPool).length + rp.length;
       const ann = live(D.plans).filter(x=>x.kind==='annual');
       const ic = homeCases('indiv').filter(c=>caseIst(c)==='open').length;
-      const hs = live(D.hasr), cr = live(D.care), rps = live(D.reports||[]);
+      const hs = live(D.hasr), cr = live(D.care);
       const Z = n=>n?A(n):'٠';
       const CARDS = [
         ['الخطة السنوية', ann.length, ann.filter(x=>x.st==='مخطط').length, 'var(--brand)', 'plan', SUBS.plan],
@@ -1240,9 +1240,9 @@ Dash.boot({
         ['الإرشاد الفردي والجمعي', live(D.sessions).length, ic, 'var(--brand)', 'sess', SUBS.sess],
         ['الحالات الخاصة والسرية', hs.length, hs.filter(x=>!x.action).length, 'var(--bad)', 'hasr', SUBS.hasr],
         ['رعاية فئات الطلاب', cr.length, cr.filter(x=>!x.result).length, 'var(--brand)', 'care', SUBS.care],
-        ['التقارير', rps.length, rps.filter(x=>x.st!=='done').length, 'var(--brand)', 'rep', [['l','تقارير البنود']]]
+        ['التقارير', Object.keys(REP).length, null, 'var(--brand)', 'rep', [['l','تقارير البنود']]]
       ];
-      return '<section class="qa">'+CARDS.map(c=>'<div class="qc" style="--k:'+c[3]+'"><div class="top"><b>'+A(c[1])+'</b><div><span class="t">'+c[0]+'</span><small>'+Z(c[2])+' مفتوحة</small></div></div><div class="tb">'+c[5].map(t=>'<button type="button" data-go="'+c[4]+'|'+t[0]+'">'+t[1]+'</button>').join('')+'</div></div>').join('')+'</section>'
+      return '<section class="qa">'+CARDS.map(c=>'<div class="qc" style="--k:'+c[3]+'"><div class="top"><b>'+A(c[1])+'</b><div><span class="t">'+c[0]+'</span><small>'+(c[2]==null?'جاهزة للطباعة':Z(c[2])+' مفتوحة')+'</small></div></div><div class="tb">'+c[5].map(t=>'<button type="button" data-go="'+c[4]+'|'+t[0]+'">'+t[1]+'</button>').join('')+'</div></div>').join('')+'</section>'
         +'<section class="card"><div class="hd"><h2>متابعات مستحقة</h2></div><div class="lst">'+caseCards(c=>c.st!=='closed' && c.nextFollow && c.nextFollow<=dk)+'</div></section>';
     }
 

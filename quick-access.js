@@ -1,4 +1,4 @@
-/* quick-access.js — إصدار 2026-10-28.1
+/* quick-access.js — إصدار 2026-10-28.2
    تبويب «الوصول السريع» الأول في صفحات الوكلاء ومنصة النشاط: تبويبان داخليان («المؤشرات» و«الوصول السريع»)،
    وبطاقات تفتح الأقسام وتبويباتها الفرعية. لكل صفحة نمط شكل: head | rows | ring | bar.
    cards: [{t:العنوان, n:الإجمالي, p:عدد بانتظار أو null, l:نص المعنى, go:()=>…, tabs:[[نص, ()=>…],…]}] */
@@ -91,5 +91,16 @@
   }
   /* قالب البنية (يُنسخ إلى قالب كل صفحة) */
   var SHELL = '<div class="pane" id="p-q"><section class="card"><div class="qa-sub"><button type="button" class="on" data-qs="i">المؤشرات</button><button type="button" data-qs="q">الوصول السريع</button></div><div class="qa-i">@@STATS@@</div><div class="qa-q" hidden></div></section></div>';
-  window.QA = { mount: mount, install: install, bind: bind, shell: SHELL, A: A, html: html, css: css };
+  /* بعد الانتقال من بطاقة: يُظهر التبويب الرئيسي والفرعي النشطين داخل شريطيهما (على الجوال قد يكونان خارج الرؤية) */
+  function reveal(){
+    [30, 150, 400, 900].forEach(function(ms){ setTimeout(function(){
+      document.querySelectorAll('nav.tabs,.tabs,[role=tablist],.seg,.subs,.ac-tabs').forEach(function(c){
+        var a = c.querySelector('.active,.on,[aria-selected="true"]'); if (!a || c.scrollWidth <= c.clientWidth + 2) return;
+        var r = a.getBoundingClientRect(), q = c.getBoundingClientRect();
+        if (r.left < q.left || r.right > q.right) c.scrollLeft += (r.left + r.right) / 2 - (q.left + q.right) / 2;
+      });
+    }, ms); });
+  }
+  document.addEventListener('click', function(e){ if (e.target.closest && e.target.closest('[data-qc],[data-qt]')) reveal(); }, true);
+  window.QA = { reveal: reveal, mount: mount, install: install, bind: bind, shell: SHELL, A: A, html: html, css: css };
 })();

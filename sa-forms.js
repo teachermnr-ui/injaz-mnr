@@ -166,7 +166,7 @@
       const ol = L=>'<ol>'+(L||[]).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>';
       return printDoc('محضر اجتماع لجنة التوجيه والإرشاد', m.period||C.period, [], (ctx,M)=>{
         const rows = (c.members||[]).filter(x=>x.present).map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.role)+'</td><td>'+(sg[x.id]&&sg[x.id].image?'<img src="'+sg[x.id].image+'" style="height:34px" alt="">':'')+'</td></tr>').join('');
-        return '<table><tr><th>اليوم</th><td>'+esc(c.dayName||'')+'</td><th>التاريخ</th><td>'+A(esc(c.dateH||''))+' هـ</td><th>الوقت</th><td>'+fmtT(c.time)+'</td></tr></table>'
+        return '<table><tr><th>اليوم</th><td>'+esc(c.dayName||'')+'</td><th>التاريخ</th><td>'+A(esc(c.dateH||''))+' هـ</td><th>الوقت</th><td>'+fmtT(c.time)+'</td></tr>'+(c.place?'<tr><th>المكان</th><td colspan="5">'+esc(c.place)+'</td></tr>':'')+'</table>'
           +'<div class="ln"><b>نقاط النقاش خلال الاجتماع:</b></div>'+ol(c.points)+'<div class="ln"><b>ومما سبق تم إقرار والموافقة على التوصيات التالية وهي:</b></div>'+ol(c.recs)
           +'<div class="ln"><b>وبذلك تم التوقيع على المحضر والتوصيات:</b></div><table><thead><tr><th>م</th><th>الاسم</th><th>عمله في اللجنة</th><th>التوقيع</th></tr></thead><tbody>'+rows+'</tbody></table>'
           +mgrRow(M,Object.assign({},ctx,{principal:m.approvedByName||ctx.principal}),'e'); }, async()=>{ sg = (typeof getSig==='function' ? await getSig() : getSig) || {}; });

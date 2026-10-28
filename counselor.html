@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-27.2 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
+<!-- إصدار: 2026-10-28.2 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -286,7 +286,7 @@ details.vc[open]>summary,.rpc[open]>summary{border-bottom:0;padding-bottom:8px;m
 .sc{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .sec2{margin-top:6px;font-weight:800}
 
-/* === 2026-10-27.2 — تكييف الجوال وتوحيد التبويبات === */
+/* === 2026-10-28.1 — تكييف الجوال وتوحيد التبويبات === */
 html,body{max-width:100%;overflow-x:hidden}
 .wrap,#body,.card,.pane,section{min-width:0;max-width:100%}
 .top h1,.top .sub{overflow-wrap:anywhere}
@@ -312,6 +312,18 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 tr.gone td{color:var(--muted)}
 tr.gone del{text-decoration:line-through}
+
+/* 2026-10-28 — التعديلات التنظيمية */
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.g3 .btn,.bgrid .btn{white-space:normal;text-align:center;width:100%;padding:9px 8px;line-height:1.5}
+.gbtn.red{background:var(--bad-soft);color:var(--bad);border:1px solid var(--bad)}
+.gbtn.green{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)}
+.gbtn:disabled{opacity:.55;cursor:not-allowed}
+.bgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
+@media (min-width:701px){.bgrid{grid-template-columns:repeat(3,1fr)}}
+.frz{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;margin:8px 0}
+.grph{margin:12px 0 4px;font-size:15px}
+.seg.ist{margin:10px 0}
 </style>
 </head>
 <body>
@@ -352,7 +364,7 @@ const TABS = [
 const SUBS = {
   inbox:[['a','إحالات وكيل شؤون الطلاب'],['b','المحالون إلى لجنة التوجيه والإرشاد'],['c','قرارات وتوصيات لجنة التوجيه والإرشاد'],['d','الحالات عالية الخطورة'],['e','تقارير تحليل النتائج من المعلمين']],
   plan:[['annual','الخطة السنوية للإرشاد الطلابي'],['prog','البرامج الإرشادية'],['career','التوجيه والإرشاد التعليمي والمهني'],['parents','لقاءات أولياء الأمور ومجالس الآباء'],['group','جماعة التوجيه والإرشاد']],
-  cases:[['list','الحالات'],['comp','السجل الشامل'],['plan','خطة تعديل السلوك'],['contacts','سجل التواصل'],['inc','سجل المواقف اليومية الطارئة']],
+  cases:[['list','الحالات'],['contacts','سجل التواصل'],['inc','سجل المواقف اليومية الطارئة']],
   sess:[['indiv','التوجيه الفردي'],['group','الإرشاد الجمعي']],
   hasr:[['psy','الحالات النفسية والانفعالية'],['soc','الحالات الاجتماعية'],['orph','الأيتام'],['aid','الإعانة والمكافأة'],['fu','متابعة الحالات الفردية (بالرموز)']],
   care:[['weak','المتأخرون دراسيًا'],['rep','المعيدون ومتكررو الرسوب'],['gift','المتفوقون دراسيًا والموهوبون'],['beh','المتميزون سلوكيًا'],['new','المستجدون'],['honor','كشف تكريم الطلاب']],
@@ -362,6 +374,7 @@ const SP = {first:'الفصل الدراسي الأول', second:'الفصل ا�
 const CASE_TYPES = ['سلوكية','دراسية','نفسية وانفعالية','اجتماعية وأسرية','صحية','أخرى'];
 const CASE_ST = {open:['مفتوحة','bad'], watch:['تحت المتابعة','warn'], closed:['مغلقة','ok']};
 
+const HMON = ['محرم','صفر','ربيع الأول','ربيع الآخر','جمادى الأولى','جمادى الآخرة','رجب','شعبان','رمضان','شوال','ذو القعدة','ذو الحجة'];
 /* ----- مواصفات النماذج المتكررة (جداول السجلات) ----- */
 const F = {
   date:{k:'date',l:'التاريخ',t:'date'}, time:{k:'time',l:'الوقت',t:'time'}, student:{k:'stu',l:'الطالب',t:'student',req:true},
@@ -369,15 +382,15 @@ const F = {
 };
 const SPEC = {
   plans:{
-    annual:{ fields:[{k:'goal',l:'الهدف',t:'textarea',req:true,w:1},{k:'act',l:'البرنامج أو النشاط',t:'text',req:true},{k:'target',l:'الفئة المستهدفة',t:'text'},{k:'when',l:'التوقيت',t:'text'},{k:'who',l:'المنفذ',t:'text'},{k:'st',l:'الحالة',t:'select',o:['مخطط','نُفذ','مؤجل']},F.note],
-      cols:[['الهدف',x=>x.goal],['النشاط',x=>x.act],['الفئة المستهدفة',x=>x.target],['التوقيت',x=>x.when],['المنفذ',x=>x.who],['الحالة',x=>x.st]] },
+    annual:{ fields:[{k:'goal',l:'الهدف',t:'textarea',req:true,w:1},{k:'act',l:'البرنامج أو النشاط',t:'text',req:true},{k:'target',l:'الفئة المستهدفة',t:'text'},{k:'month',l:'الشهر (هجري)',t:'select',opt0:'غير محدد',o:HMON},{k:'week',l:'الأسبوع',t:'select',opt0:'غير محدد',o:['الأول','الثاني','الثالث','الرابع','الخامس']},{k:'who',l:'المنفذ',t:'text'},{k:'st',l:'الحالة',t:'select',o:['مخطط','نُفذ','مؤجل']},F.note],
+      cols:[['الهدف',x=>x.goal],['النشاط',x=>x.act],['الفئة المستهدفة',x=>x.target],['الشهر',x=>x.month||x.when],['الأسبوع',x=>x.week],['المنفذ',x=>x.who],['الحالة',x=>x.st]] },
     prog:{ fields:[{k:'name',l:'اسم البرنامج',t:'text',req:true},{k:'ptype',l:'نوع البرنامج',t:'select',o:['نمائي','وقائي','علاجي']},{k:'target',l:'الفئة المستهدفة',t:'text'},{k:'goal',l:'الهدف',t:'textarea',w:1},{k:'from',l:'من تاريخ',t:'date'},{k:'to',l:'إلى تاريخ',t:'date'},{k:'st',l:'الحالة',t:'select',o:['مخطط','جارٍ','نُفذ']},{k:'result',l:'نتائج التنفيذ',t:'textarea',w:1}],
       cols:[['البرنامج',x=>x.name],['النوع',x=>x.ptype],['الفئة',x=>x.target],['من',x=>x.from],['إلى',x=>x.to],['الحالة',x=>x.st],['النتائج',x=>x.result]] },
     career:{ fields:[{k:'act',l:'النشاط',t:'text',req:true},{k:'target',l:'الصف أو الفئة',t:'text'},F.date,{k:'st',l:'الحالة',t:'select',o:['مخطط','نُفذ']},F.note],
       cols:[['النشاط',x=>x.act],['الفئة',x=>x.target],['التاريخ',x=>x.date],['الحالة',x=>x.st],['ملاحظات',x=>x.note]] },
     parents:{ fields:[{k:'ptype',l:'النوع',t:'select',o:['لقاء أولياء أمور','مجلس الآباء']},F.date,{k:'topic',l:'الموضوع',t:'text',req:true},{k:'attend',l:'عدد الحضور',t:'text'},{k:'result',l:'المخرجات والتوصيات',t:'textarea',w:1}],
       cols:[['النوع',x=>x.ptype],['التاريخ',x=>x.date],['الموضوع',x=>x.topic],['الحضور',x=>x.attend],['المخرجات',x=>x.result]] },
-    group:{ fields:[{k:'ptype',l:'البند',t:'select',o:['عضو في الجماعة','اجتماع','نشاط']},F.date,{k:'topic',l:'الاسم أو الموضوع',t:'text',req:true},{k:'members',l:'الأعضاء المشاركون',t:'textarea',w:1},{k:'result',l:'المخرجات',t:'textarea',w:1}],
+    group:{ fields:[{k:'ptype',l:'البند',t:'select',o:['اجتماع','نشاط']},F.date,{k:'topic',l:'الاسم أو الموضوع',t:'text',req:true},{k:'members',l:'الأعضاء المشاركون',t:'textarea',w:1},{k:'result',l:'المخرجات',t:'textarea',w:1}],
       cols:[['البند',x=>x.ptype],['التاريخ',x=>x.date],['الاسم أو الموضوع',x=>x.topic],['الأعضاء',x=>x.members],['المخرجات',x=>x.result]] }
   },
   contacts:{
@@ -424,6 +437,7 @@ Dash.boot({
     const dk = (()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
     const hij = k=>{ try{ const o={}; new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(k+'T12:00:00')).forEach(x=>o[x.type]=x.value); return A(o.year+'/'+o.month+'/'+o.day); }catch(e){ return ''; } };
     const dshow = k=>k ? hij(k)+'هـ' : '';
+    const cv = v=>{ v = String(v==null?'':v); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? dshow(v) : v; };
     const toast = m=>{ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toast.h); toast.h=setTimeout(()=>t.hidden=true,2800); };
     const fail = e=>{ console.error(e); toast('تعذّر الحفظ: '+(e && e.message ? e.message : e)); };
 
@@ -437,11 +451,11 @@ Dash.boot({
     let RAWN = [], RAWR = [], OTHER = null, OTHERLOADING = false;
     const mapTR = (raw,per)=>raw.filter(x=>x.period===per && x.studentSeat).map(x=>({id:x.id, seat:String(x.studentSeat), name:x.studentName||'', cls:x.className||'', st:x.trSt||'new', note:x.agentReport||'', why:x.trReason||x.referralReason||'', at:x.referredAt||x.createdAt||0}));
     const mapRP = (raw,per)=>raw.filter(x=>x.referralReason==='تقرير تحليل نتائج' && (!x.period || x.period===per));
-    let CS = [], D = {}, RO = [], VL = [], AB = [], MN = [], HR = [], TR = [], RP = [], AIDS = [], AIDCFG = {}, loaded = false;
+    let CS = [], D = {}, RO = [], VL = [], AB = [], MN = [], HR = [], TR = [], RP = [], AIDS = [], AIDCFG = {}, CMT = null, TASKS = [], CMRS = [], loaded = false;
     const get = (ref)=>ref.get().then(s=>s.docs.map(d=>Object.assign({id:d.id},d.data()))).catch(e=>{ console.error(e); return []; });
     async function loadAll(){
       const byP = c=>get(base.collection(c).where('period','==',period));
-      CS = await byP('cases'); COLS.forEach(c=>D[c]=[]);
+      CS = await byP('cases'); COLS.forEach(c=>D[c]=[]); D.stRec = [];
       if(mgrOnly){ loaded = true; return; }
       const r = await Promise.all([
         ...COLS.map(byP),
@@ -453,7 +467,11 @@ Dash.boot({
         get(db.collection('notes').where('schoolId','==',sid).where('trType','==','st')),
         get(db.collection('notes').where('recipients','array-contains',env.me.id)),
         get(sa.collection('aid')),
-        sa.collection('aidCfg').doc('main').get().then(d=>d.exists?d.data():{}).catch(()=>({}))]);
+        sa.collection('aidCfg').doc('main').get().then(d=>d.exists?d.data():{}).catch(()=>({})),
+        get(base.collection('stRec')),
+        sa.collection('committee').doc(period).get().then(d=>d.exists?d.data():null).catch(()=>null),
+        get(sa.collection('committeeTasks').where('period','==',period)),
+        get(sa.collection('cmRefs').where('period','==',period))]);
       COLS.forEach((c,i)=>D[c]=r[i]);
       const k = COLS.length, o = r[k];
       const cm = new Map((o.classes||[]).map(c=>[String(c.code),c]));
@@ -463,6 +481,7 @@ Dash.boot({
       RAWN = r[k+5]; RAWR = r[k+6]; TR = mapTR(RAWN, period);
       RP = mapRP(RAWR, period);
       AIDS = r[k+7]; AIDCFG = r[k+8] || {};
+      D.stRec = r[k+9]; CMT = r[k+10]; TASKS = r[k+11]; CMRS = r[k+12];
       loaded = true;
     }
     const lk = v=> v.k==='other' ? (v.stage==='ابتدائي'?'pri':'mid') : v.k;
@@ -476,6 +495,10 @@ Dash.boot({
     async function put(col, id, data){
       const ref = id ? base.collection(col).doc(id) : base.collection(col).doc();
       const rec = Object.assign({period}, data, who());
+      if(['cases','caseFiles','sessions','stRec'].includes(col)){
+        const sk = data.seat || (col==='stRec' ? id : ((col==='cases'||col==='caseFiles') ? (csOf(id)||{}).seat : (D.sessions.find(x=>x.id===id)||{}).seat));
+        if(sk && refSeats().has(String(sk))) rec.cmRef = true;
+      }
       await ref.set(rec, {merge:true});
       const row = Object.assign({id:ref.id}, rec);
       const arr = col==='cases' ? CS : D[col]; const i = arr.findIndex(x=>x.id===ref.id);
@@ -510,7 +533,7 @@ Dash.boot({
       }
       if(f.t==='students'){
         return '<div class="fld" style="grid-column:1/-1" data-stm="'+f.k+'"><label>'+f.l+'</label><div class="chips" data-cur></div>'
-          +'<div class="row"><select data-cls><option value="">إضافة صف كامل…</option>'+[...new Set(RO.map(x=>x.cls))].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'ar')).map(c=>'<option>'+esc(c)+'</option>').join('')+'</select><button type="button" class="btn" data-addcls="1">إضافة الصف كاملًا</button></div>'
+          +(f.noCls?'':'<div class="row"><select data-cls><option value="">إضافة صف كامل…</option>'+[...new Set(RO.map(x=>x.cls))].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'ar')).map(c=>'<option>'+esc(c)+'</option>').join('')+'</select><button type="button" class="btn" data-addcls="1">إضافة الصف كاملًا</button></div>')
           +'<input type="text" data-q placeholder="ابحث باسم الطالب لإضافته"><div class="resl" data-res></div></div>';
       }
       const lab = '<label for="f_'+f.k+'">'+f.l+(f.req?' *':'')+'</label>';
@@ -537,7 +560,7 @@ Dash.boot({
         if(pk){ const w = pk.closest('[data-stp],[data-stm]'); const s = RO.find(x=>x.seat===pk.dataset.pk); if(!s) return;
           const o = {seat:s.seat, name:s.name, className:s.cls};
           if(w.dataset.stp){ sel[w.dataset.stp] = o; w.querySelector('[data-cur]').innerHTML = '<span class="chip">'+esc(o.name)+' · '+esc(o.className)+'</span>'; }
-          else { const k=w.dataset.stm; if(!multi[k].some(x=>x.seat===o.seat)) multi[k].push(o); drawM(w); }
+          else { const k=w.dataset.stm, fd=fields.find(x=>x.k===k)||{}; if(!multi[k].some(x=>x.seat===o.seat)){ if(fd.max && multi[k].length>=fd.max){ toast('الحد الأقصى '+A(fd.max)+' طلاب'); return; } multi[k].push(o); } drawM(w); }
           w.querySelector('[data-q]').value=''; w.querySelector('[data-res]').innerHTML=''; return; }
         const ac = e.target.closest('[data-addcls]');
         if(ac){ const w = ac.closest('[data-stm]'), c = w.querySelector('[data-cls]').value; if(!c){ toast('اختر الصف أولًا'); return; }
@@ -589,7 +612,7 @@ Dash.boot({
     function printTable(title, cols, rows, o){
       o = o||{};
       return printHtml(title, (o.top||'')+'<table><thead><tr><th>م</th>'+cols.map(c=>'<th>'+esc(c[0])+'</th>').join('')+'</tr></thead><tbody>'
-        +(rows.map((r,i)=>'<tr><td>'+A(i+1)+'</td>'+cols.map(c=>'<td>'+esc(c[1](r)||'')+'</td>').join('')+'</tr>').join('') || '<tr><td colspan="'+(cols.length+1)+'">لا سجلات.</td></tr>')
+        +(rows.map((r,i)=>'<tr><td>'+A(i+1)+'</td>'+cols.map(c=>'<td>'+esc(cv(c[1](r)))+'</td>').join('')+'</tr>').join('') || '<tr><td colspan="'+(cols.length+1)+'">لا سجلات.</td></tr>')
         +'</tbody></table>'+(o.nosig?'':sigC()), {land:o.land!==false, extra:o.extra});
     }
 
@@ -621,9 +644,82 @@ Dash.boot({
         if(x.k===1) items.push({grp:'b', key:'a5_'+a.seat, seat:String(a.seat), name:a.name, cls:a.className, title:'غياب بدون عذر: إحالة إلى لجنة التوجيه والإرشاد', detail:'بلغ الغياب بدون عذر '+A(x.n)+' أيام', type:'دراسية', at:x.at||0, letter:true}); }); });
       HR.filter(h=>h.st==='approved').forEach(h=>items.push({grp:'d', key:'h_'+h.id, seat:String(h.seat), name:h.name, cls:h.className, title:'حالة عالية الخطورة معتمدة: '+(h.type||''), detail:h.desc||'', type:'نفسية وانفعالية', at:h.approvedAt||0, hr:h}));
       RP.forEach(n=>items.push({grp:'e', key:'r_'+n.id, seat:'', name:'', cls:n.className||'', title:n.text||'تقرير تحليل نتائج', detail:'من المعلم '+(n.fromName||''), at:n.createdAt||0, note:n, pdf:n.hasPdf}));
+      CS.filter(c=>c.cm).forEach(c=>{ if(!items.some(i=>i.grp==='b' && String(i.seat)===String(c.seat))) items.push({grp:'b', key:'cc_'+c.id, seat:String(c.seat), name:c.name, cls:c.className, title:'أُحيل إلى لجنة التوجيه والإرشاد: '+(c.src||c.type||''), detail:'إحالة من الموجه الطلابي', type:c.type||'', at:c.cmAt||0, letter:true}); });
       const seen = new Set(); return items.filter(i=>seen.has(i.key)?false:(seen.add(i.key),true)).sort((a,b)=>(b.at||0)-(a.at||0));
     }
     const done = it=>{ const d = inboxDoc(it.key); return !!(d && d.st==='handled'); };
+    const refSeats = ()=>new Set(inboxItems().filter(i=>i.grp==='b' && i.seat).map(i=>String(i.seat)));
+    const caseOfSeat = seat=>{ const L = CS.filter(c=>String(c.seat)===String(seat)).sort((a,b)=>(b.openedAt||0)-(a.openedAt||0)); return L.find(c=>c.st!=='closed') || L[0] || null; };
+    const IST = [['open','حالات مفتوحة'],['watch','تحت المتابعة'],['closed','حالات مغلقة'],['handled','حالات عولجت']];
+    /* بيت واحد لكل ملف: الإحالة الواردة تبقى في «الإحالات الواردة» حتى يحدد الموجه مسارها، ثم تنتقل إلى تبويب واحد فقط */
+    const DEST = [
+      ['cm','لجنة التوجيه والإرشاد','يظهر في: الإحالات الواردة ← المحالون إلى لجنة التوجيه والإرشاد'],
+      ['hr','الحالات عالية الخطورة','يظهر في: الإحالات الواردة ← الحالات عالية الخطورة'],
+      ['cases','دراسة الحالات الفردية','يظهر في: دراسة الحالات الفردية ← الحالات'],
+      ['indiv','الإرشاد الفردي','يظهر في: الإرشاد الفردي والجمعي ← التوجيه الفردي']];
+    const KEYHOME = k=>/^(c_|a5_|cc_)/.test(k) ? 'cm' : (/^h_/.test(k) ? 'hr' : 'cases');
+    const caseHome = c=> c.route || (c.cm ? 'cm' : (c.srcKey ? KEYHOME(c.srcKey) : 'cases'));
+    const homeCases = h=>CS.filter(c=>caseHome(c)===h);
+    const caseIst = c=>{ const hd = (c.handledAt||0) > 0 && (c.handledAt||0) >= (c.reopenedAt||0); return hd ? 'handled' : (c.st==='closed' ? 'closed' : (c.st==='watch' ? 'watch' : 'open')); };
+    const caseLbl = c=>(c.routed || c.srcKey) ? 'محوّلة من الوارد' : 'مفتوحة من التبويب';
+    function itemHome(it){
+      if(it.grp==='e') return 'pool';
+      const d = inboxDoc(it.key), c = it.seat ? caseOfSeat(it.seat) : null;
+      if(c && (c.st!=='closed' || (d && d.caseId===c.id))) return caseHome(c);
+      if(d && d.route) return d.route;
+      return 'pool';
+    }
+    const inPool = it=>itemHome(it)==='pool' && !(done(it) || it.trDone);
+    const stDest = it=>{ const x = itemStatus(it); return x==='new' ? 'open' : x; };
+    function istBlock(key, L, stOf, card, wrap){
+      CUR.ist = CUR.ist || {}; const cur = CUR.ist[key] || 'open', by = {}, w = wrap || 'ul';
+      L.forEach(x=>{ const k = stOf(x); (by[k] = by[k] || []).push(x); });
+      const tabs = '<div class="seg subs ist" id="ist">'+IST.map(t=>'<button type="button" class="'+(t[0]===cur?'on':'')+'" data-it="'+t[0]+'" data-ik="'+esc(key)+'">'+t[1]+' ('+A((by[t[0]]||[]).length)+')</button>').join('')+'</div>';
+      return tabs + '<'+w+' class="lst">'+((by[cur]||[]).map(card).join('') || (w==='ul' ? '<li class="muted">لا حالات في هذا القسم.</li>' : '<div class="muted">لا حالات في هذا القسم.</div>'))+'</'+w+'>';
+    }
+    async function routeItem(it, dest){
+      const sib = inboxItems().filter(i=>i.grp!=='e' && String(i.seat)===String(it.seat) && itemHome(i)==='pool');
+      let c = openCaseOfSeat(it.seat);
+      if(!c) c = await newCase({seat:it.seat, name:it.name, cls:it.cls, type:it.type, src:it.title, srcKey:it.key});
+      for(const i of sib) await put('inbox', i.key, {route:dest, caseId:c.id});
+      if(dest==='cm' && !refSeats().has(String(it.seat))) await referCase(c);
+      await put('cases', c.id, {route:dest, routed:true, routedAt:Date.now()});
+      if(dest==='cm') syncCm();
+      return c;
+    }
+    function routeDlg(it){
+      if(!canEdit) return;
+      const ov = overlay('<h3 style="margin:0">تحديد مسار ملف الحالة — '+esc(it.name)+'</h3><div class="muted">يُنقل الملف من «الإحالات الواردة» إلى التبويب الذي تختاره، ويُدرس فيه كاملًا ولا يظهر في غيره.</div><div class="resl">'
+        +DEST.map(d=>'<button type="button" class="btn" data-d="'+d[0]+'">تحويل إلى '+d[1]+'<span class="muted" style="display:block;font-weight:400">'+d[2]+'</span></button>').join('')+'</div><div class="row"><button type="button" class="btn" id="x">إلغاء</button></div>');
+      ov.querySelector('#x').onclick = ()=>ov.close();
+      ov.addEventListener('click', async e=>{ const b = e.target.closest('[data-d]'); if(!b || b.disabled) return; b.disabled = true;
+        try{ await routeItem(it, b.dataset.d); toast('حُوِّل الملف إلى: '+DEST.find(d=>d[0]===b.dataset.d)[1]); ov.close(); render(); }catch(er){ fail(er); b.disabled = false; } });
+    }
+    function itemStatus(it){
+      const c = it.seat ? caseOfSeat(it.seat) : null;
+      const fin = done(it) || it.trDone;
+      if(fin && !(c && c.reopenedAt && c.reopenedAt > (c.handledAt||0))) return 'handled';
+      if(!c) return 'new';
+      return c.st==='closed' ? 'closed' : (c.st==='watch' ? 'watch' : 'open');
+    }
+    const cmMembers = ()=> (CMT && CMT.pres) ? [{id:CMT.pres.id, name:CMT.pres.name, role:'رئيس اللجنة'}, {id:(CMT.edu||{}).id, name:(CMT.edu||{}).name, role:'عضو'}, {id:(CMT.cn||{}).id, name:(CMT.cn||{}).name, role:'مقرر'}].concat((CMT.t||[]).map(x=>({id:x.id, name:x.name, role:'عضو'}))).filter(m=>m.id) : [];
+    const execField = ()=>{ const o = cmMembers().filter(m=>m.id!==env.me.id).map(m=>[m.id, m.name+' — '+m.role]); return o.length ? [{k:'exec', l:'المنفِّذ (اختياري: عضو من لجنة التوجيه والإرشاد)', t:'select', opt0:'الموجه نفسه', o}] : []; };
+    const taskOf = x=>x && x.taskId ? TASKS.find(t=>t.id===x.taskId) : null;
+    const effF = x=>{ const t = taskOf(x); return t && t.st==='done' ? Object.assign({}, x, {res:t.res||x.res}) : x; };
+    const effS = x=>{ const t = taskOf(x); return t && t.st==='done' ? Object.assign({}, x, {proc:t.proc||x.proc, result:t.result||x.result, recs:t.recs||x.recs}) : x; };
+    const execTag = x=>{ if(!x || !x.execName) return ''; const t = taskOf(x); return ' <span class="tag '+(t&&t.st==='done'?'ok':'warn')+'">المنفِّذ: '+esc(x.execName)+' — '+(t&&t.st==='done'?'سُجِّلت':'بانتظار التسجيل')+'</span>'; };
+    async function assignTask(kind, c, out){
+      const m = cmMembers().find(x=>x.id===out.exec); if(!m) return {};
+      const tref = sa.collection('committeeTasks').doc();
+      const rec = {period, memberId:m.id, memberName:m.name, seat:c.seat||'', name:c.name, className:c.className||'', caseId:c.id||'', kind, date:out.date||dk, time:out.time||'', topic:out.topic||out.text||'', goal:out.goal||'', st:'pending', createdAt:Date.now(), createdBy:env.me.id, createdByName:env.me.name};
+      await tref.set(rec); TASKS.push(Object.assign({id:tref.id}, rec));
+      try{
+        await db.collection('notes').add({schoolId:sid, period, fromUserId:env.me.id, fromName:env.me.name, fromRole:'counselor', recipients:[m.id], recipientsInfo:[{userId:m.id, name:m.name, role:''}], scope:'task',
+          studentSeat:'', studentName:'', classCode:'', className:'', text:'أسند إليك الموجه الطلابي '+(kind==='indiv'?'جلسة توجيه فردي':(kind==='group'?'جلسة إرشاد جمعي':'متابعة سريعة'))+(kind==='group'?' للفئة: ':' مع الطالب: ')+c.name+(c.className?' ('+c.className+')':'')+'. تجدها في «لوحتي ← لجنة التوجيه والإرشاد».',
+          referralReason:'إسناد مهمة من لجنة التوجيه والإرشاد', createdAt:Date.now(), replies:[], readAt:{}, closed:false});
+      }catch(e){ console.warn(e); }
+      return {taskId:tref.id, execId:m.id, execName:m.name};
+    }
     async function printCommitteeLetter(it){
       const body = '<div class="ln">سعادة رئيس لجنة التوجيه والإرشاد، وفقه الله</div><div class="ln" style="text-align:center">السلام عليكم ورحمة الله وبركاته</div>'
         +'<div class="ln">أحيل إليكم الطالب/ة: '+dots(it.name,260)+' بالصف: '+dots(it.cls,150)+'</div>'
@@ -652,23 +748,45 @@ Dash.boot({
       }).catch(e=>{ if(w) w.close(); fail(e); });
     }
     function itemHtml(it){
-      const fin = done(it) || it.trDone;
+      const pool = itemHome(it)==='pool', st = itemStatus(it);
       const btns = [];
-      const oc = it.seat ? openCaseOfSeat(it.seat) : null;
-      if(canEdit && it.seat) btns.push('<button type="button" class="btn solid" data-oc="'+esc(it.key)+'">'+(oc?'فتح الحالة القائمة':'فتح دراسة حالة')+'</button>');
+      const ex = it.seat ? caseOfSeat(it.seat) : null;
+      if(canEdit && it.seat){
+        if(pool) btns.push('<button type="button" class="btn solid" data-rt="'+esc(it.key)+'">تحديد مسار الملف</button>');
+        else btns.push('<button type="button" class="btn solid" data-oc="'+esc(it.key)+'">'+(ex?'متابعة دراسة الحالة':'إجراءات دراسة الحالة')+'</button>');
+      }
       if(it.letter) btns.push('<button type="button" class="btn" data-lt="'+esc(it.key)+'">خطاب الإحالة إلى اللجنة</button>');
       if(it.hr) btns.push('<button type="button" class="btn" data-pr="'+esc(it.key)+'">خطاب بلاغ الحماية</button>');
       if(it.pdf) btns.push('<button type="button" class="btn" data-pdf="'+esc(it.note.id)+'">فتح التقرير</button>');
-      if(canEdit && !fin) btns.push('<button type="button" class="btn" data-hd="'+esc(it.key)+'">تمت المعالجة</button>');
       const det = it.lines ? '<ul class="dl">'+it.lines.map(l=>'<li>'+esc(l)+'</li>').join('')+'</ul>' : '<div class="muted">'+esc(it.detail||'')+'</div>';
-      return '<li class="srow"><div class="row" style="align-items:center"><b>'+esc(it.name||'تقرير')+'</b> <span class="muted">'+esc(it.cls||'')+'</span> '+(fin?'<span class="tag ok">عولج</span>':'<span class="tag bad">جديد</span>')
-        +(it.cnt>1?'<span class="tag cnr">'+A(it.cnt)+' تحويلات</span>':'')+(oc?'<span class="tag warn">لها حالة مفتوحة</span>':'')+'</div><div>'+esc(it.title)+'</div>'+det
-        +((it.trIds&&canEdit&&!fin)?'<div class="muted">«تمت المعالجة» تُنهي ملف الطالب عند الوكيل أيضًا.</div>':'')+'<div class="row">'+btns.join('')+'</div></li>';
+      const stTag = pool ? '<span class="tag bad">جديد</span>' : {new:'<span class="tag bad">جديد</span>', open:'<span class="tag warn">مفتوحة</span>', watch:'<span class="tag warn">تحت المتابعة</span>', closed:'<span class="tag">مغلقة</span>', handled:'<span class="tag ok">عولج</span>'}[st];
+      const orig = (pool || it.grp==='e') ? '' : '<span class="tag cnr">'+(/^cc_/.test(it.key)?'أحالها الموجه':'محوّلة من الوارد')+'</span>';
+      return '<li class="srow"><div class="row" style="align-items:center"><b>'+esc(it.name||'تقرير')+'</b> <span class="muted">'+esc(it.cls||'')+'</span> '+stTag+orig
+        +(it.cnt>1?'<span class="tag cnr">'+A(it.cnt)+' تحويلات</span>':'')+'</div><div>'+esc(it.title)+'</div>'+det
+        +'<div class="row">'+btns.join('')+'</div></li>';
     }
     function recsList(){
       const out = [];
       MN.filter(m=>m.st==='approved').sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).forEach(m=>{ ((m.content||{}).recs||[]).forEach((r,i)=>out.push({id:'m_'+m.id+'_'+i, m, r, i})); });
       return out;
+    }
+    const seenRep = it=>{ const d = inboxDoc(it.key); return !!(d && d.seen); };
+    const shortRep = it=>{ let t = String(it.title||''); [' الفصول:', 'عدد الطلاب'].forEach(w=>{ const i = t.indexOf(w); if(i>0) t = t.slice(0,i); }); return t.replace(/[|\s:]+$/,'').slice(0,150); };
+    function reportsPane(){
+      const L = inboxItems().filter(i=>i.grp==='e');
+      if(!L.length) return '<ul class="lst"><li class="muted">لا تقارير واردة.</li></ul>';
+      const by = {}; L.forEach(i=>{ const k = i.note.fromUserId || i.note.fromName || '—'; (by[k] = by[k] || {name:i.note.fromName||'معلم', list:[]}).list.push(i); });
+      const G = Object.values(by); G.forEach(g=>g.list.sort((a,b)=>(b.at||0)-(a.at||0))); G.sort((a,b)=>(b.list[0].at||0)-(a.list[0].at||0));
+      return '<div class="muted">لكل معلم بطاقة، والتقرير الجديد في أعلاها.</div><div class="lst">'+G.map(g=>{ const nw = g.list.filter(i=>!seenRep(i)).length;
+        return '<details class="trow vc" open><summary><div class="nm">'+esc(g.name)+'<small>'+A(g.list.length)+' تقارير</small></div><div class="row">'+(nw?'<span class="tag bad">'+A(nw)+' جديد</span>':'')+'</div></summary><div class="vcb"><ul class="lst">'
+          + g.list.map(i=>'<li class="srow"><div class="row" style="align-items:center"><b>'+esc(i.cls||'')+'</b>'+(seenRep(i)?'':'<span class="tag bad">جديد</span>')+'</div><div class="muted">'+esc(shortRep(i))+'</div><div class="row"><button type="button" class="btn solid" data-rv="'+esc(i.key)+'">معاينة التحليل</button></div></li>').join('')
+          +'</ul></div></details>'; }).join('')+'</div>';
+    }
+    async function showRep(it){
+      const ov = overlay('<div class="cnh"><h3 style="margin:0">'+esc(it.cls||'تحليل النتائج')+'</h3><span class="muted">من المعلم '+esc((it.note||{}).fromName||'')+'</span></div><div class="nt">'+esc(it.title||'').split(' | ').join('<br>')+'</div>'
+        +'<div class="row">'+(it.pdf?'<button type="button" class="btn solid" data-p="1">فتح ملف PDF</button>':'')+'<button type="button" class="btn" data-x="1">إغلاق</button></div>', true);
+      ov.addEventListener('click', e=>{ const b = e.target.closest('button'); if(!b) return; if(b.dataset.x){ ov.close(); return; } if(b.dataset.p) openPdf(it.note.id); });
+      if(canEdit && !seenRep(it)){ try{ await put('inbox', it.key, {seen:true}); render(); }catch(er){ console.warn(er); } }
     }
     function inboxPane(sub){
       if(sub==='c'){
@@ -678,22 +796,26 @@ Dash.boot({
           return '<li class="srow"><div><b>'+esc(x.m.name)+'</b> <span class="muted">'+esc(x.m.className||'')+' · اجتماع '+esc(dshow(c.dateG))+'</span></div><div>'+esc(x.r)+'</div>'
             +'<div class="row">'+(canEdit?'<select data-rs="'+esc(x.id)+'"><option value="">لم تُسجَّل حالة</option><option value="ongoing"'+(d.st==='ongoing'?' selected':'')+'>جارية</option><option value="done"'+(d.st==='done'?' selected':'')+'>نُفذت</option></select>':'<span class="tag">'+(d.st==='done'?'نُفذت':d.st==='ongoing'?'جارية':'لم تُسجَّل حالة')+'</span>')+'</div></li>'; }).join('') || '<li class="muted">لا توصيات معتمدة بعد.</li>')+'</ul>';
       }
-      const L = inboxItems().filter(i=>i.grp===sub);
-      return '<ul class="lst">'+(L.map(itemHtml).join('') || '<li class="muted">لا إحالات واردة في هذا القسم.</li>')+'</ul>';
+      if(sub==='e') return reportsPane();
+      const hm = {a:'pool', b:'cm', d:'hr'}[sub];
+      const L = inboxItems().filter(i=>i.grp!=='e' && (hm==='pool' ? inPool(i) : itemHome(i)===hm));
+      if(hm==='pool') return '<div class="muted">كل إحالة جديدة تصل هنا ببياناتها. حدّد مسار ملف الحالة لينتقل إلى تبويبه ويُدرس فيه ويختفي من هنا.</div><ul class="lst">'+(L.map(itemHtml).join('') || '<li class="muted">لا إحالات جديدة.</li>')+'</ul>';
+      return '<div class="muted">'+(hm==='cm'?'ملفات حُوّلت إلى لجنة التوجيه والإرشاد، وتُدرس هنا كاملة.':'ملفات الحالات عالية الخطورة، وتُدرس هنا كاملة.')+'</div>'+istBlock('inbox:'+sub, L, stDest, itemHtml);
     }
     async function inboxClick(e){
       const g = a=>e.target.closest('['+a+']'); let b;
       const find = k=>inboxItems().find(i=>i.key===k);
+      if(b=g('data-rt')){ const it=find(b.dataset.rt); if(it) routeDlg(it); return true; }
+      if(b=g('data-rv')){ const it=find(b.dataset.rv); if(it) showRep(it); return true; }
       if(b=g('data-oc')){ if(!canEdit) return; const it=find(b.dataset.oc); if(!it) return;
-        try{ const c = await newCase({seat:it.seat, name:it.name, cls:it.cls, type:it.type, src:it.title, srcKey:it.key}); render(); openCase(c.id); }catch(er){ fail(er); } return true; }
+        try{
+          const ex = caseOfSeat(it.seat);
+          if(ex && (ex.st!=='closed' || ['handled','closed'].includes(itemStatus(it)))){ openCase(ex.id); return true; }
+          const c = await newCase({seat:it.seat, name:it.name, cls:it.cls, type:it.type, src:it.title, srcKey:it.key}); render(); openCase(c.id);
+        }catch(er){ fail(er); } return true; }
       if(b=g('data-lt')){ const it=find(b.dataset.lt); if(it) printCommitteeLetter(it); return true; }
       if(b=g('data-pr')){ const it=find(b.dataset.pr); if(it) printProtection(it); return true; }
       if(b=g('data-pdf')){ openPdf(b.dataset.pdf); return true; }
-      if(b=g('data-hd')){ if(!canEdit) return; const it=find(b.dataset.hd); if(!it) return;
-        try{
-          for(const id of (it.trIds||[])){ await db.collection('notes').doc(id).update({trSt:'done', closedAt:Date.now(), closedBy:env.me.id, closedByName:env.me.name}); const t=TR.find(x=>x.id===id); if(t) t.st='done'; }
-          await put('inbox', it.key, {st:'handled'}); toast(it.trIds&&it.trIds.length?'أُنهي الملف وعاد للوكيل منتهيًا':'سُجلت المعالجة'); render();
-        }catch(er){ fail(er); } return true; }
     }
     document.addEventListener('change', async e=>{
       const s = e.target.closest('[data-rs]'); if(!s || !canEdit) return;
@@ -701,16 +823,16 @@ Dash.boot({
     });
 
     /* ===== الخطط والسجلات العامة (جداول) ===== */
-    function crudPane(col, kind, title){
+    function crudPane(col, kind, title, extra){
       const sp = specOf(col, kind), L = D[col].filter(x=>x.kind===kind).sort((a,b)=>String(b.date||b.since||'').localeCompare(String(a.date||a.since||'')) || (b.at||0)-(a.at||0));
       const showSym = col==='hasr' && kind==='fu';
       const cols = sp.cols;
-      return '<div class="cnh"><h3 style="margin:0">'+esc(title)+'</h3><div class="row">'+(canEdit?'<button type="button" class="btn solid" data-add="'+col+'|'+kind+'">+ إضافة</button>':'')
+      return '<div class="cnh"><h3 style="margin:0">'+esc(title)+'</h3><div class="row">'+(canEdit?'<button type="button" class="btn solid" data-add="'+col+'|'+kind+'">+ إضافة</button>':'')+(extra||'')
         +'<button type="button" class="btn" data-prt="'+col+'|'+kind+'">طباعة</button>'+(showSym?'<button type="button" class="btn" data-prt="'+col+'|'+kind+'|sym">طباعة بالرموز</button>':'')+'</div></div>'
         +'<div class="tw2"><table class="tbl"><thead><tr>'+cols.map(c=>'<th>'+esc(c[0])+'</th>').join('')+'<th></th></tr></thead><tbody>'
         +(L.map(x=>isDel(x)
-          ? '<tr class="gone">'+cols.map(c=>'<td><del>'+esc(String(c[1](x)||''))+'</del></td>').join('')+'<td>'+delNote(x)+'</td></tr>'
-          : '<tr>'+cols.map(c=>'<td>'+esc(String(c[1](x)||''))+'</td>').join('')+'<td style="white-space:nowrap">'+(canEdit?'<button type="button" class="btn" data-ed="'+col+'|'+x.id+'">تعديل</button> <button type="button" class="btn danger" data-dl="'+col+'|'+x.id+'">حذف</button>':'')+'</td></tr>').join('') || '<tr><td colspan="'+(cols.length+1)+'" class="muted">لا سجلات.</td></tr>')+'</tbody></table></div>';
+          ? '<tr class="gone">'+cols.map(c=>'<td><del>'+esc(cv(c[1](x)))+'</del></td>').join('')+'<td>'+delNote(x)+'</td></tr>'
+          : '<tr>'+cols.map(c=>'<td>'+esc(cv(c[1](x)))+'</td>').join('')+'<td style="white-space:nowrap">'+(canEdit?'<button type="button" class="btn" data-ed="'+col+'|'+x.id+'">تعديل</button> <button type="button" class="btn danger" data-dl="'+col+'|'+x.id+'">حذف</button>':'')+'</td></tr>').join('') || '<tr><td colspan="'+(cols.length+1)+'" class="muted">لا سجلات.</td></tr>')+'</tbody></table></div>';
     }
     function nextSym(){ const L2 = {'٠':0,'١':1,'٢':2,'٣':3,'٤':4,'٥':5,'٦':6,'٧':7,'٨':8,'٩':9}; let mx = 0;
       D.hasr.filter(x=>x.kind==='fu').forEach(x=>{ const m = String(x.sym||'').match(/[0-9٠-٩]+/); if(m){ const n = parseInt(m[0].replace(/[٠-٩]/g,d=>L2[d]),10); if(n>mx) mx=n; } });
@@ -751,35 +873,57 @@ Dash.boot({
     }
 
     /* ===== الجلسات ===== */
-    function sessPane(kind){
-      const L = D.sessions.filter(x=>x.kind===kind).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')) || (b.at||0)-(a.at||0));
-      return '<div class="cnh"><h3 style="margin:0">'+(kind==='indiv'?'التوجيه الفردي':'الإرشاد الجمعي')+'</h3><div class="row">'+(canEdit?'<button type="button" class="btn solid" data-sadd="'+kind+'">+ جلسة جديدة</button>':'')+'</div></div>'
-        +'<ul class="lst">'+(L.map(s=>'<li class="srow"><div><b>'+esc(kind==='indiv'?s.name:(s.groupName||'جلسة جماعية'))+'</b> <span class="muted">'+esc(dshow(s.date))+(s.time?' · '+esc(A(s.time)):'')+(kind==='group'?' · '+A((s.students||[]).length)+' طلاب':'')+'</span>'+(s.caseId&&csOf(s.caseId)?' <span class="tag">مرتبطة بحالة</span>':'')+'</div><div>'+esc(s.topic||'')+'</div>'
-          +'<div class="row"><button type="button" class="btn" data-sp="'+s.id+'">طباعة الاستمارة</button>'+(kind==='group'?'<button type="button" class="btn" data-sat="'+s.id+'">كشف الحضور</button>':'')+(canEdit?'<button type="button" class="btn" data-sed="'+s.id+'">تعديل</button><button type="button" class="btn danger" data-sdl="'+s.id+'">حذف</button>':'')+'</div></li>').join('') || '<li class="muted">لا جلسات مسجلة.</li>')+'</ul>';
+    const sfOf = kind=>{ CUR.sf = CUR.sf || {}; return CUR.sf[kind] = CUR.sf[kind] || {q:'', from:'', to:''}; };
+    function sessRows(kind){
+      const f = sfOf(kind), q = f.q.trim();
+      return D.sessions.filter(x=>x.kind===kind && !(kind==='indiv' && x.caseId && csOf(x.caseId))).map(effS)
+        .filter(s=>!q || String(kind==='indiv'?(s.name||''):(s.groupName||'')).includes(q) || String(s.topic||'').includes(q))
+        .filter(s=>(!f.from || String(s.date||'')>=f.from) && (!f.to || String(s.date||'')<=f.to))
+        .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')) || (b.at||0)-(a.at||0));
     }
-    function sessFields(kind){
-      const cases = CS.filter(c=>c.st!=='closed');
+    function sessListHtml(kind){
+      const L = sessRows(kind);
+      return '<ul class="lst" id="sessList">'+(L.map(s=>{
+        const nm = esc(kind==='indiv'?s.name:(s.groupName||'جلسة جماعية')), meta = esc(dshow(s.date))+(s.time?' · '+esc(A(s.time)):'')+(kind==='group'?' · '+A((s.students||[]).length)+' طلاب':'');
+        if(isDel(s)) return '<li class="srow gone"><div><del><b>'+nm+'</b> <span class="muted">'+meta+'</span></del></div><div><del>'+esc(s.topic||'')+'</del></div>'+delNote(s)+'</li>';
+        return '<li class="srow"><div><b>'+nm+'</b> <span class="muted">'+meta+'</span>'+(kind==='indiv'?' <span class="tag cnr">جلسة مفتوحة من التبويب</span>':'')+execTag(s)+'</div><div>'+esc(s.topic||'')+'</div>'
+          +'<div class="row"><button type="button" class="btn" data-sp="'+s.id+'">طباعة الاستمارة</button>'+(kind==='group'?'<button type="button" class="btn" data-sat="'+s.id+'">كشف الحضور</button>':'')+(canEdit?'<button type="button" class="btn" data-sed="'+s.id+'">تعديل</button><button type="button" class="btn danger" data-sdl="'+s.id+'">حذف</button>':'')+'</div></li>'; }).join('') || '<li class="muted">لا جلسات مسجلة.</li>')+'</ul>';
+    }
+    function sessPane(kind){
+      const f = sfOf(kind);
+      const files = kind==='indiv' ? '<h4 class="grph">ملفات الحالات المحوّلة إلى الإرشاد الفردي</h4><div class="muted">تُدرس هذه الملفات كاملة هنا، وتُسجَّل جلساتها داخل ملف كل حالة.</div>'
+        + istBlock('sess:indiv', homeCases('indiv').slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ar')), caseIst, c=>caseCard(c,'محوّلة من الوارد'), 'div')
+        + '<h4 class="grph">الجلسات المفتوحة من هذا التبويب</h4>' : '';
+      return '<div class="cnh"><h3 style="margin:0">'+(kind==='indiv'?'التوجيه الفردي':'الإرشاد الجمعي')+'</h3><div class="row">'+(canEdit?'<button type="button" class="btn solid" data-sadd="'+kind+'">+ جلسة جديدة</button>':'')+'</div></div>'
+        + files
+        + '<div class="fgrid"><div class="fld"><label for="sfq">'+(kind==='indiv'?'بحث باسم الطالب أو الموضوع':'بحث باسم المجموعة أو الموضوع')+'</label><input type="text" id="sfq" value="'+esc(f.q)+'"></div>'
+        + '<div class="fld"><label for="sff">من تاريخ</label><input type="date" id="sff" value="'+esc(f.from)+'"></div><div class="fld"><label for="sft">إلى تاريخ</label><input type="date" id="sft" value="'+esc(f.to)+'"></div></div>'
+        + sessListHtml(kind);
+    }
+    function sessFields(kind, withExec){
       return [F.date, F.time]
         .concat(kind==='indiv'
-          ? [{k:'stu',l:'الطالب',t:'student',req:true},{k:'caseId',l:'ربط بحالة مفتوحة (اختياري)',t:'select',opt0:'بلا ربط',o:cases.map(c=>[c.id,c.name+' — '+c.type])}]
+          ? [{k:'stu',l:'الطالب',t:'student',req:true}]
           : [{k:'groupName',l:'الفئة المستهدفة أو اسم المجموعة',t:'text',req:true},{k:'students',l:'الطلاب المشاركون',t:'students',req:true}])
-        .concat([{k:'topic',l:'موضوع الجلسة',t:'text',req:true},{k:'goal',l:'أهداف الجلسة',t:'textarea',w:1},{k:'proc',l:'ما تم في الجلسة',t:'textarea',w:1},{k:'result',l:'النتائج',t:'textarea',w:1},{k:'recs',l:'التوصيات',t:'textarea',w:1},{k:'next',l:'موعد الجلسة التالية',t:'date'}]);
+        .concat([{k:'topic',l:'موضوع الجلسة',t:'text',req:true},{k:'goal',l:'أهداف الجلسة',t:'textarea',w:1},{k:'proc',l:'ما تم في الجلسة',t:'textarea',w:1},{k:'result',l:'النتائج',t:'textarea',w:1},{k:'recs',l:'التوصيات',t:'textarea',w:1},{k:'next',l:'موعد الجلسة التالية',t:'date'}])
+        .concat(withExec ? execField() : []);
     }
     function sessAdd(kind){
-      formModal(kind==='indiv'?'جلسة توجيه فردي':'جلسة إرشاد جمعي', sessFields(kind), {date:dk}, async out=>{
-        const row = await put('sessions', null, Object.assign({kind}, out));
-        if(row.caseId){ const c = csOf(row.caseId); if(c) await put('cases', c.id, {lastSession:row.date||dk, nextFollow:row.next||c.nextFollow||''}); }
-        toast('حُفظت الجلسة'); render(); }, true);
+      formModal(kind==='indiv'?'جلسة توجيه فردي':'جلسة إرشاد جمعي', sessFields(kind, true), {date:dk}, async out=>{
+        const ex = out.exec ? await assignTask(kind==='group'?'group':'indiv', kind==='group' ? {name:out.groupName, seat:'', className:'', id:''} : {name:out.name, seat:out.seat, className:out.className, id:''}, out) : {};
+        delete out.exec;
+        await put('sessions', null, Object.assign({kind}, out, ex));
+        toast(ex.execName?'حُفظت الجلسة وأُرسل إشعار للمنفِّذ':'حُفظت الجلسة'); render(); }, true);
     }
     function sessEdit(id){
       const s = D.sessions.find(x=>x.id===id); if(!s) return;
-      formModal('تعديل الجلسة', sessFields(s.kind), s, async out=>{ await put('sessions', id, out); toast('حُفظ'); render(); }, true);
+      formModal('تعديل الجلسة', sessFields(s.kind, false), s, async out=>{ await put('sessions', id, out); toast('حُفظ'); render(); }, true);
     }
-    function sessPrint(s){
-      const ind = s.kind==='indiv';
+    function sessPrint(s0){
+      const s = effS(s0), ind = s.kind==='indiv';
       const body = '<div class="ln">التاريخ: '+dots(dshow(s.date),150)+' الوقت: '+dots(A(s.time||''),80)+'</div>'
         +(ind ? '<div class="ln">اسم الطالب: '+dots(s.name,260)+' الصف: '+dots(s.className,150)+'</div>' : '<div class="ln">الفئة المستهدفة: '+dots(s.groupName,300)+' عدد المشاركين: '+dots(A((s.students||[]).length),60)+'</div>')
-        +'<div class="ln">موضوع الجلسة: '+dots(s.topic,420)+'</div>'
+        +'<div class="ln">موضوع الجلسة: '+dots(s.topic,420)+'</div>'+(s.execName?'<div class="ln">المنفِّذ: '+dots(s.execName,260)+'</div>':'')
         +['goal:أهداف الجلسة','proc:ما تم في الجلسة','result:النتائج','recs:التوصيات'].map(p=>{ const q=p.split(':'); return '<div class="sec">'+q[1]+'</div><div class="ln" style="min-height:44px">'+esc(s[q[0]]||'')+'</div>'; }).join('')
         +'<div class="ln">موعد الجلسة التالية: '+dots(dshow(s.next),150)+'</div>'
         +(ind?'':'<div class="sec">المشاركون</div><div class="ln">'+(s.students||[]).map(x=>esc(x.name)+' ('+esc(x.className||'')+')').join('، ')+'</div>')+sigC();
@@ -796,39 +940,62 @@ Dash.boot({
       plan:{t:'خطة تعديل السلوك', fields:[{k:'target',l:'السلوك المراد تعديله',t:'textarea',w:1},{k:'base',l:'مستوى السلوك الحالي',t:'textarea',w:1},{k:'goal',l:'الهدف',t:'textarea',w:1},{k:'strat',l:'الأساليب والإجراءات',t:'textarea',w:1},{k:'reinf',l:'التعزيز',t:'textarea',w:1},{k:'from',l:'من تاريخ',t:'date'},{k:'to',l:'إلى تاريخ',t:'date'},{k:'resp',l:'المسؤول عن التنفيذ',t:'text'},{k:'eval',l:'التقويم',t:'textarea',w:1}]},
       close:{t:'تقرير الإغلاق', fields:[{k:'date',l:'تاريخ الإغلاق',t:'date'},{k:'res',l:'نتيجة الحالة',t:'select',o:['تم حل المشكلة','تحسن ملحوظ','إحالة إلى جهة مختصة','استمرار المتابعة']},{k:'text',l:'تقرير الإغلاق',t:'textarea',w:1}]}
     };
-    const gv = (c,g)=> (fileOf(c.id)[g]||{});
+    const gv = (c,g)=> g==='comp' ? (((D.stRec||[]).find(x=>x.id===String(c.seat))||{}).comp || {}) : (fileOf(c.id)[g]||{});
+    function caseCard(c, tag){
+      const hd = caseIst(c)==='handled', st = hd ? ['عولجت','ok'] : (CASE_ST[c.st]||CASE_ST.open), n = live(D.sessions).filter(s=>s.caseId===c.id).length;
+      const due = c.st!=='closed' && !hd && c.nextFollow && c.nextFollow<=dk;
+      const inner = '<div class="kv"><b>نوع الحالة</b><span>'+esc(c.type||'')+'</span><b>المصدر</b><span>'+esc(c.src||'')+'</span><b>تاريخ الفتح</b><span>'+esc(dshow(c.openedAt?new Date(c.openedAt).toISOString().slice(0,10):''))+'</span><b>المتابعة القادمة</b><span>'+esc(dshow(c.nextFollow)||'غير محددة')+'</span></div>'
+        +(mgrOnly?'':'<div class="row"><button type="button" class="btn solid" data-oc2="'+c.id+'">فتح ملف الحالة</button></div>');
+      return '<details class="trow vc"><summary><div class="nm">'+esc(c.name)+'<small>'+esc(c.className||'')+'</small></div><div class="row">'+(tag?'<span class="tag cnr">'+tag+'</span>':'')+'<span class="tag cnr">'+A(n)+' جلسات</span><span class="tag '+st[1]+'">'+st[0]+'</span>'+(due?'<span class="tag bad">متابعة مستحقة</span>':'')+'</div></summary><div class="vcb">'+inner+'</div></details>';
+    }
     function caseCards(filter){
       const L = CS.filter(filter||(()=>true)).sort((a,b)=>({open:0,watch:1,closed:2}[a.st]-{open:0,watch:1,closed:2}[b.st]) || a.name.localeCompare(b.name,'ar'));
-      return L.map(c=>{
-        const st = CASE_ST[c.st]||CASE_ST.open; const n = D.sessions.filter(s=>s.caseId===c.id).length;
-        const due = c.st!=='closed' && c.nextFollow && c.nextFollow<=dk;
-        const inner = '<div class="kv"><b>نوع الحالة</b><span>'+esc(c.type||'')+'</span><b>المصدر</b><span>'+esc(c.src||'')+'</span><b>تاريخ الفتح</b><span>'+esc(dshow(c.openedAt?new Date(c.openedAt).toISOString().slice(0,10):''))+'</span><b>المتابعة القادمة</b><span>'+esc(dshow(c.nextFollow)||'غير محددة')+'</span></div>'
-          +(mgrOnly?'':'<div class="row"><button type="button" class="btn solid" data-oc2="'+c.id+'">فتح ملف الحالة</button></div>');
-        return '<details class="trow vc"><summary><div class="nm">'+esc(c.name)+'<small>'+esc(c.className||'')+'</small></div><div class="row"><span class="tag cnr">'+A(n)+' جلسات</span><span class="tag '+st[1]+'">'+st[0]+'</span>'+(due?'<span class="tag bad">متابعة مستحقة</span>':'')+'</div></summary><div class="vcb">'+inner+'</div></details>';
-      }).join('') || '<div class="muted">لا حالات.</div>';
+      return L.map(c=>caseCard(c)).join('') || '<div class="muted">لا حالات.</div>';
     }
     function casesPane(sub){
       if(sub==='list'){
-        return '<div class="cnh"><h3 style="margin:0">حالات الطلاب</h3><div class="row">'+(canEdit?'<button type="button" class="btn solid" data-nc="1">+ فتح دراسة حالة</button>':'')+'<button type="button" class="btn" data-cl="1">طباعة كشف الحالات</button></div></div><div class="lst">'+caseCards()+'</div>';
-      }
-      if(sub==='comp' || sub==='plan'){
-        const g = sub, L = CS.filter(c=>Object.keys(gv(c,g)).length>1);
-        return '<div class="cnh"><h3 style="margin:0">'+CASE_GROUPS[g].t+'</h3>'+(canEdit?'<div class="row"><button type="button" class="btn solid" data-gadd="'+g+'">+ تعبئة لطالب</button></div>':'')+'</div>'
-          +'<ul class="lst">'+(L.map(c=>'<li class="srow"><div><b>'+esc(c.name)+'</b> <span class="muted">'+esc(c.className||'')+'</span></div><div class="row"><button type="button" class="btn" data-gp="'+g+'|'+c.id+'">طباعة</button>'+(canEdit?'<button type="button" class="btn" data-ge="'+g+'|'+c.id+'">تعديل</button>':'')+'</div></li>').join('') || '<li class="muted">لا سجلات.</li>')+'</ul>';
+        const L = homeCases('cases').slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ar'));
+        return '<div class="cnh"><h3 style="margin:0">حالات الطلاب</h3><div class="row">'+(canEdit?'<button type="button" class="btn solid" data-nc="1">+ فتح دراسة حالة</button>':'')+'<button type="button" class="btn" data-cl="1">طباعة كشف الحالات</button></div></div>'
+          +'<div class="muted">تشمل الملفات المحوّلة من «الإحالات الواردة» والملفات المفتوحة من هذا التبويب، وتُدرس كاملة هنا.</div>'
+          + istBlock('cases:list', L, caseIst, c=>caseCard(c, caseLbl(c)), 'div');
       }
       if(sub==='contacts') return ['parent','teacher','ext'].map(k=>'<div class="card">'+crudPane('contacts',k,{parent:'التواصل مع أولياء الأمور',teacher:'التواصل مع المعلمين',ext:'التواصل مع الجهات الخارجية'}[k])+'</div>').join('');
       return crudPane('incidents','day','سجل المواقف اليومية الطارئة');
     }
-    function pickCase(g){
-      const L = CS.filter(c=>c.st!=='closed'); if(!L.length){ toast('افتح دراسة حالة أولًا'); return; }
-      const ov = overlay('<h3 style="margin:0">اختر الحالة</h3><div class="resl">'+L.map(c=>'<button type="button" class="btn" data-id="'+c.id+'">'+esc(c.name)+' · '+esc(c.className||'')+'</button>').join('')+'</div><div class="row"><button type="button" class="btn" id="x">إلغاء</button></div>');
-      ov.querySelector('#x').onclick = ()=>ov.close();
-      ov.addEventListener('click', e=>{ const b=e.target.closest('[data-id]'); if(b){ ov.close(); groupEdit(g, b.dataset.id); } });
+    /* ===== جماعة التوجيه والإرشاد (جماعة واحدة، حتى ١٠ طلاب) ===== */
+    const GMAX = 10;
+    function groupPane(){
+      const g = D.plans.find(x=>x.id==='group_members') || {}, M = g.members || [];
+      return '<div class="cnh"><h3 style="margin:0">جماعة التوجيه والإرشاد</h3><div class="row">'+(canEdit?'<button type="button" class="btn solid" data-gm="1">تحديد الأعضاء</button>':'')+'<button type="button" class="btn" data-gmp="1">طباعة كشف الأعضاء</button></div></div>'
+        +'<div class="muted">أعضاء الجماعة من طلاب المدرسة بحد أقصى '+A(GMAX)+' طلاب (الحاليون: '+A(M.length)+').</div>'
+        +'<div class="chips">'+(M.map(x=>'<span class="chip">'+esc(x.name)+' · '+esc(x.className||'')+'</span>').join('') || '<span class="muted">لم يُحدَّد أعضاء الجماعة بعد.</span>')+'</div>'
+        +'<div class="card">'+crudPane('plans','group','سجل اجتماعات الجماعة وأنشطتها')+'</div>';
+    }
+    function groupMembers(){
+      const g = D.plans.find(x=>x.id==='group_members') || {};
+      formModal('أعضاء جماعة التوجيه والإرشاد (حتى '+A(GMAX)+' طلاب)', [{k:'members',l:'الأعضاء',t:'students',max:GMAX,noCls:true}], {members:g.members||[]}, async out=>{
+        if((out.members||[]).length>GMAX){ toast('الحد الأقصى '+A(GMAX)+' طلاب'); throw new Error('الحد الأقصى '+GMAX+' طلاب'); }
+        await put('plans', 'group_members', {kind:'gmem', members:out.members||[]}); toast('حُفظ أعضاء الجماعة'); render(); }, true);
+    }
+    async function copyAnnual(){
+      try{
+        const src = (await get(base.collection('plans').where('period','==','first'))).filter(x=>x.kind==='annual');
+        if(!src.length){ toast('لا توجد خطة سنوية في الفصل الأول'); return; }
+        const have = new Set(D.plans.filter(x=>x.kind==='annual' && x.copiedFrom).map(x=>x.copiedFrom));
+        const todo = src.filter(x=>!have.has(x.id));
+        if(!todo.length){ toast('نُسخت خطة الفصل الأول سابقًا'); return; }
+        if(!confirm('نسخ '+A(todo.length)+' بندًا من الخطة السنوية للفصل الأول إلى الفصل الثاني؟')) return;
+        for(const x of todo){ const d = Object.assign({}, x); ['id','period','by','byName','at'].forEach(k=>delete d[k]); await put('plans', null, Object.assign(d, {st:'مخطط', copiedFrom:x.id})); }
+        toast('نُسخت الخطة'); render();
+      }catch(er){ fail(er); }
     }
     function groupEdit(g, id, back){
       const c = csOf(id), G = CASE_GROUPS[g];
       formModal(G.t+' — '+c.name, G.fields, gv(c,g), async out=>{
-        const f = fileOf(id); await put('caseFiles', id, Object.assign({seat:c.seat, name:c.name}, {[g]:Object.assign({}, f[g]||{}, out, {_:1, at:Date.now(), byName:env.me.name})})); toast('حُفظ: '+G.t); render(); if(back) openCase(id); }, true);
+        const stamp = Object.assign({}, gv(c,g), out, {_:1, at:Date.now(), byName:env.me.name});
+        if(g==='comp') await put('stRec', String(c.seat), {seat:c.seat, name:c.name, comp:stamp});
+        else await put('caseFiles', id, Object.assign({seat:c.seat, name:c.name}, {[g]:stamp}));
+        toast('حُفظ: '+G.t); render(); if(back) openCase(id); }, true);
     }
     function groupPrint(g, id){
       const c = csOf(id), G = CASE_GROUPS[g], v = gv(c,g);
@@ -837,41 +1004,92 @@ Dash.boot({
       printHtml(G.t, body, {});
     }
     function followPrint(id){
-      const c = csOf(id), F2 = fileOf(id).follow||[];
-      const S = D.sessions.filter(s=>s.caseId===id).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-      printTable('متابعة حالة فردية', [['التاريخ',x=>dshow(x.date)],['النوع',x=>x.kind],['الموضوع / الإجراء',x=>x.text],['النتيجة',x=>x.res]],
-        S.map(s=>({date:s.date, kind:'جلسة توجيه فردي', text:s.topic, res:s.result})).concat(F2.map(f=>({date:f.date, kind:'متابعة', text:f.text, res:f.res}))).sort((a,b)=>String(a.date).localeCompare(String(b.date))),
+      const c = csOf(id), F2 = (fileOf(id).follow||[]).map(effF);
+      const S = live(D.sessions).filter(s=>s.caseId===id).map(effS).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+      printTable('متابعة حالة فردية', [['التاريخ',x=>dshow(x.date)],['النوع',x=>x.kind+(x.exec?' (المنفِّذ: '+x.exec+')':'')],['الموضوع / الإجراء',x=>x.text],['النتيجة',x=>x.res]],
+        S.map(s=>({date:s.date, kind:'جلسة توجيه فردي', exec:s.execName, text:s.topic, res:s.result})).concat(F2.map(f=>({date:f.date, kind:'متابعة سريعة', exec:f.execName, text:f.text, res:f.res}))).sort((a,b)=>String(a.date).localeCompare(String(b.date))),
         {top:'<div class="cnf">سري</div><div class="ln">اسم الطالب: '+dots(c.name,260)+' الصف: '+dots(c.className,150)+' نوع الحالة: '+dots(c.type,120)+'</div>', land:false});
+    }
+    function groupBlock(c, g){
+      const G = CASE_GROUPS[g], v = gv(c,g);
+      return '<div class="sec" style="font-size:16px">'+G.t+'</div>'+G.fields.map(f=>'<div class="sec">'+f.l+'</div><div class="ln" style="min-height:'+(f.t==='textarea'?'40px':'20px')+'">'+esc(f.t==='date'?dshow(v[f.k]):(v[f.k]||''))+'</div>').join('');
+    }
+    function printStudentFile(id){
+      const c = csOf(id);
+      const head = '<div class="cnf">سري</div><div class="ln">اسم الطالب: '+dots(c.name,260)+' الصف: '+dots(c.className,150)+' نوع الحالة: '+dots(c.type,120)+'</div>';
+      const sep = '<div style="page-break-before:always"></div>';
+      printHtml('ملف الطالب — '+c.name, head+groupBlock(c,'study')+sep+head+groupBlock(c,'comp')+sep+head+groupBlock(c,'plan')+sigC(), {});
+    }
+    async function handleSeat(c){
+      const L = inboxItems().filter(i=>String(i.seat)===String(c.seat) && !(done(i)||i.trDone));
+      for(const it of L){
+        for(const nid of (it.trIds||[])){ await db.collection('notes').doc(nid).update({trSt:'done', closedAt:Date.now(), closedBy:env.me.id, closedByName:env.me.name}); const t=TR.find(x=>x.id===nid); if(t) t.st='done'; }
+        if(it.hr && it.hr.id){ try{ const hd = {handledAt:Date.now(), handledBy:env.me.id, handledByName:env.me.name}; await sa.collection('highRisk').doc(it.hr.id).update(hd); Object.assign(it.hr, hd); }catch(er){ console.warn(er); } }
+        await put('inbox', it.key, {st:'handled'});
+      }
+      await put('cases', c.id, {handledAt:Date.now()});
+    }
+    async function referCase(c){
+      const rec = {period, seat:String(c.seat), name:c.name, className:c.className||'', why:c.src||c.type||'', at:Date.now(), by:env.me.id, byName:env.me.name, from:'counselor'};
+      await sa.collection('cmRefs').doc(period+'__'+c.seat).set(rec);
+      await put('cases', c.id, {cm:true, cmAt:Date.now(), route:'cm'});
+      await base.collection('cases').doc(c.id).set({cmRef:true}, {merge:true}); c.cmRef = true; CMRS.push(rec);
+      for(const col of ['caseFiles','sessions','stRec']){ for(const x of D[col].filter(y=>String(y.seat)===String(c.seat) && !y.cmRef)){ try{ await base.collection(col).doc(x.id).set({cmRef:true}, {merge:true}); x.cmRef = true; }catch(e){ console.warn(e); } } }
     }
     function openCase(id){
       const c = csOf(id); if(!c) return;
-      const f = fileOf(id), F2 = (f.follow||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-      const S = D.sessions.filter(s=>s.caseId===id).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+      const f = fileOf(id), F2 = (f.follow||[]).map(effF).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+      const S = live(D.sessions).filter(s=>s.caseId===id).map(effS).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+      const CT = live(D.contacts).filter(x=>x.seat && String(x.seat)===String(c.seat)).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+      const seatIt = inboxItems().filter(i=>String(i.seat)===String(c.seat));
+      const handled = (c.handledAt||0) > 0 && (c.handledAt||0) >= (c.reopenedAt||0);
+      const frozen = c.st==='closed' || handled, canAct = canEdit && !frozen;
+      const pending = seatIt.some(i=>(i.trIds||[]).length>0 && !(done(i)||i.trDone));
+      const B = (a,t,cl)=>'<button type="button" class="btn'+(cl?' '+cl:'')+'" '+a+'>'+t+'</button>';
+      const grp = ['study','comp','plan'].map(g=>'<button type="button" class="btn gbtn '+(Object.keys(gv(c,g)).length>1?'green':'red')+'" data-g="'+g+'"'+((frozen&&canEdit)?' disabled':'')+'>'+CASE_GROUPS[g].t+'</button>').join('');
+      let grid = '';
+      if(canAct){
+        grid += B('data-fu="1"','+ تسجيل متابعة سريعة','solid') + B('data-ns="1"','+ جلسة توجيه فردي') + B('data-w="1"', c.st==='watch'?'إرجاع للمفتوحة':'نقل لتحت المتابعة');
+        if(seatIt.length) grid += B('data-hd="1"','تمت المعالجة');
+        if(!refSeats().has(String(c.seat))) grid += B('data-cm="1"','إحالة إلى اللجنة');
+        grid += B('data-cs="1"','إغلاق الحالة','danger');
+      }
+      if(canEdit && frozen) grid += B('data-ro="1"','إعادة فتح');
+      grid += B('data-fp="1"','طباعة المتابعة') + B('data-pf="1"','طباعة ملف الطالب','solid');
+      if(Object.keys(gv(c,'close')).length>1) grid += B('data-gpc="1"','طباعة تقرير الإغلاق');
+      grid += B('data-x="1"','إغلاق النافذة');
       const ov = overlay('<div class="cnh"><h3 style="margin:0">'+esc(c.name)+' <span class="muted">'+esc(c.className||'')+'</span></h3><span class="tag '+(CASE_ST[c.st]||CASE_ST.open)[1]+'">'+(CASE_ST[c.st]||CASE_ST.open)[0]+'</span></div>'
         +'<div class="kv"><b>نوع الحالة</b><span>'+esc(c.type)+'</span><b>المصدر</b><span>'+esc(c.src||'')+'</span><b>المتابعة القادمة</b><span>'+esc(dshow(c.nextFollow)||'غير محددة')+'</span></div>'
-        +'<div class="row">'+['study','comp','plan'].map(g=>'<button type="button" class="btn'+(Object.keys(gv(c,g)).length>1?' solid':'')+'" data-g="'+g+'">'+CASE_GROUPS[g].t+'</button>').join('')+'</div>'
+        +(frozen&&canEdit?'<div class="frz">'+(c.st==='closed'?'الحالة مغلقة':'تمت معالجة الحالة')+': الأزرار مجمّدة عدا الطباعة وإغلاق النافذة'+(canEdit?' وإعادة الفتح':'')+'.</div>':'')
+        +'<div class="g3">'+grp+'</div>'
         +'<div class="sumg">'+['study','comp','plan','close'].map(g=>{ const v = gv(c,g); return Object.keys(v).length>1 ? '<div class="muted">✔ '+CASE_GROUPS[g].t+' — محفوظ'+(v.at?' بتاريخ '+esc(dshow(new Date(v.at).toISOString().slice(0,10))):'')+(v.byName?' بواسطة '+esc(v.byName):'')+'</div>' : ''; }).join('')+'</div>'
         +'<div class="sec2"><b>المتابعات والجلسات</b></div>'
-        +'<ul class="lst">'+(F2.map(x=>'<li class="srow"><div class="muted">'+esc(dshow(x.date))+' · متابعة</div><div>'+esc(x.text)+'</div><div class="muted">'+esc(x.res||'')+'</div></li>').join('')
-          + S.map(s=>'<li class="srow"><div class="muted">'+esc(dshow(s.date))+' · جلسة توجيه فردي</div><div>'+esc(s.topic||'')+'</div></li>').join('') || '<li class="muted">لا متابعات بعد.</li>')+'</ul>'
-        +'<div class="row">'+(canEdit&&c.st!=='closed'?'<button type="button" class="btn solid" data-fu="1">+ تسجيل متابعة</button><button type="button" class="btn" data-ns="1">+ جلسة توجيه فردي</button><button type="button" class="btn" data-w="1">'+(c.st==='watch'?'إرجاع للمفتوحة':'نقل لتحت المتابعة')+'</button><button type="button" class="btn danger" data-cs="1">إغلاق الحالة</button>':'')
-        +(canEdit&&c.st==='closed'?'<button type="button" class="btn" data-ro="1">إعادة فتح</button>':'')
-        +'<button type="button" class="btn" data-fp="1">طباعة المتابعة</button>'+(Object.keys(gv(c,'close')).length>1?'<button type="button" class="btn" data-gpc="1">طباعة تقرير الإغلاق</button>':'')+'<button type="button" class="btn" data-x="1">إغلاق النافذة</button></div>', true);
+        +'<ul class="lst">'+(F2.map(x=>'<li class="srow"><div class="muted">'+esc(dshow(x.date))+' · متابعة سريعة'+execTag(x)+'</div><div>'+esc(x.text)+'</div><div class="muted">'+esc(x.res||'')+'</div></li>').join('')
+          + S.map(s=>'<li class="srow"><div class="muted">'+esc(dshow(s.date))+' · جلسة توجيه فردي'+execTag(s)+'</div><div>'+esc(s.topic||'')+'</div></li>').join('') || '<li class="muted">لا متابعات بعد.</li>')+'</ul>'
+        +'<div class="sec2"><b>سجل التواصل مع الطالب</b></div><ul class="lst">'+(CT.map(x=>'<li class="srow"><div class="muted">'+esc(dshow(x.date))+' · '+({parent:'ولي الأمر',teacher:'معلم',ext:'جهة خارجية'}[x.kind]||'تواصل')+(x.who?' · '+esc(x.who):'')+(x.mean?' · '+esc(x.mean):'')+'</div><div>'+esc(x.topic||'')+'</div><div class="muted">'+esc(x.result||'')+'</div></li>').join('') || '<li class="muted">لا سجلات تواصل.</li>')+'</ul>'
+        +(canAct && pending ? '<div class="muted">«تمت المعالجة» تُنهي ملف الطالب عند الوكيل والمعلم أيضًا.</div>' : '')
+        +'<div class="bgrid">'+grid+'</div>', true);
       ov.addEventListener('click', async e=>{
-        const b = e.target.closest('button'); if(!b) return;
+        const b = e.target.closest('button'); if(!b || b.disabled) return;
         if(b.dataset.x){ ov.close(); return; }
-        if(b.dataset.g){ if(canEdit){ ov.close(); groupEdit(b.dataset.g, id, true); } else groupPrint(b.dataset.g, id); return; }
+        if(b.dataset.g){ if(canEdit){ if(frozen) return; ov.close(); groupEdit(b.dataset.g, id, true); } else groupPrint(b.dataset.g, id); return; }
         if(b.dataset.fp){ followPrint(id); return; }
+        if(b.dataset.pf){ printStudentFile(id); return; }
         if(b.dataset.gpc){ groupPrint('close', id); return; }
         if(!canEdit) return;
         try{
-          if(b.dataset.fu){ ov.close(); formModal('تسجيل متابعة — '+c.name, [F.date,{k:'text',l:'الإجراء أو الملاحظة',t:'textarea',req:true,w:1},{k:'res',l:'النتيجة',t:'textarea',w:1},{k:'next',l:'موعد المتابعة القادمة',t:'date'}], {date:dk}, async out=>{
-              const nf = (fileOf(id).follow||[]).concat([{date:out.date||dk, text:out.text, res:out.res}]);
-              await put('caseFiles', id, {seat:c.seat, name:c.name, follow:nf}); await put('cases', id, {nextFollow:out.next||''}); toast('سُجلت المتابعة'); render(); openCase(id); }); }
-          else if(b.dataset.ns){ ov.close(); const fl = sessFields('indiv').filter(x=>x.k!=='stu'&&x.k!=='caseId');
-            formModal('جلسة توجيه فردي — '+c.name, fl, {date:dk}, async out=>{ const row = await put('sessions', null, Object.assign({kind:'indiv', seat:c.seat, name:c.name, className:c.className, caseId:id}, out)); await put('cases', id, {lastSession:row.date||dk, nextFollow:row.next||c.nextFollow||''}); toast('حُفظت الجلسة'); render(); openCase(id); }, true); }
+          if(b.dataset.ro){ await put('cases', id, {st:'open', reopenedAt:Date.now()}); ov.close(); render(); openCase(id); return; }
+          if(frozen) return;
+          if(b.dataset.fu){ ov.close(); formModal('تسجيل متابعة سريعة — '+c.name, [F.date,{k:'text',l:'الإجراء أو الملاحظة',t:'textarea',req:true,w:1},{k:'res',l:'النتيجة',t:'textarea',w:1},{k:'next',l:'موعد المتابعة القادمة',t:'date'}].concat(execField()), {date:dk}, async out=>{
+              const ex = out.exec ? await assignTask('follow', c, out) : {}; delete out.exec;
+              const nf = (fileOf(id).follow||[]).concat([Object.assign({date:out.date||dk, text:out.text, res:out.res}, ex)]);
+              await put('caseFiles', id, {seat:c.seat, name:c.name, follow:nf}); await put('cases', id, {nextFollow:out.next||''}); toast(ex.execName?'سُجلت المتابعة وأُرسل إشعار للمنفِّذ':'سُجلت المتابعة'); render(); openCase(id); }); }
+          else if(b.dataset.ns){ ov.close(); const fl = sessFields('indiv').filter(x=>x.k!=='stu'&&x.k!=='caseId').concat(execField());
+            formModal('جلسة توجيه فردي — '+c.name, fl, {date:dk}, async out=>{ const ex = out.exec ? await assignTask('indiv', c, out) : {}; delete out.exec;
+              const row = await put('sessions', null, Object.assign({kind:'indiv', seat:c.seat, name:c.name, className:c.className, caseId:id}, out, ex)); await put('cases', id, {lastSession:row.date||dk, nextFollow:row.next||c.nextFollow||''}); toast(ex.execName?'حُفظت الجلسة وأُرسل إشعار للمنفِّذ':'حُفظت الجلسة'); render(); openCase(id); }, true); }
           else if(b.dataset.w){ await put('cases', id, {st:c.st==='watch'?'open':'watch'}); ov.close(); render(); openCase(id); }
-          else if(b.dataset.ro){ await put('cases', id, {st:'open'}); ov.close(); render(); openCase(id); }
+          else if(b.dataset.hd){ if(!confirm('تأكيد «تمت المعالجة»؟ ستُجمَّد أزرار الملف'+(pending?' ويُنهى ملف الطالب عند الوكيل والمعلم':'')+'.')) return; await handleSeat(c); toast(pending?'أُنهي الملف وعاد للوكيل منتهيًا':'سُجلت المعالجة'); ov.close(); render(); openCase(id); }
+          else if(b.dataset.cm){ if(!confirm('إحالة الطالب إلى لجنة التوجيه والإرشاد؟ سينتقل الملف إلى تبويب «المحالون إلى لجنة التوجيه والإرشاد» ويُدرس فيه.')) return; await referCase(c); toast('أُحيل الطالب إلى اللجنة'); ov.close(); render(); openCase(id); }
           else if(b.dataset.cs){ ov.close(); formModal('إغلاق الحالة — '+c.name, CASE_GROUPS.close.fields, {date:dk}, async out=>{
               await put('caseFiles', id, {seat:c.seat, name:c.name, close:Object.assign({}, out, {_:1})}); await put('cases', id, {st:'closed', closedAt:Date.now(), nextFollow:''}); toast('أُغلقت الحالة'); render(); openCase(id); }, true); }
         }catch(er){ fail(er); }
@@ -884,7 +1102,7 @@ Dash.boot({
       const rec = recsList();
       return [
         ['الحالات الفردية المفتوحة خلال الفصل', CS.length],['الحالات المغلقة', cnt(CS,c=>c.st==='closed')],['الحالات تحت المتابعة', cnt(CS,c=>c.st==='watch')],
-        ['جلسات التوجيه الفردي', cnt(D.sessions,s=>s.kind==='indiv')],['جلسات الإرشاد الجمعي', cnt(D.sessions,s=>s.kind==='group')],
+        ['جلسات التوجيه الفردي', cnt(live(D.sessions),s=>s.kind==='indiv')],['جلسات الإرشاد الجمعي', cnt(live(D.sessions),s=>s.kind==='group')],
         ['الإحالات الواردة من وكيل شؤون الطلاب', inboxItems().filter(i=>i.grp==='a').length],['المحالون إلى لجنة التوجيه والإرشاد', inboxItems().filter(i=>i.grp==='b').length],
         ['الحالات عالية الخطورة المعتمدة', inboxItems().filter(i=>i.grp==='d').length],
         ['توصيات اللجنة المعتمدة', rec.length],['التوصيات المنفذة', cnt(rec,x=>(D.recs.find(y=>y.id===x.id)||{}).st==='done')],['التوصيات الجارية', cnt(rec,x=>(D.recs.find(y=>y.id===x.id)||{}).st==='ongoing')],
@@ -903,7 +1121,7 @@ Dash.boot({
         const d2 = {}; COLS.forEach((c,i)=>d2[c]=r[1+i]); const k = COLS.length;
         OTHER = {CS:r[0], D:d2, VL:r[k+1], AB:r[k+2], MN:r[k+3], HR:r[k+4], TR:mapTR(RAWN, per2), RP:mapRP(RAWR, per2)};
       }catch(e){ console.error(e); OTHER = {CS:[], D:(()=>{const d2={}; COLS.forEach(c=>d2[c]=[]); return d2;})(), VL:[], AB:[], MN:[], HR:[], TR:[], RP:[]}; }
-      OTHERLOADING = false; render();
+      OTHER.D.stRec = D.stRec; OTHERLOADING = false; render();
     }
     function withData(o, fn){
       const sv = {CS,D,VL,AB,MN,HR,TR,RP};
@@ -942,19 +1160,18 @@ Dash.boot({
 
     /* ===== لوحة المعلومات ===== */
     function homePane(){
-      const items = inboxItems(), fresh = items.filter(i=>!done(i) && !i.trDone);
+      const items = inboxItems(), fresh = items.filter(i=>i.grp!=='e' && inPool(i));
       const due = CS.filter(c=>c.st!=='closed' && c.nextFollow && c.nextFollow<=dk);
       const rec = recsList().filter(x=>(D.recs.find(y=>y.id===x.id)||{}).st!=='done');
       const S = (n,l,tone,t,s)=>'<button type="button" class="stat '+tone+'" data-go="'+t+(s?'|'+s:'')+'"><span class="n">'+A(n)+'</span><span class="l">'+l+'</span></button>';
       return '<section class="stats">'+S(fresh.length,'إحالات جديدة غير معالجة',fresh.length?'bad':'','inbox','a')
         +S(CS.filter(c=>c.st==='open').length,'حالات مفتوحة','warn','cases','list')+S(due.length,'متابعات مستحقة',due.length?'bad':'','cases','list')
-        +S(D.sessions.length,'الجلسات هذا الفصل','','sess','indiv')+S(rec.length,'توصيات لم تُنفذ بعد','warn','inbox','c')+S(items.filter(i=>i.grp==='d').length,'حالات عالية الخطورة','bad','inbox','d')+'</section>'
-        +'<section class="card"><div class="hd"><h2>متابعات مستحقة</h2></div><div class="lst">'+caseCards(c=>c.st!=='closed' && c.nextFollow && c.nextFollow<=dk)+'</div></section>'
-        +'<section class="card"><div class="hd"><h2>أحدث الإحالات الواردة</h2></div><ul class="lst">'+(fresh.slice(0,5).map(itemHtml).join('') || '<li class="muted">لا إحالات جديدة.</li>')+'</ul></section>';
+        +S(live(D.sessions).length,'الجلسات هذا الفصل','','sess','indiv')+S(rec.length,'توصيات لم تُنفذ بعد','warn','inbox','c')+S(items.filter(i=>i.grp!=='e' && itemHome(i)==='hr').length,'حالات عالية الخطورة','bad','inbox','d')+'</section>'
+        +'<section class="card"><div class="hd"><h2>متابعات مستحقة</h2></div><div class="lst">'+caseCards(c=>c.st!=='closed' && c.nextFollow && c.nextFollow<=dk)+'</div></section>';
     }
 
     /* ===== العرض ===== */
-    const CUR = {tab:'home', sub:{}};
+    const CUR = {tab:'home', sub:{}, ist:{}, sf:{}};
     function render(){
       const t = CUR.tab, subs = SUBS[t]; if(subs && !CUR.sub[t]) CUR.sub[t] = subs[0][0];
       const sub = CUR.sub[t];
@@ -966,7 +1183,7 @@ Dash.boot({
         let inner = '';
         if(t==='home') inner = homePane();
         else if(t==='inbox') inner = inboxPane(sub);
-        else if(t==='plan') inner = crudPane('plans',sub,subs.find(s=>s[0]===sub)[1]);
+        else if(t==='plan') inner = sub==='group' ? groupPane() : crudPane('plans',sub,subs.find(s=>s[0]===sub)[1], (sub==='annual' && period==='second' && canEdit) ? '<button type="button" class="btn" data-cp="1">نسخ الخطة من الفصل الأول</button>' : '');
         else if(t==='cases') inner = casesPane(sub);
         else if(t==='sess') inner = sessPane(sub);
         else if(t==='hasr') inner = sub==='aid' ? aidPane() : crudPane('hasr',sub,subs.find(s=>s[0]===sub)[1]);
@@ -974,7 +1191,9 @@ Dash.boot({
         else if(t==='rep') inner = repPane(sub);
         h = (t==='home' ? inner : '<section class="card">'+(canEdit?'':'<div class="nt">اطلاع فقط: لا تعديل في هذه الصفحة.</div>')+seg+inner+'</section>');
       }
+      const keep = {}; ['subs','ist'].forEach(k=>{ const el = document.getElementById(k); if(el) keep[k] = el.scrollLeft; });
       $('#body').innerHTML = h;
+      ['subs','ist'].forEach(k=>{ const el = document.getElementById(k); if(!el) return; if(keep[k]!=null) el.scrollLeft = keep[k]; const on = el.querySelector('.on'); if(on){ const r = on.getBoundingClientRect(), q = el.getBoundingClientRect(); if(r.left<q.left || r.right>q.right) el.scrollLeft += (r.left + r.right)/2 - (q.left + q.right)/2; } });
     }
     const tabsFor = mgrOnly ? [['cases','الحالات']] : TABS;
     if(mgrOnly) CUR.tab = 'cases';
@@ -983,14 +1202,15 @@ Dash.boot({
     $('#body').addEventListener('click', async e=>{
       const g = a=>e.target.closest('['+a+']'); let b;
       if(b=g('data-s')){ CUR.sub[CUR.tab]=b.dataset.s; render(); return; }
+      if(b=g('data-it')){ CUR.ist = CUR.ist || {}; CUR.ist[b.dataset.ik || ('inbox:'+(CUR.sub.inbox||'a'))] = b.dataset.it; render(); return; }
+      if(b=g('data-cp')){ copyAnnual(); return; }
+      if(b=g('data-gm')){ if(canEdit) groupMembers(); return; }
+      if(b=g('data-gmp')){ const g2 = D.plans.find(x=>x.id==='group_members') || {}; printTable('كشف أعضاء جماعة التوجيه والإرشاد', [['اسم الطالب',x=>x.name],['الصف',x=>x.className]], g2.members||[], {land:false}); return; }
       if(b=g('data-go')){ const p=b.dataset.go.split('|'); CUR.tab=p[0]; if(p[1]) CUR.sub[p[0]]=p[1]; document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x.dataset.t===CUR.tab)); render(); return; }
       if(CUR.tab==='inbox' || CUR.tab==='home'){ if(await inboxClick(e)) return; }
       if(b=g('data-oc2')){ openCase(b.dataset.oc2); return; }
       if(b=g('data-nc')){ if(!canEdit) return; formModal('فتح دراسة حالة', [{k:'stu',l:'الطالب',t:'student',req:true},{k:'type',l:'نوع الحالة',t:'select',o:CASE_TYPES},{k:'src',l:'سبب الفتح',t:'text'}], {type:CASE_TYPES[0]}, async out=>{ const c = await newCase({seat:out.seat, name:out.name, cls:out.className, type:out.type, src:out.src||'فتح مباشر'}); render(); openCase(c.id); }); return; }
-      if(b=g('data-cl')){ printTable('كشف الحالات الفردية', [['الطالب',x=>x.name],['الصف',x=>x.className],['النوع',x=>x.type],['الحالة',x=>(CASE_ST[x.st]||[''])[0]],['المصدر',x=>x.src],['المتابعة القادمة',x=>dshow(x.nextFollow)]], CS, {top:'<div class="cnf">سري</div>'}); return; }
-      if(b=g('data-gadd')){ pickCase(b.dataset.gadd); return; }
-      if(b=g('data-ge')){ const p=b.dataset.ge.split('|'); groupEdit(p[0],p[1]); return; }
-      if(b=g('data-gp')){ const p=b.dataset.gp.split('|'); groupPrint(p[0],p[1]); return; }
+      if(b=g('data-cl')){ printTable('كشف الحالات الفردية', [['الطالب',x=>x.name],['الصف',x=>x.className],['النوع',x=>x.type],['الحالة',x=>(CASE_ST[x.st]||[''])[0]],['المصدر',x=>x.src],['المتابعة القادمة',x=>dshow(x.nextFollow)]], homeCases('cases'), {top:'<div class="cnf">سري</div>'}); return; }
       if(b=g('data-add')){ const p=b.dataset.add.split('|'); crudAdd(p[0],p[1],(SUBS[CUR.tab].find(s=>s[0]===CUR.sub[CUR.tab])||[0,'سجل جديد'])[1]); return; }
       if(b=g('data-ed')){ const p=b.dataset.ed.split('|'); crudEdit(p[0],p[1]); return; }
       if(b=g('data-dl')){ const p=b.dataset.dl.split('|'); const soft = SOFT.includes(p[0]); if(!canEdit || !confirm(soft?'حذف هذا السجل؟ سيبقى ظاهرًا مشطوبًا مع بيان من حذفه.':'حذف هذا السجل نهائيًا؟')) return; try{ if(soft) await softDel(p[0],p[1]); else await del(p[0],p[1]); toast('حُذف السجل'); render(); }catch(er){ fail(er); } return; }
@@ -1000,15 +1220,35 @@ Dash.boot({
       if(b=g('data-aprt')){ printTable('كشف الإعانة والمكافأة', [['الطالب',x=>x.name],['الصف',x=>x.className],['النوع',x=>x.type],['التاريخ',x=>x.dateH]], live(AIDS).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)), {land:false}); return; }
       if(b=g('data-sadd')){ sessAdd(b.dataset.sadd); return; }
       if(b=g('data-sed')){ sessEdit(b.dataset.sed); return; }
-      if(b=g('data-sdl')){ if(!canEdit || !confirm('حذف الجلسة نهائيًا؟')) return; try{ await del('sessions', b.dataset.sdl); toast('حُذفت الجلسة'); render(); }catch(er){ fail(er); } return; }
+      if(b=g('data-sdl')){ if(!canEdit || !confirm('حذف الجلسة؟ ستبقى ظاهرة مشطوبة مع بيان من حذفها وتخرج من الإحصاءات.')) return; try{ await softDel('sessions', b.dataset.sdl); toast('حُذفت الجلسة'); render(); }catch(er){ fail(er); } return; }
       if(b=g('data-sp')){ const s=D.sessions.find(x=>x.id===b.dataset.sp); if(s) sessPrint(s); return; }
       if(b=g('data-sat')){ const s=D.sessions.find(x=>x.id===b.dataset.sat); if(s) attPrint(s); return; }
       if(b=g('data-vs')){ try{ await put('reports', b.dataset.vs+'_'+period, {vis:$('#vis').value.trim(), kind:b.dataset.vs}); toast('حُفظت المرئيات'); }catch(er){ fail(er); } return; }
       if(b=g('data-rp')){ repPrint(b.dataset.rp); return; }
     });
 
+    $('#body').addEventListener('input', e=>{
+      if(!['sfq','sff','sft'].includes(e.target.id)) return;
+      const kind = CUR.sub.sess || 'indiv', f = sfOf(kind);
+      f.q = $('#sfq').value; f.from = $('#sff').value; f.to = $('#sft').value;
+      const el = $('#sessList'); if(el) el.outerHTML = sessListHtml(kind);
+    });
     try{ await loadAll(); }catch(e){ console.error(e); toast('تعذّر تحميل بعض البيانات'); }
     render();
+    /* مزامنة اطلاع أعضاء اللجنة: قائمة المحالين (cmRefs) ووسم cmRef على ملفات المحالين */
+    async function syncCm(){
+      if(!canEdit || mgrOnly) return;
+      const items = inboxItems().filter(i=>i.grp==='b' && i.seat);
+      for(const it of items){
+        const seat = String(it.seat);
+        try{
+          if(!CMRS.some(x=>String(x.seat)===seat)){ const rec = {period, seat, name:it.name, className:it.cls||'', why:it.title||'', at:it.at||Date.now(), by:env.me.id, byName:env.me.name, from:'agent'}; await sa.collection('cmRefs').doc(period+'__'+seat).set(rec, {merge:true}); CMRS.push(rec); }
+          for(const col of ['caseFiles','sessions','stRec']){ for(const x of D[col].filter(y=>String(y.seat)===seat && !y.cmRef)){ await base.collection(col).doc(x.id).set({cmRef:true}, {merge:true}); x.cmRef = true; } }
+          for(const c of CS.filter(y=>String(y.seat)===seat && !y.cmRef)){ await base.collection('cases').doc(c.id).set({cmRef:true}, {merge:true}); c.cmRef = true; }
+        }catch(e){ console.warn(e); }
+      }
+    }
+    syncCm();
   }
 });
 </script>

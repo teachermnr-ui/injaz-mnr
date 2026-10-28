@@ -621,17 +621,19 @@ const MYBOARD_ITEMS = [
   // رائد النشاط (مقرر مجلس النشاط): يدخل منصة النشاط المدرسي كاملة دون حاجة لمنحه صلاحية من «الصلاحيات الخاصة»
   // الإشعارات والمرفقات (2026-10-20): ما وصلني من وكيل الشؤون المدرسية للتوقيع أو الاطلاع، وللمدير ما ينتظر اعتماده، ولصاحب صلاحية الوكيل اعتمادات المدير
   { key:'notices', href:'notices.html', icon:'🔔', label:'الإشعارات والمرفقات' },
+  // لجنة التوجيه والإرشاد (2026-10-28): للمعلم المختار عضوًا في اللجنة فقط
+  { key:'cmt', action:'cmt', icon:'🧭', label:'لجنة التوجيه والإرشاد', when:()=>MYBOARD.cm.member },
   { key:'actcoord', href:'activity.html', icon:'🧩', label:'منصة النشاط المدرسي (رائد النشاط)', when:()=>MYBOARD.act.coord },
 ];
-const MYBOARD = { pendingCirculars:0, scheduleChanged:false, apptsToday:0, followupsDue:0, visits:[], visitsSig:'', visitsChanged:false, duty:[], dutySig:'', dutyChanged:false, wait:[], waitSig:'', waitChanged:false, act:{ visible:false, pending:0, coord:false }, notices:0 };
+const MYBOARD = { pendingCirculars:0, scheduleChanged:false, apptsToday:0, followupsDue:0, visits:[], visitsSig:'', visitsChanged:false, duty:[], dutySig:'', dutyChanged:false, wait:[], waitSig:'', waitChanged:false, act:{ visible:false, pending:0, coord:false }, notices:0, cm:{ member:false, tasks:[], pend:0 } };
 const myBoardDotOn = key=> key==='circulars' ? MYBOARD.pendingCirculars>0 : key==='schedule' ? MYBOARD.scheduleChanged
-  : key==='appts' ? MYBOARD.apptsToday>0 : key==='followups' ? MYBOARD.followupsDue>0 : key==='visits' ? MYBOARD.visitsChanged : key==='duty' ? MYBOARD.dutyChanged : key==='wait' ? MYBOARD.waitChanged : key==='activities' ? MYBOARD.act.pending>0 : key==='notices' ? MYBOARD.notices>0 : false;
+  : key==='appts' ? MYBOARD.apptsToday>0 : key==='followups' ? MYBOARD.followupsDue>0 : key==='visits' ? MYBOARD.visitsChanged : key==='duty' ? MYBOARD.dutyChanged : key==='wait' ? MYBOARD.waitChanged : key==='activities' ? MYBOARD.act.pending>0 : key==='notices' ? MYBOARD.notices>0 : key==='cmt' ? MYBOARD.cm.pend>0 : false;
 async function refreshMyBoardAlerts(){
   MYBOARD.pendingCirculars = 0; MYBOARD.scheduleChanged = false; MYBOARD.apptsToday = 0; MYBOARD.followupsDue = 0;
   MYBOARD.visits = []; MYBOARD.visitsSig = ''; MYBOARD.visitsChanged = false;
   MYBOARD.duty = []; MYBOARD.dutySig = ''; MYBOARD.dutyChanged = false;
   MYBOARD.wait = []; MYBOARD.waitSig = ''; MYBOARD.waitChanged = false;
-  MYBOARD.act = { visible:false, pending:0, coord:false }; MYBOARD.notices = 0;
+  MYBOARD.act = { visible:false, pending:0, coord:false }; MYBOARD.notices = 0; MYBOARD.cm = { member:false, tasks:[], pend:0 };
   updateMyBoardBadges();
   if(!myBoardVisible()) return;
   try{
@@ -746,6 +748,7 @@ async function refreshMyBoardAlerts(){
     let seen = ''; try{ seen = localStorage.getItem(myWaitSeenKey()) || ''; }catch(e){}
     MYBOARD.waitChanged = !!MYBOARD.waitSig && MYBOARD.waitSig !== seen;
   }catch(e){}
+  try{ await loadMyCm(); }catch(e){}
   updateMyBoardBadges();
 }
 /* «لوحتي ← انتظاري»: حصص الانتظار المسندة للمعلم اليوم/غدًا (التحديد اليومي في أداة الجدول) */
@@ -761,6 +764,75 @@ function openMyWait(){
   modal('<h2>انتظاري</h2>'+(rows||'<div class="empty">لا توجد حصص انتظار.</div>')+'<div class="modal-row"><button class="btn" onclick="closeModal()">إغلاق</button></div>');
   try{ localStorage.setItem(myWaitSeenKey(), MYBOARD.waitSig); }catch(e){}
   MYBOARD.waitChanged = false; updateMyBoardBadges();
+}
+/* ============ «لوحتي ← لجنة التوجيه والإرشاد» (2026-10-28): للمعلم العضو فقط، قراءة ما يخص اللجنة وتسجيل ما يُسنَد إليه ============
+   الأعضاء يطّلعون على ملفات المحالين إلى اللجنة وقراراتها فقط، ولا صلاحية لهم خارجها (قواعد Firestore: cmMember). */
+const CM_LBL = {
+  study:{t:'دراسة الحالة', f:{reason:'سبب الدراسة',family:'الجانب الأسري',academic:'الجانب الدراسي',health:'الجانب الصحي',social:'الجانب الاجتماعي',behavior:'الجانب السلوكي',strengths:'جوانب القوة',causes:'أسباب المشكلة',diagnosis:'التشخيص',recs:'التوصيات والخطة العلاجية'}},
+  comp:{t:'السجل الشامل', f:{guardian:'ولي الأمر',phone:'هاتف التواصل',address:'السكن',siblings:'عدد الإخوة وترتيب الطالب',level:'المستوى الدراسي العام',interests:'الميول والهوايات',hnotes:'ملاحظات صحية',snotes:'ملاحظات اجتماعية',tnotes:'ملاحظات المعلمين'}},
+  plan:{t:'خطة تعديل السلوك', f:{target:'السلوك المراد تعديله',base:'مستوى السلوك الحالي',goal:'الهدف',strat:'الأساليب والإجراءات',reinf:'التعزيز',from:'من تاريخ',to:'إلى تاريخ',resp:'المسؤول عن التنفيذ',eval:'التقويم'}}
+};
+async function loadMyCm(){
+  MYBOARD.cm = { member:false, tasks:[], pend:0 };
+  const sa = db.collection('studentAffairs').doc(CURRENT.schoolId);
+  const cm = await sa.collection('committee').doc(SESSION.period).get();
+  const d = cm.exists ? cm.data() : null;
+  if(!d || !(d.t||[]).some(x=>x.id===CURRENT.id)) return;
+  MYBOARD.cm.member = true;
+  try{ const ts = await sa.collection('committeeTasks').where('memberId','==',CURRENT.id).get();
+    MYBOARD.cm.tasks = ts.docs.map(x=>Object.assign({id:x.id}, x.data())).filter(x=>x.period===SESSION.period);
+    MYBOARD.cm.pend = MYBOARD.cm.tasks.filter(x=>x.st==='pending').length; }catch(e){}
+}
+async function openMyCm(){
+  const sid = CURRENT.schoolId, P = SESSION.period, sa = db.collection('studentAffairs').doc(sid), cr = db.collection('counselor').doc(sid);
+  modal('<h2>لجنة التوجيه والإرشاد</h2><div id="cmBody" class="umeta">جارٍ التحميل…</div><div class="modal-row"><button class="btn" onclick="closeModal()">إغلاق</button></div>');
+  const get = async q=>{ try{ return (await q.get()).docs.map(d=>Object.assign({id:d.id}, d.data())); }catch(e){ return []; } };
+  const dshow = k=>{ try{ return k ? new Date(k+'T12:00:00').toLocaleDateString('ar-SA-u-ca-islamic-umalqura',{year:'numeric',month:'long',day:'numeric'}) : ''; }catch(e){ return k||''; } };
+  const [fm, mn, rf, ts] = await Promise.all([
+    sa.collection('formation').doc(P).get().then(d=>d.exists?d.data():null).catch(()=>null),
+    get(sa.collection('minutes').where('period','==',P)), get(sa.collection('cmRefs').where('period','==',P)),
+    get(sa.collection('committeeTasks').where('memberId','==',CURRENT.id))]);
+  const tasks = ts.filter(x=>x.period===P).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const card = h=>'<div class="card" style="margin:8px 0;padding:12px">'+h+'</div>';
+  const MST = {pending:'بانتظار توقيع الأعضاء واعتماد الوكيل', agentOk:'اعتمده الوكيل — بانتظار اعتماد المدير', approved:'اعتمده المدير'};
+  const T = (t,k)=>'<div class="field"><label>'+k[1]+'</label><textarea data-tk="'+t.id+'" data-f="'+k[0]+'" rows="2" style="width:100%">'+esc(t[k[0]]||'')+'</textarea></div>';
+  const draw = ()=>{
+    const fmH = fm && fm.st==='approved' ? card('<b>قرار التشكيل</b><div class="umeta">رقم القرار: '+esc(fm.decNo||'')+' — '+esc(dshow(fm.decDate))+'</div><div class="umeta">الرئيس: '+esc((fm.pres||{}).name||'')+' · الأعضاء: '+esc([(fm.edu||{}).name,(fm.cn||{}).name].concat((fm.t||[]).map(x=>x.name)).filter(Boolean).join('، '))+'</div>') : card('<b>قرار التشكيل</b><div class="umeta">لم يُعتمد قرار التشكيل بعد.</div>');
+    const tkH = tasks.length ? tasks.map(t=>card('<b>'+(t.kind==='indiv'?'جلسة توجيه فردي':(t.kind==='group'?'جلسة إرشاد جمعي':'متابعة سريعة'))+' — '+esc(t.name)+'</b> <span class="umeta">'+esc(t.className||'')+'</span><div class="umeta">'+esc(dshow(t.date))+'</div><div>'+esc(t.topic||'')+'</div>'+(t.goal?'<div class="umeta">'+esc(t.goal)+'</div>':'')
+      +(t.st==='done' ? '<div class="umeta" style="color:var(--ok,#2f7d4f)">سُجِّلت بواسطتك</div>'+[['proc','ما تم في الجلسة'],['result','النتائج'],['recs','التوصيات'],['res','النتيجة']].filter(k=>t[k[0]]).map(k=>'<div class="umeta">'+k[1]+': '+esc(t[k[0]])+'</div>').join('')
+        : ((t.kind==='indiv'||t.kind==='group')?[['proc','ما تم في الجلسة'],['result','النتائج'],['recs','التوصيات']]:[['res','نتيجة المتابعة']]).map(k=>T(t,k)).join('')+'<button class="btn" data-tsave="'+t.id+'">حفظ التسجيل</button>'))).join('') : '<div class="umeta">لا مهام مسندة إليك.</div>';
+    const rfH = rf.length ? rf.map(r=>'<div class="card" style="margin:8px 0;padding:10px;display:flex;justify-content:space-between;gap:8px;align-items:center"><div><b>'+esc(r.name)+'</b> <span class="umeta">'+esc(r.className||'')+'</span><div class="umeta">'+esc(r.why||'')+'</div></div><button class="btn" data-file="'+esc(r.seat)+'">فتح الملف</button></div>').join('') : '<div class="umeta">لا طلاب محالون إلى اللجنة.</div>';
+    const mnH = mn.length ? mn.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(m=>card('<b>'+esc(m.name||'')+'</b> <span class="umeta">'+esc(m.className||'')+' — اجتماع '+esc(dshow((m.content||{}).dateG))+((m.content||{}).place?' — '+esc(m.content.place):'')+'</span><div class="umeta">'+(MST[m.st]||'')+'</div>'
+      +(m.st==='approved'?'<ol style="margin:6px 0;padding-right:22px">'+((m.content||{}).recs||[]).map(r=>'<li>'+esc(r)+'</li>').join('')+'</ol>':''))).join('') : '<div class="umeta">لا محاضر بعد.</div>';
+    $('#cmBody').innerHTML = fmH+'<h3 style="margin:12px 0 4px">مهامي</h3>'+tkH+'<h3 style="margin:12px 0 4px">المحالون إلى اللجنة</h3>'+rfH+'<h3 style="margin:12px 0 4px">المحاضر والتوصيات</h3>'+mnH;
+  };
+  const showFile = async seat=>{
+    $('#cmBody').innerHTML = '<div class="umeta">جارٍ تحميل الملف…</div>';
+    const q = c=>get(cr.collection(c).where('period','==',P).where('cmRef','==',true));
+    const [cs, cf, ss, sr] = await Promise.all([q('cases'), q('caseFiles'), q('sessions'), get(cr.collection('stRec').where('cmRef','==',true))]);
+    const c = cs.filter(x=>String(x.seat)===String(seat)).sort((a,b)=>(b.openedAt||0)-(a.openedAt||0))[0];
+    const f = c ? (cf.find(x=>x.id===c.id)||{}) : {}, rec = sr.find(x=>String(x.seat)===String(seat)) || {};
+    const grp = (g,v)=>{ const L = Object.keys(CM_LBL[g].f).filter(k=>v&&v[k]); return card('<b>'+CM_LBL[g].t+'</b>'+(L.length?L.map(k=>'<div class="umeta">'+CM_LBL[g].f[k]+': <span style="color:var(--fg,inherit)">'+esc(g==='plan'&&(k==='from'||k==='to')?dshow(v[k]):v[k])+'</span></div>').join(''):'<div class="umeta">لم تُعبَّأ بعد.</div>')); };
+    const S = ss.filter(x=>String(x.seat)===String(seat)).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    $('#cmBody').innerHTML = '<button class="btn" data-back="1">← رجوع</button><h3 style="margin:10px 0 4px">'+esc((c||{}).name||(rf.find(r=>String(r.seat)===String(seat))||{}).name||'')+'</h3>'
+      + (c ? card('<div class="umeta">نوع الحالة: '+esc(c.type||'')+' — المصدر: '+esc(c.src||'')+'</div>') : card('<div class="umeta">لم تُفتح دراسة حالة لهذا الطالب بعد.</div>'))
+      + grp('study', f.study) + grp('comp', rec.comp) + grp('plan', f.plan)
+      + card('<b>المتابعات والجلسات</b>'+((f.follow||[]).map(x=>'<div class="umeta">'+esc(dshow(x.date))+' · متابعة: '+esc(x.text||'')+(x.res?' — '+esc(x.res):'')+'</div>').join('')+S.map(x=>'<div class="umeta">'+esc(dshow(x.date))+' · جلسة: '+esc(x.topic||'')+'</div>').join('') || '<div class="umeta">لا شيء.</div>'));
+  };
+  draw();
+  $('#cmBody').addEventListener('click', async e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    if(b.dataset.back){ draw(); return; }
+    if(b.dataset.file){ showFile(b.dataset.file); return; }
+    if(b.dataset.tsave){
+      const t = tasks.find(x=>x.id===b.dataset.tsave); if(!t) return;
+      const upd = { st:'done', doneAt:Date.now(), doneByName:CURRENT.username||'' };
+      document.querySelectorAll('[data-tk="'+t.id+'"]').forEach(el=>{ upd[el.dataset.f] = el.value.trim(); });
+      if(!Object.keys(upd).some(k=>!['st','doneAt','doneByName'].includes(k) && upd[k])){ toast('اكتب ما تم قبل الحفظ'); return; }
+      try{ await sa.collection('committeeTasks').doc(t.id).update(upd); Object.assign(t, upd); MYBOARD.cm.pend = tasks.filter(x=>x.st==='pending').length; updateMyBoardBadges(); draw(); toast('حُفظ التسجيل وسيطّلع عليه الموجه'); }
+      catch(er){ toast('تعذّر الحفظ'); console.error(er); }
+    }
+  });
 }
 /* «لوحتي ← مناوبتي»: تكليفات المعلم من النسخة المعتمدة لأداة «المناوبة والإشراف» (لكل مرحلة كُلِّف فيها) */
 const myDutySeenKey = ()=>'injaz_dutySeen_'+CURRENT.id+'_'+CURRENT.schoolId+'_'+SESSION.period;
@@ -862,6 +934,7 @@ function toggleMyBoardMenu(btn){
     if(it.dataset.action==='visits'){ openMyVisits(); return; }
     if(it.dataset.action==='duty'){ openMyDuty(); return; }
     if(it.dataset.action==='wait'){ openMyWait(); return; }
+    if(it.dataset.action==='cmt'){ openMyCm(); return; }
     if(it.dataset.action==='followups'){ window.location.href='counselor.html'; return; }
     window.location.href=it.dataset.href;
   });

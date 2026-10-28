@@ -5525,7 +5525,7 @@ function paintOmrInbox(){
     const st=ST[n.trSt||'new']||ST.new;
     const meta=[n.subject, n.lessonNo?('الحصة '+toArabic(n.lessonNo)):'', n.dayName, n.dateH?toArabic(n.dateH):''].filter(Boolean).map(escapeHtml).join(' · ');
     return '<div class="subcard"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div style="font-weight:700">'+escapeHtml(n.studentName||'')+(n.className?(' · '+escapeHtml(n.className)):'')+'</div>'+
-      '<span style="padding:2px 10px;border-radius:12px;font-size:12px;font-weight:800;color:'+st[1]+';background:'+st[2]+'">'+st[0]+'</span></div>'+
+      '<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="padding:2px 10px;border-radius:12px;font-size:12px;font-weight:800;color:'+st[1]+';background:'+st[2]+'">'+st[0]+'</span>'+(n.trVio?'<span style="padding:2px 10px;border-radius:12px;font-size:12px;font-weight:800;color:#b4412f;background:#f9e1dc">سُجلت مخالفة</span>':'')+'</span></div>'+
       '<div class="sub">السبب: <b>'+escapeHtml(n.trReason||n.referralReason||'')+'</b></div>'+(meta?'<div class="sub">'+meta+'</div>':'')+
       '<div style="margin:8px 0;padding:9px 11px;background:var(--bg-ffffff,#fff);border-right:3px solid var(--teal,#0f766e);border-radius:8px;font-weight:600;white-space:pre-wrap">'+escapeHtml(n.text)+'</div></div>';
   }).join('') : '<div class="empty">لا تحويلات مرسلة.</div>');
@@ -5613,7 +5613,7 @@ function doMoveStudentOmr(seat){
    ويتوقف بعد ١٥ دقيقة خمول ويُستأنف عند العودة. */
 const OLIVE = { subs:{}, lastActive: Date.now(), paused:false, sig:null };
 function oliveOff(){ Object.keys(OLIVE.subs).forEach(k=>{ try{ OLIVE.subs[k](); }catch(e){} delete OLIVE.subs[k]; }); }
-function oliveSig(arr){ return arr.map(n=>n.id+':'+(n.createdAt||0)+':'+((n.replies||[]).length)+':'+(n.closed?1:0)+':'+(n.trSt||'')).sort().join('|'); }
+function oliveSig(arr){ return arr.map(n=>n.id+':'+(n.createdAt||0)+':'+((n.replies||[]).length)+':'+(n.closed?1:0)+':'+(n.trSt||'')+':'+(n.trVio?1:0)).sort().join('|'); }
 function oliveNotice(show){
   const el=document.getElementById('omrLiveNotice'); if(!el) return;
   el.innerHTML = show ? '<button style="width:100%;margin-bottom:10px;padding:10px;border:none;border-radius:10px;background:var(--teal,var(--bg-0f766e,#0f766e));color:var(--fg-ffffff,#fff);font:inherit;font-weight:700;cursor:pointer" onclick="oliveNotice(false);renderOmrNotes()">🔄 تحديثات جديدة — اضغط للعرض</button>' : '';

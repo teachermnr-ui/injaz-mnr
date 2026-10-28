@@ -540,7 +540,7 @@ function minutesHtml(m, c){
   const mem = (m.members||[]).filter(x=>x.present).map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.role)+'</td></tr>').join('');
   return '<div class="sub" style="margin-top:10px">'+esc(m.school||'')+' — '+esc(m.eduDept||'')+'</div>'+
     '<h4 style="margin:10px 0">محضر اجتماع لجنة التوجيه والإرشاد بالمدرسة</h4>'+
-    '<div class="sub">'+esc(m.dayName||'')+' '+A(esc(m.dateH||''))+' هـ — الحالة: '+esc(m.caseText||'')+'</div>'+
+    '<div class="sub">'+esc(m.dayName||'')+' '+A(esc(m.dateH||''))+' هـ'+(m.place?' — المكان: '+esc(m.place):'')+' — الحالة: '+esc(m.caseText||'')+'</div>'+
     '<b>نقاط النقاش خلال الاجتماع:</b>'+ol(m.points)+'<b>التوصيات:</b>'+ol(m.recs)+
     '<b>الأعضاء الحاضرون:</b><table style="width:100%;border-collapse:collapse;margin-top:6px" border="1" cellpadding="6"><tr><th>م</th><th>الاسم</th><th>عمله في اللجنة</th></tr>'+mem+'</table>'+
     (c && c.approvedAt?'<div class="alert ok" style="margin-top:10px">اعتمد المدير هذا المحضر.</div>':'');

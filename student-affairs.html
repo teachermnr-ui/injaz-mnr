@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-27.2 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
+<!-- إصدار: 2026-10-28.1 — وكيل الشؤون الطلابية: المرحلة ١ (الهيكل) + المرحلة ٢ (غياب الطلاب والأعذار والسلّم) + المرحلة ٣ (التحويلات) + المرحلة ٤ (المخالفات والحسم والسلوك والمواظبة) + المرحلة ٥ (اللجنة والإعانة والموافقات) (طبق الأصل من النموذج المعتمد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -411,7 +411,7 @@ tr.gone del{text-decoration:line-through}
 <div class="ov" id="mnOv" hidden>
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="mnT" style="max-width:640px;max-height:90vh;overflow:auto">
     <strong id="mnT">محضر اجتماع لجنة التوجيه والإرشاد</strong><div class="muted" id="mnSub"></div>
-    <div class="fgrid"><div><label for="mnD">التاريخ</label><input type="date" id="mnD" class="ci sel"></div><div><label for="mnTm">الوقت</label><input type="time" id="mnTm" class="ci sel"></div></div>
+    <div class="fgrid"><div><label for="mnD">التاريخ</label><input type="date" id="mnD" class="ci sel"></div><div><label for="mnTm">الوقت</label><input type="time" id="mnTm" class="ci sel"></div><div style="grid-column:1/-1"><label for="mnPl">مكان الاجتماع</label><input type="text" id="mnPl" class="ci" style="width:100%" placeholder="مثال: غرفة الإدارة"></div></div>
     <div class="muted" id="mnDay"></div>
     <label class="muted">الأعضاء الحاضرون</label><div id="mnMem" style="display:flex;flex-direction:column;gap:4px"></div>
     <label class="muted">نقاط النقاش خلال الاجتماع</label><div id="mnPts" style="display:flex;flex-direction:column;gap:6px"></div><div class="row"><button type="button" class="btn" id="mnAddP">+ نقطة</button></div>
@@ -602,7 +602,7 @@ Dash.boot({
         const now=Date.now(); const acts=(s.doc.actions||[]).concat([{k, n:LV[k].d, at:now, date:dk, g:false, by:env.me.id, byName:env.me.name}]);
         try{
           if(k===LV.length-1){ const dec={st:'wait', at:now, date:dk}; await saveDoc(Object.assign(s,{doc:Object.assign({},s.doc,{actions:acts,moved:true,decision:dec})}),{decision:dec}); toast('أُحيل الطالب إلى القرارات للمدير (مخاطبة الجهات)'); cRender(); }
-          else { s.doc=Object.assign({},s.doc,{actions:acts}); await saveDoc(s); toast('سُجّل: '+LV[k].k); }
+          else { s.doc=Object.assign({},s.doc,{actions:acts}); await saveDoc(s); if(k===1) cmRefPut(s.seat, s.name, s.cls, 'غياب '+A(LV[k].d)+' أيام بدون عذر'); toast('سُجّل: '+LV[k].k); }
         }catch(er){ fail(er); await loadAbs(); }
         gRender(); return; }
       const y=e.target.closest('[data-y]'); if(y) openDays(y.dataset.y);
@@ -716,6 +716,7 @@ Dash.boot({
     /* «تحويل لمخالفة»: يظهر للوكيل في تحويلات «مشاغبة» و«أخرى»، ويفتح نموذج المخالفة بالطالب وتاريخ التحويل */
     const vioBtn = r=>{ if(r.why!=='مشاغبة' && r.why!=='أخرى') return '';
       if(VL.some(v=>v.srcNote===r.id)) return '<div class="row"><span class="tag ok">حُوّل إلى مخالفة</span></div>';
+      if(r.st==='ref' || r.st==='done' || ['ref','done'].includes(trFile(r.seat))) return '<div class="row"><span class="muted">الملف بيد الموجه الطلابي</span></div>';
       return canEdit ? '<div class="row"><button type="button" class="btn" data-rv="'+r.id+'">تحويل لمخالفة</button></div>' : ''; };
     const trConv = r=>VL.some(v=>v.srcNote===r.id);
     function rRender(){
@@ -930,6 +931,7 @@ Dash.boot({
         createdAt:now, createdBy:env.me.id, createdByName:env.me.name};
       try{ await ref.set(rec); }catch(er){ fail(er); return; }
       VL.push(Object.assign({id:ref.id},rec));
+      if(t && t.noteId){ try{ await nCol.doc(t.noteId).update({trVio:true, trVioAt:now}); const tr0=TR.find(x=>x.id===t.noteId); if(tr0) tr0.vio=true; }catch(er){ console.warn(er); } }
       vSelS=null; vFromTr=null; trBanner(); vBoxDraw(); $('#vW').value=''; $('#vWb').textContent='اختر المخالفة'; $('#vWo').value=''; vOpts();
       refreshV(); rRender(); toast(t?'حُوّل التحويل إلى مخالفة وسُجّلت في السجل':'سُجّلت المخالفة');
     };
@@ -937,7 +939,7 @@ Dash.boot({
       const x=e.target.closest('[data-vs]'), c=e.target.closest('[data-vc]');
       try{
         if(x){ const v=VL.find(y=>y.id===x.dataset.vs); await vCol.doc(v.id).update({toDed:true, toDedAt:Date.now()}); v.toDed=true; toast('أُضيف إلى حسم السلوك'); }
-        else if(c){ const v=VL.find(y=>y.id===c.dataset.vc); await vCol.doc(v.id).update({cm:true, cmAt:Date.now(), cmBy:env.me.id}); v.cm=true; toast('سُجّلت الإحالة، وتظهر في قسم التوجيه الطلابي لاحقًا'); }
+        else if(c){ const v=VL.find(y=>y.id===c.dataset.vc); await vCol.doc(v.id).update({cm:true, cmAt:Date.now(), cmBy:env.me.id}); v.cm=true; cmRefPut(v.seat, v.name, v.className, v.w+' (الدرجة '+DEGN[v.d]+')'); toast('سُجّلت الإحالة، وتظهر في قسم التوجيه الطلابي لاحقًا'); }
         else return;
       }catch(er){ fail(er); return; }
       refreshV();
@@ -1050,11 +1052,12 @@ Dash.boot({
          approvals/{kind}__{seat}  موافقة ولي الأمر (bus|act): yes|no|none
          private/stamp        ختم المدير وتوقيعه (يقرؤه ويكتبه المدير وحده)
        المحضر يُرسل للأعضاء الحاضرين تعميمًا (circulars/{sid}/items بنوع committeeMinutes) للتوقيع؛ يعتمده المدير بعد اكتمال التواقيع ويطبعه وحده. */
-    const cmCol = base.collection('committee'), mnCol = base.collection('minutes'), hrCol = base.collection('highRisk'), aidCol = base.collection('aid'),
+    const cmCol = base.collection('committee'), mnCol = base.collection('minutes'), hrCol = base.collection('highRisk'), rfCol = base.collection('cmRefs'), aidCol = base.collection('aid'),
           aidCfg = base.collection('aidCfg').doc('main'), apCol = base.collection('approvals'), fmRef = base.collection('formation').doc(period);
+    const cmRefPut = (seat,name,cls,why)=>rfCol.doc(period+'__'+seat).set({period, seat:String(seat), name:name||'', className:cls||'', why:why||'', at:Date.now(), by:env.me.id, byName:env.me.name, from:'agent'}, {merge:true}).catch(e=>console.warn(e));
     const circRoot = db.collection('circulars').doc(sid), circItems = circRoot.collection('items');
     const ROLEN = {agent:'وكيل', counselor:'موجه طلابي', assistant:'كادر إداري', teacherAssistant:'مساعد معلم', teacher:'معلم'};
-    let STAFF = [], CMT = null, FM = null, FMSIG = {}, MN = [], MSIG = new Map(), HR = [], AIDS = [], AIDON = false, AIDOWN = 'agent', APR = new Map();
+    let STAFF = [], CMT = null, FM = null, FMSIG = {}, MN = [], MSIG = new Map(), HR = [], CMR = [], AIDS = [], AIDON = false, AIDOWN = 'agent', APR = new Map();
     const ordA = (a,b)=>String(a).localeCompare(String(b),'ar');
     async function loadStaff(){
       STAFF = [];
@@ -1072,11 +1075,12 @@ Dash.boot({
     }
     async function loadS5(){
       const E = {docs:[]};
-      const [cm, mn, hr, ac, cf, ap] = await Promise.all([ cmCol.doc(period).get().catch(()=>null), mnCol.get().catch(()=>E), hrCol.get().catch(()=>E), aidCol.get().catch(()=>E),
-        aidCfg.get().catch(()=>null), apCol.get().catch(()=>E) ]);
+      const [cm, mn, hr, ac, cf, ap, rf] = await Promise.all([ cmCol.doc(period).get().catch(()=>null), mnCol.get().catch(()=>E), hrCol.get().catch(()=>E), aidCol.get().catch(()=>E),
+        aidCfg.get().catch(()=>null), apCol.get().catch(()=>E), rfCol.get().catch(()=>E) ]);
       CMT = cm && cm.exists ? cm.data() : null;
       MN = mn.docs.map(d=>Object.assign({id:d.id}, d.data()));
       HR = hr.docs.map(d=>Object.assign({id:d.id}, d.data()));
+      CMR = rf.docs.map(d=>Object.assign({id:d.id}, d.data()));
       AIDS = ac.docs.map(d=>Object.assign({id:d.id}, d.data()));
       AIDON = !!(cf && cf.exists && cf.data().on); AIDOWN = (cf && cf.exists && cf.data().owner) || 'agent';
       APR = new Map(ap.docs.map(d=>[d.id, d.data()]));
@@ -1172,6 +1176,7 @@ Dash.boot({
       const out = [];
       VL.filter(v=>v.period===period && v.cm).forEach(v=>out.push({key:'v_'+v.id, seat:v.seat, name:v.name, cls:v.className, why:v.w+' (الدرجة '+DEGN[v.d]+')'}));
       AB.forEach(s=>{ const a=(s.doc.actions||[]).find(x=>x.k===1); if(a) out.push({key:'a_'+s.seat, seat:s.seat, name:s.name, cls:s.cls, why:'غياب '+A(a.n||5)+' أيام بدون عذر'}); });
+      CMR.filter(r=>r.period===period && !out.some(o=>String(o.seat)===String(r.seat))).forEach(r=>out.push({key:'r_'+r.seat, seat:String(r.seat), name:r.name, cls:r.className, why:(r.why||'إحالة من الموجه الطلابي')+' (إحالة الموجه الطلابي)'}));
       return out;
     }
     function lRender(){
@@ -1187,8 +1192,9 @@ Dash.boot({
             const sg = MSIG.get(m.id)||{}, pr = (m.content.members||[]).filter(x=>x.present), done = pr.filter(x=>sg[x.id]).length, all = done===pr.length;
             body = '<dl class="kv"><dt>الاجتماع</dt><dd>'+A((m.content.dayName||'')+' '+(m.content.dateH||''))+' '+timeTxt(m.content.time)+'</dd><dt>التواقيع</dt><dd>'+A(done)+' من '+A(pr.length)+(all?'':' — لم يوقّع: '+esc(pr.filter(x=>!sg[x.id]).map(x=>x.name).join('، ')))+'</dd></dl>'+
               '<details><summary class="muted">قرارات اللجنة (التوصيات)</summary><ol style="margin:6px 0">'+(m.content.recs||[]).map(r=>'<li>'+esc(r)+'</li>').join('')+'</ol></details>';
-            if(m.st==='approved'){ st='<span class="tag ok">عُرضت على اللجنة</span><span class="tag ok">اعتمد المدير</span>'; if(env.isSA||canEdit) act='<button type="button" class="btn solid" data-pr="'+m.id+'">طباعة المحضر</button>'; }
-            else { st='<span class="tag warn">المحضر بانتظار التوقيع والاعتماد</span>'; if(env.isSA) act='<button type="button" class="btn solid" data-ap="'+m.id+'"'+(all?'':' disabled')+'>اعتماد المحضر</button>'+(all?'':'<span class="muted">يُفعَّل بعد اكتمال توقيع الأعضاء الحاضرين</span>'); }
+            if(m.st==='approved'){ st='<span class="tag ok">عُرضت على اللجنة</span><span class="tag ok">اعتمد الوكيل</span><span class="tag ok">اعتمد المدير</span>'; if(env.isSA||canEdit) act='<button type="button" class="btn solid" data-pr="'+m.id+'">طباعة المحضر</button>'; }
+            else if(m.st==='agentOk'){ st='<span class="tag ok">اعتمد الوكيل</span><span class="tag warn">بانتظار اعتماد المدير</span>'; if(env.isSA) act='<button type="button" class="btn solid" data-ap="'+m.id+'">اعتماد المحضر</button>'; }
+            else { st='<span class="tag warn">المحضر بانتظار التوقيع واعتماد الوكيل</span>'; if(canEdit && !env.isSA) act='<button type="button" class="btn solid" data-aa="'+m.id+'"'+(all?'':' disabled')+'>اعتماد الوكيل للمحضر</button>'+(all?'':'<span class="muted">يُفعَّل بعد اكتمال توقيع الأعضاء الحاضرين</span>'); else if(env.isSA) act='<span class="muted">بانتظار توقيع الأعضاء واعتماد الوكيل ثم اعتمادك</span>'; }
           }
           return vrow('<div class="row"><b>'+esc(c.why)+'</b>'+st+'</div>'+body+(act?'<div class="row">'+act+'</div>':'')); }).join(''));
       }).join('') || '<div class="muted">لا حالات محالة إلى اللجنة.</div>';
@@ -1202,7 +1208,7 @@ Dash.boot({
       const c = cases().find(x=>x.key===key); if(!c) return;
       if(!CMT){ toast('شكّل اللجنة أولًا'); return; }
       mnCur = c; $('#mnSub').textContent = c.name+' · '+c.cls+' · '+c.why;
-      $('#mnD').value = dk; $('#mnTm').value = ''; mnDay();
+      $('#mnD').value = dk; $('#mnTm').value = ''; $('#mnPl').value = ''; mnDay();
       $('#mnMem').innerHTML = cmMembers().map(m=>'<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-mm="'+esc(m.id)+'" checked style="width:18px;height:18px;accent-color:var(--brand)">'+esc(m.name)+' <span class="muted">— '+m.role+'</span></label>').join('');
       $('#mnPts').innerHTML = mnRow('mnp','عُرضت حالة الطالب '+c.name+' ('+c.cls+') المحالة إلى اللجنة بسبب: '+c.why+'.') + mnRow('mnp','');
       $('#mnRecs').innerHTML = mnRow('mnr',''); $('#mnOv').hidden = false;
@@ -1216,10 +1222,10 @@ Dash.boot({
       const g = cls=>[...document.querySelectorAll('.'+cls)].map(x=>x.value.trim()).filter(Boolean);
       const pts = g('mnp'), recs = g('mnr'), d = $('#mnD').value;
       const mem = cmMembers().map(m=>Object.assign({present: !!document.querySelector('[data-mm="'+m.id+'"]:checked')}, m));
-      if(!d){ toast('حدد تاريخ الاجتماع'); return; } if(!$('#mnTm').value){ toast('حدد وقت الاجتماع'); return; }
+      if(!d){ toast('حدد تاريخ الاجتماع'); return; } if(!$('#mnTm').value){ toast('حدد وقت الاجتماع'); return; } if(!$('#mnPl').value.trim()){ toast('اكتب مكان الاجتماع'); return; }
       if(!pts.length || !recs.length){ toast('اكتب نقاط النقاش والتوصيات'); return; }
       const present = mem.filter(m=>m.present); if(present.length<2){ toast('حدد الأعضاء الحاضرين'); return; }
-      const content = {school:env.school.name||'', eduDept:env.school.eduDept||'', dayName:dayOf(d), dateH:hijL(d), dateG:d, time:$('#mnTm').value, caseText:c.name+' ('+c.cls+') — '+c.why, points:pts, recs, members:mem};
+      const content = {school:env.school.name||'', eduDept:env.school.eduDept||'', dayName:dayOf(d), dateH:hijL(d), dateG:d, time:$('#mnTm').value, place:$('#mnPl').value.trim(), caseText:c.name+' ('+c.cls+') — '+c.why, points:pts, recs, members:mem};
       const now = Date.now(), itemRef = circItems.doc(), mref = mnCol.doc(); $('#mnSave').disabled = true;
       try{
         await db.runTransaction(async tx=>{
@@ -1234,10 +1240,19 @@ Dash.boot({
       $('#mnSave').disabled = false; $('#mnOv').hidden = true; lRender(); toast('حُفظ المحضر وأُرسل للأعضاء الحاضرين في «التعاميم» للتوقيع');
     };
     $('#lRows').addEventListener('click', async e=>{
-      const mn = e.target.closest('[data-mn]'), ap = e.target.closest('[data-ap]'), pr = e.target.closest('[data-pr]');
+      const mn = e.target.closest('[data-mn]'), ap = e.target.closest('[data-ap]'), pr = e.target.closest('[data-pr]'), aa = e.target.closest('[data-aa]');
       if(mn){ openMn(mn.dataset.mn); return; }
+      if(aa){
+        const m = MN.find(x=>x.id===aa.dataset.aa); if(!m || !canEdit || m.st!=='pending') return;
+        await loadSigs(); const sg=MSIG.get(m.id)||{};
+        if((m.content.members||[]).filter(x=>x.present).some(x=>!sg[x.id])){ toast('لم يكتمل توقيع الأعضاء الحاضرين'); lRender(); return; }
+        const now=Date.now();
+        try{ await mnCol.doc(m.id).update({st:'agentOk', agentApprovedAt:now, agentApprovedBy:env.me.id, agentApprovedByName:env.me.name}); }catch(er){ fail(er); return; }
+        m.st='agentOk'; m.agentApprovedAt=now; m.agentApprovedByName=env.me.name; lRender(); toast('اعتُمد المحضر من الوكيل، وصار بانتظار اعتماد المدير'); return;
+      }
       if(ap){
         const m = MN.find(x=>x.id===ap.dataset.ap); if(!m) return;
+        if(m.st!=='agentOk'){ toast('يُعتمد المحضر بعد اعتماد الوكيل'); return; }
         if(!(await SAF.hasMgr())){ toast('ارفع ختمك وتوقيعك في منصة النشاط المدرسي أولًا ثم اعتمد المحضر'); return; }
         await loadSigs(); const sg=MSIG.get(m.id)||{};
         if((m.content.members||[]).filter(x=>x.present).some(x=>!sg[x.id])){ toast('لم يكتمل توقيع الأعضاء الحاضرين'); lRender(); return; }
@@ -1272,7 +1287,7 @@ Dash.boot({
       $('#hRows').innerHTML = seats.map(seat=>{ const hs = L.filter(x=>x.seat===seat).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)), f = hs[0];
         return vcard(f.name, f.className, '<span class="tag cnr">'+cnt(hs.length,'تقرير واحد','تقريران','تقارير')+'</span>', hs.map(x=>{ const st = HST[x.st]||HST.pending, mine = env.isSA;
           return vrow((x.type?'<b>'+esc(x.type)+'</b>':'')+'<div>'+esc(x.desc)+'</div><div class="muted">الراصد: '+esc(x.observer||x.createdByName||'')+(x.obsDate?' · '+A(hijL(x.obsDate))+' هـ':'')+(x.obsTime?' · '+timeTxt(x.obsTime):'')+'</div>'
-            +'<div class="row"><span class="tag '+st[1]+'">'+st[0]+'</span><span class="tag">'+cnt((x.checks||[]).length,'إجراء واحد','إجراءان','إجراءات')+'</span>'+(x.st==='approved'&&x.approvedByName?'<span class="muted">'+esc(x.approvedByName)+'</span>':'')+'</div>'
+            +'<div class="row"><span class="tag '+st[1]+'">'+st[0]+'</span><span class="tag">'+cnt((x.checks||[]).length,'إجراء واحد','إجراءان','إجراءات')+'</span>'+(x.st==='approved'&&x.approvedByName?'<span class="muted">'+esc(x.approvedByName)+'</span>':'')+(x.handledAt?'<span class="tag ok">عالجها الموجه الطلابي'+(x.handledByName?' — '+esc(x.handledByName):'')+'</span>':'')+'</div>'
             +(x.st==='returned'&&x.returnNote?'<div class="muted">سبب الإعادة: '+esc(x.returnNote)+'</div>':'')
             +'<div class="row">'+(x.st==='pending'&&mine?'<button type="button" class="btn solid" data-ho="'+x.id+'">اعتماد</button>':'')
               +((x.st==='pending'||x.st==='approved')&&mine?'<input type="text" class="ci" data-hrn="'+x.id+'" placeholder="سبب الإعادة للتعديل (اختياري)" style="width:210px;text-align:right"><button type="button" class="btn" data-hrt="'+x.id+'">إعادة للتعديل</button>':'')

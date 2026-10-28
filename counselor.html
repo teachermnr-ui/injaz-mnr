@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-28.3 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
+<!-- إصدار: 2026-10-28.4 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -371,7 +371,7 @@ const TABS = [
   ['plan','الخطة السنوية والبرامج الإرشادية'],
   ['cases','دراسة الحالات الفردية'],
   ['sess','الإرشاد الفردي والجمعي'],
-  ['hasr','حصر ومتابعة الحالات الخاصة'],
+  ['hasr','الحالات الخاصة والسرية'],
   ['care','رعاية فئات الطلاب'],
   ['rep','التقارير']
 ];
@@ -382,8 +382,18 @@ const SUBS = {
   sess:[['indiv','التوجيه الفردي'],['group','الإرشاد الجمعي']],
   hasr:[['psy','الحالات النفسية والانفعالية'],['soc','الحالات الاجتماعية'],['orph','الأيتام'],['aid','الإعانة والمكافأة'],['fu','متابعة الحالات الفردية (بالرموز)']],
   care:[['weak','المتأخرون دراسيًا'],['rep','المعيدون ومتكررو الرسوب'],['gift','المتفوقون دراسيًا والموهوبون'],['beh','المتميزون سلوكيًا'],['new','المستجدون'],['honor','كشف تكريم الطلاب']],
-  rep:[['term','التقرير الفصلي'],['final','التقرير الختامي']]
+  rep:[['per','التقارير الدورية'],['sess','تقارير التوجيه والإرشاد'],['hasr','تقارير الحالات الخاصة والسرية'],['care','تقارير رعاية فئات الطلاب']]
 };
+/* ----- التقارير: كل تقرير ومجموعته ----- */
+const REP = {
+  term:{t:'التقرير الفصلي للإرشاد الطلابي'}, final:{t:'التقرير الختامي للإرشاد الطلابي'},
+  indiv:{t:'تقرير التوجيه الفردي'}, group:{t:'تقرير الإرشاد الجمعي'},
+  hasr_psy:{t:'تقرير الحالات النفسية والانفعالية', col:'hasr', k:'psy'}, hasr_soc:{t:'تقرير الحالات الاجتماعية', col:'hasr', k:'soc'}, hasr_orph:{t:'تقرير الأيتام', col:'hasr', k:'orph'},
+  hasr_aid:{t:'تقرير الإعانة والمكافأة', col:'aid'}, hasr_fu:{t:'تقرير متابعة الحالات الفردية (بالرموز)', col:'hasr', k:'fu'},
+  care_weak:{t:'تقرير المتأخرين دراسيًا', col:'care', k:'weak'}, care_rep:{t:'تقرير المعيدين ومتكرري الرسوب', col:'care', k:'rep'}, care_gift:{t:'تقرير المتفوقين دراسيًا والموهوبين', col:'care', k:'gift'},
+  care_beh:{t:'تقرير المتميزين سلوكيًا', col:'care', k:'beh'}, care_new:{t:'تقرير المستجدين', col:'care', k:'new'}, care_honor:{t:'تقرير كشف تكريم الطلاب', col:'care', k:'honor'}
+};
+const REPG = {per:['term','final'], sess:['indiv','group'], hasr:['hasr_psy','hasr_soc','hasr_orph','hasr_aid','hasr_fu'], care:['care_weak','care_rep','care_gift','care_beh','care_new','care_honor']};
 const SP = {first:'الفصل الدراسي الأول', second:'الفصل الدراسي الثاني'};
 const CASE_TYPES = ['سلوكية','دراسية','نفسية وانفعالية','اجتماعية وأسرية','صحية','أخرى'];
 const CASE_ST = {open:['مفتوحة','bad'], watch:['تحت المتابعة','warn'], closed:['مغلقة','ok']};
@@ -609,19 +619,20 @@ Dash.boot({
     }
 
     /* ===== الطباعة ===== */
-    const PCSS = 'table{border-collapse:collapse;width:100%;margin:8px 0}td,th{border:1px solid #333;padding:4px 6px;font-size:12px;text-align:right;vertical-align:top}th{background:#eee}.ln{margin:7px 0;font-size:14px}.sg{display:flex;justify-content:space-between;margin-top:30px;font-size:13px}.sg div{min-width:30%}.sec{font-weight:800;margin:10px 0 4px;border-bottom:1px solid #999}.cnf{text-align:center;font-weight:800;color:#a00}';
+    const PCSS = 'table{border-collapse:collapse;width:100%;margin:8px 0}td,th{border:1px solid #333;padding:4px 6px;font-size:12px;text-align:right;vertical-align:top}th{background:#eee}.ln{margin:7px 0;font-size:14px}.sg{display:flex;justify-content:space-between;margin-top:30px;font-size:13px}.sg div{min-width:30%}.sec{font-weight:800;margin:10px 0 4px;border-bottom:1px solid #999}.cnf{text-align:center;font-weight:800;color:#a00}.sgb{display:flex;gap:16px;margin-top:28px;page-break-inside:avoid}.sgb .bx{flex:1;border:1px solid #333;padding:8px 10px;min-height:120px;font-size:13px}.sgb .bx b{display:block;margin-bottom:8px}.sgb .stz{margin-top:10px;height:58px;border:1px dashed #888;text-align:center;color:#888;font-size:11px;line-height:58px}';
     async function printHtml(title, body, o){
       o = o||{};
       const w = window.open('', '_blank'); if(!w){ toast('اسمح بالنوافذ المنبثقة للطباعة'); return; }
       try{ w.document.write('<!doctype html><meta charset="utf-8"><body dir="rtl" style="font-family:Tahoma,Arial;padding:24px">جارٍ تحضير النموذج…</body>'); }catch(e){}
       try{
         const ctx = await FormHdr.resolve({db, session:env.session, period});
-        const html = FormHdr.doc({title, formTitle:title, ctx, extra:o.extra||[], body:'<div class="f">'+body+'</div>', extraCss:PCSS, landscape:!!o.land});
+        const html = FormHdr.doc({title, formTitle:title, ctx, extra:o.extra||[], body:'<div class="f">'+(typeof body==='function'?body(ctx):body)+'</div>', extraCss:PCSS, landscape:!!o.land});
         w.document.open(); w.document.write(html); w.document.close();
       }catch(e){ try{ w.close(); }catch(x){} fail(e); }
     }
     const dots = (t,n)=>'<span style="display:inline-block;min-width:'+(n||120)+'px;border-bottom:1px dotted #333">'+esc(t||'')+'&nbsp;</span>';
     const sigC = ()=>'<div class="sg"><div>الموجه الطلابي: '+dots(env.me.name,140)+'</div><div>التوقيع: '+dots('',110)+'</div></div>';
+    const sigBox = ctx=>'<div class="sgb"><div class="bx"><b>الموجه الطلابي</b><div>الاسم: '+dots(env.me.name,150)+'</div><div style="margin-top:14px">التوقيع: '+dots('',130)+'</div></div><div class="bx"><b>اعتماد مدير المدرسة</b><div>الاسم: '+dots(ctx&&ctx.principal||'',150)+'</div><div class="stz">موضع الختم والتوقيع</div></div></div>';
     const sigM = ctx=>'<div class="sg"><div></div><div>مدير المدرسة: '+dots(ctx&&ctx.principal||'',140)+'<div style="height:46px"></div>التوقيع: '+dots('',110)+'<div style="height:26px"></div></div></div>';
     function printTable(title, cols, rows, o){
       o = o||{};
@@ -1148,28 +1159,87 @@ Dash.boot({
       const f = period==='first' ? cur : oth, sc = period==='first' ? oth : cur;
       return f.map((x,i)=>({l:x[0], a:x[1], b:(sc[i]||[])[1]||0, t:(+x[1]||0)+(+((sc[i]||[])[1])||0)}));
     }
+    const sumTbl = L=>'<table class="tbl"><tbody>'+L.map(x=>'<tr><td>'+esc(x[0])+'</td><td class="num"><b>'+A(x[1])+'</b></td></tr>').join('')+'</tbody></table>';
+    function symMap(){
+      const m = {}, L = live(D.hasr).slice().sort((a,b)=>(a.at||0)-(b.at||0));
+      L.filter(x=>x.kind==='fu' && x.sym && x.seat).forEach(x=>{ m[String(x.seat)] = x.sym; });
+      let n = 0; const need = x=>{ const k = String(x.seat||''); if(k && !m[k]) m[k] = 'ر-'+A(String(++n).padStart(3,'0')); };
+      L.forEach(need); live(AIDS).slice().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)).forEach(need);
+      return m;
+    }
+    const byDt = (a,b)=>String(a.date||a.since||'').localeCompare(String(b.date||b.since||'')) || (a.at||0)-(b.at||0);
+    function repData(kind){
+      const R = REP[kind], cnt = (a,f)=>a.filter(f).length, uq = (a,f)=>new Set(a.map(f).filter(Boolean)).size;
+      if(kind==='indiv'){
+        const L = live(D.sessions).filter(s=>s.kind==='indiv').map(effS).sort(byDt);
+        return {rows:L, land:true, sum:[['جلسات التوجيه الفردي',L.length],['عدد الطلاب المستفيدين',uq(L,x=>x.seat||x.name)],['جلسات ضمن ملفات الحالات',cnt(L,x=>x.caseId)],['جلسات لها موعد جلسة تالية',cnt(L,x=>x.next)],['الحالات الفردية المفتوحة',cnt(CS,c=>c.st!=='closed')]],
+          cols:[['التاريخ',x=>x.date],['الطالب',x=>x.name],['الصف',x=>x.className],['موضوع الجلسة',x=>x.topic],['النتائج',x=>x.result],['التوصيات',x=>x.recs]]};
+      }
+      if(kind==='group'){
+        const L = live(D.sessions).filter(s=>s.kind==='group').map(effS).sort(byDt);
+        return {rows:L, land:true, sum:[['جلسات الإرشاد الجمعي',L.length],['إجمالي المشاركين',L.reduce((n,x)=>n+(x.students||[]).length,0)],['الفئات أو المجموعات المستهدفة',uq(L,x=>x.groupName)],['جلسات لها موعد جلسة تالية',cnt(L,x=>x.next)]],
+          cols:[['التاريخ',x=>x.date],['الفئة أو المجموعة',x=>x.groupName],['عدد المشاركين',x=>A((x.students||[]).length)],['موضوع الجلسة',x=>x.topic],['النتائج',x=>x.result],['التوصيات',x=>x.recs]]};
+      }
+      if(R.col==='aid'){
+        const SY = symMap(), L = live(AIDS).slice().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+        return {rows:L, land:false, secret:'سري — يُحفظ في ملف خاص مغلق لدى الموجه الطلابي (بالرموز)', sum:[['إجمالي المستحقين',L.length],['الإعانة',cnt(L,x=>x.type==='إعانة')],['المكافأة',cnt(L,x=>x.type==='مكافأة')]],
+          cols:[['الرمز',x=>SY[String(x.seat)]||'—'],['النوع',x=>x.type],['التاريخ',x=>x.dateH]]};
+      }
+      if(R.col==='hasr'){
+        const SY = symMap(), L = live(D.hasr).filter(x=>x.kind===R.k).sort(byDt);
+        return {rows:L, land:false, secret:'سري — يُحفظ في ملف خاص مغلق لدى الموجه الطلابي (بالرموز)', sum:[['عدد الحالات',L.length],['حالات اتُّخذ فيها إجراء',cnt(L,x=>x.action)],['حالات لم يُسجَّل فيها إجراء',cnt(L,x=>!x.action)]],
+          cols:[['الرمز',x=>(R.k==='fu'&&x.sym)||SY[String(x.seat)]||'—'],['وصف الحالة',x=>x.detail],['تاريخ الرصد',x=>x.since],['الإجراء المتخذ',x=>x.action],['ملاحظات',x=>x.note]]};
+      }
+      const L = live(D.care).filter(x=>x.kind===R.k).sort(byDt);
+      if(R.k==='honor'){
+        const T = ['تفوق دراسي','تميز سلوكي','مواظبة','موهبة','مشاركة'];
+        return {rows:L, land:true, sum:[['عدد المكرمين',L.length]].concat(T.map(t=>['المكرمون في «'+t+'»',cnt(L,x=>x.htype===t)])),
+          cols:[['الطالب',x=>x.name],['الصف',x=>x.className],['نوع التكريم',x=>x.htype],['سبب التكريم',x=>x.detail],['التاريخ',x=>x.date]]};
+      }
+      return {rows:L, land:true, sum:[['عدد الطلاب',L.length],['لهم خطة أو برنامج',cnt(L,x=>x.plan)],['سُجلت نتيجة متابعتهم',cnt(L,x=>x.result)],['بانتظار النتيجة',cnt(L,x=>!x.result)]],
+        cols:[['الطالب',x=>x.name],['الصف',x=>x.className],['التفاصيل',x=>x.detail],['الخطة أو البرنامج',x=>x.plan],['التاريخ',x=>x.date],['النتيجة والمتابعة',x=>x.result]]};
+    }
+    const recTbl = (cols,rows,pr)=>(pr?'<table>':'<div class="tw2"><table class="tbl">')+'<thead><tr><th>م</th>'+cols.map(c=>'<th>'+esc(c[0])+'</th>').join('')+'</tr></thead><tbody>'
+      +(rows.map((r,i)=>'<tr><td>'+A(i+1)+'</td>'+cols.map(c=>'<td>'+esc(cv(c[1](r)))+'</td>').join('')+'</tr>').join('') || '<tr><td colspan="'+(cols.length+1)+'" class="muted">لا سجلات.</td></tr>')+'</tbody></table>'+(pr?'':'</div>');
+    function repGroupPane(g){
+      const ks = REPG[g] || REPG.per; CUR.rk = CUR.rk || {};
+      const cur = ks.includes(CUR.rk[g]) ? CUR.rk[g] : ks[0];
+      return '<div class="seg subs" id="rks">'+ks.map(k=>'<button type="button" class="'+(k===cur?'on':'')+'" data-rk="'+g+'|'+k+'">'+esc(REP[k].t)+'</button>').join('')+'</div>'+repPane(cur);
+    }
     function repPane(kind){
-      const id = kind+'_'+period, r = D.reports.find(x=>x.id===id)||{};
-      const title = kind==='term'?'التقرير الفصلي للإرشاد الطلابي':'التقرير الختامي للإرشاد الطلابي';
+      const id = kind+'_'+period, r = D.reports.find(x=>x.id===id)||{}, title = REP[kind].t;
+      const visBox = '<label for="vis" style="font-weight:700">مرئيات الموجه الطلابي</label><textarea id="vis" style="width:100%;min-height:90px"'+(canEdit?'':' disabled')+'>'+esc(r.vis||'')+'</textarea>'
+        +(canEdit?'<div class="row"><button type="button" class="btn solid" data-vs="'+kind+'">حفظ المرئيات</button></div>':'');
+      const head = '<div class="cnh"><h3 style="margin:0">'+esc(title)+'</h3><div class="row"><button type="button" class="btn" data-rp="'+kind+'">طباعة التقرير</button></div></div>';
+      if(kind!=='term' && kind!=='final'){
+        const d = repData(kind);
+        return head+'<div class="muted">تُحسب الأرقام والسجلات آليًا من بيانات الصفحة للفصل الدراسي الحالي.'+(d.secret?' يُطبع بالرموز دون أسماء الطلاب.':'')+'</div>'
+          +'<h4 class="grph">ملخص الأرقام</h4>'+sumTbl(d.sum)+'<h4 class="grph">كشف السجلات</h4>'+recTbl(d.cols,d.rows,false)+visBox
+          +'<div class="muted">يُطبع التقرير بخانتين: توقيع الموجه الطلابي، واعتماد مدير المدرسة (يضيف المدير ختمه وتوقيعه).</div>';
+      }
       if(kind==='final' && !OTHER){ loadOther(); return '<div class="cnh"><h3 style="margin:0">'+title+'</h3></div><div class="muted">جارٍ تحميل بيانات الفصلين…</div>'; }
       const tbl = kind==='final'
         ? '<div class="tw2"><table class="tbl"><thead><tr><th>البند</th><th>'+SP.first+'</th><th>'+SP.second+'</th><th>المجموع</th></tr></thead><tbody>'+yearStats().map(x=>'<tr><td>'+esc(x.l)+'</td><td class="num">'+A(x.a)+'</td><td class="num">'+A(x.b)+'</td><td class="num"><b>'+A(x.t)+'</b></td></tr>').join('')+'</tbody></table></div>'
         : '<table class="tbl"><tbody>'+stats().map(s=>'<tr><td>'+esc(s[0])+'</td><td class="num"><b>'+A(s[1])+'</b></td></tr>').join('')+'</tbody></table>';
-      return '<div class="cnh"><h3 style="margin:0">'+title+'</h3><div class="row"><button type="button" class="btn" data-rp="'+kind+'">طباعة التقرير</button></div></div>'
-        +'<div class="muted">'+(kind==='final'?'يجمع حصيلة الفصلين الدراسيين وإجمالي العام.':'تُحسب الأرقام آليًا من سجلات الصفحة للفصل الدراسي الحالي.')+'</div>'
-        +tbl
-        +'<label for="vis" style="font-weight:700">مرئيات الموجه الطلابي</label><textarea id="vis" style="width:100%;min-height:90px"'+(canEdit?'':' disabled')+'>'+esc(r.vis||'')+'</textarea>'
-        +(canEdit?'<div class="row"><button type="button" class="btn solid" data-vs="'+kind+'">حفظ المرئيات</button></div>':'');
+      return head+'<div class="muted">'+(kind==='final'?'يجمع حصيلة الفصلين الدراسيين وإجمالي العام.':'تُحسب الأرقام آليًا من سجلات الصفحة للفصل الدراسي الحالي.')+'</div>'+tbl+visBox
+        +'<div class="muted">يُطبع التقرير بخانتين: توقيع الموجه الطلابي، واعتماد مدير المدرسة (يضيف المدير ختمه وتوقيعه).</div>';
     }
     function repPrint(kind){
       const r = D.reports.find(x=>x.id===kind+'_'+period)||{}, vis = $('#vis') ? $('#vis').value.trim() : (r.vis||'');
-      const title = kind==='term'?'التقرير الفصلي للإرشاد الطلابي':'التقرير الختامي للإرشاد الطلابي';
+      const title = REP[kind].t;
       if(kind==='final' && !OTHER){ toast('جارٍ تحميل بيانات الفصلين، أعد المحاولة بعد لحظة'); loadOther(); return; }
+      const visHtml = '<div class="sec">مرئيات الموجه الطلابي</div><div class="ln" style="min-height:70px;white-space:pre-wrap">'+esc(vis)+'</div>';
+      if(kind!=='term' && kind!=='final'){
+        const d = repData(kind);
+        printHtml(title, ctx=>(d.secret?'<div class="cnf">'+d.secret+'</div>':'')+'<div class="ln">'+SP[period]+'</div><div class="sec">ملخص الأرقام</div>'
+          +'<table><thead><tr><th>م</th><th>البند</th><th>العدد</th></tr></thead><tbody>'+d.sum.map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x[0])+'</td><td>'+A(x[1])+'</td></tr>').join('')+'</tbody></table>'
+          +'<div class="sec">كشف السجلات</div>'+recTbl(d.cols,d.rows,true)+visHtml+sigBox(ctx), {land:d.land});
+        return;
+      }
       const tbody = kind==='final'
         ? '<table><thead><tr><th>م</th><th>البند</th><th>'+SP.first+'</th><th>'+SP.second+'</th><th>المجموع</th></tr></thead><tbody>'+yearStats().map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x.l)+'</td><td>'+A(x.a)+'</td><td>'+A(x.b)+'</td><td>'+A(x.t)+'</td></tr>').join('')+'</tbody></table>'
         : '<table><thead><tr><th>م</th><th>البند</th><th>العدد</th></tr></thead><tbody>'+stats().map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x[0])+'</td><td>'+A(x[1])+'</td></tr>').join('')+'</tbody></table>';
-      printHtml(title, '<div class="ln">'+(kind==='final'?'العام الدراسي كاملًا (الفصلان الدراسيان)':SP[period])+'</div>'+tbody
-        +'<div class="sec">مرئيات الموجه الطلابي</div><div class="ln" style="min-height:70px;white-space:pre-wrap">'+esc(vis)+'</div>'+sigC(), {});
+      printHtml(title, ctx=>'<div class="ln">'+(kind==='final'?'العام الدراسي كاملًا (الفصلان الدراسيان)':SP[period])+'</div>'+tbody+visHtml+sigBox(ctx), {});
     }
 
     /* ===== لوحة المعلومات ===== */
@@ -1200,7 +1270,7 @@ Dash.boot({
     }
 
     /* ===== العرض ===== */
-    const CUR = {tab:'home', sub:{}, ist:{}, sf:{}};
+    const CUR = {tab:'home', sub:{}, ist:{}, sf:{}, rk:{}};
     function render(){
       const t = CUR.tab, subs = SUBS[t]; if(subs && !CUR.sub[t]) CUR.sub[t] = subs[0][0];
       const sub = CUR.sub[t];
@@ -1217,12 +1287,12 @@ Dash.boot({
         else if(t==='sess') inner = sessPane(sub);
         else if(t==='hasr') inner = sub==='aid' ? aidPane() : crudPane('hasr',sub,subs.find(s=>s[0]===sub)[1]);
         else if(t==='care') inner = crudPane('care',sub,subs.find(s=>s[0]===sub)[1]);
-        else if(t==='rep') inner = repPane(sub);
+        else if(t==='rep') inner = repGroupPane(sub);
         h = (t==='home' ? inner : '<section class="card">'+(canEdit?'':'<div class="nt">اطلاع فقط: لا تعديل في هذه الصفحة.</div>')+seg+inner+'</section>');
       }
-      const keep = {}; ['subs','ist'].forEach(k=>{ const el = document.getElementById(k); if(el) keep[k] = el.scrollLeft; });
+      const keep = {}; ['subs','ist','rks'].forEach(k=>{ const el = document.getElementById(k); if(el) keep[k] = el.scrollLeft; });
       $('#body').innerHTML = h;
-      ['subs','ist'].forEach(k=>{ const el = document.getElementById(k); if(!el) return; if(keep[k]!=null) el.scrollLeft = keep[k]; const on = el.querySelector('.on'); if(on){ const r = on.getBoundingClientRect(), q = el.getBoundingClientRect(); if(r.left<q.left || r.right>q.right) el.scrollLeft += (r.left + r.right)/2 - (q.left + q.right)/2; } });
+      ['subs','ist','rks'].forEach(k=>{ const el = document.getElementById(k); if(!el) return; if(keep[k]!=null) el.scrollLeft = keep[k]; const on = el.querySelector('.on'); if(on){ const r = on.getBoundingClientRect(), q = el.getBoundingClientRect(); if(r.left<q.left || r.right>q.right) el.scrollLeft += (r.left + r.right)/2 - (q.left + q.right)/2; } });
     }
     const tabsFor = mgrOnly ? [['cases','الحالات']] : TABS;
     if(mgrOnly) CUR.tab = 'cases';
@@ -1231,6 +1301,7 @@ Dash.boot({
     $('#body').addEventListener('click', async e=>{
       const g = a=>e.target.closest('['+a+']'); let b;
       if(b=g('data-s')){ CUR.sub[CUR.tab]=b.dataset.s; render(); return; }
+      if(b=g('data-rk')){ const p=b.dataset.rk.split('|'); CUR.rk[p[0]]=p[1]; render(); return; }
       if(b=g('data-it')){ CUR.ist = CUR.ist || {}; CUR.ist[b.dataset.ik || ('inbox:'+(CUR.sub.inbox||'a'))] = b.dataset.it; render(); return; }
       if(b=g('data-cp')){ copyAnnual(); return; }
       if(b=g('data-gm')){ if(canEdit) groupMembers(); return; }

@@ -272,16 +272,9 @@ tr.gone del{text-decoration:line-through}
     <div><h1>لوحة وكيل الشؤون الطلابية</h1><div class="sub" id="today"></div></div>
     <div class="row"><button type="button" class="btn" id="back">← الموقع</button><span class="chip">وكيل الشؤون الطلابية</span></div>
   </header>
-  <section class="stats" aria-label="مؤشرات اليوم">
-    <div class="stat bad"><span class="n" id="s1">٠</span><span class="l">غياب الطلاب اليوم</span><span class="d src">من الموقع</span></div>
-    <div class="stat warn"><span class="n" id="s2">٠</span><span class="l">متأخرون صباحًا اليوم</span><span class="d src">من الموقع</span></div>
-    <div class="stat"><span class="n" id="s3">٠</span><span class="l">مستأذنون اليوم</span><span class="d src">من الموقع</span></div>
-    <div class="stat bad"><span class="n" id="s4">٠</span><span class="l">إجراءات غياب مستحقة</span><span class="d">لم تصدر بعد</span></div>
-    <div class="stat warn"><span class="n" id="s5">٠</span><span class="l">تحويلات جديدة</span><span class="d src">من المعلمين</span></div>
-    <div class="stat bad"><span class="n" id="s6">٠</span><span class="l">قرارات بانتظار المدير</span><span class="d">تحتاج اعتمادًا</span></div>
-  </section>
   <nav class="tabs" id="tabs" aria-label="أقسام الشؤون الطلابية">
-    <button type="button" data-t="a" class="active">الحضور والانضباط</button>
+    <button type="button" data-t="q" class="active">الوصول السريع</button>
+    <button type="button" data-t="a">الحضور والانضباط</button>
     <button type="button" data-t="g">غياب الطلاب</button>
     <button type="button" data-t="r">التحويلات</button>
     <button type="button" data-t="v">المخالفات السلوكية</button>
@@ -291,7 +284,16 @@ tr.gone del{text-decoration:line-through}
     <button type="button" data-t="p">موافقات أولياء الأمور</button>
   </nav>
 
-  <div class="pane" id="p-a"><section class="card">
+  <div class="pane" id="p-q"><section class="card"><div class="qa-sub"><button type="button" class="on" data-qs="i">المؤشرات</button><button type="button" data-qs="q">الوصول السريع</button></div><div class="qa-i">  <section class="stats" aria-label="مؤشرات اليوم">
+    <div class="stat bad"><span class="n" id="s1">٠</span><span class="l">غياب الطلاب اليوم</span><span class="d src">من الموقع</span></div>
+    <div class="stat warn"><span class="n" id="s2">٠</span><span class="l">متأخرون صباحًا اليوم</span><span class="d src">من الموقع</span></div>
+    <div class="stat"><span class="n" id="s3">٠</span><span class="l">مستأذنون اليوم</span><span class="d src">من الموقع</span></div>
+    <div class="stat bad"><span class="n" id="s4">٠</span><span class="l">إجراءات غياب مستحقة</span><span class="d">لم تصدر بعد</span></div>
+    <div class="stat warn"><span class="n" id="s5">٠</span><span class="l">تحويلات جديدة</span><span class="d src">من المعلمين</span></div>
+    <div class="stat bad"><span class="n" id="s6">٠</span><span class="l">قرارات بانتظار المدير</span><span class="d">تحتاج اعتمادًا</span></div>
+  </section></div><div class="qa-q" hidden></div></section></div>
+
+  <div class="pane" id="p-a" hidden><section class="card">
     <div class="hd"><h2>الحضور والانضباط</h2><span class="chip" id="aDate"></span></div>
     <div class="muted">هذه الأعمال منفذة في الموقع، وتفتح هذه البطاقات صفحاتها دون تكرار إدخالها هنا.</div>
     <div class="lnk" id="lnks"></div>
@@ -485,6 +487,24 @@ Dash.boot({
   render: async env=>{
     const {db, sid, period} = env;
     env.main.innerHTML = ST_MARKUP;
+    /* ---- الوصول السريع (أول تبويب): يُركَّب فورًا قبل تحميل البيانات حتى لا يظهر الشكل القديم ثم يتبدّل ---- */
+    try{
+      let q = null; const G = (t,sub)=>()=>q && q.go(t,sub);
+      q = QA.bind({ style:'head', stats:'.stats', cards:()=>{
+        const trNew = TR.filter(r=>r.st==='new').length, noDed = VL.filter(v=>!DD.some(d=>d.id===v.id)).length;
+        const hrWait = HR.filter(h=>h.st==='pending').length, dueN = [...AB.values()].filter(due).length;
+        const bus = [...APR.keys()].filter(k=>k.indexOf('bus__')===0).length;
+        return [
+          {t:'الحضور والانضباط', n:TODAY.length, l:'غائبون اليوم', go:G('a')},
+          {t:'غياب الطلاب', n:AB.size, p:dueN, l:'إجراءات مستحقة', go:G('g'), tabs:[['غياب الطلاب',G('g','.subs[data-grp="g"] [data-s="a"]')],['إشعار ولي الأمر',G('g','.subs[data-grp="g"] [data-s="n"]')],['قرارات الغياب',G('g','.subs[data-grp="g"] [data-s="d"]')]]},
+          {t:'التحويلات', n:TR.length, p:trNew, l:'جديدة', go:G('r'), tabs:[['جديد',G('r','#rSeg [data-f="new"]')],['تحت الملاحظة',G('r','#rSeg [data-f="obs"]')],['إحالات للتوجيه',G('r','#rSeg [data-f="ref"]')],['منتهٍ',G('r','#rSeg [data-f="done"]')]]},
+          {t:'المخالفات السلوكية', n:VL.length, p:noDed, l:'بلا حسم', go:G('v'), tabs:[['سجل المخالفات',G('v','.subs[data-grp="v"] [data-s="v"]')],['حسم السلوك',G('v','.subs[data-grp="v"] [data-s="b"]')],['تقارير',G('v','.subs[data-grp="v"] [data-s="t"]')]]},
+          {t:'السلوك والمواظبة', n:RO.length, l:'طالبًا', go:G('k')},
+          {t:'التوجيه الطلابي', n:HR.length+CMR.length, p:hrWait, l:'بانتظار المدير', go:G('l'), tabs:[['لجنة التوجيه والإرشاد',G('l','.subs[data-grp="l"] [data-s="c"]')],['حالات عالية الخطورة',G('l','.subs[data-grp="l"] [data-s="h"]')]]},
+          {t:'الإعانة والمكافأة', n:AIDS.length, l:'مسجّلة', go:G('e')},
+          {t:'موافقات أولياء الأمور', n:RO.length, p:Math.max(0,RO.length-bus), l:'لم تصل (النقل)', go:G('p'), tabs:[['النقل المدرسي',G('p','#pSeg [data-k="bus"]')],['المشاركة في نشاط',G('p','#pSeg [data-k="act"]')]]}
+        ]; } });
+    }catch(e){ console.warn('QA', e); }
     const $ = s=>document.querySelector(s);
     const A = n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
     const esc = s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1409,24 +1429,6 @@ Dash.boot({
     try{ await loadS5(); refreshL(); vRender(); rpRender(); $('#cmBox').open = !CMT || !!window.__saOpenAll; }
     catch(e){ console.error(e); toast('تعذّر تحميل التوجيه الطلابي'); }
 
-    /* ---- الوصول السريع (أول تبويب) ---- */
-    try{
-      let q = null; const G = (t,sub)=>()=>q && q.go(t,sub);
-      q = QA.install({ style:'head', stats:'.stats', cards:()=>{
-        const trNew = TR.filter(r=>r.st==='new').length, noDed = VL.filter(v=>!DD.some(d=>d.id===v.id)).length;
-        const hrWait = HR.filter(h=>h.st==='pending').length, dueN = [...AB.values()].filter(due).length;
-        const bus = [...APR.keys()].filter(k=>k.indexOf('bus__')===0).length;
-        return [
-          {t:'الحضور والانضباط', n:TODAY.length, l:'غائبون اليوم', go:G('a')},
-          {t:'غياب الطلاب', n:AB.size, p:dueN, l:'إجراءات مستحقة', go:G('g'), tabs:[['غياب الطلاب',G('g','.subs[data-grp="g"] [data-s="a"]')],['إشعار ولي الأمر',G('g','.subs[data-grp="g"] [data-s="n"]')],['قرارات الغياب',G('g','.subs[data-grp="g"] [data-s="d"]')]]},
-          {t:'التحويلات', n:TR.length, p:trNew, l:'جديدة', go:G('r'), tabs:[['جديد',G('r','#rSeg [data-f="new"]')],['تحت الملاحظة',G('r','#rSeg [data-f="obs"]')],['إحالات للتوجيه',G('r','#rSeg [data-f="ref"]')],['منتهٍ',G('r','#rSeg [data-f="done"]')]]},
-          {t:'المخالفات السلوكية', n:VL.length, p:noDed, l:'بلا حسم', go:G('v'), tabs:[['سجل المخالفات',G('v','.subs[data-grp="v"] [data-s="v"]')],['حسم السلوك',G('v','.subs[data-grp="v"] [data-s="b"]')],['تقارير',G('v','.subs[data-grp="v"] [data-s="t"]')]]},
-          {t:'السلوك والمواظبة', n:RO.length, l:'طالبًا', go:G('k')},
-          {t:'التوجيه الطلابي', n:HR.length+CMR.length, p:hrWait, l:'بانتظار المدير', go:G('l'), tabs:[['لجنة التوجيه والإرشاد',G('l','.subs[data-grp="l"] [data-s="c"]')],['حالات عالية الخطورة',G('l','.subs[data-grp="l"] [data-s="h"]')]]},
-          {t:'الإعانة والمكافأة', n:AIDS.length, l:'مسجّلة', go:G('e')},
-          {t:'موافقات أولياء الأمور', n:RO.length, p:Math.max(0,RO.length-bus), l:'لم تصل (النقل)', go:G('p'), tabs:[['النقل المدرسي',G('p','#pSeg [data-k="bus"]')],['المشاركة في نشاط',G('p','#pSeg [data-k="act"]')]]}
-        ]; } });
-    }catch(e){ console.warn('QA', e); }
   }
 });
 </script>

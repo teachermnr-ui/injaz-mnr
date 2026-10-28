@@ -211,24 +211,26 @@ table{line-height:normal}
     <div class="row"><button type="button" class="btn" id="back">← الموقع</button><span class="chip">وكيل الشؤون التعليمية</span></div>
   </header>
 
-  <section class="stats" aria-label="مؤشرات اليوم">
-    <div class="stat"><span class="n" id="stStu">٠</span><span class="l">غياب الطلاب اليوم</span><span class="d" id="stStuD"></span></div>
-    <div class="stat bad"><span class="n" id="stAbs">٠</span><span class="l">معلمون غائبون اليوم</span><span class="d" id="stAbsD"></span></div>
-    <div class="stat"><span class="n" id="stWait">٠</span><span class="l">حصص الانتظار</span><span class="d" id="stWaitD"></span></div>
-    <div class="stat"><span class="n" id="stDuty">—</span><span class="l">المناوبة والإشراف</span><span class="d" id="stDutyD"></span></div>
-    <div class="stat"><span class="n" id="stVis">٠</span><span class="l">الزيارات الصفية</span><span class="d">هذا الأسبوع</span></div>
-    <div class="stat"><span class="n" id="stOver">٠</span><span class="l">بلغوا حد الغياب</span><span class="d" id="stOverD"></span></div>
-  </section>
 
   <nav class="tabs" id="tabs" aria-label="أقسام المتابعة">
-    <button type="button" data-t="l" class="active">الإشعارات والمساءلات</button>
+    <button type="button" data-t="q" class="active">الوصول السريع</button>
+    <button type="button" data-t="l">الإشعارات والمساءلات</button>
     <button type="button" data-t="m">متابعة المعلمين</button>
     <button type="button" data-t="w">تقرير المتابعات اليومية</button>
     <button type="button" data-t="r">تقرير المتابعات الفصلية</button>
     <button type="button" data-t="u">لجنة التوجيه الطلابي</button>
   </nav>
 
-  <div class="pane" id="p-l">
+  <div class="pane" id="p-q"><section class="card"><div class="qa-sub"><button type="button" class="on" data-qs="i">المؤشرات</button><button type="button" data-qs="q">الوصول السريع</button></div><div class="qa-i">  <section class="stats" aria-label="مؤشرات اليوم">
+    <div class="stat"><span class="n" id="stStu">٠</span><span class="l">غياب الطلاب اليوم</span><span class="d" id="stStuD"></span></div>
+    <div class="stat bad"><span class="n" id="stAbs">٠</span><span class="l">معلمون غائبون اليوم</span><span class="d" id="stAbsD"></span></div>
+    <div class="stat"><span class="n" id="stWait">٠</span><span class="l">حصص الانتظار</span><span class="d" id="stWaitD"></span></div>
+    <div class="stat"><span class="n" id="stDuty">—</span><span class="l">المناوبة والإشراف</span><span class="d" id="stDutyD"></span></div>
+    <div class="stat"><span class="n" id="stVis">٠</span><span class="l">الزيارات الصفية</span><span class="d">هذا الأسبوع</span></div>
+    <div class="stat"><span class="n" id="stOver">٠</span><span class="l">بلغوا حد الغياب</span><span class="d" id="stOverD"></span></div>
+  </section></div><div class="qa-q" hidden></div></section></div>
+
+  <div class="pane" id="p-l" hidden>
     <section class="card">
       <div class="hd"><h2>الإشعارات والمساءلات</h2><span class="chip" id="lCount"></span></div>
       <div class="muted">كل إشعار يحمل رقمه لكل بند، وكل مساءلة تبيّن حالتها وتوقيع المعلم.</div>
@@ -347,6 +349,20 @@ Dash.boot({
     const perm = (env.ctx && env.ctx.permissions && env.ctx.permissions['tools.agentEdu']) || {};
     const canEdit = !isSA && !!perm.edit;
     env.main.innerHTML = EDU_MARKUP;
+    /* ---- الوصول السريع (أول تبويب): يُركَّب فورًا قبل تحميل البيانات حتى لا يظهر الشكل القديم ثم يتبدّل ---- */
+    try{
+      let q = null; const G = (t,sub)=>()=>q && q.go(t,sub);
+      q = QA.bind({ style:'rows', stats:'.stats', cards:()=>{
+        const waitAcc = LOG.acc.filter(a=>a.status==='wait').length;
+        const flagged = T.filter((t,i)=>DK.some(k=>dApplies(i,k[0]) && dBad(i,k[0]))).length;
+        return [
+          {t:'الإشعارات والمساءلات', n:LOG.notices.length+LOG.acc.length, p:waitAcc, l:'بانتظار الاعتماد', go:G('l')},
+          {t:'متابعة المعلمين', n:T.length, p:flagged, l:'لديهم ملاحظات اليوم', go:G('m'), tabs:[['المتابعات اليومية',G('m','#subTabs [data-t="d"]')],['متابعات الفصل الدراسي',G('m','#subTabs [data-t="s"]')]]},
+          {t:'تقرير المتابعات اليومية', n:T.length, l:'معلمًا', go:G('w')},
+          {t:'تقرير المتابعات الفصلية', n:T.length, l:'معلمًا', go:G('r')},
+          {t:'لجنة التوجيه الطلابي', n:6, l:'أعضاء', go:G('u')}
+        ]; } });
+    }catch(e){ console.warn('QA', e); }
     const $ = id=>document.getElementById(id);
     const AR = '٠١٢٣٤٥٦٧٨٩';
     const arN = n=>String(n).replace(/\d/g,d=>AR[d]);
@@ -1187,20 +1203,6 @@ Dash.boot({
     topStats(); visitsStat();
     dRender(); sRender(); lRender();
 
-    /* ---- الوصول السريع (أول تبويب) ---- */
-    try{
-      let q = null; const G = (t,sub)=>()=>q && q.go(t,sub);
-      q = QA.install({ style:'rows', stats:'.stats', cards:()=>{
-        const waitAcc = LOG.acc.filter(a=>a.status==='wait').length;
-        const flagged = T.filter((t,i)=>DK.some(k=>dApplies(i,k[0]) && dBad(i,k[0]))).length;
-        return [
-          {t:'الإشعارات والمساءلات', n:LOG.notices.length+LOG.acc.length, p:waitAcc, l:'بانتظار الاعتماد', go:G('l')},
-          {t:'متابعة المعلمين', n:T.length, p:flagged, l:'لديهم ملاحظات اليوم', go:G('m'), tabs:[['المتابعات اليومية',G('m','#subTabs [data-t="d"]')],['متابعات الفصل الدراسي',G('m','#subTabs [data-t="s"]')]]},
-          {t:'تقرير المتابعات اليومية', n:T.length, l:'معلمًا', go:G('w')},
-          {t:'تقرير المتابعات الفصلية', n:T.length, l:'معلمًا', go:G('r')},
-          {t:'لجنة التوجيه الطلابي', n:6, l:'أعضاء', go:G('u')}
-        ]; } });
-    }catch(e){ console.warn('QA', e); }
   }
 });
 </script>

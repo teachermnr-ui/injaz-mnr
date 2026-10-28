@@ -50,7 +50,7 @@
       var c = e.target.closest('[data-qc]');
       if (c && cur[c.dataset.qc] && cur[c.dataset.qc].go) cur[c.dataset.qc].go();
     });
-    setInterval(function(){ if (!Q.hidden) refresh(); }, 2500);
+    setInterval(function(){ if (!Q.hidden) refresh(); }, 1200);
     return { refresh: refresh };
   }
   /* تثبيت للصفحات ذات الشريط #tabs و.pane: يضيف الزر والقسم أولًا ويجعله الافتتاحي */
@@ -69,5 +69,27 @@
     var go = function(t, sub){ var b = nav.querySelector('[data-t="' + t + '"]'); if (b) b.click(); if (sub) setTimeout(function(){ var x = document.querySelector(sub); if (x) x.click(); }, 60); };
     return { refresh: m.refresh, go: go };
   }
-  window.QA = { mount: mount, install: install, A: A, html: html, css: css };
+
+  /* ربط فقط: الصفحة تحمل بنية «الوصول السريع» في قالبها نفسه (الزر الأول، والقسم، والمؤشرات داخله)، وهذه الدالة تربط البطاقات */
+  function bind(o){
+    css();
+    var nav = document.querySelector(o.nav || '#tabs'), pane = document.getElementById('p-q'); if (!nav || !pane) return null;
+    var host = pane.querySelector('.card') || pane, Q = host.querySelector('.qa-q'), I = host.querySelector('.qa-i'), cur = [];
+    function refresh(){ if (pane.hidden || Q.hidden) return; try { cur = o.cards(); Q.innerHTML = html(o.style, cur); } catch (e) { console.warn('QA', e); } }
+    host.addEventListener('click', function(e){
+      var s = e.target.closest('[data-qs]');
+      if (s) { host.querySelectorAll('.qa-sub button').forEach(function(b){ b.classList.toggle('on', b === s); }); I.hidden = s.dataset.qs !== 'i'; Q.hidden = s.dataset.qs !== 'q'; if (s.dataset.qs === 'q') refresh(); return; }
+      var t = e.target.closest('[data-qt]');
+      if (t) { var p = t.dataset.qt.split('|'); e.stopPropagation(); cur[p[0]].tabs[p[1]][1](); return; }
+      var c = e.target.closest('[data-qc]');
+      if (c && cur[c.dataset.qc] && cur[c.dataset.qc].go) cur[c.dataset.qc].go();
+    });
+    nav.addEventListener('click', function(e){ var b = e.target.closest('button'); if (b && b.dataset.t === 'q') setTimeout(refresh, 0); });
+    setInterval(refresh, 1200);
+    var go = function(t, sub){ var b = nav.querySelector('[data-t="' + t + '"]'); if (b) b.click(); if (sub) setTimeout(function(){ var x = document.querySelector(sub); if (x) x.click(); }, 60); };
+    return { refresh: refresh, go: go };
+  }
+  /* قالب البنية (يُنسخ إلى قالب كل صفحة) */
+  var SHELL = '<div class="pane" id="p-q"><section class="card"><div class="qa-sub"><button type="button" class="on" data-qs="i">المؤشرات</button><button type="button" data-qs="q">الوصول السريع</button></div><div class="qa-i">@@STATS@@</div><div class="qa-q" hidden></div></section></div>';
+  window.QA = { mount: mount, install: install, bind: bind, shell: SHELL, A: A, html: html, css: css };
 })();

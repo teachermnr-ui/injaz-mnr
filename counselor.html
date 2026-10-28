@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-28.5 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
+<!-- إصدار: 2026-10-28.6 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -335,6 +335,7 @@ tr.gone del{text-decoration:line-through}
 .bgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
 @media (min-width:701px){.bgrid{grid-template-columns:repeat(3,1fr)}}
 .frz{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;margin:8px 0}
+.rg{margin:14px 2px 4px;font-weight:800;font-size:14px;color:var(--brand)}.rl{border:1px solid var(--line);border-radius:12px;overflow:hidden}.rr{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:13px;font-weight:700}.rr:last-child{border-bottom:0}.rr .btn{padding:3px 14px;font-size:12px;min-height:0;flex:none}
 .grph{margin:12px 0 4px;font-size:15px}
 .seg.ist{margin:10px 0}
 </style>
@@ -1202,7 +1203,7 @@ Dash.boot({
       +(rows.map((r,i)=>'<tr><td>'+A(i+1)+'</td>'+cols.map(c=>'<td>'+esc(cv(c[1](r)))+'</td>').join('')+'</tr>').join('') || '<tr><td colspan="'+(cols.length+1)+'" class="muted">لا سجلات.</td></tr>')+'</tbody></table>'+(pr?'':'</div>');
     function repListPane(){
       return '<div class="cnh"><h3 style="margin:0">التقارير</h3></div><div class="muted">لكل بند تقريره: اضغط «تحميل PDF» ثم احفظه من نافذة الطباعة. يُختم كل تقرير بتوقيع الموجه الطلابي واعتماد مدير المدرسة.</div>'
-        +REPG.map(g=>'<h4 class="grph">'+esc(g[0])+'</h4><ul class="lst">'+g[1].map(k=>'<li class="srow"><div><b>'+esc(REP[k].t)+'</b></div><div class="row"><button type="button" class="btn solid" data-rp="'+k+'">تحميل PDF</button></div></li>').join('')+'</ul>').join('');
+        +REPG.map(g=>'<div class="rg">'+esc(g[0])+'</div><div class="rl">'+g[1].map(k=>'<div class="rr"><span>'+esc(REP[k].t)+'</span><button type="button" class="btn solid" data-rp="'+k+'">PDF</button></div>').join('')+'</div>').join('');
     }
     function repPrint(kind){
       const title = REP[kind].t;

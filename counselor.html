@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-28.2 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
+<!-- إصدار: 2026-10-28.3 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -46,6 +46,19 @@ header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-
 .top .sub{color:var(--muted);font-size:14px}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--brand-soft);color:var(--brand);border-radius:99px;padding:3px 12px;font-size:13px;font-weight:700}
 
+.qa{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media (min-width:760px){.qa{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.qc{background:var(--surface);border:1px solid var(--line);border-right:4px solid var(--k,var(--brand));border-radius:12px;padding:8px 9px 4px;display:flex;flex-direction:column;min-width:0}
+.qc .top{display:flex;align-items:center;gap:7px}
+.qc .top b{font-size:24px;line-height:1;min-width:26px;text-align:center;color:var(--k,var(--brand));font-variant-numeric:tabular-nums}
+.qc .top div{display:flex;flex-direction:column;gap:1px;min-width:0}
+.qc .t{font-size:12px;font-weight:800;line-height:1.25}
+.qc small{font-size:10px;color:var(--muted)}
+.qc .tb{margin-top:6px;border-top:1px solid var(--line)}
+.qc .tb button{display:flex;justify-content:space-between;align-items:center;width:100%;font:inherit;font-size:10.5px;color:inherit;background:none;border:0;border-bottom:1px solid var(--line);padding:5px 1px;text-align:right;cursor:pointer}
+.qc .tb button:last-child{border-bottom:0}
+.qc .tb button:after{content:"‹";color:var(--muted)}
+.qc .tb button:hover{color:var(--brand)}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 @media (min-width:760px){.stats{grid-template-columns:repeat(6,minmax(0,1fr))}}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -352,7 +365,7 @@ tr.gone del{text-decoration:line-through}
       5:[ic('تدوين محضر الواقعة، ودعوة ولي الأمر، وحسم خمس عشرة درجة، واجتماع لجنة التوجيه فورًا، ورفع محضر لإدارة التعليم، ونقل الطالب لمدرسة أخرى بقرار مدير التعليم')]}};
     const DEGN=['','الأولى','الثانية','الثالثة','الرابعة','الخامسة'], DPT={1:1,2:2,3:3,4:10,5:15}, DCLS={1:'d1',2:'d2',3:'d3',4:'d4',5:'d5'};
 const TABS = [
-  ['home','لوحة المعلومات'],
+  ['home','الوصول السريع'],
   ['inbox','الإحالات الواردة'],
   ['plan','الخطة السنوية والبرامج الإرشادية'],
   ['cases','دراسة الحالات الفردية'],
@@ -362,7 +375,7 @@ const TABS = [
   ['rep','التقارير']
 ];
 const SUBS = {
-  inbox:[['a','إحالات وكيل شؤون الطلاب'],['b','المحالون إلى لجنة التوجيه والإرشاد'],['c','قرارات وتوصيات لجنة التوجيه والإرشاد'],['d','الحالات عالية الخطورة'],['e','تقارير تحليل النتائج من المعلمين']],
+  inbox:[['a','إحالات وكيل شؤون الطلاب'],['b','المحالون إلى لجنة التوجيه والإرشاد'],['c','قرارات وتوصيات لجنة التوجيه والإرشاد'],['d','الحالات عالية الخطورة'],['e','تحليل نتائج الطلاب']],
   plan:[['annual','الخطة السنوية للإرشاد الطلابي'],['prog','البرامج الإرشادية'],['career','التوجيه والإرشاد التعليمي والمهني'],['parents','لقاءات أولياء الأمور ومجالس الآباء'],['group','جماعة التوجيه والإرشاد']],
   cases:[['list','الحالات'],['contacts','سجل التواصل'],['inc','سجل المواقف اليومية الطارئة']],
   sess:[['indiv','التوجيه الفردي'],['group','الإرشاد الجمعي']],
@@ -1163,10 +1176,25 @@ Dash.boot({
       const items = inboxItems(), fresh = items.filter(i=>i.grp!=='e' && inPool(i));
       const due = CS.filter(c=>c.st!=='closed' && c.nextFollow && c.nextFollow<=dk);
       const rec = recsList().filter(x=>(D.recs.find(y=>y.id===x.id)||{}).st!=='done');
-      const S = (n,l,tone,t,s)=>'<button type="button" class="stat '+tone+'" data-go="'+t+(s?'|'+s:'')+'"><span class="n">'+A(n)+'</span><span class="l">'+l+'</span></button>';
-      return '<section class="stats">'+S(fresh.length,'إحالات جديدة غير معالجة',fresh.length?'bad':'','inbox','a')
-        +S(CS.filter(c=>c.st==='open').length,'حالات مفتوحة','warn','cases','list')+S(due.length,'متابعات مستحقة',due.length?'bad':'','cases','list')
-        +S(live(D.sessions).length,'الجلسات هذا الفصل','','sess','indiv')+S(rec.length,'توصيات لم تُنفذ بعد','warn','inbox','c')+S(items.filter(i=>i.grp!=='e' && itemHome(i)==='hr').length,'حالات عالية الخطورة','bad','inbox','d')+'</section>'
+      const all = items.filter(i=>i.grp!=='e'), rp = items.filter(i=>i.grp==='e');
+      const hm = h=>all.filter(i=>itemHome(i)===h), isOpen = i=>stDest(i)==='open';
+      const pool = all.filter(inPool).length + rp.length;
+      const ann = live(D.plans).filter(x=>x.kind==='annual');
+      const ic = homeCases('indiv').filter(c=>caseIst(c)==='open').length;
+      const hs = live(D.hasr), cr = live(D.care), rps = live(D.reports||[]);
+      const Z = n=>n?A(n):'٠';
+      const CARDS = [
+        ['الخطة السنوية', ann.length, ann.filter(x=>x.st==='مخطط').length, 'var(--brand)', 'plan', SUBS.plan],
+        ['إحالات جديدة', all.length+rp.length, pool, 'var(--bad)', 'inbox', [['a','إحالات وكيل شؤون الطلاب'],['e','تحليل نتائج الطلاب']]],
+        ['لجنة التوجيه والإرشاد', hm('cm').length, hm('cm').filter(isOpen).length, 'var(--warn)', 'inbox', [['b','المحالون إلى اللجنة'],['c','القرارات والتوصيات']]],
+        ['الحالات عالية الخطورة', hm('hr').length, hm('hr').filter(isOpen).length, 'var(--bad)', 'inbox', [['d','الحالات عالية الخطورة']]],
+        ['الحالات الفردية', homeCases('cases').length, homeCases('cases').filter(c=>caseIst(c)==='open').length, 'var(--brand)', 'cases', [['list','الحالات'],['contacts','سجل التواصل'],['inc','المواقف اليومية الطارئة']]],
+        ['الإرشاد الفردي والجمعي', live(D.sessions).length, ic, 'var(--brand)', 'sess', SUBS.sess],
+        ['الحالات الخاصة والسرية', hs.length, hs.filter(x=>!x.action).length, 'var(--bad)', 'hasr', SUBS.hasr],
+        ['رعاية فئات الطلاب', cr.length, cr.filter(x=>!x.result).length, 'var(--brand)', 'care', SUBS.care],
+        ['التقارير', rps.length, rps.filter(x=>x.st!=='done').length, 'var(--brand)', 'rep', SUBS.rep]
+      ];
+      return '<section class="qa">'+CARDS.map(c=>'<div class="qc" style="--k:'+c[3]+'"><div class="top"><b>'+A(c[1])+'</b><div><span class="t">'+c[0]+'</span><small>'+Z(c[2])+' مفتوحة</small></div></div><div class="tb">'+c[5].map(t=>'<button type="button" data-go="'+c[4]+'|'+t[0]+'">'+t[1]+'</button>').join('')+'</div></div>').join('')+'</section>'
         +'<section class="card"><div class="hd"><h2>متابعات مستحقة</h2></div><div class="lst">'+caseCards(c=>c.st!=='closed' && c.nextFollow && c.nextFollow<=dk)+'</div></section>';
     }
 

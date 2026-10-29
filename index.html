@@ -4622,10 +4622,12 @@ function renderSettings(c){
   /* [TEMP-WIPE:BEGIN] */
   (function(){
     const PHRASE='حذف جميع بيانات العملاء';
+    // مهلة أطول من الافتراضية (٧٠ ثانية) — الدالة تعمل حتى ٤٥ ثانية في كل دفعة
+    const twCall=async(data)=>{ return (await firebase.functions().httpsCallable('wipeAllClientData',{timeout:150000})(data)).data; };
     $('#twCount').onclick=async()=>{
       $('#twInfo').innerHTML='<span class="spin"></span>';
       try{
-        const r=await UsersAPI.call('wipeAllClientData',{action:'count'});
+        const r=await twCall({action:'count'});
         const rows=Object.entries(r.collections||{}).filter(([k,v])=>v>0).map(([k,v])=>`<li>${esc(k)}: ${ayArDigits(v)}</li>`).join('');
         $('#twInfo').innerHTML=`<div class="alert">سيُحذف (كل المستندات بما فيها الفرعية)${r.partial?' — العدّ جزئي لكثرة البيانات':''}: <ul style="margin:6px 0">${rows||'<li>لا شيء</li>'}</ul>حسابات الدخول: <b>${ayArDigits(r.authUsers)}</b> — الملفات: <b>${r.files<0?'تعذّر العدّ':ayArDigits(r.files)}</b></div>`;
         $('#twConfirmBox').style.display='';
@@ -4639,7 +4641,7 @@ function renderSettings(c){
         let n=0, r;
         do{
           n++; alertBox('twAlert','ok','جارٍ الحذف… الدفعة '+ayArDigits(n)+(r&&r.stage?' — المرحلة: '+({firestore:'قاعدة البيانات',auth:'الحسابات'}[r.stage]||r.stage):''));
-          r=await UsersAPI.call('wipeAllClientData',{action:'wipe',confirm:PHRASE});
+          r=await twCall({action:'wipe',confirm:PHRASE});
         }while(r && r.done===false && n<500);
         alertBox('twAlert','ok','اكتمل الحذف.'+(r&&r.storageErr?' تنبيه: تعذّر حذف الملفات: '+r.storageErr:''));
         $('#twConfirmBox').style.display='none';

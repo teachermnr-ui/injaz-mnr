@@ -4627,7 +4627,7 @@ function renderSettings(c){
       try{
         const r=await UsersAPI.call('wipeAllClientData',{action:'count'});
         const rows=Object.entries(r.collections||{}).filter(([k,v])=>v>0).map(([k,v])=>`<li>${esc(k)}: ${ayArDigits(v)}</li>`).join('');
-        $('#twInfo').innerHTML=`<div class="alert">سيُحذف (مستندات المستوى الأول، دون الفرعيات): <ul style="margin:6px 0">${rows||'<li>لا شيء</li>'}</ul>حسابات الدخول: <b>${ayArDigits(r.authUsers)}</b> — الملفات: <b>${r.files<0?'تعذّر العدّ':ayArDigits(r.files)}</b></div>`;
+        $('#twInfo').innerHTML=`<div class="alert">سيُحذف (كل المستندات بما فيها الفرعية)${r.partial?' — العدّ جزئي لكثرة البيانات':''}: <ul style="margin:6px 0">${rows||'<li>لا شيء</li>'}</ul>حسابات الدخول: <b>${ayArDigits(r.authUsers)}</b> — الملفات: <b>${r.files<0?'تعذّر العدّ':ayArDigits(r.files)}</b></div>`;
         $('#twConfirmBox').style.display='';
       }catch(e){ $('#twInfo').innerHTML=''; alertBox('twAlert','err',e.message||'تعذّر العدّ'); }
     };

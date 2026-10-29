@@ -2716,13 +2716,30 @@ exports.wipeAllClientData = onCall({ timeoutSeconds: 120, memory: "1GiB" }, asyn
   const cols = (await db.listCollections()).filter((c) => !WIPE_KEEP_COLS.includes(c.id));
 
   if (d.action === "count") {
+    /* عدّ دقيق: كل المستندات بما فيها الفرعية. listDocuments تُرجع حتى المستندات «الغائبة» التي لها فرعيات فقط
+       (مثل studentAffairs/{sid} و counselor/{sid})، وهذه لا يُرجعها الاستعلام العادي. */
+    const t0c = Date.now();
+    let partial = false;
+    const tree = async (ref) => {
+      let n = 0;
+      for (const sub of await ref.listCollections()) {
+        if (Date.now() - t0c > WIPE_BUDGET_MS) { partial = true; return n; }
+        n += (await sub.count().get()).data().count;
+        for (const r of await sub.listDocuments()) n += await tree(r);
+      }
+      return n;
+    };
     const collections = {};
     for (const c of cols) {
-      const n = (await c.count().get()).data().count;
       const keep = wipeKeepIds(c.id, me.uid);
-      let kept = 0;
-      for (const id of keep) { if ((await c.doc(id).get()).exists) kept++; }
-      collections[c.id] = Math.max(0, n - kept);
+      const refs = (await c.listDocuments()).filter((r) => !keep.includes(r.id));
+      let n = 0;
+      if (refs.length) {
+        const snaps = await db.getAll(...refs);
+        n = snaps.filter((x) => x.exists).length;
+        for (const r of refs) n += await tree(r);
+      }
+      collections[c.id] = n;
     }
     let authUsers = 0, token;
     do {
@@ -2732,7 +2749,7 @@ exports.wipeAllClientData = onCall({ timeoutSeconds: 120, memory: "1GiB" }, asyn
     } while (token);
     let files = 0;
     try { const [f] = await admin.storage().bucket().getFiles({ maxResults: 5000 }); files = f.length; } catch (e) { files = -1; }
-    return { ok: true, collections, authUsers, files };
+    return { ok: true, collections, authUsers, files, partial };
   }
 
   if (d.action !== "wipe" || d.confirm !== WIPE_CONFIRM) throw secMsg("invalid-argument", "عبارة التأكيد غير صحيحة.");
@@ -2740,21 +2757,15 @@ exports.wipeAllClientData = onCall({ timeoutSeconds: 120, memory: "1GiB" }, asyn
   const left = () => Date.now() - t0 < WIPE_BUDGET_MS;
   console.warn("WIPE started by " + me.uid);
 
-  // ١) Firestore: صفحات صغيرة، والحذف تكراري يشمل الفرعيات
+  // ١) Firestore: listDocuments تشمل المستندات الغائبة ذات الفرعيات، والحذف تكراري يشمل كل ما تحتها
   for (const c of cols) {
     const keep = wipeKeepIds(c.id, me.uid);
-    let last = null;
-    for (;;) {
+    const refs = (await c.listDocuments()).filter((r) => !keep.includes(r.id));
+    for (let i = 0; i < refs.length; i += 100) {
       if (!left()) return { ok: true, done: false, stage: "firestore", at: c.id };
-      let q = c.orderBy(admin.firestore.FieldPath.documentId()).select().limit(100);
-      if (last) q = q.startAfter(last);
-      const snap = await q.get();
-      if (snap.empty) break;
       const bw = db.bulkWriter();
-      const todo = snap.docs.filter((x) => !keep.includes(x.id));
-      await Promise.all(todo.map((x) => db.recursiveDelete(x.ref, bw)));
+      await Promise.all(refs.slice(i, i + 100).map((r) => db.recursiveDelete(r, bw)));
       await bw.close();
-      last = snap.docs[snap.docs.length - 1];
     }
   }
 

@@ -2720,27 +2720,35 @@ exports.wipeAllClientData = onCall({ timeoutSeconds: 120, memory: "1GiB" }, asyn
        (مثل studentAffairs/{sid} و counselor/{sid})، وهذه لا يُرجعها الاستعلام العادي. */
     const t0c = Date.now();
     let partial = false;
-    const tree = async (ref) => {
+    const over = () => { if (Date.now() - t0c > 40000) { partial = true; return true; } return false; };
+    // تنفيذ متوازٍ على دفعات من ٢٥ (العدّ التسلسلي تجاوز مهلة الاستدعاء)
+    const sumPar = async (items, fn) => {
       let n = 0;
-      for (const sub of await ref.listCollections()) {
-        if (Date.now() - t0c > WIPE_BUDGET_MS) { partial = true; return n; }
-        n += (await sub.count().get()).data().count;
-        for (const r of await sub.listDocuments()) n += await tree(r);
+      for (let i = 0; i < items.length; i += 25) {
+        if (over()) break;
+        n += (await Promise.all(items.slice(i, i + 25).map(fn))).reduce((x, y) => x + y, 0);
       }
       return n;
     };
+    const tree = async (ref) => {
+      if (over()) return 0;
+      const subs = await ref.listCollections();
+      return sumPar(subs, async (sub) => {
+        const [cnt, kids] = await Promise.all([sub.count().get(), sub.listDocuments()]);
+        return cnt.data().count + await sumPar(kids, tree);
+      });
+    };
     const collections = {};
-    for (const c of cols) {
+    await Promise.all(cols.map(async (c) => {
       const keep = wipeKeepIds(c.id, me.uid);
       const refs = (await c.listDocuments()).filter((r) => !keep.includes(r.id));
       let n = 0;
       if (refs.length) {
         const snaps = await db.getAll(...refs);
-        n = snaps.filter((x) => x.exists).length;
-        for (const r of refs) n += await tree(r);
+        n = snaps.filter((x) => x.exists).length + await sumPar(refs, tree);
       }
       collections[c.id] = n;
-    }
+    }));
     let authUsers = 0, token;
     do {
       const r = await admin.auth().listUsers(1000, token);

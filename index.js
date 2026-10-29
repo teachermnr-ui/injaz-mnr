@@ -2684,3 +2684,93 @@ exports.aiSuggest = onCall({ secrets: [CF_ACCOUNT_ID, CF_API_TOKEN], timeoutSeco
     throw e;
   }
 });
+
+/* [TEMP-WIPE:BEGIN] ============================================================================
+   (2026-10-29) دالة مؤقتة: تصفير بيانات العملاء بالكامل (تُحذف بعد الاستعمال مرة واحدة — انظر ملف الإلغاء).
+   تبقى: حساب الأدمن العام (مستنده وحسابه)، settings/*، schoolData/roleTemplates، aiConfig، aiPrompts، calendarLog.
+   يُحذف كل ما سواها: Firestore (مع الفرعيات)، حسابات Authentication، ملفات Storage.
+   الاستدعاء: action = "count" (عدّ فقط) | "wipe" مع confirm = العبارة. كل استدعاء يعمل نحو ٤٥ ثانية ويعيد done=false ليُعاد حتى الانتهاء.
+   ============================================================================================ */
+const WIPE_CONFIRM = "حذف جميع بيانات العملاء";
+const WIPE_ADMIN_EMAIL = "teacher.mnr@gmail.com";
+const WIPE_KEEP_COLS = ["settings", "aiConfig", "aiPrompts", "calendarLog"];
+const WIPE_KEEP_DOCS = { schoolData: ["roleTemplates"] };
+const WIPE_BUDGET_MS = 45000;
+
+async function wipeGuard(request) {
+  const me = await secCaller(request, { needDoc: true, allowClosed: true });
+  const email = String((request.auth.token && request.auth.token.email) || "").toLowerCase();
+  if (!secIsAdmin(me.data) || email !== WIPE_ADMIN_EMAIL) throw secMsg("permission-denied", "مقصور على حساب الأدمن العام المحدد.");
+  return me;
+}
+function wipeKeepIds(colId, adminUid) {
+  const k = (WIPE_KEEP_DOCS[colId] || []).slice();
+  if (colId === "users") k.push(adminUid);
+  return k;
+}
+
+exports.wipeAllClientData = onCall({ timeoutSeconds: 120, memory: "1GiB" }, async (request) => {
+  const me = await wipeGuard(request);
+  const d = request.data || {};
+  const db = secDb();
+  const cols = (await db.listCollections()).filter((c) => !WIPE_KEEP_COLS.includes(c.id));
+
+  if (d.action === "count") {
+    const collections = {};
+    for (const c of cols) {
+      const n = (await c.count().get()).data().count;
+      const keep = wipeKeepIds(c.id, me.uid);
+      let kept = 0;
+      for (const id of keep) { if ((await c.doc(id).get()).exists) kept++; }
+      collections[c.id] = Math.max(0, n - kept);
+    }
+    let authUsers = 0, token;
+    do {
+      const r = await admin.auth().listUsers(1000, token);
+      authUsers += r.users.filter((u) => u.uid !== me.uid).length;
+      token = r.pageToken;
+    } while (token);
+    let files = 0;
+    try { const [f] = await admin.storage().bucket().getFiles({ maxResults: 5000 }); files = f.length; } catch (e) { files = -1; }
+    return { ok: true, collections, authUsers, files };
+  }
+
+  if (d.action !== "wipe" || d.confirm !== WIPE_CONFIRM) throw secMsg("invalid-argument", "عبارة التأكيد غير صحيحة.");
+  const t0 = Date.now();
+  const left = () => Date.now() - t0 < WIPE_BUDGET_MS;
+  console.warn("WIPE started by " + me.uid);
+
+  // ١) Firestore: صفحات صغيرة، والحذف تكراري يشمل الفرعيات
+  for (const c of cols) {
+    const keep = wipeKeepIds(c.id, me.uid);
+    let last = null;
+    for (;;) {
+      if (!left()) return { ok: true, done: false, stage: "firestore", at: c.id };
+      let q = c.orderBy(admin.firestore.FieldPath.documentId()).select().limit(100);
+      if (last) q = q.startAfter(last);
+      const snap = await q.get();
+      if (snap.empty) break;
+      const bw = db.bulkWriter();
+      const todo = snap.docs.filter((x) => !keep.includes(x.id));
+      await Promise.all(todo.map((x) => db.recursiveDelete(x.ref, bw)));
+      await bw.close();
+      last = snap.docs[snap.docs.length - 1];
+    }
+  }
+
+  // ٢) Authentication: كل الحسابات عدا الأدمن
+  for (;;) {
+    const r = await admin.auth().listUsers(1000);
+    const uids = r.users.map((u) => u.uid).filter((u) => u !== me.uid);
+    if (!uids.length) break;
+    await admin.auth().deleteUsers(uids);
+    if (!left()) return { ok: true, done: false, stage: "auth" };
+  }
+
+  // ٣) Storage
+  let storageErr = null;
+  try { await admin.storage().bucket().deleteFiles({ force: true }); } catch (e) { storageErr = String((e && e.message) || e).slice(0, 200); }
+  console.warn("WIPE finished by " + me.uid);
+  return { ok: true, done: true, storageErr };
+});
+/* [TEMP-WIPE:END] */

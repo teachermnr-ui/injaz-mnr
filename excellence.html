@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script>try{ if(localStorage.getItem('ex_theme')==='light') document.documentElement.setAttribute('data-theme','light'); }catch(e){}</script>
 <style>
 :root{
   --night:#0b2523; --deep:#113733; --jade:#1d6a5d; --gold:#dfae48; --gold-soft:#f1d995;
@@ -25,6 +26,23 @@ button,input,textarea,select{font-family:inherit}
 button{cursor:pointer;border:0}
 .hidden{display:none !important}
 
+
+/* ---------- المظهر الفاتح للوحة التعبئة فقط (العرض والمعاينة يبقيان داكنين) ---------- */
+html[data-theme=light],html[data-theme=light] body{background:#f1f5f4;color:#14302c}
+html[data-theme=light] .bar{background:#fff;border-bottom-color:#d5e0de}
+html[data-theme=light] .bar a,html[data-theme=light] .bar>button,html[data-theme=light] .bar .grp button{background:#e6eeec;color:#14302c}
+html[data-theme=light] .bar .grp{background:#eef3f2}
+html[data-theme=light] .bar .grp button.act.on{background:var(--gold);color:#251b04}
+html[data-theme=light] .ph{color:#7a5a10}
+html[data-theme=light] .notice{background:#fff7e0;border-color:#e3c46f;color:#6b4f08}
+html[data-theme=light] .sec{background:#fff;border-color:#d5e0de}
+html[data-theme=light] .sec h3 small,html[data-theme=light] .empty{color:#5d7370}
+html[data-theme=light] .btn.ghost{background:#e6eeec;color:#14302c}
+html[data-theme=light] .btn.danger{background:#fde4e4;color:#9b2a2a}
+html[data-theme=light] .it{background:#f3f7f6}
+html[data-theme=light] .panel input,html[data-theme=light] .panel textarea,html[data-theme=light] .panel select{background:#fff;color:#14302c;border-color:#c3d3d0}
+html[data-theme=light]{--ink:#14302c;--mute:#5d7370;--gold-soft:#7a5a10;--line:rgba(160,120,30,.35)}
+html[data-theme=light] .modal,html[data-theme=light] .pvm{--ink:#eef5f2;--mute:#9db8b1;--gold-soft:#f1d995;--line:rgba(223,174,72,.28);color:#eef5f2}
 /* ---------- شريط التبويبات ---------- */
 .bar{position:sticky;top:0;height:var(--bar-h);z-index:20;display:flex;align-items:center;gap:8px;padding:0 12px;background:#04100f;border-bottom:1px solid rgba(255,255,255,.08);font-size:13.5px;overflow-x:auto}
 .bar a,.bar>button{flex:none;color:var(--ink);background:rgba(255,255,255,.08);padding:7px 14px;border-radius:9px;font-weight:700;font-size:13px;text-decoration:none;white-space:nowrap}
@@ -120,7 +138,7 @@ textarea{min-height:60px;resize:vertical}
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="ai-fill.js?v=2026-10-16.7"></script>
 <script src="users-api.js?v=2026-10-12.1"></script>
-<script src="ex-render.js?v=2026-10-11.1"></script>
+<script src="ex-render.js?v=2026-10-29.1"></script>
 <script src="nav-back.js?v=2026-10-28.1" defer></script>
 </head>
 <body>
@@ -131,6 +149,7 @@ textarea{min-height:60px;resize:vertical}
   <div class="grp off" data-g="teachers"><span class="dot"></span><button data-ch="teachers">شاشة المعلمين</button><span class="st"></span><button class="act" data-act="pub">نشر</button><button class="act" data-act="stop">إيقاف</button></div>
   <div class="grp off" data-g="admins"><span class="dot"></span><button data-ch="admins">شاشة الإداريين</button><span class="st"></span><button class="act" data-act="pub">نشر</button><button class="act" data-act="stop">إيقاف</button></div>
   <span class="sp"></span>
+  <button id="themeBtn" title="تبديل مظهر لوحة التعبئة">☀ مظهر فاتح</button>
   <button id="fs">ملء الشاشة</button>
 </div>
 
@@ -153,7 +172,7 @@ const firebaseConfig = {
   appId: "1:640060389242:web:37e42c456d7b4e015e88c3"
 };
 let db=null, fns=null, SID='local', ME={id:'local',name:''}, CAN_EDIT=true, SCHOOL='';
-let D={items:[],news:[]}, BOARDS={}, SCREENS=[];
+let D={items:[],news:[],imgs:[]}, BOARDS={}, SCREENS=[];
 let CH='public', FORM=null, ADDOPEN=false, SCROPEN=false, PVI=null, SCRNOTE='';
 let STAFF=[], ARCH=[], EXS={}, AUTOOPEN=false, ARCHOPEN=false;
 const SW_DEF={circ:true,duty:true,ind:true,alerts:true,nums:true};
@@ -195,7 +214,7 @@ const byCreated = (a,b)=>(a.createdAt||0)-(b.createdAt||0) || String(a.id).local
 
 /* ===== طبقة التخزين: Firestore (الأصل) أو محلي (للتجربة) ===== */
 const LS='excellence_local_v1', LSB='excellence_local_boards_v1';
-function lsLoad(){ try{ const j=JSON.parse(localStorage.getItem(LS)||'null'); if(j&&j.items) return j; }catch(e){} return null; }
+function lsLoad(){ try{ const j=JSON.parse(localStorage.getItem(LS)||'null'); if(j&&j.items){ j.imgs=j.imgs||[]; return j; } }catch(e){} return null; }
 function lsSave(){ try{ localStorage.setItem(LS,JSON.stringify(D)); return true; }catch(e){ toast('تعذّر الحفظ في المتصفح (قد تكون المساحة ممتلئة).'); return false; } }
 const Store = {
   async putItem(it){
@@ -205,6 +224,8 @@ const Store = {
   async delItem(id){ if(LOCAL){ D.items=D.items.filter(x=>x.id!==id); lsSave(); return; } await db.collection('excellence').doc(SID).collection('items').doc(id).delete(); },
   async putNews(n){ if(LOCAL){ D.news.push(n); lsSave(); return; } await db.collection('excellence').doc(SID).collection('news').doc(n.id).set({ch:n.ch,t:n.t,createdAt:n.createdAt,updatedBy:ME.id}); },
   async delNews(id){ if(LOCAL){ D.news=D.news.filter(x=>x.id!==id); lsSave(); return; } await db.collection('excellence').doc(SID).collection('news').doc(id).delete(); },
+  async putImg(m){ if(LOCAL){ D.imgs.push(m); if(!lsSave()){ D.imgs.pop(); throw new Error('save'); } return; } await db.collection('excellence').doc(SID).collection('images').doc(m.id).set({ch:m.ch,src:m.src,createdAt:m.createdAt,updatedBy:ME.id}); },
+  async delImg(id){ if(LOCAL){ D.imgs=D.imgs.filter(x=>x.id!==id); lsSave(); return; } await db.collection('excellence').doc(SID).collection('images').doc(id).delete(); },
   async publish(ch,b){
     if(LOCAL){ const all=JSON.parse(localStorage.getItem(LSB)||'{}'); all[ch]=b; localStorage.setItem(LSB,JSON.stringify(all)); BOARDS[ch]=b; return; }
     await db.collection('boards').doc(SID+'_'+ch).set(b);
@@ -222,32 +243,42 @@ function catOrder(ch){
   itemsFor(ch).forEach(i=>{ if(!names.includes(i.cat)) names.push(i.cat); });
   return names;
 }
+const MAX_IMGS=5;
+function imgsFor(ch){ return D.imgs.filter(n=>n.ch===ch).slice(0,MAX_IMGS); }
 function newsFor(ch){ return D.news.filter(n=>n.ch===ch); }
 function renderBoard(ch){
   return { channel:ch, schoolName:SCHOOL,
     items:itemsFor(ch).map(i=>({id:i.id,cat:i.cat,name:i.name,sub:i.sub,note:i.note,period:i.period,photo:i.photo,m:i.m})),
-    news:newsFor(ch).map(n=>n.t) };
+    news:newsFor(ch).map(n=>n.t), imgs:imgsFor(ch).map(n=>n.src) };
 }
 function hashOf(str){ let h=5381; for(let i=0;i<str.length;i++) h=((h<<5)+h+str.charCodeAt(i))|0; return String(h>>>0); }
-function contentHash(ch){ const b=renderBoard(ch); return hashOf(JSON.stringify([b.items.map(i=>[i.cat,i.name,i.sub,i.note,i.period,i.m,i.photo]),b.news,SCHOOL])); }
+function contentHash(ch){ const b=renderBoard(ch); return hashOf(JSON.stringify([b.items.map(i=>[i.cat,i.name,i.sub,i.note,i.period,i.m,i.photo]),b.news,b.imgs,SCHOOL])); }
 function boardDoc(ch,prev){
   const b=renderBoard(ch);
   return { schoolId:SID, channel:ch, schoolName:SCHOOL, live:true,
     items:b.items.map(i=>({id:i.id,cat:i.cat,name:i.name,sub:i.sub,note:i.note,period:i.period,photo:i.photo,m:mOut(i.m)})),
-    news:b.news, version:((prev&&prev.version)||0)+1, hash:contentHash(ch),
+    news:b.news, imgs:b.imgs, version:((prev&&prev.version)||0)+1, hash:contentHash(ch),
     publishedAt:Date.now(), publishedBy:ME.id, publishedByName:ME.name||'' };
 }
-const photoBytes = b=>b.items.reduce((s,i)=>s+(i.photo?i.photo.length:0),0);
+const photoBytes = b=>b.items.reduce((s,i)=>s+(i.photo?i.photo.length:0),0)+(b.imgs||[]).reduce((s,x)=>s+x.length,0);
 function shrinkPhoto(dataUrl,W,H,qlt){
   return new Promise(res=>{ if(!dataUrl) return res(''); const img=new Image();
     img.onload=()=>{ const cv=document.createElement('canvas'); cv.width=W; cv.height=H; cv.getContext('2d').drawImage(img,0,0,W,H); res(cv.toDataURL('image/jpeg',qlt)); };
     img.onerror=()=>res(dataUrl); img.src=dataUrl; });
 }
+/* صورة ملء الشاشة: تصغير مع حفظ النسبة (بلا اقتصاص) */
+function shrinkImg(dataUrl,maxW,qlt){
+  return new Promise(res=>{ if(!dataUrl) return res(''); const img=new Image();
+    img.onload=()=>{ const k=Math.min(1,maxW/img.width), cv=document.createElement('canvas'); cv.width=Math.round(img.width*k); cv.height=Math.round(img.height*k); cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height); res(cv.toDataURL('image/jpeg',qlt)); };
+    img.onerror=()=>res(dataUrl); img.src=dataUrl; });
+}
 async function fitBoard(b){
-  if(photoBytes(b)+JSON.stringify(b.news).length+20000 <= PHOTO_BUDGET) return true;
-  for(const [W,H,Q] of [[360,450,.74],[280,350,.68]]){
+  const ok=()=>photoBytes(b)+JSON.stringify(b.news).length+20000 <= PHOTO_BUDGET;
+  if(ok()) return true;
+  for(const [W,H,Q,IW] of [[360,450,.74,1000],[280,350,.68,820],[280,350,.68,640]]){
     for(const i of b.items) i.photo=await shrinkPhoto(i.photo,W,H,Q);
-    if(photoBytes(b)+JSON.stringify(b.news).length+20000 <= PHOTO_BUDGET) return true;
+    b.imgs=await Promise.all((b.imgs||[]).map(x=>shrinkImg(x,IW,Q-.12)));
+    if(ok()) return true;
   }
   return false;
 }
@@ -284,7 +315,7 @@ async function openPublish(ch){
     +'<div class="mact"><button class="btn" id="pvOk">اعتماد ونشر</button><button class="btn ghost" id="pvBack">رجوع للتعديل</button></div></div>';
   document.body.appendChild(back);
   PM=ExR.create($('#pvmHost'));
-  PM.setBoard({channel:ch,schoolName:SCHOOL,items:board.items.map(i=>Object.assign({},i,{m:mIn(i.m)})),news:board.news,extra:extraOf(ch)});
+  PM.setBoard({channel:ch,schoolName:SCHOOL,items:board.items.map(i=>Object.assign({},i,{m:mIn(i.m)})),news:board.news,imgs:board.imgs,extra:extraOf(ch)});
   const close=()=>{ if(PM){ PM.destroy(); PM=null; } back.remove(); document.removeEventListener('keydown',kd); };
   const kd=e=>{ if(e.key==='Escape') close(); else if(e.key==='ArrowRight') PM&&PM.prev(); else if(e.key==='ArrowLeft') PM&&PM.next(); };
   document.addEventListener('keydown',kd);
@@ -440,13 +471,14 @@ function renderPanel(){
   const hasDemo = D.items.some(i=>i.demo) || D.news.some(n=>n.demo);
   let h=(LOCAL?'<div class="notice">وضع التجربة المحلي: ما تدخله يُحفظ في هذا المتصفح فقط ولا يصل إلى أي شاشة.</div>':'')
     +'<div class="notice">لا تُدخل درجات أو أرقام اتصال أو هويات أو بيانات غياب. «نموذج العرض» بالأسفل يعرض آخر ما أُدخل (المسودة)، ولا تصل الشاشات إلا بعد «نشر» ثم «اعتماد ونشر».</div>';
+  h+=screensHtml();
   if(CAN_EDIT){
     h+='<div class="sec addsec"><h3 class="tg" id="addTg" role="button" tabindex="0"><span>'+(ADDOPEN?'▾':'◂')+'</span> إضافة بيانات — '+esc(CHAN[CH].label)+'<span class="sp"></span>'
       +(LOCAL?(hasDemo?'<button class="btn ghost sm" id="delDemo">حذف البيانات التجريبية</button>':'<button class="btn ghost sm" id="addDemo">استرجاع البيانات التجريبية</button>'):'')+'</h3>';
     if(ADDOPEN){ if(!FORM) FORM=newForm(); h+=formHtml(); }
     h+='</div>';
   }
-  h+=screensHtml()+autoHtml()+archiveHtml();
+  h+=autoHtml()+archiveHtml();
   cats.forEach(cn=>{
     const list=all.filter(i=>i.cat===cn);
     h+='<div class="sec"><h3>'+esc(cn)+' <small>'+list.length+' مضاف</small></h3>'
@@ -456,7 +488,13 @@ function renderPanel(){
   h+='<div class="sec"><h3>الشريط الإخباري <small>'+news.length+' خبر</small></h3>'
     +(news.length?'<div class="items">'+news.map(n=>'<div class="it"><div class="tx"><b>'+esc(n.t)+(n.demo?'<span class="chip demo">تجريبي</span>':'')+'</b></div>'+(CAN_EDIT?'<button class="btn danger sm" data-delnews="'+n.id+'">حذف</button>':'')+'</div>').join('')+'</div>':'<div class="empty">لا توجد أخبار، ويُخفى الشريط حتى يُضاف خبر.</div>')
     +(CAN_EDIT?'<div class="newsrow"><input type="text" id="newsIn" maxlength="140" placeholder="نص الخبر"><button class="btn" id="newsAdd">إضافة</button></div>':'')+'</div>';
+  const im=imgsFor(CH);
+  h+='<div class="sec"><h3>صور ملء الشاشة <small>'+im.length+' من '+MAX_IMGS+'</small></h3>'
+    +'<div class="empty" style="margin-bottom:8px">تُعرض كاملةً بلا اقتطاع وبلا نص، بعد شرائح التكريم.</div>'
+    +(im.length?'<div class="items">'+im.map((n,k)=>'<div class="it"><div class="av" style="border-radius:8px;width:72px"><img src="'+n.src+'" alt="" style="object-fit:contain"></div><div class="tx"><b>صورة '+(k+1)+'</b></div>'+(CAN_EDIT?'<button class="btn danger sm" data-delimg="'+n.id+'">حذف</button>':'')+'</div>').join('')+'</div>':'')
+    +(CAN_EDIT?'<div class="newsrow"><label class="btn'+(im.length>=MAX_IMGS?' ghost':'')+'" id="imgLbl">إضافة صورة<input type="file" id="imgIn" accept="image/*" hidden'+(im.length>=MAX_IMGS?' disabled':'')+'></label></div>':'')+'</div>';
   $('#panel').innerHTML=h;
+  const ii=$('#imgIn'); if(ii) ii.onchange=onImg;
   if(ADDOPEN && FORM && CAN_EDIT) bindForm();
 }
 function bindForm(){
@@ -494,6 +532,7 @@ $('#panel').addEventListener('click', e=>{
   if(b.dataset.edit){ FORM=JSON.parse(JSON.stringify(D.items.find(i=>i.id===b.dataset.edit))); ADDOPEN=true; renderPanel(); $('#addTg').scrollIntoView({behavior:'smooth'}); }
   else if(b.dataset.del){ if(confirm('حذف هذا البند؟')) guard(async()=>{ await Store.delItem(b.dataset.del); if(LOCAL) refresh(); },'تعذّر الحذف'); }
   else if(b.dataset.goto){ switchCh(b.dataset.goto); }
+  else if(b.dataset.delimg){ guard(async()=>{ await Store.delImg(b.dataset.delimg); if(LOCAL) refresh(); },'تعذّر الحذف'); }
   else if(b.dataset.delnews){ guard(async()=>{ await Store.delNews(b.dataset.delnews); if(LOCAL) refresh(); },'تعذّر الحذف'); }
   else if(b.id==='newsAdd') addNews();
   else if(b.id==='delDemo'){ if(confirm('حذف كل البيانات التجريبية؟')){ D.items=D.items.filter(i=>!i.demo); D.news=D.news.filter(n=>!n.demo); lsSave(); refresh(); } }
@@ -544,6 +583,18 @@ function addNews(){
   const v=($('#newsIn').value||'').trim(); if(!v) return;
   guard(async()=>{ await Store.putNews({id:uid(),ch:CH,t:v,createdAt:Date.now()}); if(LOCAL) refresh(); },'تعذّرت الإضافة');
 }
+function onImg(e){
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  if(imgsFor(CH).length>=MAX_IMGS){ toast('الحد الأقصى '+MAX_IMGS+' صور لكل شاشة'); return; }
+  const r=new FileReader();
+  r.onload=()=>{
+    shrinkImg(r.result,1280,.7).then(src=>{
+      guard(async()=>{ await Store.putImg({id:uid(),ch:CH,src,createdAt:Date.now()}); if(LOCAL) refresh(); toast('أُضيفت الصورة'); },'تعذّرت إضافة الصورة');
+    });
+  };
+  r.onerror=()=>toast('تعذّرت قراءة الصورة');
+  r.readAsDataURL(f);
+}
 function onPhoto(e){
   const f=e.target.files[0]; if(!f) return;
   const r=new FileReader();
@@ -577,6 +628,10 @@ function extraOf(ch){ return (BOARDS[ch]&&BOARDS[ch].extra)||[]; }
 function buildPreview(){ if(PVI) PVI.setBoard(Object.assign(renderBoard(CH),{extra:extraOf(CH)})); }
 
 function switchCh(ch){ CH=ch; FORM=null; renderPanel(); buildPreview(); applyPub(); window.scrollTo({top:0,behavior:'smooth'}); }
+(function(){ const bt=document.getElementById('themeBtn'); if(!bt) return;
+  const paint=()=>{ const l=document.documentElement.getAttribute('data-theme')==='light'; bt.textContent=l?'☾ مظهر داكن':'☀ مظهر فاتح'; };
+  bt.onclick=()=>{ const l=document.documentElement.getAttribute('data-theme')==='light'; if(l) document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme','light'); try{ localStorage.setItem('ex_theme',l?'dark':'light'); }catch(e){} paint(); };
+  paint(); })();
 document.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>switchCh(b.dataset.ch));
 document.querySelectorAll('.bar .grp').forEach(g=>{
   g.querySelector('[data-act=pub]').onclick=()=>openPublish(g.dataset.g);
@@ -598,6 +653,7 @@ function start(){
 function listen(){
   const base=db.collection('excellence').doc(SID);
   base.collection('items').onSnapshot(s=>{ D.items=s.docs.map(d=>itemIn(d.id,d.data())).sort(byCreated); refresh(); },e=>{ console.error(e); toast('تعذّر تحميل البنود: '+e.message); });
+  base.collection('images').onSnapshot(s=>{ D.imgs=s.docs.map(d=>Object.assign({id:d.id},d.data())).sort(byCreated); refresh(); },e=>console.error(e));
   base.collection('news').onSnapshot(s=>{ D.news=s.docs.map(d=>Object.assign({id:d.id},d.data())).sort(byCreated); refresh(); },e=>console.error(e));
   ORDER.forEach(ch=>db.collection('boards').doc(SID+'_'+ch).onSnapshot(s=>{ const o=JSON.stringify(extraOf(ch)); BOARDS[ch]=s.exists?s.data():null; applyPub(); if(ch===CH&&o!==JSON.stringify(extraOf(ch))) buildPreview(); if(AUTOOPEN&&!(ADDOPEN&&FORM)) renderPanel(); },e=>console.error(e)));
   base.onSnapshot(s=>{ EXS=s.exists?s.data():{}; if(!(ADDOPEN&&FORM)) renderPanel(); },e=>console.error(e));

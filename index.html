@@ -400,6 +400,7 @@ input,select{font-family:inherit;font-size:15px}
 <script src="pwa.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions-compat.js"></script>
 <script src="users-api.js"></script>
+<script src="approvals.js?v=2026-10-29.1"></script>
 <script src="sem-guard.js?v=2026-10-14.5"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
@@ -573,12 +574,9 @@ const ADMIN_TOOLS = [
   // أما «منصة النشاط المدرسي» و«الإرشاد الصحي» فتُمنحان لموظف بعينه من «الصلاحيات الخاصة» (ومدير المدرسة بالدور) — ولا أدمن النظام
   { key:'activity', perm:'tools.activity', label:'منصة النشاط المدرسي', icon:'🎯', href:'activity.html', noAdmin:true },
   { key:'counselor', perm:'tools.counselor', label:'التوجيه والإرشاد الطلابي', icon:'🤝', href:'counselor.html', noAdmin:true, roles:['counselor','schoolAdmin'] },
-  { key:'agents', label:'الوكلاء', icon:'🧭', href:'agents.html', noAdmin:true, roles:['agent'] },
+  // (2026-10-29) «الوكلاء» صفحة اختيار: تظهر للمدير ولمن فُوِّض بأي صفحة وكيل (المدرسية أو التعليمية أو الطلابية)، وحلّت محل البنود الثلاثة المنفصلة
+  { key:'agents', label:'الوكلاء', icon:'🧭', href:'agents.html', noAdmin:true, roles:['schoolAdmin'], anyPerm:['tools.agentSchool','tools.agentEdu','tools.agentStudents'] },
   { key:'health', perm:'tools.health', label:'الإرشاد الصحي', icon:'🩺', href:'health.html', noAdmin:true },
-  // وكيل الشؤون المدرسية (2026-10-20): بتفويض «وكيل الشؤون المدرسية» فقط (لا يكفي دور الوكيل). المدير يفتحها للاطّلاع واعتماد ما يخصه (حق للمدير لا صلاحية)، ولا أدمن النظام
-  { key:'agentSchool', perm:'tools.agentSchool', label:'وكيل الشؤون المدرسية', icon:'🛠️', href:'school-affairs.html', noAdmin:true, roles:['schoolAdmin'] },
-  { key:'agentEdu', perm:'tools.agentEdu', label:'وكيل الشؤون التعليمية', icon:'📚', href:'edu-affairs.html', noAdmin:true, roles:['schoolAdmin'] },
-  { key:'agentStudents', perm:'tools.agentStudents', label:'وكيل الشؤون الطلابية', icon:'🎒', href:'student-affairs.html', noAdmin:true, roles:['schoolAdmin'] },
 ];
 /* بنود صلاحيات لا تُمنح من قوالب الأدوار — تُفعَّل للفرد من «الصلاحيات الخاصة» فقط */
 /* [ADMIN-TOOLS:MOD] ORIG: const TEMPLATE_LOCKED_PERMS = ['index.users.perms','tools.classes','tools.timetable','tools.circulars','tools.visits','tools.duty','tools.waiting']; */
@@ -594,7 +592,16 @@ function visibleTools(){
   if(CURRENT.role==='admin') return ADMIN_TOOLS.filter(t=>!t.noAdmin);
   if(CURRENT.role==='soloTeacher' || !CURRENT.schoolId) return [];
   const pm = CURRENT.permissions||{};
-  return ADMIN_TOOLS.filter(t=> (pm[t.perm] && pm[t.perm][t.permField||'access']) || (t.roles && t.roles.includes(CURRENT.role)));
+  return ADMIN_TOOLS.filter(t=> (pm[t.perm] && pm[t.perm][t.permField||'access']) || (t.anyPerm && t.anyPerm.some(k=>pm[k] && (pm[k].access || pm[k].edit))) || (t.key==='activity' && MYBOARD.act.coord) || (t.roles && t.roles.includes(CURRENT.role)));
+}
+/* يُنشئ زر «أدوات إدارية» إن لم يكن موجودًا (مثلًا لرائد النشاط بعد أن يُعرف كونه رائدًا من الاستعلام اللاحق) */
+function ensureToolsToggle(){
+  if(document.getElementById('toolsToggle') || !visibleTools().length) return;
+  const bar=$('#tabbar'); if(!bar) return;
+  const tb=document.createElement('button'); tb.type='button'; tb.className='tab tools-toggle'; tb.id='toolsToggle';
+  tb.innerHTML='أدوات إدارية <span class="tools-caret">▾</span>';
+  tb.onclick=(e)=>{ e.stopPropagation(); toggleToolsMenu(tb); };
+  bar.insertBefore(tb, bar.firstChild);
 }
 /* ============ «لوحتي» — قائمة منسدلة دائمة لكل موظف عادي (التعاميم الآن، جدولي، وإضافات لاحقًا) ============
    مستقلة تمامًا عن قائمة «أدوات إدارية» (تلك لصاحب الصلاحية لإدارة الأداة؛ هذه لأي موظف عادي كي يرى ما يخصّه شخصيًا).
@@ -619,12 +626,11 @@ const MYBOARD_ITEMS = [
   { key:'wait',      action:'wait',      icon:'⏳', label:'انتظاري',  when:()=>MYBOARD.wait.length>0 },
   // الأنشطة اللاصفية (منصة النشاط المدرسي): تظهر لمن لديه تكليف معتمد أو يوجد نشاط متاح، وعلامتها حمراء عند وجود ما لم يُوثَّق بعد
   { key:'activities', href:'myactivities.html', icon:'🎯', label:'الأنشطة اللاصفية', when:()=>MYBOARD.act.visible },
-  // رائد النشاط (مقرر مجلس النشاط): يدخل منصة النشاط المدرسي كاملة دون حاجة لمنحه صلاحية من «الصلاحيات الخاصة»
+  // (2026-10-29) رائد النشاط (مقرر مجلس النشاط): بند «منصة النشاط المدرسي» انتقل من «لوحتي» إلى «أدوات إدارية» (يظهر له تلقائيًا في visibleTools)
   // الإشعارات والمرفقات (2026-10-20): ما وصلني من وكيل الشؤون المدرسية للتوقيع أو الاطلاع، وللمدير ما ينتظر اعتماده، ولصاحب صلاحية الوكيل اعتمادات المدير
   { key:'notices', href:'notices.html', icon:'🔔', label:'الإشعارات والمرفقات' },
   // لجنة التوجيه والإرشاد (2026-10-28): للمعلم المختار عضوًا في اللجنة فقط
   { key:'cmt', action:'cmt', icon:'🧭', label:'لجنة التوجيه والإرشاد', when:()=>MYBOARD.cm.member },
-  { key:'actcoord', href:'activity.html', icon:'🧩', label:'منصة النشاط المدرسي (رائد النشاط)', when:()=>MYBOARD.act.coord },
 ];
 const MYBOARD = { pendingCirculars:0, scheduleChanged:false, apptsToday:0, followupsDue:0, visits:[], visitsSig:'', visitsChanged:false, duty:[], dutySig:'', dutyChanged:false, wait:[], waitSig:'', waitChanged:false, act:{ visible:false, pending:0, coord:false }, notices:0, cm:{ member:false, tasks:[], pend:0 } };
 const myBoardDotOn = key=> key==='circulars' ? MYBOARD.pendingCirculars>0 : key==='schedule' ? MYBOARD.scheduleChanged
@@ -665,6 +671,7 @@ async function refreshMyBoardAlerts(){
     asg.docs.forEach(d=>{ const a=d.data(); (a.programs||[]).forEach((p,i)=>{ total++; const e=evs.find(x=>x.assignmentId===d.id && x.programIdx===i); if(!e || e.approvalStatus==='returned') pend++; }); });
     opn.docs.forEach(d=>{ const o=d.data(); if(o.deadlineMs ? o.deadlineMs<Date.now() : (o.deadline && o.deadline<todayK)) return; total++; const e=evs.find(x=>x.openEventId===d.id); if(!e || e.approvalStatus==='returned') pend++; });
     MYBOARD.act = { visible: total>0 || evs.length>0, pending: pend, coord: !crd.empty };
+    if(MYBOARD.act.coord) ensureToolsToggle();
   }catch(e){ /* صمت */ }
   try{
     // التعاميم والمساءلات: نماذج المساءلة (تنبيه/تعهد/لفت نظر) التي لم أوقّعها تُضاف لنقطة التعاميم.
@@ -1847,7 +1854,7 @@ function visibleTabs(){
     const order=INDEX_TABS.map(t=>t.key);
     arr=arr.concat([INDEX_TABS.find(t=>t.key==='received')]).sort((x,y)=>order.indexOf(x.key)-order.indexOf(y.key));
   }
-  return arr.map(t=>t.key==='received'?Object.assign({},t,{label:'التقارير الواردة'}):t);
+  return arr.map(t=>t.key==='received'?Object.assign({},t,{label:(CURRENT.role==='schoolAdmin'?'التقارير والاعتمادات':'التقارير الواردة')}):t);
 }
 function visibleTabsRaw(){
   if(semClosedForMe()) return [INDEX_TABS.find(t=>t.key==='semesters')];
@@ -2174,7 +2181,11 @@ async function openMyAccountsPanel(){
    ======================================================================== */
 /* ======================== غياب الطلاب + حالة الطالب ======================== */
 const attCol = ()=>db.collection('attendance');
-let RABS={}, RNOTES={}, SS_DATA={classes:[],students:[]}, SS_SEL=null, SS_RECORDS_TAB=null, ABS_CACHE=null, ABS_OPEN={};
+let APPR_PENDING=0;
+function paintRcvBadge(){ const bd=$('#rcvBadge'); if(!bd) return; const n=unreadNotes+APPR_PENDING; bd.textContent=n; bd.style.display=n>0?'inline-flex':'none'; }
+function apprEnv(){ return {db, sid:CURRENT.schoolId, period:SESSION.period, me:{id:CURRENT.id, name:CURRENT.username||''}, school:{name:((SCHOOLS[CURRENT.schoolId]||{}).name||'')}}; }
+async function refreshApprCount(){ if(CURRENT.role!=='schoolAdmin' || !CURRENT.schoolId || !window.Appr) return; APPR_PENDING = await Appr.pendingCount(apprEnv()); paintRcvBadge(); }
+let RABS={}, RNOTES={}, ABS_CACHE=null, ABS_OPEN={};
 function attDateKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function attDocIdFor(sid,period,seat,dk){ return 'att_'+sid+'_'+period+'_'+seat+'_'+dk; }
 async function markStudentAbsent(seat,name,classCode,className,status,entryTime){
@@ -3483,71 +3494,33 @@ async function absSet(id,status){
   $('#absTimeOk').onclick=async()=>{ const t=$('#absTime').value; const upd={status, source:'index'}; if(status==='late')upd.entryTime=t; else upd.excuseTime=t;
     try{ await attCol().doc(id).update(upd); }catch(e){} closeModal(); renderAbsence($('#content')); };
 }
-async function renderStudentStatus(c){
-  const canEdit=can('index.studentStatus','edit');
-  c.innerHTML='<div class="panel-head"><h2>حالة الطالب</h2></div>'+
-    (canEdit
-      ? '<div class="sub-note">اختر الفصل ثم الطالب لتعبئة حالته.</div><div class="card" id="ssForm"><div class="empty"><span class="spin"></span></div></div>'
-      : '<div class="sub-note">عرض فقط — الطلاب الذين لهم حالة اجتماعية أو صحية مسجَّلة.</div>')+
-    '<h3 style="margin:16px 4px 8px;font-size:15px">الطلاب الذين لهم حالات مسجّلة</h3><div id="ssRecords"></div>';
-  let classes=[],students=[];
-  try{ const sp=await rosterDoc(CURRENT.schoolId).get(); if(sp.exists){ const d=JSON.parse(sp.data().value||'{}'); classes=Array.isArray(d.classes)?d.classes:[]; students=(Array.isArray(d.students)?d.students:[]).filter(x=>!x.deleted); } }catch(e){}
-  SS_DATA={classes,students}; SS_SEL=null; SS_RECORDS_TAB=null;
-  if(canEdit) paintSSForm(canEdit);
-  paintSSRecords();
-}
-function paintSSForm(canEdit){
-  const f=$('#ssForm'); if(!f) return;
-  if(!SS_DATA.students.length){ f.innerHTML='<div class="empty"><span class="e-emoji">👤</span>لا طلاب في روستر المدرسة.</div>'; return; }
-  const classOpts=SS_DATA.classes.map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name)+'</option>').join('');
-  f.innerHTML=
-    '<div class="field"><label>الفصل</label><select id="ssClass"><option value="">— اختر —</option>'+classOpts+'</select></div>'+
-    '<div class="field"><label>الطالب</label><select id="ssStudent"><option value="">— اختر الفصل أولاً —</option></select></div>'+
-    '<div id="ssFields" style="display:none">'+
-      '<div class="field"><label>الحالة الاجتماعية</label><input id="ssSocial" '+(canEdit?'':'disabled')+' placeholder="—"></div>'+
-      '<div class="field"><label>الصحة</label><input id="ssHealth" '+(canEdit?'':'disabled')+' placeholder="—"></div>'+
-      (canEdit?'<button class="btn" id="ssSave">💾 حفظ</button>':'')+
-    '</div>';
-  $('#ssClass').onchange=()=>{ const code=$('#ssClass').value; const studs=SS_DATA.students.filter(s=>String(s.classCode)===String(code));
-    $('#ssStudent').innerHTML='<option value="">— اختر —</option>'+studs.map(s=>'<option value="'+esc(s.seat)+'">'+esc(s.name)+'</option>').join(''); $('#ssFields').style.display='none'; SS_SEL=null; };
-  $('#ssStudent').onchange=()=>{ const seat=$('#ssStudent').value; const st=SS_DATA.students.find(s=>String(s.seat)===String(seat));
-    if(!st){ $('#ssFields').style.display='none'; SS_SEL=null; return; }
-    SS_SEL=st; $('#ssSocial').value=st.social||''; $('#ssHealth').value=st.health||''; $('#ssFields').style.display='block'; };
-  if(canEdit){ const b=$('#ssSave'); if(b) b.onclick=saveStudentStatusOne; }
-}
-async function saveStudentStatusOne(){
-  if(!SS_SEL){ toast('اختر الطالب أولاً'); return; }
-  SS_SEL.social=($('#ssSocial').value||'').trim(); SS_SEL.health=($('#ssHealth').value||'').trim();
+/* الحالات الصحية: تُسجَّل في صفحة الموجه الطلابي (الحالات الخاصة والسرية ← الحالات الصحية)، وهنا عرض فقط (الاسم · الصف · الحالة) */
+let HEALTH_BY = {};
+async function loadHealthMap(){
+  HEALTH_BY = {};
+  if(!CURRENT || !CURRENT.schoolId || !can('index.studentStatus','access')) return [];
   try{
-    const sp=await rosterDoc(CURRENT.schoolId).get(); const d=sp.exists?JSON.parse(sp.data().value||'{}'):{};
-    const keptDel = (Array.isArray(d.students)?d.students:[]).filter(x=>x.deleted);
-    await rosterDoc(CURRENT.schoolId).set({ value:JSON.stringify(Object.assign({}, d, {classes:d.classes||SS_DATA.classes, students:SS_DATA.students.concat(keptDel)})), updatedAt:Date.now(), schoolId:CURRENT.schoolId, base:'roster' });
-    toast('تم حفظ حالة الطالب'); paintSSRecords();
-  }catch(e){ toast('خطأ: '+e.message); }
+    const sn = await db.collection('healthCases').doc(CURRENT.schoolId).collection('items').where('period','==',SESSION.period).get();
+    const L = sn.docs.map(d=>({id:d.id,...d.data()})).filter(x=>!x.deleted);
+    L.forEach(x=>{ if(x.seat) HEALTH_BY[String(x.seat)] = x.cond||''; });
+    return L;
+  }catch(e){ console.warn('health', e); return []; }
 }
-function paintSSRecords(){
+async function renderStudentStatus(c){
+  c.innerHTML='<div class="panel-head"><h2>حالات الطلاب</h2></div>'+
+    '<div class="sub-note">الحالات الصحية للطلاب كما سجّلها الموجه الطلابي — عرض فقط.</div>'+
+    '<div id="ssRecords"><div class="empty"><span class="spin"></span></div></div>';
+  const L = await loadHealthMap();
   const r=$('#ssRecords'); if(!r) return;
-  const norm=x=>_normN(x);
-  const withStatus=SS_DATA.students.filter(s=>(s.social&&s.social.trim())||(s.health&&s.health.trim()));
-  if(!withStatus.length){ r.innerHTML='<div class="empty"><span class="e-emoji">📋</span>لا حالات مسجّلة بعد.</div>'; return; }
+  if(!L.length){ r.innerHTML='<div class="empty"><span class="e-emoji">📋</span>لا حالات مسجّلة بعد.</div>'; return; }
   const byClass={};
-  withStatus.forEach(s=>{ const cc=String(s.classCode); (byClass[cc]=byClass[cc]||[]).push(s); });
-  const classCodes=Object.keys(byClass).sort((a,b)=>norm(a).localeCompare(norm(b),undefined,{numeric:true}));
-  if(!SS_RECORDS_TAB || !classCodes.includes(SS_RECORDS_TAB)) SS_RECORDS_TAB=classCodes[0];
-  const tabsHtml='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
-    classCodes.map(cc=>{
-      const cl=SS_DATA.classes.find(c=>String(c.code)===cc)||{};
-      const active=cc===SS_RECORDS_TAB;
-      return '<button onclick="ssShowClassTab(\''+esc(cc)+'\')" style="padding:6px 12px;border-radius:20px;border:1px solid var(--line);font-size:12.5px;font-weight:700;cursor:pointer;background:'+(active?'var(--accent)':'#fff')+';color:'+(active?'#fff':'var(--ink)')+'">'+esc(cl.name||cc)+' ('+byClass[cc].length+')</button>';
-    }).join('')+'</div>';
-  const list=byClass[SS_RECORDS_TAB]||[];
-  r.innerHTML=tabsHtml+list.map(s=>{
-    return '<div class="card"><div class="uname" style="font-size:14px">'+esc(s.name)+'</div>'+
-      '<div class="umeta">'+esc(s.seat||'')+'</div>'+
-      '<div style="margin-top:6px;color:var(--fg-2e73cc,#2E73CC);font-weight:600;font-size:13px">الحالة الاجتماعية: '+esc(s.social||'—')+' · الصحة: '+esc(s.health||'—')+'</div></div>';
-  }).join('');
+  L.forEach(x=>{ (byClass[x.className||'—']=byClass[x.className||'—']||[]).push(x); });
+  r.innerHTML=Object.keys(byClass).sort((a,b)=>a.localeCompare(b,'ar',{numeric:true})).map(k=>
+    '<div style="margin:12px 0 6px;padding:6px 10px;background:var(--surface-2);border-radius:8px;font-weight:800;font-size:13px;color:var(--brand)">'+esc(k)+' ('+byClass[k].length+')</div>'+
+    byClass[k].sort((a,b)=>(a.name||'').localeCompare(b.name||'','ar')).map(x=>'<div class="card"><div class="uname" style="font-size:14px">'+esc(x.name||'')+'</div>'+
+      '<div class="umeta">'+esc(x.className||'')+'</div>'+
+      '<div style="margin-top:6px;color:var(--fg-2e73cc,#2E73CC);font-weight:600;font-size:13px">الحالة: '+esc(x.cond||'—')+'</div></div>').join('')).join('');
 }
-function ssShowClassTab(cc){ SS_RECORDS_TAB=cc; paintSSRecords(); }
 
 /* ===================== التحديث الحي (Firestore onSnapshot) =====================
    • نطاق ضيق: غياب اليوم فقط + التنبيهات غير المحسومة + تحويلاتي (واردة/مرسلة).
@@ -3570,10 +3543,11 @@ function liveNotice(show){
 // شارة الواردة + شريط تحديث الواردة: مستمع دائم طوال الجلسة
 function liveStartBadge(){
   if(!CURRENT || !CURRENT.id) return;
+  refreshApprCount();
   liveOn('rcv', notesCol().where('recipients','array-contains',CURRENT.id), snap=>{
     const arr=snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.period===SESSION.period && n.scope==='report');
     unreadNotes=arr.filter(n=>!n.closed && noteLastActivity(n) > ((n.readAt && n.readAt[CURRENT.id]) || 0)).length;
-    const bd=$('#rcvBadge'); if(bd){ bd.textContent=unreadNotes; bd.style.display=unreadNotes>0?'inline-flex':'none'; }
+    paintRcvBadge();
     const sig=liveSig(arr);
     if(activeTab==='received' && LIVE.sig.received!=null && sig!==LIVE.sig.received) liveNotice(true);
   });
@@ -4880,6 +4854,7 @@ async function loadRoster(){
   RUI={ ed:{teacherAdd:!hasC, noor:!hasC, manual:!hasC, paste:!hasC}, openStage:null, openClass:null };
   await loadAbsenceCounts();
   await loadNoteCounts();
+  await loadHealthMap();
   paintClasses();
 }
 async function saveRoster(){
@@ -4957,7 +4932,7 @@ function studentRowR(s,canDel,canEdit){
   const days = (RABS && RABS[s.seat]) || 0;
   const notesN = (RNOTES && RNOTES[s.seat]) || 0;
   // الحالة الاجتماعية/الصحة مرتبطة بصلاحية "حالات الطلاب (وصول)"
-  const _ssTxt = can('index.studentStatus','access') ? ('الحالة الاجتماعية: '+esc(s.social||'—')+' · الصحة: '+esc(s.health||'—')+' · ') : '';
+  const _ssTxt = (can('index.studentStatus','access') && HEALTH_BY[String(s.seat)]) ? ('الحالة الصحية: '+esc(HEALTH_BY[String(s.seat)])+' · ') : '';
   const meta = '<div style="font-size:11.5px;margin-top:2px;color:var(--fg-2e73cc,#2E73CC);font-weight:600">'+_ssTxt+'عدد الغياب: '+days+' · عدد التحويلات: '+notesN+'</div>';
   const openRec = 'openStudentRecordIndex(\''+esc(s.seat)+'\',\''+esc(s.classCode)+'\')';
   return '<div style="padding:7px 4px;border-top:1px solid var(--line)">'+
@@ -5030,8 +5005,9 @@ async function openStudentRecordIndex(seat, classCode){
             replies+'</div>';
         }).join('')
       : '<div class="sub-note" style="margin:0">لا تحويلات عن هذا الطالب.</div>';
-    const ssBlock = can('index.studentStatus','access')
-      ? '<div style="background:var(--bg-eef4fb,#eef4fb);border-radius:10px;padding:9px 11px;margin-bottom:10px;font-size:13px;color:var(--fg-2e73cc,#2E73CC);font-weight:600">الحالة الاجتماعية: '+esc(st.social||'—')+' · الصحة: '+esc(st.health||'—')+'</div>'
+    if(can('index.studentStatus','access')) await loadHealthMap();
+    const ssBlock = (can('index.studentStatus','access') && HEALTH_BY[String(seat)])
+      ? '<div style="background:var(--bg-eef4fb,#eef4fb);border-radius:10px;padding:9px 11px;margin-bottom:10px;font-size:13px;color:var(--fg-2e73cc,#2E73CC);font-weight:600">الحالة الصحية: '+esc(HEALTH_BY[String(seat)])+'</div>'
       : '';
     host.innerHTML = ssBlock +
       '<div style="font-weight:800;margin:4px 0 8px">📅 الغياب والتأخّر (الإجمالي: '+atts.filter(a=>a.status==='absent').length+')</div>'+absHtml+
@@ -5307,7 +5283,9 @@ async function renderSent(c){
   }catch(e){ $('#notesList').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }
 }
 async function renderReceived(c){
-  c.innerHTML='<div class="panel-head"><h2>🔔 التقارير الواردة</h2></div><div id="liveNotice"></div>'+(noorPerm('access')?'<div id="dedBox"></div>':'')+'<div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
+  const _mgr = CURRENT.role==='schoolAdmin' && CURRENT.schoolId && window.Appr;
+  c.innerHTML='<div class="panel-head"><h2>🔔 '+(_mgr?'التقارير والاعتمادات':'التقارير الواردة')+'</h2></div><div id="liveNotice"></div>'+(_mgr?'<div id="apprBox"></div>':'')+(noorPerm('access')?'<div id="dedBox"></div>':'')+'<div id="notesList"><div class="empty"><span class="spin"></span></div></div>';
+  if(_mgr){ Appr.onCount = n=>{ APPR_PENDING=n; paintRcvBadge(); }; Appr.mount($('#apprBox'), apprEnv()).catch(e=>{ $('#apprBox').innerHTML='<div class="alert err">'+esc(e.message)+'</div>'; }); }
   if(noorPerm('access')) renderDeductionReports();
   try{
     const snap=await notesCol().where('recipients','array-contains',CURRENT.id).get();
@@ -5349,7 +5327,7 @@ async function refreshUnread(){
     unreadNotes=snap.docs.map(d=>d.data()).filter(n=>n.period===SESSION.period && n.scope==='report' && !n.closed
       && noteLastActivity(n) > ((n.readAt && n.readAt[CURRENT.id]) || 0)).length;
   }catch(e){ unreadNotes=0; }
-  const bd=$('#rcvBadge'); if(bd){ bd.textContent=unreadNotes; bd.style.display=unreadNotes>0?'inline-flex':'none'; }
+  paintRcvBadge();
 }
 let composeRoster={classes:[],students:[]}, composeUsers=[];
 async function openCompose(){

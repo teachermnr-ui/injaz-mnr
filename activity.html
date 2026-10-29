@@ -605,7 +605,7 @@ async function genPublish(id){
 }
 
 /* ====================== التكليفات (داخل بطاقة «التكليفات الرسمية») ====================== */
-const asStChip = a=>({pending:chip('بانتظار اعتماد قائد المدرسة','warn'),approved:chip('معتمد','ok'),cancelled:chip('ملغى','bad')})[a.status]||'';
+const asStChip = a=>({pending:chip('بانتظار اعتماد قائد المدرسة','warn'),approved:chip('معتمد','ok'),cancelled:chip('ملغى','bad'),returned:chip('أعاده قائد المدرسة للتعديل','bad')})[a.status]||'';
 function progDone(a, idx){ return S.events.find(x=>x.assignmentId===a.id && x.programIdx===idx && x.approvalStatus!=='returned'); }
 /* تاريخ انتهاء برنامج التكليف (endDate)؛ التكليفات القديمة ذات الموعد النصي (timeline) لا تنتهي */
 const progExpired = p=>!!(p && p.endDate && p.endDate < ACT.today());

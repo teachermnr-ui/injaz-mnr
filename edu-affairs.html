@@ -1092,7 +1092,7 @@ Dash.boot({
       }
       return nowMs < (x.visibleFrom||0) ? '<span class="tag">يصل المعلم غدًا</span>' : '<span class="tag ok">وصل المعلم</span>';
     }
-    const accStatus = x=>x.status==='wait' ? 'بانتظار اعتماد المدير' : 'أُرسلت للمعلم';
+    const accStatus = x=>x.status==='wait' ? 'بانتظار اعتماد المدير' : (x.status==='no' ? 'رفضها المدير' : (x.status==='ret' ? 'أعادها المدير للتعديل' : 'أُرسلت للمعلم'));
     function lRender(){
       const ids = {};
       LOG.notices.forEach(x=>{ ids[x.empId] = (ids[x.empId]||0)+1; });
@@ -1114,9 +1114,9 @@ Dash.boot({
             if(lOpen===x.id) h += '<pre class="letter">'+esc(x.text)+'</pre>';
           });
           as.forEach(x=>{
-            const pend = x.status==='wait';
-            const sg = x.status==='wait' ? '<span class="tag">التوقيع: —</span>' : (x.sign==='signed' ? '<span class="tag ok">وقّع المعلم</span>' : '<span class="tag bad">لم يوقّع</span>');
-            h += '<div class="lrow"><div class="l1"><span class="tag bad">مساءلة</span><span class="grow">'+esc(KL(x.key))+'</span></div><div class="l2"><span class="tag '+(pend?'warn':'ok')+'">'+esc(accStatus(x))+'</span>'+(pend?'<span class="tag">تصل المعلم بعد الاعتماد</span>':'')+sg+'<span class="muted">'+esc(x.dateText)+'</span><button type="button" class="btn" data-lp="'+x.id+'">معاينة</button></div></div>';
+            const pend = x.status==='wait', bad = x.status==='no' || x.status==='ret';
+            const sg = (pend||bad) ? (bad ? '' : '<span class="tag">التوقيع: —</span>') : (x.sign==='signed' ? '<span class="tag ok">وقّع المعلم</span>' : '<span class="tag bad">لم يوقّع</span>');
+            h += '<div class="lrow"><div class="l1"><span class="tag bad">مساءلة</span><span class="grow">'+esc(KL(x.key))+'</span></div><div class="l2"><span class="tag '+(pend?'warn':(bad?'bad':'ok'))+'">'+esc(accStatus(x))+'</span>'+(x.status==='ret'&&canEdit?'<button type="button" class="btn solid" data-lrs="'+x.id+'">إعادة رفع للمدير</button>':'')+(bad&&x.decisionNote?'<span class="muted">'+esc(x.decisionNote)+'</span>':'')+(pend?'<span class="tag">تصل المعلم بعد الاعتماد</span>':'')+sg+'<span class="muted">'+esc(x.dateText)+'</span><button type="button" class="btn" data-lp="'+x.id+'">معاينة</button></div></div>';
             if(lOpen===x.id) h += '<pre class="letter">'+esc(accText(x))+'</pre>';
           });
           h += '</div>';
@@ -1125,7 +1125,9 @@ Dash.boot({
       });
       $('lRows').innerHTML = h;
     }
-    $('lRows').addEventListener('click', e=>{
+    $('lRows').addEventListener('click', async e=>{
+      const rs = e.target.closest('[data-lrs]');
+      if(rs && canEdit){ try{ await logCol.doc(rs.getAttribute('data-lrs')).update({status:'wait', decisionNote:''}); const a0 = LOG.acc.find(z=>z.id===rs.getAttribute('data-lrs')); if(a0){ a0.status='wait'; a0.decisionNote=''; } lRender(); }catch(er){ console.error(er); } return; }
       const t = e.target.closest('[data-lt]');
       if(t){ const i = +t.getAttribute('data-lt'); lOpenT = (lOpenT===i) ? null : i; lOpen = null; lRender(); return; }
       const b = e.target.closest('[data-lp]'); if(!b) return;

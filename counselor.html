@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-28.8 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
+<!-- إصدار: 2026-10-29.1 — «الحالات الصحية» تبويب جديد ضمن الحالات الخاصة والسرية، ونسخة عامة مختصرة healthCases، وتقرير للمدير healthReports؛ سابقًا 2026-10-28.8 — صفحة الموجه الطلابي: مبنية على الدليل التنظيمي لمدارس التعليم العام (مهام الموجه الطلابي ولجنة التوجيه والإرشاد) -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ const SUBS = {
   plan:[['annual','الخطة السنوية للإرشاد الطلابي'],['prog','البرامج الإرشادية'],['career','التوجيه والإرشاد التعليمي والمهني'],['parents','لقاءات أولياء الأمور ومجالس الآباء'],['group','جماعة التوجيه والإرشاد']],
   cases:[['list','الحالات'],['contacts','سجل التواصل'],['inc','سجل المواقف اليومية الطارئة']],
   sess:[['indiv','التوجيه الفردي'],['group','الإرشاد الجمعي']],
-  hasr:[['psy','الحالات النفسية والانفعالية'],['soc','الحالات الاجتماعية'],['orph','الأيتام'],['aid','الإعانة والمكافأة'],['fu','متابعة الحالات الفردية (بالرموز)']],
+  hasr:[['psy','الحالات النفسية والانفعالية'],['soc','الحالات الاجتماعية'],['orph','الأيتام'],['health','الحالات الصحية'],['aid','الإعانة والمكافأة'],['fu','متابعة الحالات الفردية (بالرموز)']],
   care:[['weak','المتأخرون دراسيًا'],['rep','المعيدون ومتكررو الرسوب'],['gift','المتفوقون دراسيًا والموهوبون'],['beh','المتميزون سلوكيًا'],['new','المستجدون'],['honor','كشف تكريم الطلاب']],
 };
 /* ----- التقارير: كل تقرير ومجموعته ----- */
@@ -389,11 +389,11 @@ const REP = {
   term:{t:'التقرير الفصلي للإرشاد الطلابي'}, final:{t:'التقرير الختامي للإرشاد الطلابي'},
   indiv:{t:'تقرير التوجيه الفردي'}, group:{t:'تقرير الإرشاد الجمعي'},
   hasr_psy:{t:'تقرير الحالات النفسية والانفعالية', col:'hasr', k:'psy'}, hasr_soc:{t:'تقرير الحالات الاجتماعية', col:'hasr', k:'soc'}, hasr_orph:{t:'تقرير الأيتام', col:'hasr', k:'orph'},
-  hasr_aid:{t:'تقرير الإعانة والمكافأة', col:'aid'}, hasr_fu:{t:'تقرير متابعة الحالات الفردية (بالرموز)', col:'hasr', k:'fu'},
+  hasr_aid:{t:'تقرير الإعانة والمكافأة', col:'aid'}, hasr_fu:{t:'تقرير متابعة الحالات الفردية (بالرموز)', col:'hasr', k:'fu'}, hasr_health:{t:'تقرير الحالات الصحية', col:'hasr', k:'health'},
   care_weak:{t:'تقرير المتأخرين دراسيًا', col:'care', k:'weak'}, care_rep:{t:'تقرير المعيدين ومتكرري الرسوب', col:'care', k:'rep'}, care_gift:{t:'تقرير المتفوقين دراسيًا والموهوبين', col:'care', k:'gift'},
   care_beh:{t:'تقرير المتميزين سلوكيًا', col:'care', k:'beh'}, care_new:{t:'تقرير المستجدين', col:'care', k:'new'}, care_honor:{t:'تقرير كشف تكريم الطلاب', col:'care', k:'honor'}
 };
-const REPG = [['التقارير الدورية',['term','final']],['التوجيه والإرشاد',['indiv','group']],['الحالات الخاصة والسرية (تُطبع بالرموز)',['hasr_psy','hasr_soc','hasr_orph','hasr_aid','hasr_fu']],['رعاية فئات الطلاب',['care_weak','care_rep','care_gift','care_beh','care_new','care_honor']]];
+const REPG = [['التقارير الدورية',['term','final']],['التوجيه والإرشاد',['indiv','group']],['الحالات الخاصة والسرية (تُطبع بالرموز)',['hasr_psy','hasr_soc','hasr_orph','hasr_aid','hasr_fu']],['الحالات الصحية (حصر الحالات الصحية المزمنة)',['hasr_health']],['رعاية فئات الطلاب',['care_weak','care_rep','care_gift','care_beh','care_new','care_honor']]];
 const SP = {first:'الفصل الدراسي الأول', second:'الفصل الدراسي الثاني'};
 const CASE_TYPES = ['سلوكية','دراسية','نفسية وانفعالية','اجتماعية وأسرية','صحية','أخرى'];
 const CASE_ST = {open:['مفتوحة','bad'], watch:['تحت المتابعة','warn'], closed:['مغلقة','ok']};
@@ -429,7 +429,10 @@ const SPEC = {
     day:{ fields:[F.date,F.time,{k:'place',l:'المكان',t:'text'},{k:'stu',l:'الطالب (اختياري)',t:'student'},{k:'desc',l:'وصف الموقف',t:'textarea',req:true,w:1},{k:'action',l:'الإجراء المتخذ',t:'textarea',w:1},{k:'who',l:'الجهة المبلَّغة',t:'text'}],
       cols:[['التاريخ',x=>x.date],['الوقت',x=>x.time],['المكان',x=>x.place],['الطالب',x=>x.name],['الموقف',x=>x.desc],['الإجراء',x=>x.action],['المبلَّغ',x=>x.who]] }
   },
-  hasr:{ _:{ fields:[F.student,{k:'sym',l:'الرمز (يُستعمل بدل الاسم عند الطباعة)',t:'text'},{k:'detail',l:'وصف الحالة',t:'textarea',req:true,w:1},{k:'since',l:'تاريخ الرصد',t:'date'},{k:'action',l:'الإجراء المتخذ',t:'textarea',w:1},F.note],
+  hasr:{
+    health:{ fields:[Object.assign({},F.student,{showId:1}),{k:'cond',l:'الحالة الصحية',t:'textarea',req:true,w:1},{k:'proc',l:'إجراءات المتابعة',t:'textarea',w:1},{k:'phone',l:'رقم ولي أمر الطالب',t:'text'}],
+      cols:[['اسم الطالب',x=>x.name],['رقم الهوية',x=>x.seat],['الصف',x=>x.className],['الحالة الصحية',x=>x.cond],['إجراءات المتابعة',x=>x.proc],['جوال ولي الأمر',x=>x.phone]] },
+    _:{ fields:[F.student,{k:'sym',l:'الرمز (يُستعمل بدل الاسم عند الطباعة)',t:'text'},{k:'detail',l:'وصف الحالة',t:'textarea',req:true,w:1},{k:'since',l:'تاريخ الرصد',t:'date'},{k:'action',l:'الإجراء المتخذ',t:'textarea',w:1},F.note],
       cols:[['الرمز',x=>x.sym],['الطالب',x=>x.name],['الصف',x=>x.className],['الحالة',x=>x.detail],['التاريخ',x=>x.since],['الإجراء',x=>x.action]] } },
   care:{ _:{ fields:[F.student,{k:'detail',l:'التفاصيل',t:'textarea',w:1},{k:'plan',l:'الخطة أو البرنامج',t:'textarea',w:1},F.date,{k:'result',l:'النتيجة والمتابعة',t:'textarea',w:1}],
       cols:[['الطالب',x=>x.name],['الصف',x=>x.className],['التفاصيل',x=>x.detail],['الخطة',x=>x.plan],['التاريخ',x=>x.date],['النتيجة',x=>x.result]] },
@@ -475,7 +478,7 @@ Dash.boot({
     let RAWN = [], RAWR = [], OTHER = null, OTHERLOADING = false;
     const mapTR = (raw,per)=>raw.filter(x=>x.period===per && x.studentSeat).map(x=>({id:x.id, seat:String(x.studentSeat), name:x.studentName||'', cls:x.className||'', st:x.trSt||'new', note:x.agentReport||'', why:x.trReason||x.referralReason||'', at:x.referredAt||x.createdAt||0}));
     const mapRP = (raw,per)=>raw.filter(x=>x.referralReason==='تقرير تحليل نتائج' && (!x.period || x.period===per));
-    let CS = [], D = {}, RO = [], VL = [], AB = [], MN = [], HR = [], TR = [], RP = [], AIDS = [], AIDCFG = {}, CMT = null, TASKS = [], CMRS = [], loaded = false;
+    let HREP = [], CS = [], D = {}, RO = [], VL = [], AB = [], MN = [], HR = [], TR = [], RP = [], AIDS = [], AIDCFG = {}, CMT = null, TASKS = [], CMRS = [], loaded = false;
     const get = (ref)=>ref.get().then(s=>s.docs.map(d=>Object.assign({id:d.id},d.data()))).catch(e=>{ console.error(e); return []; });
     async function loadAll(){
       const byP = c=>get(base.collection(c).where('period','==',period));
@@ -495,17 +498,18 @@ Dash.boot({
         get(base.collection('stRec')),
         sa.collection('committee').doc(period).get().then(d=>d.exists?d.data():null).catch(()=>null),
         get(sa.collection('committeeTasks').where('period','==',period)),
-        get(sa.collection('cmRefs').where('period','==',period))]);
+        get(sa.collection('cmRefs').where('period','==',period)),
+        get(db.collection('healthReports').doc(sid).collection('items').where('period','==',period))]);
       COLS.forEach((c,i)=>D[c]=r[i]);
       const k = COLS.length, o = r[k];
       const cm = new Map((o.classes||[]).map(c=>[String(c.code),c]));
-      RO = (o.students||[]).map(s=>{ const c=cm.get(String(s.classCode))||{}; return {seat:String(s.seat), name:s.name||'', cls:c.name||String(s.classCode||'')}; })
+      RO = (o.students||[]).filter(s=>!s.deleted).map(s=>{ const c=cm.get(String(s.classCode))||{}; return {seat:String(s.seat), name:s.name||'', cls:c.name||String(s.classCode||''), health:String(s.health||'').trim()}; })
         .sort((a,b)=>a.cls.localeCompare(b.cls,'ar') || a.name.localeCompare(b.name,'ar'));
       VL = r[k+1]; AB = r[k+2]; MN = r[k+3]; HR = r[k+4];
       RAWN = r[k+5]; RAWR = r[k+6]; TR = mapTR(RAWN, period);
       RP = mapRP(RAWR, period);
       AIDS = r[k+7]; AIDCFG = r[k+8] || {};
-      D.stRec = r[k+9]; CMT = r[k+10]; TASKS = r[k+11]; CMRS = r[k+12];
+      D.stRec = r[k+9]; CMT = r[k+10]; TASKS = r[k+11]; CMRS = r[k+12]; HREP = r[k+13] || [];
       loaded = true;
     }
     const lk = v=> v.k==='other' ? (v.stage==='ابتدائي'?'pri':'mid') : v.k;
@@ -527,13 +531,18 @@ Dash.boot({
       const row = Object.assign({id:ref.id}, rec);
       const arr = col==='cases' ? CS : D[col]; const i = arr.findIndex(x=>x.id===ref.id);
       if(i>=0) arr[i] = Object.assign(arr[i], row); else arr.push(row);
+      if(col==='hasr'){ const m = arr.find(x=>x.id===ref.id); if(m && m.kind==='health') await hMirror(m); }
       return row;
     }
+    /* نسخة عامة مختصرة (الاسم والصف والحالة فقط) تقرؤها الصفحة الرئيسية لكل الموظفين؛ التفاصيل (الهوية والجوال والإجراءات) تبقى هنا مغلقة */
+    const hCol = db.collection('healthCases').doc(sid).collection('items');
+    async function hMirror(m){ await hCol.doc(m.id).set({period, seat:String(m.seat||''), name:m.name||'', className:m.className||'', cond:m.cond||'', updatedAt:Date.now(), updatedBy:env.me.id}); }
     const SOFT = ['hasr','care'];
     const isDel = x=>!!(x && x.deleted);
     const live = a=>a.filter(x=>!isDel(x));
     async function softDel(col, id){
       await base.collection(col).doc(id).set({deleted:true, deletedAt:Date.now(), deletedBy:env.me.id, deletedByName:env.me.name}, {merge:true});
+      if(col==='hasr'){ const y = D.hasr.find(z=>z.id===id); if(y && y.kind==='health'){ try{ await hCol.doc(id).delete(); }catch(e){ console.warn(e); } } }
       const x = D[col].find(y=>y.id===id); if(x) Object.assign(x, {deleted:true, deletedAt:Date.now(), deletedBy:env.me.id, deletedByName:env.me.name});
     }
     const delNote = x=>'<div class="muted">حُذف بواسطة: '+esc(x.deletedByName||'')+(x.deletedAt?' — '+A(esc(dshow(new Date(x.deletedAt).toISOString().slice(0,10)))):'')+'</div>';
@@ -552,7 +561,7 @@ Dash.boot({
       const v = data[f.k] == null ? '' : data[f.k];
       if(f.t==='student'){
         const cur = data.seat ? {seat:data.seat, name:data.name, className:data.className} : null;
-        return '<div class="fld" style="grid-column:1/-1" data-stp="'+f.k+'"><label>'+f.l+'</label><div class="chips" data-cur>'+(cur?'<span class="chip">'+esc(cur.name)+' · '+esc(cur.className||'')+'</span>':'')+'</div>'
+        return '<div class="fld" style="grid-column:1/-1" data-stp="'+f.k+'"><label>'+f.l+'</label><div class="chips" data-cur>'+(cur?'<span class="chip">'+esc(cur.name)+' · '+esc(cur.className||'')+(f.showId?' · هوية '+esc(cur.seat):'')+'</span>':'')+'</div>'
           +'<input type="text" data-q placeholder="ابحث باسم الطالب"><div class="resl" data-res></div></div>';
       }
       if(f.t==='students'){
@@ -583,7 +592,7 @@ Dash.boot({
         const pk = e.target.closest('[data-pk]');
         if(pk){ const w = pk.closest('[data-stp],[data-stm]'); const s = RO.find(x=>x.seat===pk.dataset.pk); if(!s) return;
           const o = {seat:s.seat, name:s.name, className:s.cls};
-          if(w.dataset.stp){ sel[w.dataset.stp] = o; w.querySelector('[data-cur]').innerHTML = '<span class="chip">'+esc(o.name)+' · '+esc(o.className)+'</span>'; }
+          if(w.dataset.stp){ sel[w.dataset.stp] = o; const fd0 = fields.find(x=>x.k===w.dataset.stp)||{}; w.querySelector('[data-cur]').innerHTML = '<span class="chip">'+esc(o.name)+' · '+esc(o.className)+(fd0.showId?' · هوية '+esc(o.seat):'')+'</span>'; }
           else { const k=w.dataset.stm, fd=fields.find(x=>x.k===k)||{}; if(!multi[k].some(x=>x.seat===o.seat)){ if(fd.max && multi[k].length>=fd.max){ toast('الحد الأقصى '+A(fd.max)+' طلاب'); return; } multi[k].push(o); } drawM(w); }
           w.querySelector('[data-q]').value=''; w.querySelector('[data-res]').innerHTML=''; return; }
         const ac = e.target.closest('[data-addcls]');
@@ -858,6 +867,32 @@ Dash.boot({
         +(L.map(x=>isDel(x)
           ? '<tr class="gone">'+cols.map(c=>'<td><del>'+esc(cv(c[1](x)))+'</del></td>').join('')+'<td>'+delNote(x)+'</td></tr>'
           : '<tr>'+cols.map(c=>'<td>'+esc(cv(c[1](x)))+'</td>').join('')+'<td style="white-space:nowrap">'+(canEdit?'<button type="button" class="btn" data-ed="'+col+'|'+x.id+'">تعديل</button> <button type="button" class="btn danger" data-dl="'+col+'|'+x.id+'">حذف</button>':'')+'</td></tr>').join('') || '<tr><td colspan="'+(cols.length+1)+'" class="muted">لا سجلات.</td></tr>')+'</tbody></table></div>';
+    }
+    /* ===== الحالات الصحية: استيراد القديم + رفع التقرير للمدير ===== */
+    const hLive = ()=>live(D.hasr).filter(x=>x.kind==='health');
+    const hOld = ()=>RO.filter(s=>s.health && !hLive().some(x=>String(x.seat)===s.seat));
+    const HST = {pending:['بانتظار اعتماد المدير','warn'], approved:['اعتمد المدير','ok'], rejected:['رفضه المدير','bad'], returned:['أعاده المدير للتعديل','bad']};
+    const hLast = ()=>HREP.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))[0];
+    function healthExtra(){
+      const o = hOld().length, last = hLast(), st = last && (HST[last.st]||HST.pending);
+      return (canEdit && o ? '<button type="button" class="btn" data-hmig="1">استيراد '+A(o)+' حالة قديمة من قائمة الطلاب</button>' : '')
+        +(canEdit && hLive().length ? '<button type="button" class="btn solid" data-hsend="1">رفع التقرير للمدير للاعتماد</button>' : '')
+        +(st ? '<span class="tag '+st[1]+'">آخر تقرير مرفوع: '+st[0]+'</span>' : '')
+        +(last && (last.st==='returned'||last.st==='rejected') && last.note ? '<span class="muted">ملاحظة المدير: '+esc(last.note)+'</span>' : '');
+    }
+    async function healthMigrate(){
+      const L = hOld(); if(!L.length) return;
+      for(const s of L){ const row = await put('hasr', null, {kind:'health', seat:s.seat, name:s.name, className:s.cls, cond:s.health, proc:'', phone:''}); void row; }
+      toast('استُورد '+A(L.length)+' حالة، أكمل إجراءات المتابعة ورقم ولي الأمر لكل طالب'); render();
+    }
+    async function healthSend(){
+      const L = hLive(); if(!L.length){ toast('لا حالات صحية لرفعها'); return; }
+      const last = hLast(); if(last && last.st==='pending'){ toast('يوجد تقرير سابق بانتظار اعتماد المدير'); return; }
+      const rows = L.slice().sort((a,b)=>String(a.className||'').localeCompare(String(b.className||''),'ar')||String(a.name||'').localeCompare(String(b.name||''),'ar'))
+        .map(x=>({name:x.name||'', id:String(x.seat||''), cls:x.className||'', cond:x.cond||'', proc:x.proc||'', phone:x.phone||''}));
+      const ref = db.collection('healthReports').doc(sid).collection('items').doc();
+      const rec = {period, st:'pending', rows, count:rows.length, createdAt:Date.now(), createdBy:env.me.id, createdByName:env.me.name};
+      await ref.set(rec); HREP.push(Object.assign({id:ref.id}, rec)); toast('رُفع تقرير الحالات الصحية إلى المدير للاعتماد'); render();
     }
     function nextSym(){ const L2 = {'٠':0,'١':1,'٢':2,'٣':3,'٤':4,'٥':5,'٦':6,'٧':7,'٨':8,'٩':9}; let mx = 0;
       D.hasr.filter(x=>x.kind==='fu').forEach(x=>{ const m = String(x.sym||'').match(/[0-9٠-٩]+/); if(m){ const n = parseInt(m[0].replace(/[٠-٩]/g,d=>L2[d]),10); if(n>mx) mx=n; } });
@@ -1185,6 +1220,11 @@ Dash.boot({
         return {rows:L, land:false, secret:'سري — يُحفظ في ملف خاص مغلق لدى الموجه الطلابي (بالرموز)', sum:[['إجمالي المستحقين',L.length],['الإعانة',cnt(L,x=>x.type==='إعانة')],['المكافأة',cnt(L,x=>x.type==='مكافأة')]],
           cols:[['الرمز',x=>SY[String(x.seat)]||'—'],['النوع',x=>x.type],['التاريخ',x=>x.dateH]]};
       }
+      if(R.col==='hasr' && R.k==='health'){
+        const L = live(D.hasr).filter(x=>x.kind==='health').sort((a,b)=>String(a.className||'').localeCompare(String(b.className||''),'ar')||String(a.name||'').localeCompare(String(b.name||''),'ar'));
+        return {rows:L, land:true, secret:'بيانات صحية سرية — تُتداول مع الإدارة فقط', sum:[['عدد الحالات',L.length]],
+          cols:[['اسم الطالب رباعيًا',x=>x.name],['رقم الهوية',x=>x.seat],['الصف/الفصل',x=>x.className],['الحالة الصحية',x=>x.cond],['إجراءات المتابعة',x=>x.proc],['جوال ولي الأمر',x=>x.phone]]};
+      }
       if(R.col==='hasr'){
         const SY = symMap(), L = live(D.hasr).filter(x=>x.kind===R.k).sort(byDt);
         return {rows:L, land:false, secret:'سري — يُحفظ في ملف خاص مغلق لدى الموجه الطلابي (بالرموز)', sum:[['عدد الحالات',L.length],['حالات اتُّخذ فيها إجراء',cnt(L,x=>x.action)],['حالات لم يُسجَّل فيها إجراء',cnt(L,x=>!x.action)]],
@@ -1262,7 +1302,7 @@ Dash.boot({
         else if(t==='plan') inner = sub==='group' ? groupPane() : crudPane('plans',sub,subs.find(s=>s[0]===sub)[1], (sub==='annual' && period==='second' && canEdit) ? '<button type="button" class="btn" data-cp="1">نسخ الخطة من الفصل الأول</button>' : '');
         else if(t==='cases') inner = casesPane(sub);
         else if(t==='sess') inner = sessPane(sub);
-        else if(t==='hasr') inner = sub==='aid' ? aidPane() : crudPane('hasr',sub,subs.find(s=>s[0]===sub)[1]);
+        else if(t==='hasr') inner = sub==='aid' ? aidPane() : crudPane('hasr',sub,subs.find(s=>s[0]===sub)[1], sub==='health' ? healthExtra() : '');
         else if(t==='care') inner = crudPane('care',sub,subs.find(s=>s[0]===sub)[1]);
         else if(t==='rep') inner = repListPane();
         h = (t==='home' ? inner : '<section class="card">'+(canEdit?'':'<div class="nt">اطلاع فقط: لا تعديل في هذه الصفحة.</div>')+seg+inner+'</section>');
@@ -1291,6 +1331,8 @@ Dash.boot({
       if(b=g('data-ed')){ const p=b.dataset.ed.split('|'); crudEdit(p[0],p[1]); return; }
       if(b=g('data-dl')){ const p=b.dataset.dl.split('|'); const soft = SOFT.includes(p[0]); if(!canEdit || !confirm(soft?'حذف هذا السجل؟ سيبقى ظاهرًا مشطوبًا مع بيان من حذفه.':'حذف هذا السجل نهائيًا؟')) return; try{ if(soft) await softDel(p[0],p[1]); else await del(p[0],p[1]); toast('حُذف السجل'); render(); }catch(er){ fail(er); } return; }
       if(b=g('data-prt')){ const p=b.dataset.prt.split('|'); crudPrint(p[0],p[1],p[2]==='sym'); return; }
+      if(b=g('data-hmig')){ if(canEdit){ b.disabled=true; try{ await healthMigrate(); }catch(er){ fail(er); b.disabled=false; } } return; }
+      if(b=g('data-hsend')){ if(canEdit){ b.disabled=true; try{ await healthSend(); }catch(er){ fail(er); b.disabled=false; } } return; }
       if(b=g('data-aadd')){ if(canEdit) aidAdd(); return; }
       if(b=g('data-adl')){ if(!canEdit || !confirm('حذف المستحق؟ سيبقى ظاهرًا مشطوبًا مع بيان من حذفه.')) return; try{ const dd = {deleted:true, deletedAt:Date.now(), deletedBy:env.me.id, deletedByName:env.me.name}; await sa.collection('aid').doc(b.dataset.adl).set(dd, {merge:true}); const ax = AIDS.find(x=>x.id===b.dataset.adl); if(ax) Object.assign(ax, dd); toast('حُذف'); render(); }catch(er){ fail(er); } return; }
       if(b=g('data-aprt')){ printTable('كشف الإعانة والمكافأة', [['الطالب',x=>x.name],['الصف',x=>x.className],['النوع',x=>x.type],['التاريخ',x=>x.dateH]], live(AIDS).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)), {land:false}); return; }

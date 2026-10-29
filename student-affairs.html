@@ -694,11 +694,14 @@ Dash.boot({
       const L=[...AB.values()].filter(s=>s.doc.moved).sort((a,b)=>((a.doc.decision&&a.doc.decision.st==='wait')?0:1)-((b.doc.decision&&b.doc.decision.st==='wait')?0:1) || a.name.localeCompare(b.name,'ar'));
       $('#cCount').textContent = A(L.length)+' قرارات';
       $('#cRows').innerHTML = L.map(s=>{ const d=s.doc.decision||{st:'wait'}, w=d.st==='wait';
-        return tfold('c|'+s.name+'|'+s.cls, esc(s.name)+'<small>'+esc(s.cls)+' · '+A(un(s))+' يومًا بدون عذر · أُحيل بتاريخ '+(d.date?hij(d.date):'—')+'</small>', '<span class="tag '+(w?'warn':'ok')+'">'+(w?'بانتظار اعتماد المدير':'اعتمد المدير'+(d.approvedByName?' ('+esc(d.approvedByName)+')':''))+'</span>', '<div class="row"><button type="button" class="btn" data-cb="'+esc(s.seat)+'">بيان</button>'+(w&&canApprove?'<button type="button" class="btn solid" data-ok="'+esc(s.seat)+'">اعتماد المدير</button>':'')+'</div>'); }).join('') || '<div class="muted">لا قرارات.</div>';
+        return tfold('c|'+s.name+'|'+s.cls, esc(s.name)+'<small>'+esc(s.cls)+' · '+A(un(s))+' يومًا بدون عذر · أُحيل بتاريخ '+(d.date?hij(d.date):'—')+'</small>', (d.st==='no'||d.st==='ret' ? '<span class="tag bad">'+(d.st==='no'?'رفضه المدير':'أعاده المدير للتعديل')+'</span>' : '<span class="tag '+(w?'warn':'ok')+'">'+(w?'بانتظار اعتماد المدير':'اعتمد المدير'+(d.approvedByName?' ('+esc(d.approvedByName)+')':''))+'</span>'), '<div class="row"><button type="button" class="btn" data-cb="'+esc(s.seat)+'">بيان</button>'+(w&&canApprove?'<button type="button" class="btn solid" data-ok="'+esc(s.seat)+'">اعتماد المدير</button>':'')+(d.st==='ret'&&d.decisionNote?'<span class="muted">سبب الإعادة: '+esc(d.decisionNote)+'</span>':'')+(d.st==='ret'&&canEdit?'<button type="button" class="btn solid" data-rs="'+esc(s.seat)+'">إعادة رفع للمدير</button>':'')+'</div>'); }).join('') || '<div class="muted">لا قرارات.</div>';
       stats();
     }
     $('#cRows').addEventListener('click', async e=>{
       const b=e.target.closest('[data-cb]'); if(b) openBayan(b.dataset.cb);
+      const rs=e.target.closest('[data-rs]');
+      if(rs && canEdit){ const s0=sOf(rs.dataset.rs); rs.disabled=true; const dec0=Object.assign({},s0.doc.decision||{},{st:'wait', at:Date.now(), decisionNote:''});
+        try{ await abCol.doc(abId(s0.seat)).update({decision:dec0, updatedAt:Date.now()}); s0.doc=Object.assign({},s0.doc,{decision:dec0}); toast('أُعيد رفع القرار للمدير'); }catch(er){ fail(er); } cRender(); return; }
       const o=e.target.closest('[data-ok]'); if(!o || !canApprove) return; const s=sOf(o.dataset.ok); o.disabled=true;
       const dec=Object.assign({},s.doc.decision||{},{st:'ok', approvedBy:env.me.id, approvedByName:env.me.name, approvedAt:Date.now()});
       try{ await abCol.doc(abId(s.seat)).update({decision:dec, updatedAt:Date.now()}); s.doc=Object.assign({},s.doc,{decision:dec}); toast('اعتُمد القرار'); }catch(er){ fail(er); }
@@ -1302,7 +1305,7 @@ Dash.boot({
     function hReset(){ hEdit=null; hSel=null; hBoxDraw(); $('#hD').value=''; $('#hTy').value=''; $('#hOb').value=env.me.name||''; $('#hOd').value=dk; $('#hOt').value=nowT();
       document.querySelectorAll('[data-hk]').forEach(c=>c.checked=false); $('#hAdd').textContent='رفع التقرير للمدير'; $('#hCancel').hidden=true; $('#hForm .t').textContent='تقرير جديد'; }
     hReset();
-    const HST = {pending:['بانتظار اعتماد المدير','warn'], approved:['اعتمد المدير','ok'], returned:['أُعيد للتعديل','bad']};
+    const HST = {pending:['بانتظار اعتماد المدير','warn'], approved:['اعتمد المدير','ok'], returned:['أُعيد للتعديل','bad'], rejected:['رفضه المدير','bad']};
     function hRender(){
       const L = HR.filter(x=>x.period===period); $('#hCnt').textContent = A(L.length)+' تقارير'; $('#hForm').hidden = !canEdit;
       const seats = [...new Set(L.map(x=>x.seat))];

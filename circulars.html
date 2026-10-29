@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-27.1 — عرض تعميم «محضر لجنة التوجيه» (committeeMinutes) و«قرار تشكيل لجنة التوجيه والإرشاد» (committeeFormation) -->
+<!-- إصدار: 2026-10-29.1 — عرض تعميم «الحالات الصحية» (healthCases: الاسم · الحالة · الإجراء). سابقًا 2026-10-27.1 — عرض تعميم «محضر لجنة التوجيه» (committeeMinutes) و«قرار تشكيل لجنة التوجيه والإرشاد» (committeeFormation) -->
 <!-- [ADMIN-TOOLS] صفحة مستقلة بالكامل — تُحذف عند إزالة الأدوات الإدارية (انظر ADMIN-TOOLS-LOG.md) -->
 <html lang="ar" dir="rtl">
 <head>
@@ -546,6 +546,16 @@ function minutesHtml(m, c){
     '<b>الأعضاء الحاضرون:</b><table style="width:100%;border-collapse:collapse;margin-top:6px" border="1" cellpadding="6"><tr><th>م</th><th>الاسم</th><th>عمله في اللجنة</th></tr>'+mem+'</table>'+
     (c && c.approvedAt?'<div class="alert ok" style="margin-top:10px">اعتمد المدير هذا المحضر.</div>':'');
 }
+/* حصر الحالات الصحية المزمنة (يعتمده المدير من «التقارير والاعتمادات»): الاسم والحالة والإجراء فقط، والتوقيع إلزامي */
+function healthHtml(m, c){
+  const A = n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+  const rows = (m.rows||[]).map((x,i)=>'<tr><td>'+A(i+1)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.cond||'')+'</td><td>'+esc(x.proc||'')+'</td></tr>').join('');
+  return '<div class="sub" style="margin-top:10px">'+esc(m.school||'')+'</div>'+
+    '<h4 style="margin:10px 0">حصر الحالات الصحية المزمنة للطلاب</h4>'+
+    '<div class="sub">'+esc(m.termText||'')+'</div>'+
+    '<table style="width:100%;border-collapse:collapse;margin-top:6px" border="1" cellpadding="6"><tr><th>م</th><th>الاسم</th><th>الحالة</th><th>الإجراء</th></tr>'+rows+'</table>'+
+    '<div class="alert ok" style="margin-top:10px">اعتمد المدير هذا الحصر. لا تُتداول بياناته خارج المدرسة، والتوقيع على التعميم إلزامي.</div>';
+}
 /* قرار تشكيل لجنة التوجيه والإرشاد (يصدره المدير بعد اعتماده من وكيل الشؤون الطلابية): يُعرض نصًا للاطّلاع والتوقيع الإلزامي */
 function formationHtml(m, c){
   const A = n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
@@ -571,14 +581,14 @@ async function openCircularView(cid, skipHistory){
   // جدول التعميم الأحدث يُقرأ من النسخة المعتمدة (يحدّثه المدير أو الوكيل عند أي تعديل)
   if(c.table && c.planId){ try{ const ps = await db.collection('dutyPlans').doc(c.planId).get(); const t = ps.exists && ps.data().pub && (ps.data().pub.tables||{})[c.kind]; if(t) c.table = t; }catch(e){} }
   let pages = [];
-  if(!c.table && !c.minutes && !c.formation){ const pagesSnap = await itemRef.collection('pages').orderBy('index').get(); pages = pagesSnap.docs.map(d=>d.data().dataUrl); }
+  if(!c.table && !c.minutes && !c.formation && !c.health){ const pagesSnap = await itemRef.collection('pages').orderBy('index').get(); pages = pagesSnap.docs.map(d=>d.data().dataUrl); }
 
   let html = `
     <div class="card">
       <button class="btn sec sm" id="backBtn">→ رجوع للقائمة</button>
       <h3 style="margin:10px 0 2px">تعميم رقم ${esc(c.number)}${c.title?' — '+esc(c.title):''}</h3>
       <div class="sub">${esc(c.createdByName||'')} · ${esc(fmtDate(c.createdAt))} · ${c.mandatory?'<b>التوقيع إلزامي</b>':'التوقيع اختياري'}</div>
-      ${c.table?'<div id="liveTbl" style="margin-top:12px"></div>':(c.minutes?minutesHtml(c.minutes, c):(c.formation?formationHtml(c.formation, c):`<div class="pagewrap" style="margin-top:10px">${pages.map(p=>`<img src="${p}">`).join('')}</div>`))}
+      ${c.table?'<div id="liveTbl" style="margin-top:12px"></div>':(c.minutes?minutesHtml(c.minutes, c):(c.formation?formationHtml(c.formation, c):(c.health?healthHtml(c.health, c):`<div class="pagewrap" style="margin-top:10px">${pages.map(p=>`<img src="${p}">`).join('')}</div>`)))}
     </div>`;
 
   if(isRecipient){

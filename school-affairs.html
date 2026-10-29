@@ -542,7 +542,7 @@ Dash.boot({
 
     /* ---- الصيانة ---- */
     const MS = {new:['جديد','bad'], run:['قيد التنفيذ','warn'], done:['منجز','ok']};
-    const LT = {'':null, wait:['الخطاب بانتظار اعتماد المدير','warn'], ok:['اعتمد المدير الخطاب','ok'], no:['لم يعتمد المدير الخطاب','bad']};
+    const LT = {'':null, wait:['الخطاب بانتظار اعتماد المدير','warn'], ok:['اعتمد المدير الخطاب','ok'], no:['لم يعتمد المدير الخطاب','bad'], ret:['أعاده المدير للتعديل','bad']};
     const wkDate = ms=>ms ? hijriLong(new Date(ms)) : '—';
     $('#mNew').onclick = ()=>{ $('#mForm').hidden = false; };
     $('#mCancel').onclick = ()=>$('#mForm').hidden = true;
@@ -566,7 +566,7 @@ Dash.boot({
       $('#mRows').innerHTML = L.map(m=>{
         const lt = LT[m.l||''];
         let letter = '';
-        if(canEdit && (m.l===''||m.l==='no'||!m.l)) letter = `<button type="button" class="btn" data-ml="${m.id}">${m.l==='no'?'إعادة رفع الخطاب':'رفع خطاب طلب'}</button>`;
+        if(canEdit && (m.l===''||m.l==='no'||m.l==='ret'||!m.l)) letter = `<button type="button" class="btn" data-ml="${m.id}">${(m.l==='no'||m.l==='ret')?'إعادة رفع الخطاب':'رفع خطاب طلب'}</button>`;
         if(canApprove && m.l==='wait') letter = `<button type="button" class="btn solid" data-mok="${m.id}:ok">اعتماد المدير</button> <button type="button" class="btn" data-mok="${m.id}:no">عدم الاعتماد</button>`;
         if(m.l) letter += ` <button type="button" class="btn" data-mpr="${m.id}">طباعة الخطاب</button>`;
         const stT = m.st==='run'&&m.l==='wait' ? ['warn','قيد التنفيذ - بانتظار اعتماد المدير'] : (m.st==='run'&&m.l==='ok' ? ['warn','قيد التنفيذ - <b class="okw">اعتمد المدير</b>'] : (m.st==='run'&&m.l==='no' ? ['warn','قيد التنفيذ - لم يعتمد المدير'] : [MS[m.st][1], MS[m.st][0]]));
@@ -649,7 +649,7 @@ Dash.boot({
     };
 
     /* ---- قرارات الحسم ---- */
-    const DS = {wait:['بانتظار اعتماد المدير','warn'], ok:['معتمد','ok'], sent:['رُفع لشؤون الموظفين','ok']};
+    const DS = {wait:['بانتظار اعتماد المدير','warn'], ok:['معتمد','ok'], sent:['رُفع لشؤون الموظفين','ok'], no:['رفضه المدير','bad'], ret:['أعاده المدير للتعديل','bad']};
     function cRender(){
       $('#cCount').textContent = A(DEC.length)+' قرارات';
       $('#cRows').innerHTML = DEC.map(d=>{
@@ -660,13 +660,16 @@ Dash.boot({
         let btn = '';
         if(d.st==='wait' && canApprove) btn = `<button type="button" class="btn solid" data-dk="${d.id}">اعتماد المدير</button>`;
         if(d.st==='ok' && canEdit) btn = `<button type="button" class="btn solid" data-dk="${d.id}">رفع لشؤون الموظفين</button>`;
-        if(d.st!=='wait') btn += ` <button type="button" class="btn" data-dpr="${d.id}">طباعة القرار</button>`;
+        if(d.st==='ret' && canEdit) btn = `<button type="button" class="btn solid" data-drs="${d.id}">إعادة رفع للمدير</button>`;
+        if(d.st!=='wait' && d.st!=='no' && d.st!=='ret') btn += ` <button type="button" class="btn" data-dpr="${d.id}">طباعة القرار</button>`;
         return `<div class="trow"><div class="nm">${esc(d.empName||nameOf(d.empId))}<small>${esc(d.why)}</small></div>${hist}${days}<div class="row"><span class="tag ${DS[d.st][1]}">${DS[d.st][0]}</span>${btn}</div></div>`;
       }).join('') || '<div class="muted">لا قرارات.</div>';
     }
     $('#cRows').addEventListener('click', async ev=>{
       const pr = ev.target.closest('[data-dpr]');
       if(pr){ const d = DEC.find(x=>x.id===pr.dataset.dpr); if(d) StaffDocs.printDecision(d, await printCtx()); return; }
+      const rs = ev.target.closest('[data-drs]');
+      if(rs && canEdit){ try{ await decCol.doc(rs.dataset.drs).update({st:'wait', decisionNote:''}); toast('أُعيد رفع القرار للمدير'); }catch(e){ fail(e); } return; }
       const b = ev.target.closest('[data-dk]'); if(!b) return;
       const d = DEC.find(x=>x.id===b.dataset.dk); if(!d) return;
       try{

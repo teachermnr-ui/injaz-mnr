@@ -4578,6 +4578,20 @@ function renderSettings(c){
       <button class="btn secondary sm" onclick="activeTab='users';renderTabs();renderPanel()">الذهاب إلى المستخدمين</button>
     </div>
 
+    <!-- [TEMP-WIPE:BEGIN] -->
+    <div class="card" style="border-color:var(--danger,#c0392b)">
+      <div class="set-block"><h3 style="color:var(--danger-d)">تصفير بيانات جميع العملاء (مؤقت)</h3>
+        <p>يحذف نهائيًا كل ما أدخله المشتركون: المدارس والمستخدمين والطلاب وكل بياناتهم وحساباتهم وملفاتهم. يبقى حساب الأدمن العام والصلاحيات الافتراضية للأدوار وإعدادات النظام العامة. لا رجوع بعد التنفيذ، فصدّر نسخة احتياطية من قاعدة البيانات أولًا.</p></div>
+      <button class="btn secondary sm" id="twCount">١) عدّ ما سيُحذف (بدون حذف)</button>
+      <div id="twInfo" style="margin:10px 0"></div>
+      <div id="twConfirmBox" style="display:none">
+        <div class="field"><label>اكتب العبارة التالية حرفيًا للتأكيد: <b>حذف جميع بيانات العملاء</b></label><input id="twPhrase" autocomplete="off"></div>
+        <button class="btn danger sm" id="twGo">٢) تنفيذ الحذف الشامل</button>
+      </div>
+      <div id="twAlert"></div>
+    </div>
+    <!-- [TEMP-WIPE:END] -->
+
     <div class="card" style="border-color:var(--bd-f3d6d4,#F3D6D4)">
       <div class="set-block"><h3 style="color:var(--danger-d)">مسح بيانات مدرسة</h3>
         <p>حذف نهائي لا يمكن التراجع عنه، لمدرسة واحدة بكل بياناتها. المعلمون الفرديون خارج هذا النظام تمامًا — يُدارون بالإيقاف والتفعيل فقط، ولكل منهم تنظيف ملفه بنفسه.</p></div>
@@ -4604,6 +4618,36 @@ function renderSettings(c){
     + (Object.entries(SCHOOLS).map(([id,s])=>`<option value="${esc(id)}">${esc(s.name)}</option>`).join('')
        || '');
   $('#wipeBtn').onclick=wipeData;
+
+  /* [TEMP-WIPE:BEGIN] */
+  (function(){
+    const PHRASE='حذف جميع بيانات العملاء';
+    $('#twCount').onclick=async()=>{
+      $('#twInfo').innerHTML='<span class="spin"></span>';
+      try{
+        const r=await UsersAPI.call('wipeAllClientData',{action:'count'});
+        const rows=Object.entries(r.collections||{}).filter(([k,v])=>v>0).map(([k,v])=>`<li>${esc(k)}: ${ayArDigits(v)}</li>`).join('');
+        $('#twInfo').innerHTML=`<div class="alert">سيُحذف (مستندات المستوى الأول، دون الفرعيات): <ul style="margin:6px 0">${rows||'<li>لا شيء</li>'}</ul>حسابات الدخول: <b>${ayArDigits(r.authUsers)}</b> — الملفات: <b>${r.files<0?'تعذّر العدّ':ayArDigits(r.files)}</b></div>`;
+        $('#twConfirmBox').style.display='';
+      }catch(e){ $('#twInfo').innerHTML=''; alertBox('twAlert','err',e.message||'تعذّر العدّ'); }
+    };
+    $('#twGo').onclick=async()=>{
+      if(($('#twPhrase').value||'').trim()!==PHRASE){ alertBox('twAlert','err','العبارة غير مطابقة'); return; }
+      if(!await mnConfirm('تأكيد أخير: سيُحذف كل شيء عدا حسابك. متابعة؟')) return;
+      $('#twGo').disabled=true; $('#twCount').disabled=true;
+      try{
+        let n=0, r;
+        do{
+          n++; alertBox('twAlert','ok','جارٍ الحذف… الدفعة '+ayArDigits(n)+(r&&r.stage?' — المرحلة: '+({firestore:'قاعدة البيانات',auth:'الحسابات'}[r.stage]||r.stage):''));
+          r=await UsersAPI.call('wipeAllClientData',{action:'wipe',confirm:PHRASE});
+        }while(r && r.done===false && n<500);
+        alertBox('twAlert','ok','اكتمل الحذف.'+(r&&r.storageErr?' تنبيه: تعذّر حذف الملفات: '+r.storageErr:''));
+        $('#twConfirmBox').style.display='none';
+      }catch(e){ alertBox('twAlert','err',(e.message||'انقطع التنفيذ')+' — أعد الضغط للمتابعة، فالحذف يكمل من حيث توقف.'); $('#twGo').disabled=false; }
+      $('#twCount').disabled=false;
+    };
+  })();
+  /* [TEMP-WIPE:END] */
   renderSchoolsList(); calLoad(); trialLoad();
 }
 /* ---- محرر الصلاحيات الافتراضية للأدوار (لأدمن النظام) ---- */

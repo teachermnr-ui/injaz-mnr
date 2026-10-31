@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-22.1 -->
+<!-- إصدار: 2026-10-31.1 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -705,10 +705,11 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
     </div>
     </div>
     <div class="card" id="resAnCard" style="display:none">
-      <h2>تحليل النتائج <span class="sub">من درجات سجل الأعمال</span></h2>
+      <h2>تحليل النتائج <span class="sub" id="anSourceLabel">من درجات سجل الأعمال</span></h2>
       <div class="row no-print" style="margin-bottom:8px">
-        <button class="primary" type="button">📒 سجل الأعمال</button>
-        <button class="ghost" type="button" disabled title="قريباً">📄 ملف PDF من نور — قريباً</button>
+        <button class="primary" type="button" id="anSrcWL" onclick="noorSwitchSource('wl')">📒 سجل الأعمال</button>
+        <button class="ghost" type="button" id="anSrcNoor" onclick="noorSwitchSource('noor')">📄 ملف PDF من نور</button>
+        <input type="file" id="noorPdfInput" accept="application/pdf" style="display:none" onchange="noorPdfPicked(event)">
       </div>
       <div class="no-print" id="anControls">
         <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -729,6 +730,20 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
           <button class="ghost" type="button" style="padding:3px 10px;margin-right:8px" onclick="anSelectAll(true)">تحديد الكل</button>
           <button class="ghost" type="button" style="padding:3px 10px" onclick="anSelectAll(false)">إلغاء التحديد</button></div>
         <div id="anClasses"></div>
+      </div>
+      <!-- أدوات مصدر نور -->
+      <div class="no-print" id="noorControls" style="display:none">
+        <div style="text-align:center;padding:18px 0">
+          <button class="primary" type="button" style="font-size:15px;padding:12px 28px" onclick="document.getElementById('noorPdfInput').click()">📥 ارفع ملف PDF من نور</button>
+          <div class="hint" id="noorHint" style="margin-top:8px"></div>
+        </div>
+        <div id="noorColumnsHost" style="display:none"></div>
+        <div id="noorMeta" style="display:none;flex-wrap:wrap;gap:10px;margin-top:10px">
+          <label class="field" style="flex:1;min-width:170px">المادة (تظهر في العنوان)
+            <input id="noorSubject" placeholder="مثال: الرياضيات" oninput="noorRunAnalysis()"></label>
+          <label class="field" style="flex:1;min-width:170px">نص المربع العلوي
+            <input id="noorExam" placeholder="مثال: الاختبار النهائي" oninput="noorRunAnalysis()"></label>
+        </div>
       </div>
       <div id="anReportHost" style="margin-top:10px;overflow-x:auto"></div>
       <div class="row no-print" style="margin-top:12px">
@@ -6016,6 +6031,297 @@ async function openNotePdf(id){
     if(w) w.location.href=url; else { const a=document.createElement('a'); a.href=url; a.download=d.pdfName||'report.pdf'; document.body.appendChild(a); a.click(); a.remove(); }
   }catch(e){ if(w) w.close(); alert('تعذّر فتح الملف: '+(e.message||e)); }
 }
+
+/* ============================================================
+   استيراد درجات من ملف نور PDF (ص-٢١ الجزء ٤)
+   ============================================================ */
+let _noorSource = 'wl';  // 'wl' = سجل الأعمال، 'noor' = ملف PDF من نور
+let _noorData = null;     // بيانات آخر ملف نور مقروء
+
+function noorSwitchSource(src){
+  if(src) _noorSource = src;
+  const isNoor = (_noorSource==='noor');
+  document.getElementById('anSrcWL').className = isNoor ? 'ghost' : 'primary';
+  document.getElementById('anSrcNoor').className = isNoor ? 'primary' : 'ghost';
+  document.getElementById('anControls').style.display = isNoor ? 'none' : '';
+  document.getElementById('noorControls').style.display = isNoor ? '' : 'none';
+  const lbl = document.getElementById('anSourceLabel');
+  if(lbl) lbl.textContent = isNoor ? 'من ملف PDF — نور' : 'من درجات سجل الأعمال';
+  // أزرار الأسفل (طباعة/إرسال) تظل مرتبطة بالتقرير الحالي
+  if(!isNoor) anPopulate();
+}
+
+async function noorPdfPicked(ev){
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if(!file) return;
+  const hint = document.getElementById('noorHint');
+  hint.textContent = 'جارٍ قراءة ملف PDF…';
+  try{
+    const pdfjsLib = await ensurePdfJs();
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let allText = '';
+    for(let p = 1; p <= pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      const tc = await page.getTextContent();
+      // ترتيب العناصر: من الأعلى للأسفل ثم من اليمين لليسار
+      const items = tc.items.filter(i => i.str.trim());
+      items.sort((a,b) => {
+        const dy = b.transform[5] - a.transform[5]; // Y ينزل
+        if(Math.abs(dy) > 4) return dy > 0 ? -1 : 1;
+        return b.transform[4] - a.transform[4]; // X من اليمين
+      });
+      allText += items.map(i => i.str).join(' ') + '\n';
+    }
+    hint.textContent = '';
+    _noorData = noorParseText(allText);
+    if(_noorData.error){
+      hint.textContent = '⚠️ ' + _noorData.error;
+      _noorData = null; return;
+    }
+    noorShowColumns();
+  }catch(e){
+    hint.textContent = '⚠️ تعذّر قراءة الملف. تأكّد أنه ملف PDF صالح.';
+    _noorData = null;
+  }
+}
+
+/* تحليل نص ملف نور — يستخرج الترويسة وأعمدة الدرجات والطلاب */
+function noorParseText(raw){
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  if(!lines.length) return { error: 'الملف فارغ أو لا يحتوي على نص.' };
+
+  // --- الترويسة ---
+  const hdr = {};
+  const full = lines.join(' ');
+  // المادة
+  let m = full.match(/المادة\s*:\s*([^\n,،]+)/); if(m) hdr.subject = m[1].trim();
+  // الفصل (رقم الفصل)
+  m = full.match(/الفصل\s*:\s*(\S+)/); if(m) hdr.section = m[1].trim();
+  // الصف
+  m = full.match(/(الأول|الثاني|الثالث|الرابع|الخامس|السادس)\s+(الابتدائي|المتوسط|الثانوي)/);
+  if(m) hdr.grade = m[0].trim();
+  // الفترة
+  m = full.match(/الفترة\s*:\s*([^\n,،]+)/); if(m) hdr.period = m[1].trim();
+  // السنة الدراسية
+  m = full.match(/السنة الدراسية\s*:?\s*([\d٠-٩]+-?[\d٠-٩]*)/); if(m) hdr.year = m[1].trim();
+  // الفصل الدراسي
+  m = full.match(/(الفصل الأول|الفصل الثاني|الفصل الثالث)/); if(m) hdr.term = m[1].trim();
+  // المسار
+  m = full.match(/(المسار\s+\S+)/); if(m) hdr.track = m[1].trim();
+
+  // --- البحث عن رأس الجدول: أعمدة الدرجات تحتوي «/» مثل «مهام أدائية /50» ---
+  // نجمع كل النص ونبحث عن أنماط العمود: «اسم /رقم»
+  const colPattern = /([^\d/٠-٩]{2,})\s*\/\s*([\d٠-٩]+)/g;
+  const columns = [];
+  let cm;
+  while((cm = colPattern.exec(full)) !== null){
+    const name = cm[1].trim();
+    // تجاهل إن كان الاسم يحتوي كلمات غير متوقعة
+    if(name.length < 2) continue;
+    const maxVal = parseInt(cm[2].replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+    if(maxVal > 0) columns.push({ name, max: maxVal, rawMatch: cm[0] });
+  }
+
+  // عمود «المجموع» بلا «/» — نبحث عنه كعمود منفصل
+  const hasTotal = /المجموع/.test(full);
+
+  // --- استخراج صفوف الطلاب ---
+  // نبحث عن أرقام هوية (١٠ أرقام) والدرجات المجاورة لها
+  const idPattern = /(\d{10})/g;
+  const students = [];
+  let im;
+  while((im = idPattern.exec(full)) !== null){
+    const idNum = im[1];
+    // الأرقام بعد الهوية والاسم هي الدرجات — نبحث في سياق أوسع
+    const after = full.substring(im.index);
+    // استخراج كل الأرقام (صحيحة أو عشرية) بعد الهوية
+    const nums = [];
+    // نأخذ النص حتى الهوية التالية أو نهاية السطر
+    const nextId = after.substring(10).search(/\d{10}/);
+    const segment = nextId > 0 ? after.substring(0, 10 + nextId) : after.substring(0, 300);
+    // استخراج اسم الطالب — النص العربي بين الهوية والأرقام
+    const nameMatch = segment.match(/^\d{10}\s+([؀-ۿ\s]+?)(?=\s*\d)/);
+    const studentName = nameMatch ? nameMatch[1].trim() : '';
+    // استخراج الأرقام (الدرجات) — تتضمن «50 - حاضر» نأخذ الرقم فقط
+    const numPattern = /([\d٠-٩]+(?:\.[\d٠-٩]+)?)/g;
+    let nm;
+    const segNums = segment.substring(10 + (nameMatch ? nameMatch[1].length : 0));
+    while((nm = numPattern.exec(segNums)) !== null){
+      let v = nm[1].replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+      const n = parseFloat(v);
+      if(!isNaN(n) && v.length <= 6) nums.push(n);
+    }
+    if(nums.length >= 1){
+      students.push({ id: idNum, name: studentName, grades: nums });
+    }
+  }
+
+  if(!students.length) return { error: 'لم يتم العثور على بيانات طلاب في الملف. تأكد أن الملف يحتوي على كشف درجات.' };
+
+  // --- تحديد أعمدة الدرجات ---
+  // الأعمدة المكتشفة من رأس الجدول + المجموع
+  const gradeColumns = [];
+  columns.forEach((c, i) => {
+    gradeColumns.push({ name: c.name, max: c.max, index: i });
+  });
+  // إضافة «المجموع» إن وُجد — درجته المقترحة = مجموع الأعمدة أو أعلى قيمة
+  if(hasTotal){
+    // المجموع عادة هو آخر عمود — فهرسه = عدد الأعمدة المكتشفة
+    const totalIdx = columns.length;
+    // أعلى قيمة بعمود المجموع
+    let maxTotal = 0;
+    students.forEach(s => { if(s.grades[totalIdx] !== undefined && s.grades[totalIdx] > maxTotal) maxTotal = s.grades[totalIdx]; });
+    // تقريب الدرجة القصوى
+    const suggested = noorRoundMax(maxTotal || columns.reduce((s,c) => s + c.max, 0));
+    gradeColumns.push({ name: 'المجموع', max: suggested, index: totalIdx });
+  }
+
+  if(!gradeColumns.length){
+    // إن لم نجد أعمدة بـ«/» — نعتبر كل الأرقام عمود واحد
+    let maxVal = 0;
+    students.forEach(s => { if(s.grades[0] > maxVal) maxVal = s.grades[0]; });
+    gradeColumns.push({ name: 'الدرجة', max: noorRoundMax(maxVal), index: 0 });
+  }
+
+  return { header: hdr, columns: gradeColumns, students, raw };
+}
+
+/* تقريب أعلى قيمة لدرجة قياس مناسبة (١٠/٢٠/٣٠/٤٠/٥٠/١٠٠) */
+function noorRoundMax(v){
+  if(v <= 0) return 100;
+  const steps = [10,15,20,25,30,40,50,60,80,100,150,200];
+  for(const s of steps) if(v <= s) return s;
+  return Math.ceil(v/50)*50;
+}
+
+/* عرض أعمدة الدرجات ليختار المعلم */
+function noorShowColumns(){
+  if(!_noorData) return;
+  const host = document.getElementById('noorColumnsHost');
+  const meta = document.getElementById('noorMeta');
+  host.style.display = '';
+  if(meta) meta.style.display = 'flex';
+
+  const h = _noorData.header;
+  const infoItems = [];
+  if(h.subject) infoItems.push('المادة: ' + h.subject);
+  if(h.grade) infoItems.push('الصف: ' + h.grade);
+  if(h.section) infoItems.push('الفصل: ' + h.section);
+  if(h.period) infoItems.push('الفترة: ' + h.period);
+  if(h.term) infoItems.push(h.term);
+  if(h.year) infoItems.push('السنة: ' + h.year);
+  const infoHtml = infoItems.length ? '<div style="padding:8px 12px;background:var(--bg-eef4f3,#eef4f3);border-radius:8px;margin-bottom:10px;font-size:13px;line-height:1.9">' +
+    infoItems.map(escapeHtml).join(' &bull; ') +
+    ' &bull; عدد الطلاب: ' + toArabic(_noorData.students.length) + '</div>' : '';
+
+  const colsHtml = _noorData.columns.map((c, i) =>
+    '<label class="chip" style="display:inline-flex;gap:6px;align-items:center;padding:8px 12px;border:1.5px solid var(--line,#d9e2e0);border-radius:18px;margin:0 0 6px 6px;cursor:pointer">' +
+    '<input type="radio" name="noorCol" value="' + i + '"' + (i === _noorData.columns.length - 1 ? ' checked' : '') + ' onchange="noorRunAnalysis()"> ' +
+    escapeHtml(c.name) + ' / ' + toArabic(c.max) +
+    '</label>'
+  ).join('');
+
+  host.innerHTML = infoHtml +
+    '<div style="font-weight:700;font-size:14px;margin-bottom:6px">اختر العمود المراد تحليله:</div>' +
+    '<div style="margin-bottom:8px">' + colsHtml + '</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">' +
+    '<label class="field" style="flex:0 0 130px">درجة القياس<input id="noorScale" type="number" min="1" step="any" inputmode="decimal" onchange="noorRunAnalysis()"></label>' +
+    '<button class="primary" type="button" style="height:42px;padding:0 20px" onclick="noorRunAnalysis()">📊 عرض التحليل</button>' +
+    '</div>';
+
+  // تعبئة القيم المبدئية
+  const subj = document.getElementById('noorSubject');
+  const exam = document.getElementById('noorExam');
+  if(subj && h.subject) subj.value = h.subject;
+  if(exam && h.period) exam.value = h.period;
+
+  // اختيار آخر عمود (المجموع عادة) وتعبئة درجة القياس
+  noorFillScale();
+  noorRunAnalysis();
+}
+
+function noorFillScale(){
+  if(!_noorData) return;
+  const sel = document.querySelector('input[name="noorCol"]:checked');
+  const ci = sel ? +sel.value : 0;
+  const col = _noorData.columns[ci];
+  const sc = document.getElementById('noorScale');
+  if(sc && col) sc.value = col.max;
+}
+
+/* بناء التقرير من بيانات نور */
+function noorRunAnalysis(){
+  const host = document.getElementById('anReportHost');
+  if(!host || !_noorData) return;
+
+  const sel = document.querySelector('input[name="noorCol"]:checked');
+  const ci = sel ? +sel.value : 0;
+  const col = _noorData.columns[ci];
+  if(!col){ host.innerHTML = '<div class="empty">اختر عموداً.</div>'; return; }
+
+  let scale = +(document.getElementById('noorScale')||{}).value;
+  if(!(scale > 0)) scale = col.max;
+  if(!(scale > 0)){ host.innerHTML = '<div class="empty">أدخل درجة قياس أكبر من صفر.</div>'; window.AN_LAST = null; return; }
+
+  // جمع الدرجات من العمود المختار
+  const vals = [], excluded = [];
+  _noorData.students.forEach(s => {
+    const v = s.grades[col.index];
+    if(v == null || isNaN(v)) excluded.push(s);
+    else vals.push(v);
+  });
+
+  if(!vals.length){
+    host.innerHTML = '<div class="empty">لا توجد درجات في العمود المختار.</div>';
+    window.AN_LAST = null; return;
+  }
+
+  const stats = anStats(vals, scale);
+  const h = _noorData.header;
+  const subj = ((document.getElementById('noorSubject')||{}).value||'').trim() || h.subject || '';
+  const exam = ((document.getElementById('noorExam')||{}).value||'').trim() || h.period || col.name;
+  const label = [h.grade, h.section ? 'الفصل ' + h.section : ''].filter(Boolean).join(' — ') || 'ملف نور';
+  const term = [h.term, h.year].filter(Boolean).join(' / ') || '';
+  const wlH = (state.workCfg && state.workCfg.header) || {};
+
+  // بناء كائن التقرير بنفس بنية anCompute
+  const report = {
+    metric: { key: 'noor:' + col.name, label: col.name, max: col.max },
+    scale,
+    per: [{ key: 'noor', label, subject: subj, vals, stats }],
+    all: vals,
+    excluded: excluded.length,
+    stats,
+    pi: 0,
+    label,
+    subject: subj
+  };
+
+  // حفظ للطباعة والإرسال
+  const data = { metric: report.metric, scale, pi: 0, reports: [report], skipped: [] };
+  window.AN_LAST = data;
+
+  // بناء HTML التقرير — نستخدم anReportHTML مباشرة مع تمرير بيانات الترويسة من نور + إعدادات المدرسة
+  // نحتاج أن نمرر القيم عبر حقول الواجهة المؤقتة
+  const savedSubj = (document.getElementById('anSubject')||{}).value;
+  const savedExam = (document.getElementById('anExam')||{}).value;
+  if(document.getElementById('anSubject')) document.getElementById('anSubject').value = subj;
+  if(document.getElementById('anExam')) document.getElementById('anExam').value = exam;
+
+  const exc = excluded.length ? '<div class="empty" style="margin-bottom:10px">استُبعد ' + toArabic(excluded.length) + ' طالب لعدم وجود درجة لهم في هذا العمود.</div>' : '';
+  host.innerHTML = '<style>' + AN_CSS + '</style>' + exc + '<div class="an-pg" style="margin-bottom:14px">' + anReportHTML(report) + '</div>';
+
+  // استعادة القيم
+  if(document.getElementById('anSubject')) document.getElementById('anSubject').value = savedSubj || '';
+  if(document.getElementById('anExam')) document.getElementById('anExam').value = savedExam || '';
+}
+
+// تحديث درجة القياس عند تغيير العمود
+document.addEventListener('change', function(e){
+  if(e.target && e.target.name === 'noorCol') noorFillScale();
+});
 
 function showTab(t){
   const EXAM_GRP=['design','grade','results'], inExam = (t==='exam' || EXAM_GRP.indexOf(t)>=0);

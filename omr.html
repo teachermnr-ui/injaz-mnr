@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-31.10 -->
+<!-- إصدار: 2026-10-31.12 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -5780,7 +5780,7 @@ const AN_CSS = `
 .anr .an-dt th,.anr .an-dt td{border:1px solid #bcc7c5;padding:1px 8px;text-align:center}
 .anr .an-dt th{background:#eef5f4;color:#1b6f8b;font-size:11px}
 .anr .an-dt tr{page-break-inside:avoid;break-inside:avoid}
-.anr .an-dt .n{width:44px}.anr .an-dt .g{width:90px;font-weight:800}
+.anr .an-dt .n{width:44px}.anr .an-dt .g{width:80px;font-weight:800}.anr .an-dt .id{width:120px;text-align:right;font-family:Tahoma,Arial,sans-serif;letter-spacing:.3px}.anr .an-dt th.nmh{text-align:right}
 .anr .an-dt td.nm{text-align:right;font-weight:700}
 .anr .an-dnone{border:1px solid #bcc7c5;border-top:0;border-radius:0 0 7px 7px;padding:2px 8px;text-align:center;color:#8a9a99;font-size:12px;font-weight:600}
 .anr.an-detail hr{margin:6px 0}
@@ -5866,7 +5866,7 @@ function anCompute(){
     const log=state.workLog[k]||{}; const vals=[], rows=[]; let excluded=0;
     state.students.filter(s=>s.classCode===pk.classCode).forEach(s=>{
       const v=m.get(log[s.seat]||{});
-      if(v==null) excluded++; else { vals.push(v); rows.push({ name:s.name||'', v }); }
+      if(v==null) excluded++; else { vals.push(v); rows.push({ name:s.name||'', id:(/^\d+$/.test(String(s.seat||''))?String(s.seat):''), v }); }
     });
     if(!vals.length){ skipped.push(label); return; }
     const x={ key:k, label, subject:pk.subject, vals, stats:anStats(vals,scale) };
@@ -5966,8 +5966,8 @@ function anDetailHTML(d){
   const secs = AN_LEVELS.map((l,i)=>{
     const g = groups[i].slice().sort((a,b)=> b.v-a.v || String(a.name).localeCompare(String(b.name),'ar'));
     const body = g.length
-      ? `<table class="an-dt"><thead><tr><th class="n">م</th><th>اسم الطالب</th><th class="g">الدرجة</th></tr></thead><tbody>`+
-        g.map((r,j)=>`<tr><td class="n">${toArabic(j+1)}</td><td class="nm">${escapeHtml(r.name)}</td><td class="g">${anFmt(r.v)}</td></tr>`).join('')+`</tbody></table>`
+      ? `<table class="an-dt"><thead><tr><th class="n">م</th><th class="id">رقم الهوية</th><th class="nmh">اسم الطالب</th><th class="g">الدرجة</th></tr></thead><tbody>`+
+        g.map((r,j)=>`<tr><td class="n">${toArabic(j+1)}</td><td class="id">${escapeHtml(r.id||'—')}</td><td class="nm">${escapeHtml(r.name)}</td><td class="g">${anFmt(r.v)}</td></tr>`).join('')+`</tbody></table>`
       : `<div class="an-dnone">لا يوجد طلاب في هذا التقدير</div>`;
     return `<div class="an-dsec">
       <div class="an-dh" style="background:${l.color}">${l.name}<span dir="ltr">${anRangeText(i,d.scale)}</span><b>${toArabic(g.length)} طالب</b></div>
@@ -6461,7 +6461,7 @@ function noorRunAnalysis(){
   _noorData.students.forEach(s => {
     const v = s.grades[col.index];
     if(v == null || isNaN(v)) excluded.push(s);
-    else { vals.push(v); rows.push({ name: s.name || s.id, v }); }
+    else { vals.push(v); rows.push({ name: s.name || s.id, id: s.id || '', v }); }
   });
 
   if(!vals.length){

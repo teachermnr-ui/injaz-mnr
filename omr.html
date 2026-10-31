@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-31.4 -->
+<!-- إصدار: 2026-10-31.6 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -3995,10 +3995,24 @@ function runExport(code, colorKey){
   }
 }
 
-// شعار وزارة التعليم كـSVG مضمّن (نفس نمط بطاقات الإجابة)
+// شعار وزارة التعليم الرسمي (moe-logo-color.png — نفس صورة الترويسة الموحّدة form-header.js)
+// يُحمَّل مسبقاً ويُحوَّل إلى data URL كي يظهر في الطباعة وفي ملف PDF المُرسَل للموجه
+const MOE_LOGO_URL = (function(){ try{ return new URL('moe-logo-color.png', location.href).href; }catch(e){ return 'moe-logo-color.png'; } })();
+let MOE_LOGO_DATA = '';
+(function preloadMoeLogo(){
+  try{
+    fetch(MOE_LOGO_URL).then(r => r.ok ? r.blob() : null).then(b => {
+      if(!b) return;
+      const fr = new FileReader();
+      fr.onload = () => { MOE_LOGO_DATA = fr.result; };
+      fr.readAsDataURL(b);
+    }).catch(()=>{});
+  }catch(e){}
+})();
+// w = العرض المرجعي القديم؛ الارتفاع الناتج قريب من ارتفاع الشعار السابق كي لا تتغير الترويسة
 function moeLogoInline(w){
-  const h=w*0.30, pad=w*0.03, inner = moeLogoSVG(w/2, pad, w);   // هامش علوي كي لا يُقصّ صف النقاط الأول
-  return `<svg width="${w}" height="${h+w*0.18+pad}" viewBox="0 0 ${w} ${h+w*0.18+pad}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+  const h = Math.round(w * 0.54);
+  return `<img src="${MOE_LOGO_DATA || MOE_LOGO_URL}" alt="وزارة التعليم" style="height:${h}px;width:auto;display:block;margin:0 auto">`;
 }
 
 // ---- التصدير الكامل (شكل النموذج الرسمي) ----
@@ -5871,7 +5885,7 @@ function anReportHTML(d){
   const hdrRight = d.fullHdr
     ? ['المملكة العربية السعودية','وزارة التعليم',h.edu||'',h.school||''].filter(Boolean).map(escapeHtml).join('<br>')
     : escapeHtml(h.edu||'')+'<br>'+escapeHtml(h.school||'');
-  const title = 'تحليل نتائج '+(d.metric.key==='all'?'':'«'+d.metric.label+'» ')+(subj?'مادة ['+subj+']':'');
+  const title = subj ? 'تحليل نتائج مادة '+subj : 'تحليل النتائج';
   const kv=(k,v)=>`<div class="an-kv"><div class="an-k">${k}</div><div class="an-v">${v}</div></div>`;
   const lvRows = AN_LEVELS.map((l,i)=>`<div class="an-row"><div class="an-pill" style="background:${l.color}">${l.name}</div><div class="an-box" dir="ltr">${anRangeText(i,d.scale)}</div><div class="an-box">${toArabic(st.cnt[i])}</div></div>`).join('');
   const pcts = st.cnt.map(c=> total? Math.round(c/total*1000)/10 : 0);

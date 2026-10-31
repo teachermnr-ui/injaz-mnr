@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-31.8 -->
+<!-- إصدار: 2026-10-31.9 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -5737,6 +5737,7 @@ const AN_CSS = `
 .anr *{box-sizing:border-box}
 .anr .an-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .anr .an-hd .an-r{flex:1;font-size:12px;line-height:1.8;font-weight:700}
+.anr .an-hd .an-rin{display:inline-block;text-align:center}
 .anr .an-hd .an-c{flex:0 0 auto;text-align:center}
 .anr .an-hd .an-l{flex:1;display:flex;justify-content:flex-end}
 .anr .an-xbox{border:1.5px solid #555;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;text-align:center;min-width:120px}
@@ -5917,7 +5918,7 @@ function anHeadHTML(d, title){
     ? ['المملكة العربية السعودية','وزارة التعليم',edu,h.school||''].filter(Boolean).map(escapeHtml).join('<br>')
     : escapeHtml(edu)+'<br>'+escapeHtml(h.school||'');
   return `<div class="an-hd">
-      <div class="an-r">${hdrRight}</div>
+      <div class="an-r"><div class="an-rin">${hdrRight}</div></div>
       <div class="an-c">${moeLogoInline(130)}</div>
       <div class="an-l"><div class="an-xbox">${escapeHtml(c.exam)}</div></div>
     </div>

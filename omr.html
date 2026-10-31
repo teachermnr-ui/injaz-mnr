@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-31.1 -->
+<!-- إصدار: 2026-10-31.2 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -741,6 +741,10 @@ body.cls-panels-pending section.panel{ visibility:hidden; }
         <div id="noorMeta" style="display:none;flex-wrap:wrap;gap:10px;margin-top:10px">
           <label class="field" style="flex:1;min-width:170px">المادة (تظهر في العنوان)
             <input id="noorSubject" placeholder="مثال: الرياضيات" oninput="noorRunAnalysis()"></label>
+          <label class="field" style="flex:1;min-width:150px">المرحلة الدراسية
+            <input id="noorGrade" placeholder="مثال: الثالث الثانوي" oninput="noorRunAnalysis()"></label>
+          <label class="field" style="flex:0 0 100px">الفصل
+            <input id="noorSection" placeholder="مثال: أ" oninput="noorRunAnalysis()"></label>
           <label class="field" style="flex:1;min-width:170px">نص المربع العلوي
             <input id="noorExam" placeholder="مثال: الاختبار النهائي" oninput="noorRunAnalysis()"></label>
         </div>
@@ -5887,7 +5891,7 @@ function anReportHTML(d){
     <div class="an-charts"><div class="an-ct">رسم بياني (نسب الطلاب لكل تقدير)</div><div class="an-rings">${rings}</div>
       <div class="an-ct">رسم بياني (عدد الطلاب لكل تقدير)</div><div class="an-bars">${bars}</div></div>
     ${exc}
-    <div class="an-sig"><div>معلم المادة / الاسم: ${escapeHtml(h.teacher||'')}</div><div>مدير المدرسة / الاسم: ${escapeHtml(h.principal||'')}</div></div>
+    <div class="an-sig"><div>معلم المادة: ${escapeHtml(h.teacher||'')}</div><div>مدير المدرسة: ${escapeHtml(h.principal||'')}</div></div>
   </div>`;
 }
 function anRun(){
@@ -6072,7 +6076,24 @@ async function noorPdfPicked(ev){
         if(Math.abs(dy) > 4) return dy > 0 ? -1 : 1;
         return b.transform[4] - a.transform[4]; // X من اليمين
       });
-      allText += items.map(i => i.str).join(' ') + '\n';
+      // ربط العناصر مع مراعاة الفراغات — عناصر متجاورة تُلصق بلا مسافة
+      let line = '';
+      for(let i = 0; i < items.length; i++){
+        if(i > 0){
+          const prev = items[i-1], cur = items[i];
+          const sameLine = Math.abs(prev.transform[5] - cur.transform[5]) <= 4;
+          if(!sameLine){ line += ' '; }
+          else {
+            const dist = prev.transform[4] - cur.transform[4];
+            const prevW = Math.abs(prev.width) || 0;
+            const gap = dist - prevW;
+            const fs = Math.abs(cur.transform[0]) || 12;
+            if(gap > fs * 0.3) line += ' ';
+          }
+        }
+        line += items[i].str;
+      }
+      allText += line + '\n';
     }
     hint.textContent = '';
     _noorData = noorParseText(allText);
@@ -6231,11 +6252,15 @@ function noorShowColumns(){
     '<button class="primary" type="button" style="height:42px;padding:0 20px" onclick="noorRunAnalysis()">📊 عرض التحليل</button>' +
     '</div>';
 
-  // تعبئة القيم المبدئية
+  // تعبئة القيم المبدئية من ترويسة ملف نور
   const subj = document.getElementById('noorSubject');
   const exam = document.getElementById('noorExam');
+  const gradeEl = document.getElementById('noorGrade');
+  const sectionEl = document.getElementById('noorSection');
   if(subj && h.subject) subj.value = h.subject;
   if(exam && h.period) exam.value = h.period;
+  if(gradeEl && h.grade) gradeEl.value = h.grade;
+  if(sectionEl && h.section) sectionEl.value = h.section;
 
   // اختيار آخر عمود (المجموع عادة) وتعبئة درجة القياس
   noorFillScale();
@@ -6282,7 +6307,9 @@ function noorRunAnalysis(){
   const h = _noorData.header;
   const subj = ((document.getElementById('noorSubject')||{}).value||'').trim() || h.subject || '';
   const exam = ((document.getElementById('noorExam')||{}).value||'').trim() || h.period || col.name;
-  const label = [h.grade, h.section ? 'الفصل ' + h.section : ''].filter(Boolean).join(' — ') || 'ملف نور';
+  const gradeVal = ((document.getElementById('noorGrade')||{}).value||'').trim() || h.grade || '';
+  const sectionVal = ((document.getElementById('noorSection')||{}).value||'').trim() || h.section || '';
+  const label = [gradeVal, sectionVal ? 'الفصل ' + sectionVal : ''].filter(Boolean).join(' — ') || 'ملف نور';
   const term = [h.term, h.year].filter(Boolean).join(' / ') || '';
   const wlH = (state.workCfg && state.workCfg.header) || {};
 

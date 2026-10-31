@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- إصدار: 2026-10-31.9 -->
+<!-- إصدار: 2026-10-31.10 -->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -6009,8 +6009,19 @@ function anDoPrint(detailed){
   const win=window.open('','_blank'); if(!win){ alert('فضلاً اسمح بالنوافذ المنبثقة للطباعة.'); return; }
   const pages = d.reports.map(r=>'<div class="an-pg">'+anReportHTML(r)+'</div>'+(detailed?'<div class="an-pg">'+anDetailHTML(r)+'</div>':'')).join('');
   win.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${detailed?'تحليل النتائج المفصّل':'تحليل النتائج'}</title>
-  <style>@page{size:A4 portrait;margin:8mm} body{margin:0;background:#fff} ${AN_CSS} .anr{border:none;border-radius:0;max-width:none;padding:0} .an-pg{page-break-after:always;break-after:page} .an-pg:last-child{page-break-after:auto;break-after:auto}</style></head>
-  <body>${pages}<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
+  <style>@page{size:A4 portrait;margin:8mm} body{margin:0;background:#fff} ${AN_CSS.replace(/@media \(max-width:600px\)\{[^\n]*\n/,'')} .anr{border:none;border-radius:0;max-width:none;padding:0} .an-pg{width:194mm;margin:0 auto;page-break-after:always;break-after:page} .an-pg:last-child{page-break-after:auto;break-after:auto}</style></head>
+  <body>${pages}<script>
+  // كل صفحة تُصغَّر تلقائيًا لتتسع في ورقة A4 واحدة (الخطوط تختلف بين الأجهزة فيختلف الطول)
+  function fitPages(){
+    var PH = 271 * 96 / 25.4;   // ارتفاع المساحة القابلة للطباعة (297 − هوامش) بهامش أمان
+    var pgs = document.querySelectorAll('.an-pg');
+    for(var i=0;i<pgs.length;i++){
+      var pg=pgs[i]; pg.style.zoom=''; var h=pg.scrollHeight;
+      if(h>PH) pg.style.zoom = Math.max(0.6, PH/h).toFixed(3);
+    }
+  }
+  window.onload=function(){ fitPages(); setTimeout(function(){window.print();},400); };
+  <\/script></body></html>`);
   win.document.close();
 }
 /* ===== إنشاء PDF لكل تقرير داخل المتصفح (بلا مكتبات خارجية): HTML ← SVG foreignObject ← JPEG ← ملف PDF ===== */
@@ -6081,6 +6092,8 @@ function anPdfFromJpeg(jpegB64, wpx, hpx){ return anPdfFromJpegs([{b64:jpegB64, 
 function anSliceCanvas(c, q){
   const ratio=(841.89-28)/(595.28-28);
   const ph=Math.floor(c.width*ratio), out=[];
+  // أطول من الصفحة بقليل (حتى ٤٠٪) ← صفحة واحدة مصغّرة بدل نقل التوقيع وحده لصفحة جديدة
+  if(c.height <= ph*1.4) return [{ b64:c.toDataURL('image/jpeg',q).split(',')[1], w:c.width, h:c.height }];
   const g0=c.getContext('2d');
   // نقطة قطع نظيفة: سطر بلا نص ولا شريط ملوّن (بين صفّين)، بالبحث صعودًا من الحد الأقصى
   const cleanAt=(yy)=>{
